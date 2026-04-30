@@ -1,0 +1,11 @@
+所在位置 行:1 字符: 103
++ ... tartsWith\('\/'\)\) {\n      s = s.substring\(1\);\n    }\n\n    if \ ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+表达式或语句中包含意外的标记“\/'\)\) {\n      s = s.substring\(1\);\n    }\n\n    if \(s.isEmpty\) return steps;'”。
+所在位置 行:1 字符: 187
++ ... = s.substring\(1\);\n    }\n\n    if \(s.isEmpty\) return steps;', ''
++                                                                      ~
+参数列表中缺少参量。
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : UnexpectedToken
+ 

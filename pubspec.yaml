@@ -1,0 +1,43 @@
+name: legado_flutter
+description: "Legado 阅读 - Flutter 复刻版"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # ── 状态管理 ──
+  provider: ^6.1.2
+
+  # ── 本地数据库 ──
+  sqflite: ^2.4.1
+  sqflite_common_ffi: 2.3.4
+  sqlite3: 2.4.6
+  path_provider: ^2.1.5
+  path: ^1.9.1
+
+  # ── 网络请求 ──
+  dio: ^5.7.0
+
+  # ── HTML 解析（用于书源规则） ──
+  html: ^0.15.5
+
+  # ── 工具 ──
+  uuid: ^4.5.1
+  intl: ^0.20.2
+  shared_preferences: ^2.3.5
+  file_picker: ^6.2.1
+  charset_converter: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
