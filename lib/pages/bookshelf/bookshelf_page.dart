@@ -32,6 +32,45 @@ class _BookshelfPageState extends State<BookshelfPage> {
     ).toList();
   }
 
+  void _showMenuAction(String action) {
+    switch (action) {
+      case 'add_local':
+        _addLocalBook();
+        break;
+      default:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${_menuLabel(action)}（待实现）')),
+        );
+    }
+  }
+
+  String _menuLabel(String action) {
+    switch (action) {
+      case 'update_toc': return '更新目录';
+      case 'add_local': return '添加本地';
+      case 'remote_books': return '远程书籍';
+      case 'add_url': return '添加网址';
+      case 'shelf_mgmt': return '书架管理';
+      case 'cache_export': return '缓存/导出';
+      case 'group_mgmt': return '分组管理';
+      case 'shelf_layout': return '书架布局';
+      case 'export_list': return '导出书单';
+      case 'import_list': return '导入书单';
+      case 'logs': return '日志';
+      default: return action;
+    }
+  }
+
+  Future<void> _addLocalBook() async {
+    final provider = context.read<LibraryProvider>();
+    final book = await provider.importLocalBook();
+    if (book != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已导入: ${book.name}')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -65,6 +104,26 @@ class _BookshelfPageState extends State<BookshelfPage> {
               icon: const Icon(Icons.search),
               tooltip: '搜索书架',
               onPressed: () => setState(() => _showSearch = true),
+            ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              tooltip: '更多',
+              onSelected: _showMenuAction,
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'update_toc', child: _MenuTile(icon: Icons.update, title: '更新目录')),
+                const PopupMenuItem(value: 'add_local', child: _MenuTile(icon: Icons.file_open, title: '添加本地')),
+                const PopupMenuItem(value: 'remote_books', child: _MenuTile(icon: Icons.cloud_download, title: '远程书籍')),
+                const PopupMenuItem(value: 'add_url', child: _MenuTile(icon: Icons.link, title: '添加网址')),
+                const PopupMenuDivider(),
+                const PopupMenuItem(value: 'shelf_mgmt', child: _MenuTile(icon: Icons.shelves, title: '书架管理')),
+                const PopupMenuItem(value: 'cache_export', child: _MenuTile(icon: Icons.cached, title: '缓存/导出')),
+                const PopupMenuItem(value: 'group_mgmt', child: _MenuTile(icon: Icons.folder, title: '分组管理')),
+                const PopupMenuItem(value: 'shelf_layout', child: _MenuTile(icon: Icons.grid_view, title: '书架布局')),
+                const PopupMenuDivider(),
+                const PopupMenuItem(value: 'export_list', child: _MenuTile(icon: Icons.file_upload_outlined, title: '导出书单')),
+                const PopupMenuItem(value: 'import_list', child: _MenuTile(icon: Icons.file_download_outlined, title: '导入书单')),
+                const PopupMenuItem(value: 'logs', child: _MenuTile(icon: Icons.terminal, title: '日志')),
+              ],
             ),
           ],
         ],
@@ -302,6 +361,28 @@ class _BookshelfPageState extends State<BookshelfPage> {
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('移除'),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 三点菜单的图标+文字瓦片
+class _MenuTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+
+  const _MenuTile({required this.icon, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Theme.of(context).colorScheme.onSurface),
+          const SizedBox(width: 12),
+          Text(title, style: const TextStyle(fontSize: 14)),
         ],
       ),
     );

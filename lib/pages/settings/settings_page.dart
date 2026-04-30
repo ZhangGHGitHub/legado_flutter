@@ -1,8 +1,9 @@
+import 'dart:io' show exit;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../replace/replace_page.dart';
 
-/// 设置页面 - 应用配置
+/// 设置页面 - 仿 Legado "我的" 风格
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
@@ -12,7 +13,6 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _darkMode = false;
-  bool _autoDownload = false;
   double _defaultFontSize = 18;
 
   @override
@@ -25,7 +25,6 @@ class _SettingsPageState extends State<SettingsPage> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _darkMode = prefs.getBool('darkMode') ?? false;
-      _autoDownload = prefs.getBool('autoDownload') ?? false;
       _defaultFontSize = prefs.getDouble('defaultFontSize') ?? 18;
     });
   }
@@ -35,198 +34,235 @@ class _SettingsPageState extends State<SettingsPage> {
     await prefs.setBool(key, value);
   }
 
-  Future<void> _setFontSize(double size) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('defaultFontSize', size);
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
+      appBar: AppBar(title: const Text('我的')),
       body: ListView(
+        padding: const EdgeInsets.only(top: 8, bottom: 32),
         children: [
-          // ── 内容净化 ──
-          const _SectionHeader(title: '内容净化'),
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: theme.colorScheme.primaryContainer,
-                radius: 16,
-                child: Icon(Icons.auto_fix_high, size: 18,
-                    color: theme.colorScheme.primary),
-              ),
-              title: const Text('替换净化'),
-              subtitle: const Text('去除广告脚注、排版净化'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ReplacePage()),
-              ),
-            ),
+          // ── 书源管理 ──
+          _SettingTile(
+            icon: Icons.rss_feed_rounded,
+            iconColor: Colors.orange,
+            title: '书源管理',
+            subtitle: '新建、导入、编辑或管理书源',
+            onTap: () => Navigator.pushNamed(context, '/sources'),
           ),
+          _divider(),
 
-          // ── 阅读设置 ──
-          const _SectionHeader(title: '阅读设置'),
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Column(
-              children: [
-                SwitchListTile(
-                  title: const Text('深色模式'),
-                  subtitle: const Text('跟随系统深色主题'),
-                  value: _darkMode,
-                  onChanged: (v) {
-                    setState(() => _darkMode = v);
-                    _setSetting('darkMode', v);
-                  },
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
-                SwitchListTile(
-                  title: const Text('自动下载'),
-                  subtitle: const Text('添加书籍后自动下载章节'),
-                  value: _autoDownload,
-                  onChanged: (v) {
-                    setState(() => _autoDownload = v);
-                    _setSetting('autoDownload', v);
-                  },
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
-                ListTile(
-                  title: const Text('默认字体大小'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline),
-                        onPressed: () {
-                          if (_defaultFontSize > 12) {
-                            setState(() => _defaultFontSize -= 1);
-                            _setFontSize(_defaultFontSize);
-                          }
-                        },
-                      ),
-                      SizedBox(
-                        width: 40,
-                        child: Text(
-                          '${_defaultFontSize.toInt()}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline),
-                        onPressed: () {
-                          if (_defaultFontSize < 32) {
-                            setState(() => _defaultFontSize += 1);
-                            _setFontSize(_defaultFontSize);
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+          // ── TXT目录规则 ──
+          _SettingTile(
+            icon: Icons.description_outlined,
+            iconColor: Colors.blue,
+            title: 'TXT目录规则',
+            subtitle: '配置TXT目录规则',
+            onTap: () => _notImplemented('TXT目录规则'),
+          ),
+          _divider(),
+
+          // ── 替换净化 ──
+          _SettingTile(
+            icon: Icons.auto_fix_high_outlined,
+            iconColor: Colors.teal,
+            title: '替换净化',
+            subtitle: '配置替换净化规则',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ReplacePage()),
             ),
           ),
+          _divider(),
+
+          // ── 字典规则 ──
+          _SettingTile(
+            icon: Icons.translate,
+            iconColor: Colors.indigo,
+            title: '字典规则',
+            subtitle: '配置字典规则',
+            onTap: () => _notImplemented('字典规则'),
+          ),
+          _divider(),
+
+          // ── 主题模式 ──
+          _SettingTile(
+            icon: Icons.palette_outlined,
+            iconColor: Colors.pink,
+            title: '主题模式',
+            subtitle: _darkMode ? '当前：深色模式' : '当前：浅色模式',
+            trailing: Switch(
+              value: _darkMode,
+              activeColor: theme.colorScheme.primary,
+              onChanged: (v) {
+                setState(() => _darkMode = v);
+                _setSetting('darkMode', v);
+              },
+            ),
+            onTap: () => _notImplemented('主题模式'),
+          ),
+          _divider(),
+
+          // ── Web服务 ──
+          _SettingTile(
+            icon: Icons.language,
+            iconColor: Colors.green,
+            title: 'Web服务',
+            subtitle: '用浏览器写书源或看书',
+            onTap: () => _notImplemented('Web服务'),
+          ),
+          _divider(),
+
+          // ── 备份与恢复 ──
+          _SettingTile(
+            icon: Icons.backup_rounded,
+            iconColor: Colors.amber.shade700,
+            title: '备份与恢复',
+            subtitle: 'WebDav设置/导入旧版本数据',
+            onTap: () => _notImplemented('备份与恢复'),
+          ),
+          _divider(),
+
+          // ── 主题设置 ──
+          _SettingTile(
+            icon: Icons.dashboard_customize_outlined,
+            iconColor: Colors.purple,
+            title: '主题设置',
+            subtitle: '与界面/颜色相关的一些设置',
+            onTap: () => _notImplemented('主题设置'),
+          ),
+          _divider(),
+
+          // ── 其他设置 ──
+          _SettingTile(
+            icon: Icons.settings_outlined,
+            iconColor: Colors.grey.shade600,
+            title: '其他设置',
+            subtitle: '与功能相关的一些设置',
+            onTap: () => _notImplemented('其他设置'),
+          ),
+          _divider(),
+
+          // ── 书签 ──
+          _SettingTile(
+            icon: Icons.bookmark_outline_rounded,
+            iconColor: Colors.red.shade400,
+            title: '书签',
+            subtitle: '所有书签',
+            onTap: () => _notImplemented('书签'),
+          ),
+          _divider(),
+
+          // ── 阅读记录 ──
+          _SettingTile(
+            icon: Icons.history_rounded,
+            iconColor: Colors.blueGrey,
+            title: '阅读记录',
+            subtitle: '阅读事件记录',
+            onTap: () => _notImplemented('阅读记录'),
+          ),
+          _divider(),
 
           // ── 关于 ──
-          const _SectionHeader(title: '关于'),
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: theme.colorScheme.primaryContainer,
-                    radius: 16,
-                    child: Icon(Icons.info_outline, size: 18,
-                        color: theme.colorScheme.primary),
-                  ),
-                  title: const Text('版本'),
-                  trailing: const Text('1.1.0'),
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
-                ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: theme.colorScheme.secondaryContainer,
-                    radius: 16,
-                    child: Icon(Icons.code, size: 18,
-                        color: theme.colorScheme.secondary),
-                  ),
-                  title: const Text('开源许可'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    showLicensePage(
-                      context: context,
-                      applicationName: 'Legado Flutter',
-                      applicationVersion: '1.1.0',
-                    );
-                  },
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
-                ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: theme.colorScheme.tertiaryContainer,
-                    radius: 16,
-                    child: Icon(Icons.storage, size: 18,
-                        color: theme.colorScheme.tertiary),
-                  ),
-                  title: const Text('清空缓存'),
-                  subtitle: const Text('清除本地章节缓存'),
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('清空缓存'),
-                        content: const Text('确定删除所有本地章节缓存？书籍和书源配置不受影响。'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('取消'),
-                          ),
-                          FilledButton(
-                            onPressed: () {
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('缓存已清理')),
-                              );
-                            },
-                            child: const Text('确定'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
+          _SettingTile(
+            icon: Icons.info_outline_rounded,
+            iconColor: Colors.grey.shade500,
+            title: '关于',
+            subtitle: '版本 1.0.0',
+            trailing: const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+            onTap: () => _notImplemented('关于'),
           ),
-          const SizedBox(height: 32),
+          _divider(),
+
+          // ── 退出 ──
+          _SettingTile(
+            icon: Icons.exit_to_app_rounded,
+            iconColor: Colors.red.shade400,
+            title: '退出',
+            subtitle: '',
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('退出'),
+                  content: const Text('确定退出应用？'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('取消'),
+                    ),
+                    FilledButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        exit(0);
+                      },
+                      style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                      child: const Text('退出'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
   }
+
+  Widget _divider() => const Divider(height: 1, indent: 56, endIndent: 16);
+
+  void _notImplemented(String name) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$name（待实现）')),
+    );
+  }
 }
 
-class _SectionHeader extends StatelessWidget {
+/// 单个设置项（图标 + 标题 + 副标题）
+class _SettingTile extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
   final String title;
-  const _SectionHeader({required this.title});
+  final String subtitle;
+  final VoidCallback? onTap;
+  final Widget? trailing;
+
+  const _SettingTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    this.onTap,
+    this.trailing,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: Theme.of(context).colorScheme.primary,
+    return ListTile(
+      leading: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
         ),
+        child: Icon(icon, size: 20, color: iconColor),
       ),
+      title: Text(
+        title,
+        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+      ),
+      subtitle: subtitle.isNotEmpty
+          ? Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            )
+          : null,
+      trailing: trailing ?? const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
     );
   }
 }
