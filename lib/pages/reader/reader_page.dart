@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/book.dart';
 import '../../models/chapter.dart';
-import '../../providers/library_provider.dart';
+import '../../providers/book_provider.dart';
+import '../../providers/source_provider.dart';
 
 /// ═══════════════════════════════════════════════════
 /// 书籍详情页 - 显示书籍信息 + 章节列表 + 加入书架
@@ -26,19 +27,23 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   Future<void> _initPage() async {
-    final provider = context.read<LibraryProvider>();
-    final isInShelf = provider.books.any((b) => b.name == widget.book.name);
+    final bookProvider = context.read<BookProvider>();
+    final sourceProvider = context.read<SourceProvider>();
+    final isInShelf = bookProvider.books.any((b) => b.name == widget.book.name);
     if (mounted) setState(() => _isInShelf = isInShelf);
 
     setState(() => _errorMessage = null);
-    await provider.loadChapters(widget.book);
-    if (mounted && provider.currentChapters.isEmpty) {
+    final source = sourceProvider.findSourceForBook(widget.book);
+    if (source != null) {
+      await bookProvider.loadChapters(widget.book, source: source);
+    }
+    if (mounted && bookProvider.currentChapters.isEmpty) {
       setState(() => _errorMessage = '未获取到章节列表\n请检查书源是否可用');
     }
   }
 
   Future<void> _addToShelf() async {
-    final provider = context.read<LibraryProvider>();
+    final provider = context.read<BookProvider>();
     final book = widget.book.copyWith(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
     );
@@ -51,7 +56,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
             content: Text('《${widget.book.name}》已加入书架'),
             action: SnackBarAction(
               label: '去阅读',
-              onPressed: () => _startReading(context.read<LibraryProvider>()),
+              onPressed: () => _startReading(context.read<BookProvider>()),
             ),
           ),
         );
@@ -59,7 +64,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
   }
 
-  void _startReading(LibraryProvider provider) {
+  void _startReading(BookProvider provider) {
     if (provider.currentChapters.isEmpty) return;
     // 根据保存的进度定位上次阅读的章节
     Chapter startChapter;
@@ -233,7 +238,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
             child: FilledButton.tonalIcon(
               icon: const Icon(Icons.menu_book),
               label: Text(widget.book.progress > 0 || (widget.book.currentChapter?.isNotEmpty == true) ? '继续阅读' : '开始阅读'),
-              onPressed: () => _startReading(context.read<LibraryProvider>()),
+              onPressed: () => _startReading(context.read<BookProvider>()),
             ),
           ),
         ],
@@ -282,7 +287,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
           const SizedBox(width: 6),
           const Text('章节目录', style: TextStyle(fontWeight: FontWeight.w600)),
           const Spacer(),
-          Consumer<LibraryProvider>(
+          Consumer<BookProvider>(
             builder: (context, provider, _) {
               return Text('共 ${provider.currentChapters.length} 章',
                   style: TextStyle(fontSize: 12, color: Colors.grey[500]));
@@ -294,7 +299,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   Widget _buildChapterList() {
-    return Consumer<LibraryProvider>(
+    return Consumer<BookProvider>(
       builder: (context, provider, _) {
         if (provider.isLoading) {
           return const Center(
@@ -324,7 +329,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   label: const Text('重新加载'),
                   onPressed: () {
                     setState(() => _errorMessage = null);
-                    provider.loadChapters(widget.book);
+                    final src = context.read<SourceProvider>().findSourceForBook(widget.book);
+                    if (src != null) {
+                      provider.loadChapters(widget.book, source: src);
+                    }
                   },
                 ),
               ],
@@ -496,7 +504,13 @@ class _ReaderPageState extends State<ReaderPage> {
     setState(() => _isLoading = true);
     try {
       final chapter = widget.allChapters[_currentIndex];
-      final content = await context.read<LibraryProvider>().loadChapterContent(widget.book, chapter.url);
+      final source = context.read<SourceProvider>().findSourceForBook(widget.book);
+      String content;
+      if (source != null) {
+        content = await context.read<BookProvider>().loadChapterContent(chapter.url, source: source);
+      } else {
+        content = '⚠️ 未找到匹配的书源';
+      }
       if (mounted) {
         setState(() {
           _content = content.contains('（加载失败')
@@ -595,7 +609,7 @@ class _ReaderPageState extends State<ReaderPage> {
   void _saveProgress() {
     final progress = (_currentIndex + 1) / widget.allChapters.length;
     final currentChapter = widget.allChapters[_currentIndex].title;
-    context.read<LibraryProvider>().updateProgress(
+    context.read<BookProvider>().updateProgress(
       widget.book.id,
       progress,
       currentChapter,

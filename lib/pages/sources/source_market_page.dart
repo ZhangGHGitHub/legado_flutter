@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/book_source.dart';
-import '../../providers/library_provider.dart';
+import '../../providers/source_provider.dart';
 import '../../services/book_source_service.dart';
 
 /// 书源市场 - 内置推荐书源，一键导入
@@ -36,7 +36,7 @@ class SourceMarketPage extends StatelessWidget {
   }
 
   void _importAll(BuildContext context, Map<String, List<BookSource>> market) {
-    final provider = context.read<LibraryProvider>();
+    final provider = context.read<SourceProvider>();
     for (final entry in market.entries) {
       for (final source in entry.value) {
         provider.addSource(source);
@@ -106,7 +106,7 @@ class _SourceMarketTile extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: Consumer<LibraryProvider>(
+        trailing: Consumer<SourceProvider>(
           builder: (context, provider, _) {
             final exists = provider.sources.any(
               (s) => s.bookSourceUrl == source.bookSourceUrl,

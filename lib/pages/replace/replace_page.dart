@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/replace_rule.dart';
-import '../../providers/library_provider.dart';
+import '../../providers/replace_provider.dart';
 
 /// 替换净化页面 - 管理正则替换规则，去除广告
 class ReplacePage extends StatefulWidget {
@@ -26,7 +26,7 @@ class _ReplacePageState extends State<ReplacePage> {
           PopupMenuButton<String>(
             onSelected: (v) {
               if (v == 'reset') {
-                context.read<LibraryProvider>().resetReplaceRules();
+                context.read<ReplaceProvider>().resetReplaceRules();
               }
             },
             itemBuilder: (_) => [
@@ -35,7 +35,7 @@ class _ReplacePageState extends State<ReplacePage> {
           ),
         ],
       ),
-      body: Consumer<LibraryProvider>(
+      body: Consumer<ReplaceProvider>(
         builder: (context, provider, _) {
           final rules = provider.replaceRules;
 
@@ -164,7 +164,7 @@ class _ReplacePageState extends State<ReplacePage> {
                   isRegex: isRegex,
                   isEnabled: rule?.isEnabled ?? true,
                 );
-                context.read<LibraryProvider>().saveReplaceRule(newRule);
+                context.read<ReplaceProvider>().addRule(newRule);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(rule == null ? '规则已添加' : '规则已更新')),
                 );
@@ -216,7 +216,7 @@ class _ReplaceRuleTile extends StatelessWidget {
         trailing: Switch(
           value: rule.isEnabled,
           onChanged: (v) {
-            context.read<LibraryProvider>().toggleReplaceRule(rule.id, v);
+            context.read<ReplaceProvider>().toggleRule(rule.id, v);
           },
         ),
         onLongPress: () {
@@ -230,7 +230,7 @@ class _ReplaceRuleTile extends StatelessWidget {
                 FilledButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    context.read<LibraryProvider>().deleteReplaceRule(rule.id);
+                    context.read<ReplaceProvider>().deleteRule(rule.id);
                   },
                   style: FilledButton.styleFrom(backgroundColor: Colors.red),
                   child: const Text('删除'),

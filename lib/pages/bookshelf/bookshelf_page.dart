@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/book.dart';
-import '../../providers/library_provider.dart';
+import '../../providers/book_provider.dart';
 import '../reader/reader_page.dart';
 
 /// 书架页面
@@ -62,7 +62,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
   }
 
   Future<void> _addLocalBook() async {
-    final provider = context.read<LibraryProvider>();
+    final provider = context.read<BookProvider>();
     final book = await provider.importLocalBook();
     if (book != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -129,7 +129,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
         ],
       ),
 
-      body: Consumer<LibraryProvider>(
+      body: Consumer<BookProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading && provider.books.isEmpty) {
             return const Center(child: CircularProgressIndicator());
@@ -271,7 +271,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
                     ],
                   ),
                   const SizedBox(height: 2),
-                  // 最新章节（暂无独立字段，后续补）
+                  // 最新章节
                   Row(
                     children: [
                       Icon(Icons.update,
@@ -279,7 +279,9 @@ class _BookshelfPageState extends State<BookshelfPage> {
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          book.currentChapter ?? '暂无更新',
+                          book.lastChapter?.isNotEmpty == true
+                              ? book.lastChapter!
+                              : '暂无更新',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -356,7 +358,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
           FilledButton(
             onPressed: () {
               Navigator.pop(ctx);
-              context.read<LibraryProvider>().removeBook(book.id);
+              context.read<BookProvider>().removeBook(book.id);
             },
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('移除'),

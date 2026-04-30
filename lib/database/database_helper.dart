@@ -25,7 +25,7 @@ class DatabaseHelper {
     final path = p.join(dbPath, 'legado.db');
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _createTables,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -47,6 +47,11 @@ class DatabaseHelper {
             await db.execute("ALTER TABLE books ADD COLUMN bookSourceUrl TEXT DEFAULT ''");
           } catch (_) {}
         }
+        if (oldV < 5) {
+          try {
+            await db.execute("ALTER TABLE books ADD COLUMN lastChapter TEXT DEFAULT ''");
+          } catch (_) {}
+        }
       },
     );
   }
@@ -62,6 +67,7 @@ class DatabaseHelper {
         type TEXT DEFAULT 'online',
         progress REAL DEFAULT 0.0,
         currentChapter TEXT,
+        lastChapter TEXT DEFAULT '',
         isFavorite INTEGER DEFAULT 0,
         sourceUrl TEXT DEFAULT '',
         description TEXT DEFAULT '',
@@ -145,6 +151,7 @@ class DatabaseHelper {
       'type': book.type,
       'progress': book.progress,
       'currentChapter': book.currentChapter,
+      'lastChapter': book.lastChapter,
       'isFavorite': book.isFavorite ? 1 : 0,
       'sourceUrl': book.sourceUrl,
       'description': book.description,
@@ -408,6 +415,17 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  Future<void> updateReplaceRule(ReplaceRule rule) async {
+    final db = await database;
+    await db.update('replace_rules', {
+      'name': rule.name,
+      'pattern': rule.pattern,
+      'replacement': rule.replacement,
+      'isEnabled': rule.isEnabled ? 1 : 0,
+      'isRegex': rule.isRegex ? 1 : 0,
+    }, where: 'id = ?', whereArgs: [rule.id]);
   }
 
   Future<void> deleteReplaceRule(String id) async {

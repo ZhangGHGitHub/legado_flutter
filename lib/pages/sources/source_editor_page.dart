@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/book_source.dart';
-import '../../providers/library_provider.dart';
+import '../../providers/source_provider.dart';
 import '../../services/book_source_service.dart';
 
 /// 书源规则编辑器 + 调试面板
@@ -107,7 +107,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
         ruleBookCoverUrl: parsed['ruleBookCoverUrl'] as String? ?? '',
       );
 
-      await context.read<LibraryProvider>().updateSource(updated);
+      await context.read<SourceProvider>().updateSource(updated);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('书源已保存')),

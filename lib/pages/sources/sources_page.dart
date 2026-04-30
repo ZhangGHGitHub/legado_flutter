@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import '../../models/book_source.dart';
-import '../../providers/library_provider.dart';
+import '../../providers/source_provider.dart';
+import '../../providers/book_provider.dart';
 import 'source_editor_page.dart';
 import 'source_market_page.dart';
 
@@ -60,7 +61,7 @@ class SourcesPage extends StatelessWidget {
           ),
         ],
       ),
-      body: Consumer<LibraryProvider>(
+      body: Consumer<SourceProvider>(
         builder: (context, provider, _) {
           final sources = provider.sources;
 
@@ -158,7 +159,7 @@ class SourcesPage extends StatelessWidget {
 
   /// 从JSON文件导入书源
   Future<void> _importFromJsonFile(BuildContext context) async {
-    final provider = context.read<LibraryProvider>();
+    final provider = context.read<SourceProvider>();
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -203,7 +204,7 @@ class SourcesPage extends StatelessWidget {
           FilledButton(
             onPressed: () {
               Navigator.pop(ctx);
-              context.read<LibraryProvider>().importSources(controller.text);
+              context.read<SourceProvider>().importSources(controller.text);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('✅ 书源导入成功')),
               );
@@ -249,7 +250,7 @@ class SourcesPage extends StatelessWidget {
               final url = controller.text.trim();
               if (url.isEmpty) return;
               Navigator.pop(ctx);
-              final provider = context.read<LibraryProvider>();
+              final provider = context.read<SourceProvider>();
               final success = await provider.importSourcesFromUrl(url);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -267,7 +268,7 @@ class SourcesPage extends StatelessWidget {
 
   /// 导入本地书籍
   void _importLocalBook(BuildContext context) {
-    context.read<LibraryProvider>().importLocalBook();
+    context.read<BookProvider>().importLocalBook();
   }
 }
 
@@ -308,7 +309,7 @@ class _SourceTile extends StatelessWidget {
       ),
       trailing: Switch(
         value: source.enabled,
-        onChanged: (v) => context.read<LibraryProvider>().toggleSource(
+        onChanged: (v) => context.read<SourceProvider>().toggleSource(
           source.bookSourceUrl, v,
         ),
       ),
@@ -323,7 +324,7 @@ class _SourceTile extends StatelessWidget {
               FilledButton(
                 onPressed: () {
                   Navigator.pop(ctx);
-                  context.read<LibraryProvider>().deleteSource(source.bookSourceUrl);
+                  context.read<SourceProvider>().deleteSource(source.bookSourceUrl);
                 },
                 style: FilledButton.styleFrom(backgroundColor: Colors.red),
                 child: const Text('删除'),
@@ -337,7 +338,7 @@ class _SourceTile extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (_) => ChangeNotifierProvider.value(
-              value: context.read<LibraryProvider>(),
+              value: context.read<SourceProvider>(),
               child: SourceEditorPage(source: source),
             ),
           ),

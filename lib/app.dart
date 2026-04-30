@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'pages/bookshelf/bookshelf_page.dart';
 import 'pages/search/search_page.dart';
 import 'pages/sources/sources_page.dart';
 import 'pages/settings/settings_page.dart';
+import 'providers/book_provider.dart';
+import 'providers/source_provider.dart';
+import 'database/database_helper.dart';
+import 'services/book_source_service.dart';
 
 /// App 根组件 - 底部导航 + 主题
 class LegadoApp extends StatelessWidget {
@@ -60,6 +65,34 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initProviders());
+  }
+
+  Future<void> _initProviders() async {
+    final db = DatabaseHelper();
+    final bookProvider = context.read<BookProvider>();
+    final sourceProvider = context.read<SourceProvider>();
+
+    // 加载书架
+    await bookProvider.loadBooks();
+
+    // 加载书源（首次运行导入默认书源）
+    var sources = await db.getBookSources();
+    if (sources.isEmpty) {
+      await db.insertBookSources(BookSourceService.builtInSources());
+      sources = await db.getBookSources();
+    }
+    await sourceProvider.loadSources();
+
+    if (mounted) {
+      setState(() => _initialized = true);
+    }
+  }
 
   final List<Widget> _pages = const [
     BookshelfPage(),
@@ -70,6 +103,11 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_initialized) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,

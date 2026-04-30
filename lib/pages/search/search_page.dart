@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/book.dart';
-import '../../providers/library_provider.dart';
+import '../../providers/source_provider.dart';
 import '../reader/reader_page.dart';
 
 /// 搜索页面 - 扁平列表（仿 Legado 风格）
@@ -25,11 +25,11 @@ class _SearchPageState extends State<SearchPage> {
 
   void _search(String keyword) {
     if (keyword.trim().isEmpty) return;
-    context.read<LibraryProvider>().searchAll(keyword.trim());
+    context.read<SourceProvider>().searchAll(keyword.trim());
   }
 
   /// 根据书源 URL 获取书源名称
-  String _sourceName(LibraryProvider provider, String sourceUrl) {
+  String _sourceName(SourceProvider provider, String sourceUrl) {
     for (final s in provider.sources) {
       if (s.bookSourceUrl == sourceUrl) {
         return s.bookSourceName;
@@ -188,7 +188,7 @@ class _SearchPageState extends State<SearchPage> {
           ),
         ],
       ),
-      body: Consumer<LibraryProvider>(
+      body: Consumer<SourceProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading) {
             return const Center(
