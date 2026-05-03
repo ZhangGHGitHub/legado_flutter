@@ -38,6 +38,9 @@ class _BookshelfPageState extends State<BookshelfPage> {
       case 'add_local':
         _addLocalBook();
         break;
+      case 'cache_all':
+        _cacheAllBooks();
+        break;
       default:
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${_menuLabel(action)}（待实现）')),
@@ -51,6 +54,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
       case 'add_local': return '添加本地';
       case 'remote_books': return '远程书籍';
       case 'add_url': return '添加网址';
+      case 'cache_all': return '缓存全部';
       case 'shelf_mgmt': return '书架管理';
       case 'cache_export': return '缓存/导出';
       case 'group_mgmt': return '分组管理';
@@ -68,6 +72,50 @@ class _BookshelfPageState extends State<BookshelfPage> {
     if (book != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('已导入: ${book.name}')),
+      );
+    }
+  }
+
+  /// 缓存书架中所有书籍的章节
+  Future<void> _cacheAllBooks() async {
+    final provider = context.read<BookProvider>();
+    final sourceProvider = context.read<SourceProvider>();
+    final books = provider.books.where((b) => b.bookSourceUrl.isNotEmpty).toList();
+    if (books.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('没有需要缓存的书籍')),
+      );
+      return;
+    }
+
+    int totalBooks = books.length;
+    int completedBooks = 0;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('正在缓存 $totalBooks 本书的章节...'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+
+    for (final book in books) {
+      final source = sourceProvider.findSourceForBook(book);
+      if (source == null) continue;
+
+      try {
+        await provider.loadChapters(book, source: source);
+        // provider.currentChapters 已有 ID（来自 book_source_service）
+        await provider.downloadAllChapters(book.id, provider.currentChapters, source);
+        completedBooks++;
+      } catch (e) {
+        debugPrint('  ✗ 缓存失败: ${book.name} — $e');
+      }
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('缓存完成: $completedBooks/$totalBooks 本书')),
       );
     }
   }
@@ -115,6 +163,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
                 const PopupMenuItem(value: 'add_local', child: _MenuTile(icon: Icons.file_open, title: '添加本地')),
                 const PopupMenuItem(value: 'remote_books', child: _MenuTile(icon: Icons.cloud_download, title: '远程书籍')),
                 const PopupMenuItem(value: 'add_url', child: _MenuTile(icon: Icons.link, title: '添加网址')),
+                const PopupMenuItem(value: 'cache_all', child: _MenuTile(icon: Icons.download, title: '缓存全部')),
                 const PopupMenuDivider(),
                 const PopupMenuItem(value: 'shelf_mgmt', child: _MenuTile(icon: Icons.shelves, title: '书架管理')),
                 const PopupMenuItem(value: 'cache_export', child: _MenuTile(icon: Icons.cached, title: '缓存/导出')),

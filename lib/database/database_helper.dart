@@ -25,7 +25,7 @@ class DatabaseHelper {
     final path = p.join(dbPath, 'legado.db');
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _createTables,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -52,6 +52,11 @@ class DatabaseHelper {
             await db.execute("ALTER TABLE books ADD COLUMN lastChapter TEXT DEFAULT ''");
           } catch (_) {}
         }
+        if (oldV < 6) {
+          try {
+            await db.execute("ALTER TABLE books ADD COLUMN currentPageIndex INTEGER DEFAULT 0");
+          } catch (_) {}
+        }
       },
     );
   }
@@ -68,6 +73,7 @@ class DatabaseHelper {
         progress REAL DEFAULT 0.0,
         currentChapter TEXT,
         lastChapter TEXT DEFAULT '',
+        currentPageIndex INTEGER DEFAULT 0,
         isFavorite INTEGER DEFAULT 0,
         sourceUrl TEXT DEFAULT '',
         description TEXT DEFAULT '',
@@ -152,6 +158,7 @@ class DatabaseHelper {
       'progress': book.progress,
       'currentChapter': book.currentChapter,
       'lastChapter': book.lastChapter,
+      'currentPageIndex': book.currentPageIndex,
       'isFavorite': book.isFavorite ? 1 : 0,
       'sourceUrl': book.sourceUrl,
       'description': book.description,
@@ -168,11 +175,11 @@ class DatabaseHelper {
     })).toList();
   }
 
-  Future<void> updateBookProgress(String bookId, double progress, String? chapter) async {
+  Future<void> updateBookProgress(String bookId, double progress, String? chapter, {int pageIndex = 0}) async {
     final db = await database;
     await db.update(
       'books',
-      {'progress': progress, 'currentChapter': chapter, 'updatedAt': DateTime.now().toIso8601String()},
+      {'progress': progress, 'currentChapter': chapter, 'currentPageIndex': pageIndex, 'updatedAt': DateTime.now().toIso8601String()},
       where: 'id = ?',
       whereArgs: [bookId],
     );

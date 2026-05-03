@@ -190,7 +190,6 @@ class BookSourceService {
           encodedParts.add('$key=$encodedVal');
         }
         encodedBody = encodedParts.join('&');
-        debugPrint('  ▸ body($charsetName)=$encodedBody');
       } else {
         encodedBody = body
             .split('&')
@@ -202,10 +201,7 @@ class BookSourceService {
               return '$key=${Uri.encodeQueryComponent(val)}';
             })
             .join('&');
-        debugPrint('  ▸ body(UTF-8)=$encodedBody');
       }
-
-      debugPrint('  ▸ body(原始)=$body');
 
       response = await _dio.post(
         resolvedUrl,
@@ -225,12 +221,10 @@ class BookSourceService {
     }
 
     final statusCode = response.statusCode ?? 0;
-    debugPrint('  ▸ 状态码=$statusCode');
     List<int> rawBytes = response.data ?? [];
 
     if (rawBytes.length >= 2 && rawBytes[0] == 0x1F && rawBytes[1] == 0x8B) {
       rawBytes = gzip.decode(rawBytes);
-      debugPrint('  ▸ gzip 解压后=${rawBytes.length} 字节');
     }
 
     return Uint8List.fromList(rawBytes);
@@ -243,17 +237,13 @@ class BookSourceService {
       try {
         return utf8.decode(rawBytes);
       } catch (e) {
-        debugPrint('  ▸ charset "UTF-8" 失败: $e');
+        // UTF-8 失败，尝试常见中文 charset
       }
-      // UTF-8 失败，尝试常见中文 charset
       for (final alias in ['gb2312', 'GB2312', 'GBK', 'cp936', '936', 'windows-936', 'gb18030']) {
         try {
           final result = await CharsetConverter.decode(alias, rawBytes);
-          debugPrint('  ▸ charset "$alias" 解码成功');
           return result;
-        } catch (e) {
-          debugPrint('  ▸ charset "$alias" 失败: $e');
-        }
+        } catch (_) {}
       }
       return utf8.decode(rawBytes);
     }
@@ -270,11 +260,8 @@ class BookSourceService {
     for (final alias in aliases) {
       try {
         final result = await CharsetConverter.decode(alias, rawBytes);
-        debugPrint('  ▸ charset "$alias" 解码成功');
         return result;
-      } catch (e) {
-        debugPrint('  ▸ charset "$alias" 失败: $e');
-      }
+      } catch (_) {}
     }
 
     // 全部失败，回退 UTF-8
@@ -295,18 +282,12 @@ class BookSourceService {
       }
 
       debugPrint('🔍 ${source.bookSourceName}: ${cfg.method} $resolvedUrl');
-      if (cfg.body != null) debugPrint('  ▸ body: ${cfg.body}');
-
       // 发送请求
       final rawBytes = await _executeRequest(resolvedUrl,
           method: cfg.method, body: cfg.body, charset: cfg.charset, source: source);
-      debugPrint('  ▸ 字节=${rawBytes.length}');
 
       // charset 解码
       final body = await _decodeResponse(rawBytes, charset: cfg.charset);
-      debugPrint('  ▸ 前100字符=${body.substring(0, body.length < 100 ? body.length : 100)}');
-      // 搜索成功时打印完整 HTML 用于调试（只打前 2000 字符）
-      debugPrint('  ▸ 响应HTML(前2000)=\n${body.substring(0, body.length < 2000 ? body.length : 2000)}');
 
       // 尝试 JSON 解析
       dynamic data;
@@ -315,8 +296,6 @@ class BookSourceService {
       } catch (e) {
         debugPrint('  ▸ JSON 解析失败: $e');
       }
-
-      debugPrint('  ▸ 响应类型: ${data.runtimeType}, isJsonApiSource=${source.isJsonApiSource}');
 
       // 检测是否为 JSON API 书源
       if (data is Map || data is List) {
@@ -395,7 +374,6 @@ class BookSourceService {
         );
         final statusCode = resp.statusCode ?? 0;
         rawBytes = (resp.data as List<int>?) ?? [];
-        debugPrint('  ▸ 状态码=$statusCode, 字节=${rawBytes.length}');
         if (statusCode == 503 && retries < maxRetries - 1) {
           retries++;
           debugPrint('  ⚠ 503，${retries * 2}秒后重试($retries/$maxRetries)...');
@@ -406,10 +384,8 @@ class BookSourceService {
       }
       if (rawBytes.length >= 2 && rawBytes[0] == 0x1F && rawBytes[1] == 0x8B) {
         rawBytes = gzip.decode(rawBytes);
-        debugPrint('  ▸ gzip 解压后=${rawBytes.length} 字节');
       }
       final body = await _decodeResponse(Uint8List.fromList(rawBytes));
-      debugPrint('  ▸ 前100字符=${body.substring(0, body.length < 100 ? body.length : 100)}');
       final document = parse(body);
 
       final results = RuleEngine.parseChapters(document, source: source);
@@ -449,7 +425,6 @@ class BookSourceService {
 
       // 提取 articleid
       final articleId = JsonPath.resolveString(detailData, 'data.articleid');
-      debugPrint('  ▸ JSON API 章节: articleId=$articleId');
 
       // 2. 构造章节列表 URL
       String tocUrl = source.ruleBookInfoTocUrl;
@@ -540,13 +515,10 @@ class BookSourceService {
         options: _buildOptions(source),
       );
       List<int> rawBytes = (response.data as List<int>?) ?? [];
-      debugPrint('  ▸ 状态码=${response.statusCode}, 字节=${rawBytes.length}');
       if (rawBytes.length >= 2 && rawBytes[0] == 0x1F && rawBytes[1] == 0x8B) {
         rawBytes = gzip.decode(rawBytes);
-        debugPrint('  ▸ gzip 解压后=${rawBytes.length} 字节');
       }
       final body = await _decodeResponse(Uint8List.fromList(rawBytes));
-      debugPrint('  ▸ 前100字符=${body.substring(0, body.length < 100 ? body.length : 100)}');
       final document = parse(body);
       final content = RuleEngine.parseContent(document, source: source);
       return content.isNotEmpty ? content : '（此章节暂无内容）';
@@ -646,11 +618,8 @@ class BookSourceService {
         if (e is! Map) continue;
         try {
           final src = BookSource.fromJson(Map<String, dynamic>.from(e));
-          debugPrint('  导入书源: ${src.bookSourceName}, rawSourceJson长度=${src.rawSourceJson.length}, searchUrl="${src.ruleSearchUrl}"');
           sources.add(src);
-        } catch (parseErr) {
-          debugPrint('  跳过无法解析的书源: $parseErr');
-        }
+        } catch (_) {}
       }
       debugPrint('从 $url 获取书源: 成功导入 ${sources.length}/${sourceList.length} 个');
       return sources;

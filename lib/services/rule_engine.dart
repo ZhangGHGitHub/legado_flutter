@@ -1,7 +1,17 @@
 import 'dart:convert';
 import 'package:html/dom.dart' as dom;
-import '../models/book_source.dart';
 import 'package:flutter/foundation.dart';
+import '../models/book_source.dart';
+import 'js_evaluator.dart';
+
+/// 全局懒加载的 JS 执行器实例
+JsEvaluatorService? _jsEval;
+
+/// 获取 JS 执行器（懒初始化）
+JsEvaluatorService _getJsEval() {
+  _jsEval ??= JsEvaluatorService();
+  return _jsEval!;
+}
 
 /// XPath 解析器 — 支持 Legado 书源中的 XPath 选择器
 ///
@@ -750,13 +760,15 @@ class LegadoSegment {
       );
     }
 
-    // 检查 @js: 前缀（Legado 的 JS 表达式，暂不完整实现）
+    // 检查 @js: 前缀（Legado 的 JS 表达式）
     if (s.startsWith('js:') || s.startsWith('js ')) {
       final jsExpr = s.contains(':') ? s.substring(3).trim() : s.substring(2).trim();
       return LegadoSegment(
         raw: raw,
         type: 'js',
         name: jsExpr,
+        isTerminal: true,
+        terminalType: 'js',
         reversed: reversed,
       );
     }
@@ -883,7 +895,8 @@ class LegadoSegment {
           } catch (_) {}
           break;
         case 'js':
-          debugPrint('  ⚠ @js: 规则暂不支持（"$name"），请使用 CSS/XPath 替代');
+          // @js: 是终端类型，选择器层面不做处理，透传元素
+          result.add(el);
           break;
         default:
           if (type.isNotEmpty) {
@@ -951,6 +964,24 @@ class LegadoSegment {
             .join('\n');
       case 'all':
         return el.outerHtml.trim();
+      case 'js':
+        // 执行 @js: 表达式，以元素文本/属性为上下文
+        final String expr = name;
+        // 构建包含元素信息的 data
+        final data = <String, dynamic>{
+          'result': el.text.trim(),
+          'text': el.text.trim(),
+          'html': el.innerHtml.trim(),
+          'href': el.attributes['href'] ?? '',
+          'src': el.attributes['src'] ?? '',
+          'outerHtml': el.outerHtml.trim(),
+        };
+        // 添加所有属性
+        for (final entry in el.attributes.entries) {
+          data[entry.key as String] = entry.value;
+        }
+        final engine = _getJsEval();
+        return engine.eval(expr, data);
       default:
         return el.text.trim();
     }
@@ -1078,15 +1109,12 @@ class RuleEngine {
     List<dom.Element> items;
     if (hasCustomRules) {
       try {
-        debugPrint('  ▸ ruleSearchList="${source.ruleSearchList}"');
         if (_isLegadoRule(source.ruleSearchList)) {
           // Legado 规则搜索列表
           final parsed = LegadoRule.parse(source.ruleSearchList);
           items = parsed.queryAll(document.body!);
-          debugPrint('  ▸ Legado 规则匹配: items=${items.length}');
         } else {
           items = document.querySelectorAll(source.ruleSearchList);
-          debugPrint('  ▸ CSS 选择器匹配: items=${items.length}');
         }
       } catch (e) {
         debugPrint('  ⚠ 搜索列表规则无效 ("${source.ruleSearchList}"): $e');
@@ -1139,7 +1167,6 @@ class RuleEngine {
       }
 
       if (name.isNotEmpty && url.isNotEmpty) {
-        debugPrint('  ✓ 搜索结果: name="$name" url="$url"');
         results.add({
           'name': name,
           'author': author,
@@ -1243,7 +1270,6 @@ class RuleEngine {
   }) {
     String content;
 
-    debugPrint('  ▸ ruleContent="${source.ruleContent}"');
     if (source.ruleContent.isNotEmpty) {
       // 兜底: 如果 ruleContent 是 {content: ...} 格式（脏数据），提取 content 值
       String effectiveRule = source.ruleContent;
@@ -1267,11 +1293,9 @@ class RuleEngine {
         content = _extractByRule(document.body!, effectiveRule);
       } else {
         content = CssSelector.extractInnerHtml(document.body!, source.ruleContent);
-        debugPrint('  ▸ CSS 提取: 长度=${content.length}');
       }
     } else {
       content = _smartExtractContent(document);
-      debugPrint('  ▸ 智能提取: 长度=${content.length}');
     }
 
     // 去除不需要的元素
@@ -1314,23 +1338,19 @@ class RuleEngine {
   }) {
     final results = <Map<String, String>>[];
     if (source.rawSourceJson.isEmpty) {
-      debugPrint('  ▸ rawSourceJson 为空');
       return results;
     }
 
     try {
       final ruleSearch = jsonDecode(source.ruleSearchJson) as Map<String, dynamic>;
-      debugPrint('  ▸ ruleSearch: ${ruleSearch.keys}');
 
       final root = jsonDecode(jsonStr);
 
       // 1. 获取书籍列表路径
       final bookListPath = ruleSearch['bookList'] as String? ?? '';
-      debugPrint('  ▸ bookListPath: "$bookListPath"');
       if (bookListPath.isEmpty) return results;
 
       dynamic items = JsonPath.resolve(root, bookListPath);
-      debugPrint('  ▸ items type: ${items.runtimeType}, length: ${items is List ? items.length : "N/A"}');
       if (items == null) return results;
       if (items is! List) items = [items];
 
@@ -1340,12 +1360,9 @@ class RuleEngine {
       final bookUrlPath = ruleSearch['bookUrl'] as String? ?? '';
       final coverUrlPath = ruleSearch['coverUrl'] as String? ?? '';
       final introPath = ruleSearch['intro'] as String? ?? '';
-      debugPrint('  ▸ namePath="$namePath" authorPath="$authorPath"');
 
       for (final item in items) {
-        debugPrint('  ▸ item keys: ${item is Map ? item.keys : "not a Map"}');
         final name = namePath.isNotEmpty ? JsonPath.resolveString(item, namePath) : '';
-        debugPrint('  ▸ resolved name: "$name"');
         if (name.isEmpty) continue;
 
         String url = '';

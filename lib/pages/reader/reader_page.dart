@@ -21,6 +21,7 @@ class BookDetailPage extends StatefulWidget {
 class _BookDetailPageState extends State<BookDetailPage> {
   bool _isInShelf = false;
   String? _errorMessage;
+  final ScrollController _chapterScrollController = ScrollController();
 
   @override
   void initState() {
@@ -79,13 +80,76 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
   }
 
+  /// 从书架移除
+  Future<void> _removeFromShelf() async {
+    final provider = context.read<BookProvider>();
+    await provider.removeBook(widget.book.id);
+    if (mounted) {
+      setState(() => _isInShelf = false);
+      if (context.mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('已从书架移除《${widget.book.name}》'),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  /// 批量缓存所有章节
+  Future<void> _downloadAllChapters(BookProvider provider) async {
+    if (provider.isDownloading) {
+      provider.cancelDownload();
+      return;
+    }
+    final source = context.read<SourceProvider>().findSourceForBook(widget.book);
+    if (source == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('未找到书源，无法缓存')),
+        );
+      }
+      return;
+    }
+    final chapters = provider.currentChapters;
+    if (chapters.isEmpty) return;
+
+    // 章节已有 ID（来自 book_source_service），直接下载
+    provider.downloadAllChapters(widget.book.id, chapters, source);
+  }
+
+  /// 章节列表加载后自动滚动到已读章节
+  void _scrollToCurrentChapter(BookProvider provider) {
+    if (!mounted || provider.currentChapters.isEmpty) return;
+    final idx = provider.currentChapters.indexWhere(
+      (c) => c.title == widget.book.currentChapter,
+    );
+    if (idx >= 0 && _chapterScrollController.hasClients) {
+      final offset = idx * 56.0; // ListTile 高度估算
+      _chapterScrollController.animateTo(
+        offset.clamp(0, _chapterScrollController.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
   void _startReading(BookProvider provider) {
     if (provider.currentChapters.isEmpty) return;
+    // 从 provider 中获取最新的 Book 数据（含 currentPageIndex）
+    final latestBook = provider.books.firstWhere(
+      (b) => b.id == widget.book.id,
+      orElse: () => widget.book,
+    );
     // 根据保存的进度定位上次阅读的章节
     Chapter startChapter;
-    if (widget.book.currentChapter != null && widget.book.currentChapter!.isNotEmpty) {
+    if (latestBook.currentChapter != null && latestBook.currentChapter!.isNotEmpty) {
       final idx = provider.currentChapters.indexWhere(
-        (c) => c.title == widget.book.currentChapter,
+        (c) => c.title == latestBook.currentChapter,
       );
       if (idx >= 0) {
         startChapter = provider.currentChapters[idx];
@@ -99,12 +163,18 @@ class _BookDetailPageState extends State<BookDetailPage> {
       context,
       MaterialPageRoute(
         builder: (_) => ReaderPage(
-          book: widget.book,
+          book: latestBook,
           chapter: startChapter,
           allChapters: provider.currentChapters,
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _chapterScrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -238,22 +308,25 @@ class _BookDetailPageState extends State<BookDetailPage> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          if (!_isInShelf)
-            Expanded(
-              child: FilledButton.icon(
-                icon: const Icon(Icons.add),
-                label: const Text('加入书架'),
-                onPressed: _addToShelf,
-              ),
-            )
-          else
-            Expanded(
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.check),
-                label: const Text('已在书架'),
-                onPressed: null,
-              ),
-            ),
+          Expanded(
+            child: _isInShelf
+                ? FilledButton.tonalIcon(
+                    icon: const Icon(Icons.check, color: Colors.orange),
+                    label: Text(
+                      '移出书架',
+                      style: const TextStyle(color: Colors.orange),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.orange.withValues(alpha: 0.1),
+                    ),
+                    onPressed: _removeFromShelf,
+                  )
+                : FilledButton.tonalIcon(
+                    icon: const Icon(Icons.add),
+                    label: const Text('加入书架'),
+                    onPressed: _addToShelf,
+                  ),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: FilledButton.tonalIcon(
@@ -348,8 +421,34 @@ class _BookDetailPageState extends State<BookDetailPage> {
           const Spacer(),
           Consumer<BookProvider>(
             builder: (context, provider, _) {
-              return Text('共 ${provider.currentChapters.length} 章',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]));
+              if (provider.isDownloading && provider.downloadBookId == widget.book.id) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 16, height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${provider.downloadCompleted}/${provider.downloadTotal}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('共 ${provider.currentChapters.length} 章',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => _downloadAllChapters(provider),
+                    child: Icon(Icons.download, size: 18, color: Colors.blue[400]),
+                  ),
+                ],
+              );
             },
           ),
         ],
@@ -360,6 +459,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
   Widget _buildChapterList() {
     return Consumer<BookProvider>(
       builder: (context, provider, _) {
+        // 章节列表加载完成后，自动滚动到已读位置
+        if (provider.currentChapters.isNotEmpty && !provider.isLoading) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _scrollToCurrentChapter(provider);
+          });
+        }
+
         if (provider.isLoading) {
           return const Center(
             child: Column(
@@ -406,13 +512,17 @@ class _BookDetailPageState extends State<BookDetailPage> {
         }
 
         return ListView.separated(
+          controller: _chapterScrollController,
           padding: const EdgeInsets.symmetric(vertical: 4),
           itemCount: chapters.length,
           separatorBuilder: (context, i) => const Divider(height: 1, indent: 16),
           itemBuilder: (context, index) {
             final chapter = chapters[index];
+            final isCurrent = chapter.title == widget.book.currentChapter;
             return ListTile(
               dense: true,
+              selected: isCurrent,
+              selectedTileColor: Colors.blue.withValues(alpha: 0.08),
               leading: Text('${index + 1}',
                   style: TextStyle(color: Colors.grey[500], fontSize: 13)),
               title: Text(chapter.title, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -536,6 +646,7 @@ class _ReaderPageState extends State<ReaderPage> {
   bool _isLoading = true;
   int _currentIndex = 0;
   int _pageIndex = 0;
+  int? _pendingTargetPage; // 切换章节后要跳转到的页面索引
   List<String> _pages = [];
   late ReaderSettings _settings;
   late ScrollController _scrollController;
@@ -549,6 +660,10 @@ class _ReaderPageState extends State<ReaderPage> {
     _scrollController = ScrollController();
     _currentIndex = widget.allChapters.indexOf(widget.chapter);
     if (_currentIndex < 0) _currentIndex = 0;
+    // 恢复章内精确页面位置
+    if (widget.book.currentPageIndex > 0) {
+      _pendingTargetPage = widget.book.currentPageIndex;
+    }
     _loadContent();
   }
 
@@ -566,7 +681,11 @@ class _ReaderPageState extends State<ReaderPage> {
       final source = context.read<SourceProvider>().findSourceForBook(widget.book);
       String content;
       if (source != null) {
-        content = await context.read<BookProvider>().loadChapterContent(chapter.url, source: source);
+        content = await context.read<BookProvider>().loadChapterContentCached(
+          chapter.url,
+          source: source,
+          chapterId: chapter.id,
+        );
       } else {
         content = '⚠️ 未找到匹配的书源';
       }
@@ -605,8 +724,8 @@ class _ReaderPageState extends State<ReaderPage> {
     final pageWidth = renderBox.size.width - 40 - MediaQuery.of(context).padding.left - MediaQuery.of(context).padding.right;
     // 可用高度 = 可视区域 - appbar - 章节标题 - 底部进度条
     final appBarHeight = kToolbarHeight + MediaQuery.of(context).padding.top;
-    final progressHeight = 36.0;
     final chapterTitleHeight = _settings.fontSize + 28.0;
+    final progressHeight = 36.0;
     final pageHeight = renderBox.size.height - appBarHeight - chapterTitleHeight - progressHeight - 60;
 
     if (pageWidth <= 0 || pageHeight <= 0) {
@@ -656,22 +775,29 @@ class _ReaderPageState extends State<ReaderPage> {
     if (result.isEmpty) result.add(_content);
 
     _pageController?.dispose();
-    _pageController = PageController(initialPage: 0);
+    final targetPage = _pendingTargetPage ?? 0;
+    final clampedPage = targetPage < 0
+        ? result.length - 1
+        : (targetPage >= result.length ? 0 : targetPage);
+    _pageController = PageController(initialPage: clampedPage);
     setState(() {
       _pages = result;
-      _pageIndex = 0;
+      _pageIndex = clampedPage;
+      _pendingTargetPage = null; // 消费完毕
     });
-    debugPrint('📖 分页完成: ${result.length} 页 (总高度=$totalHeight, 页高=$pageHeight)');
+    debugPrint('📖 分页完成: ${result.length} 页 (目标=${clampedPage}, 总高度=$totalHeight, 页高=$pageHeight)');
   }
 
   /// 自动保存阅读进度
   void _saveProgress() {
     final progress = (_currentIndex + 1) / widget.allChapters.length;
     final currentChapter = widget.allChapters[_currentIndex].title;
+    final pageIdx = _settings.pageMode == 'slide' ? _pageIndex : 0;
     context.read<BookProvider>().updateProgress(
       widget.book.id,
       progress,
       currentChapter,
+      pageIndex: pageIdx,
     );
   }
 
@@ -683,6 +809,7 @@ class _ReaderPageState extends State<ReaderPage> {
     }
     _pageController?.dispose();
     _pageController = null;
+    // 保留旧页面内容，避免加载时空白闪烁；只清除分页
     _pages = [];
     _pageIndex = 0;
     setState(() => _currentIndex = index);
@@ -734,8 +861,7 @@ class _ReaderPageState extends State<ReaderPage> {
       appBar: AppBar(
         automaticallyImplyLeading: false,
         backgroundColor: theme.appBar.withValues(alpha: 0.95),
-        title: Text(chapter.title, style: const TextStyle(fontSize: 15),
-            overflow: TextOverflow.ellipsis),
+        title: const Text('阅读', style: TextStyle(fontSize: 15)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
@@ -754,8 +880,29 @@ class _ReaderPageState extends State<ReaderPage> {
       body: SafeArea(
         child: Column(
           children: [
+            // 加载进度条（切换章节时显示，首次加载无旧内容不显示）
+            if (_isLoading && _content != '加载中...')
+              LinearProgressIndicator(
+                backgroundColor: theme.text.withValues(alpha: 0.1),
+                color: theme.progress,
+                minHeight: 2,
+              ),
+            // 章节标题
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+              child: Text(
+                chapter.title,
+                style: TextStyle(
+                  fontSize: _settings.fontSize + 4,
+                  fontWeight: FontWeight.bold,
+                  color: theme.text,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const Divider(height: 8),
             Expanded(
-              child: _isLoading
+              child: _isLoading && _content == '加载中...'
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -779,20 +926,6 @@ class _ReaderPageState extends State<ReaderPage> {
                         )
                       : Column(
                           children: [
-                            // 章节标题
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-                              child: Text(
-                                chapter.title,
-                                style: TextStyle(
-                                  fontSize: _settings.fontSize + 4,
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.text,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                            const Divider(height: 8),
                             // 分页阅读区域
                             Expanded(
                               child: Stack(
@@ -889,6 +1022,7 @@ class _ReaderPageState extends State<ReaderPage> {
         duration: const Duration(milliseconds: 200), curve: Curves.easeInOut,
       );
     } else if (_currentIndex > 0) {
+      _pendingTargetPage = -1; // 上一章最后一页
       _goToChapter(_currentIndex - 1);
     }
   }
@@ -901,6 +1035,7 @@ class _ReaderPageState extends State<ReaderPage> {
         duration: const Duration(milliseconds: 200), curve: Curves.easeInOut,
       );
     } else if (_currentIndex < widget.allChapters.length - 1) {
+      _pendingTargetPage = 0; // 下一章第一页
       _goToChapter(_currentIndex + 1);
     }
   }
@@ -912,8 +1047,7 @@ class _ReaderPageState extends State<ReaderPage> {
       appBar: AppBar(
         automaticallyImplyLeading: false,
         backgroundColor: theme.appBar.withValues(alpha: 0.95),
-        title: Text(chapter.title, style: const TextStyle(fontSize: 15),
-            overflow: TextOverflow.ellipsis),
+        title: const Text('阅读', style: TextStyle(fontSize: 15)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
@@ -969,15 +1103,17 @@ class _ReaderPageState extends State<ReaderPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // 章节标题
-                      Text(
-                        chapter.title,
-                        style: TextStyle(
-                          fontSize: _settings.fontSize + 6,
-                          fontWeight: FontWeight.bold,
-                          color: theme.text,
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          chapter.title,
+                          style: TextStyle(
+                            fontSize: _settings.fontSize + 6,
+                            fontWeight: FontWeight.bold,
+                            color: theme.text,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 16),
                       SelectableText(
                         _content,
                         style: TextStyle(

@@ -7,7 +7,7 @@ import '../services/book_source_service.dart';
 import '../services/local_book_service.dart';
 import '../services/replace_service.dart';
 
-/// 书籍管理 Provider — 书架、阅读、章节
+/// 书籍管理 Provider — 书架、阅读、章节、下载缓存
 class BookProvider extends ChangeNotifier {
   final DatabaseHelper _db = DatabaseHelper();
   final BookSourceService _sourceService = BookSourceService();
@@ -18,9 +18,22 @@ class BookProvider extends ChangeNotifier {
   List<Chapter> _currentChapters = [];
   bool _isLoading = false;
 
+  // 下载状态
+  bool _isDownloading = false;
+  int _downloadTotal = 0;
+  int _downloadCompleted = 0;
+  String _downloadBookId = '';
+  bool _cancelRequested = false;
+
   List<Book> get books => _books;
   List<Chapter> get currentChapters => _currentChapters;
   bool get isLoading => _isLoading;
+  bool get isDownloading => _isDownloading;
+  int get downloadTotal => _downloadTotal;
+  int get downloadCompleted => _downloadCompleted;
+  String get downloadBookId => _downloadBookId;
+  double get downloadProgress =>
+      _downloadTotal > 0 ? _downloadCompleted / _downloadTotal : 0.0;
 
   /// 加载书架
   Future<void> loadBooks() async {
@@ -43,8 +56,8 @@ class BookProvider extends ChangeNotifier {
   }
 
   /// 更新阅读进度
-  Future<void> updateProgress(String bookId, double progress, String? chapter) async {
-    await _db.updateBookProgress(bookId, progress, chapter);
+  Future<void> updateProgress(String bookId, double progress, String? chapter, {int pageIndex = 0}) async {
+    await _db.updateBookProgress(bookId, progress, chapter, pageIndex: pageIndex);
     _books = await _db.getBooks();
     notifyListeners();
   }
@@ -63,6 +76,61 @@ class BookProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  // ── 下载缓存 ──
+
+  /// 取消当前下载
+  void cancelDownload() {
+    _cancelRequested = true;
+  }
+
+  /// 下载单个章节正文并保存到数据库
+  Future<String> downloadChapter(Chapter chapter, BookSource source) async {
+    final raw = await _sourceService.getChapterContent(chapter.url, source: source);
+    final content = _replaceService.apply(raw);
+    await _db.saveChapterContent(chapter.id, content);
+    return content;
+  }
+
+  /// 批量下载所有未缓存章节
+  Future<void> downloadAllChapters(String bookId, List<Chapter> chapters, BookSource source) async {
+    _isDownloading = true;
+    _downloadBookId = bookId;
+    _downloadTotal = chapters.length;
+    _downloadCompleted = 0;
+    _cancelRequested = false;
+    notifyListeners();
+
+    // 先保存章节列表（确保 id/索引正确）
+    await _db.insertChapters(chapters);
+
+    for (final chapter in chapters) {
+      if (_cancelRequested) break;
+
+      try {
+        await downloadChapter(chapter, source);
+        _downloadCompleted++;
+        notifyListeners();
+      } catch (e) {
+        debugPrint('  ✗ 下载失败: ${chapter.title} — $e');
+        _downloadCompleted++;
+        notifyListeners();
+      }
+    }
+
+    _isDownloading = false;
+    _downloadBookId = '';
+    notifyListeners();
+  }
+
+  /// 加载正文并自动缓存到本地
+  Future<String> loadChapterContentCached(String url, {required BookSource source, String? chapterId}) async {
+    final content = await loadChapterContent(url, source: source);
+    if (chapterId != null && content.isNotEmpty && !content.startsWith('⚠️') && !content.startsWith('（加载失败')) {
+      await _db.saveChapterContent(chapterId, content);
+    }
+    return content;
   }
 
   // ── 章节操作 ──

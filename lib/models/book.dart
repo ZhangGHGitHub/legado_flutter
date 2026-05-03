@@ -8,6 +8,7 @@ class Book {
   final double progress; // 阅读进度 0.0 ~ 1.0
   final String? currentChapter; // 已读到章节名
   final String? lastChapter; // 最新章节名（从书源获取的最新更新）
+  final int currentPageIndex; // 当前章节内阅读到的页面索引
   final bool isFavorite;
   final String sourceUrl; // 书籍来源链接（如章节列表 URL）
   final String description; // 书籍简介
@@ -22,6 +23,7 @@ class Book {
     this.progress = 0.0,
     this.currentChapter,
     this.lastChapter,
+    this.currentPageIndex = 0,
     this.isFavorite = false,
     this.sourceUrl = '',
     this.description = '',
@@ -38,6 +40,7 @@ class Book {
     double? progress,
     String? currentChapter,
     String? lastChapter,
+    int? currentPageIndex,
     bool? isFavorite,
     String? sourceUrl,
     String? description,
@@ -52,6 +55,7 @@ class Book {
       progress: progress ?? this.progress,
       currentChapter: currentChapter ?? this.currentChapter,
       lastChapter: lastChapter ?? this.lastChapter,
+      currentPageIndex: currentPageIndex ?? this.currentPageIndex,
       isFavorite: isFavorite ?? this.isFavorite,
       sourceUrl: sourceUrl ?? this.sourceUrl,
       description: description ?? this.description,
@@ -70,6 +74,7 @@ class Book {
       progress: (json['progress'] as num?)?.toDouble() ?? 0.0,
       currentChapter: json['currentChapter'] as String?,
       lastChapter: json['lastChapter'] as String?,
+      currentPageIndex: (json['currentPageIndex'] as num?)?.toInt() ?? 0,
       isFavorite: json['isFavorite'] as bool? ?? false,
       sourceUrl: json['sourceUrl'] as String? ?? '',
       description: json['description'] as String? ?? '',
@@ -88,6 +93,7 @@ class Book {
       'progress': progress,
       'currentChapter': currentChapter,
       'lastChapter': lastChapter,
+      'currentPageIndex': currentPageIndex,
       'isFavorite': isFavorite,
       'sourceUrl': sourceUrl,
       'description': description,
