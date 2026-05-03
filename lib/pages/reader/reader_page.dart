@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/book.dart';
@@ -51,19 +52,28 @@ class _BookDetailPageState extends State<BookDetailPage> {
     if (mounted) {
       setState(() => _isInShelf = true);
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-          ..removeCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text('《${widget.book.name}》已加入书架'),
-              duration: const Duration(seconds: 3),
-              behavior: SnackBarBehavior.floating,
-              action: SnackBarAction(
-                label: '去阅读',
-                onPressed: () => _startReading(context.read<BookProvider>()),
-              ),
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('《${widget.book.name}》已加入书架'),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 10), // 给 action 足够时间
+            action: SnackBarAction(
+              label: '去阅读',
+              onPressed: () {
+                messenger.hideCurrentSnackBar();
+                _startReading(context.read<BookProvider>());
+              },
             ),
-          );
+          ),
+        );
+        // 手动 3 秒后强制关闭（解决 Windows 上 SnackBar 不自动消失的 bug）
+        Timer(const Duration(seconds: 3), () {
+          if (context.mounted) {
+            messenger.hideCurrentSnackBar();
+          }
+        });
       }
     }
   }
