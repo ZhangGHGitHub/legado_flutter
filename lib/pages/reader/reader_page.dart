@@ -51,15 +51,19 @@ class _BookDetailPageState extends State<BookDetailPage> {
     if (mounted) {
       setState(() => _isInShelf = true);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('《${widget.book.name}》已加入书架'),
-            action: SnackBarAction(
-              label: '去阅读',
-              onPressed: () => _startReading(context.read<BookProvider>()),
+        ScaffoldMessenger.of(context)
+          ..removeCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text('《${widget.book.name}》已加入书架'),
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+              action: SnackBarAction(
+                label: '去阅读',
+                onPressed: () => _startReading(context.read<BookProvider>()),
+              ),
             ),
-          ),
-        );
+          );
       }
     }
   }
