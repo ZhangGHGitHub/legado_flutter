@@ -191,6 +191,12 @@ class DatabaseHelper {
     await db.delete('books', where: 'id = ?', whereArgs: [bookId]);
   }
 
+  Future<void> updateBookCover(String bookId, String coverUrl) async {
+    final db = await database;
+    await db.update('books', {'coverUrl': coverUrl},
+        where: 'id = ?', whereArgs: [bookId]);
+  }
+
   // ═══════════════════ 书源操作 ═══════════════════
 
   /// 将数据库行转换为 BookSource（兼容旧表结构 + Legado 嵌套格式）

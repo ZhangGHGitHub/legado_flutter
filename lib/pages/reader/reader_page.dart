@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import '../../models/book.dart';
 import '../../models/book_source.dart';
 import '../../models/chapter.dart';
+import '../../database/database_helper.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
+import '../../services/book_source_service.dart';
 
 /// ═══════════════════════════════════════════════════
 /// 书籍详情页 - 显示书籍信息 + 章节列表 + 加入书架
@@ -21,6 +23,7 @@ class BookDetailPage extends StatefulWidget {
 class _BookDetailPageState extends State<BookDetailPage> {
   bool _isInShelf = false;
   String? _errorMessage;
+  String _coverUrl = ''; // 可能从搜索获取的封面 URL
   final ScrollController _chapterScrollController = ScrollController();
 
   @override
@@ -32,6 +35,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   Future<void> _initPage() async {
     final bookProvider = context.read<BookProvider>();
     final sourceProvider = context.read<SourceProvider>();
+    _coverUrl = widget.book.coverUrl;
     final isInShelf = bookProvider.books.any((b) => b.name == widget.book.name);
     if (mounted) setState(() => _isInShelf = isInShelf);
 
@@ -39,9 +43,36 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final source = sourceProvider.findSourceForBook(widget.book);
     if (source != null) {
       await bookProvider.loadChapters(widget.book, source: source);
+      // 如果封面为空，尝试从书源搜索封面
+      if (_coverUrl.isEmpty && mounted) {
+        await _fetchCoverFromSource(source);
+      }
     }
     if (mounted && bookProvider.currentChapters.isEmpty) {
       setState(() => _errorMessage = '未获取到章节列表\n请检查书源是否可用');
+    }
+  }
+
+  /// 从书源搜索封面 URL
+  Future<void> _fetchCoverFromSource(BookSource source) async {
+    try {
+      final service = BookSourceService();
+      final results = await service.search(source, widget.book.name);
+      for (final r in results) {
+        if (r['name'] == widget.book.name && (r['coverUrl']?.isNotEmpty == true)) {
+          if (mounted) {
+            setState(() => _coverUrl = r['coverUrl'] ?? '');
+            // 如果已加入书架，更新数据库
+            if (_isInShelf) {
+              final db = DatabaseHelper();
+              await db.updateBookCover(widget.book.id, _coverUrl);
+            }
+          }
+          break;
+        }
+      }
+    } catch (_) {
+      // 封面获取失败不影响正常使用
     }
   }
 
@@ -246,7 +277,17 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         return _buildCoverPlaceholder(theme);
                       },
                     )
-                  : _buildCoverPlaceholder(theme),
+                  : _coverUrl.isNotEmpty
+                      ? Image.network(
+                          _coverUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _buildCoverPlaceholder(theme),
+                          loadingBuilder: (_, child, progress) {
+                            if (progress == null) return child;
+                            return _buildCoverPlaceholder(theme);
+                          },
+                        )
+                      : _buildCoverPlaceholder(theme),
             ),
           ),
           const SizedBox(width: 16),
