@@ -179,6 +179,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
                           style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[600])),
                     ],
                   ),
+                // 书源
+                if (widget.book.bookSourceUrl.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: _buildSourceChip(widget.book.bookSourceUrl),
+                  ),
                 const SizedBox(height: 8),
                 if (widget.book.currentChapter != null)
                   Container(
@@ -287,6 +293,43 @@ class _BookDetailPageState extends State<BookDetailPage> {
             ),
           ),
           const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  /// 书源标签
+  Widget _buildSourceChip(String sourceUrl) {
+    String name;
+    try {
+      final sp = context.read<SourceProvider>();
+      for (final s in sp.sources) {
+        if (s.bookSourceUrl == sourceUrl) {
+          name = s.bookSourceName;
+          break;
+        }
+      }
+      name = Uri.tryParse(sourceUrl)?.host ?? sourceUrl;
+    } catch (_) {
+      name = Uri.tryParse(sourceUrl)?.host ?? sourceUrl;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.blue.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.rss_feed, size: 10, color: Colors.blue[600]),
+          const SizedBox(width: 3),
+          Text(
+            name,
+            style: TextStyle(fontSize: 10, color: Colors.blue[700]),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ],
       ),
     );

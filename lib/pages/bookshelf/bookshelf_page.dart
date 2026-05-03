@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/book.dart';
 import '../../providers/book_provider.dart';
+import '../../providers/source_provider.dart';
 import '../reader/reader_page.dart';
 
 /// 书架页面
@@ -162,6 +163,42 @@ class _BookshelfPageState extends State<BookshelfPage> {
     );
   }
 
+  /// 根据书源 URL 获取书源名称
+  String _getSourceName(String sourceUrl) {
+    try {
+      final provider = context.read<SourceProvider>();
+      for (final s in provider.sources) {
+        if (s.bookSourceUrl == sourceUrl) return s.bookSourceName;
+      }
+    } catch (_) {}
+    return Uri.tryParse(sourceUrl)?.host ?? sourceUrl;
+  }
+
+  /// 书源标签
+  Widget _buildSourceChip(String sourceUrl) {
+    final name = _getSourceName(sourceUrl);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.blue.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.rss_feed, size: 10, color: Colors.blue[600]),
+          const SizedBox(width: 3),
+          Text(
+            name,
+            style: TextStyle(fontSize: 10, color: Colors.blue[700]),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -292,6 +329,12 @@ class _BookshelfPageState extends State<BookshelfPage> {
                       ),
                     ],
                   ),
+                  // 书源
+                  if (book.bookSourceUrl.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: _buildSourceChip(book.bookSourceUrl),
+                    ),
                 ],
               ),
             ),
