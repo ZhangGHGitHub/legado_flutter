@@ -121,6 +121,23 @@ class BookProvider extends ChangeNotifier {
 
     _isDownloading = false;
     _downloadBookId = '';
+    // 刷新已下载状态
+    if (_currentChapters.isNotEmpty) {
+      final localChapters = await _db.getChapters(bookId);
+      final downloadedIds = localChapters
+          .where((c) => c.isDownloaded)
+          .map((c) => c.id)
+          .toSet();
+      _currentChapters = _currentChapters.map((c) => Chapter(
+        id: c.id,
+        bookId: c.bookId,
+        title: c.title,
+        index: c.index,
+        url: c.url,
+        isDownloaded: downloadedIds.contains(c.id),
+        content: c.content,
+      )).toList();
+    }
     notifyListeners();
   }
 
@@ -135,13 +152,28 @@ class BookProvider extends ChangeNotifier {
 
   // ── 章节操作 ──
 
-  /// 加载章节列表
+  /// 加载章节列表（自动合并已缓存状态）
   Future<void> loadChapters(Book book, {required BookSource source}) async {
     _isLoading = true;
     _currentChapters = [];
     notifyListeners();
     try {
       _currentChapters = await _sourceService.getChapters(book, source: source);
+      // 合并已下载状态
+      final localChapters = await _db.getChapters(book.id);
+      final downloadedIds = localChapters
+          .where((c) => c.isDownloaded)
+          .map((c) => c.id)
+          .toSet();
+      _currentChapters = _currentChapters.map((c) => Chapter(
+        id: c.id,
+        bookId: c.bookId,
+        title: c.title,
+        index: c.index,
+        url: c.url,
+        isDownloaded: downloadedIds.contains(c.id),
+        content: c.content,
+      )).toList();
     } finally {
       _isLoading = false;
       notifyListeners();
