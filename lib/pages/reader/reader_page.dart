@@ -58,17 +58,26 @@ class _BookDetailPageState extends State<BookDetailPage> {
     try {
       final service = BookSourceService();
       final results = await service.search(source, widget.book.name);
+      // 先尝试精确匹配书名，再尝试包含匹配
+      String? foundCover;
       for (final r in results) {
-        if (r['name'] == widget.book.name && (r['coverUrl']?.isNotEmpty == true)) {
-          if (mounted) {
-            setState(() => _coverUrl = r['coverUrl'] ?? '');
-            // 如果已加入书架，更新数据库
-            if (_isInShelf) {
-              final db = DatabaseHelper();
-              await db.updateBookCover(widget.book.id, _coverUrl);
-            }
-          }
+        final name = r['name'] ?? '';
+        final cover = r['coverUrl'] ?? '';
+        if (cover.isEmpty) continue;
+        if (name == widget.book.name) {
+          foundCover = cover;
           break;
+        }
+        if (foundCover == null && name.contains(widget.book.name)) {
+          foundCover = cover;
+        }
+      }
+      if (foundCover != null && mounted) {
+        setState(() => _coverUrl = foundCover!);
+        // 如果已加入书架，更新数据库
+        if (_isInShelf && foundCover.isNotEmpty) {
+          final db = DatabaseHelper();
+          await db.updateBookCover(widget.book.id, foundCover);
         }
       }
     } catch (_) {
