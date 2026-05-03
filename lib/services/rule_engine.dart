@@ -1155,6 +1155,13 @@ class RuleEngine {
             coverUrl = CssSelector.extractOneAttr(item, source.ruleSearchCoverUrl, 'src');
           }
         }
+        // 兜底：自动查找第一张图片
+        if (coverUrl.isEmpty) {
+          final img = item.querySelector('img');
+          if (img != null) {
+            coverUrl = img.attributes['src'] ?? img.attributes['data-src'] ?? '';
+          }
+        }
       } else {
         // 智能识别：找链接 + 文本
         final link = item.querySelector('a');
@@ -1164,6 +1171,11 @@ class RuleEngine {
         }
         if (name.isEmpty) name = item.text.trim();
         if (url.isEmpty) url = item.attributes['href'] ?? '';
+        // 智能识别封面：从搜索结果项中找第一张图片
+        final img = item.querySelector('img');
+        if (img != null) {
+          coverUrl = img.attributes['src'] ?? img.attributes['data-src'] ?? '';
+        }
       }
 
       if (name.isNotEmpty && url.isNotEmpty) {

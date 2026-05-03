@@ -308,7 +308,7 @@ class BookSourceService {
             'name': r['name'] ?? '',
             'author': r['author'] ?? '',
             'url': RuleEngine.resolveUrl(r['url'] ?? '', baseUrl),
-            'coverUrl': r['coverUrl'] ?? '',
+            'coverUrl': RuleEngine.resolveUrl(r['coverUrl'] ?? '', baseUrl),
             'kind': r['kind'] ?? '',
             'note': r['note'] ?? '',
           }).toList();
@@ -326,7 +326,7 @@ class BookSourceService {
         'name': r['name'] ?? '',
         'author': r['author'] ?? '',
         'url': RuleEngine.resolveUrl(r['url'] ?? '', baseUrl),
-        'coverUrl': r['coverUrl'] ?? '',
+        'coverUrl': RuleEngine.resolveUrl(r['coverUrl'] ?? '', baseUrl),
         'kind': r['kind'] ?? '',
         'note': r['note'] ?? '',
       }).toList();
