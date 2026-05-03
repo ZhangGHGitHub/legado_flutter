@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/book.dart';
+import '../../models/book_source.dart';
 import '../../models/chapter.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
@@ -303,13 +304,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
     String name;
     try {
       final sp = context.read<SourceProvider>();
+      BookSource? found;
       for (final s in sp.sources) {
         if (s.bookSourceUrl == sourceUrl) {
-          name = s.bookSourceName;
+          found = s;
           break;
         }
       }
-      name = Uri.tryParse(sourceUrl)?.host ?? sourceUrl;
+      name = found?.bookSourceName ?? Uri.tryParse(sourceUrl)?.host ?? sourceUrl;
     } catch (_) {
       name = Uri.tryParse(sourceUrl)?.host ?? sourceUrl;
     }
