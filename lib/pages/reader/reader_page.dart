@@ -208,7 +208,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.book.name)),
+      appBar: AppBar(title: const Text('书籍详情')),
       body: Column(
         children: [
           _buildBookHeader(theme),
