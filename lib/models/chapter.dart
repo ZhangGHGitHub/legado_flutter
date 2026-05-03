@@ -19,11 +19,13 @@ class Chapter {
   });
 
   factory Chapter.fromJson(Map<String, dynamic> json) {
+    // 兼容数据库列名 idx 和 JSON 字段名 index
+    final idxVal = json['index'] ?? json['idx'];
     return Chapter(
       id: json['id'] as String,
       bookId: json['bookId'] as String,
       title: json['title'] as String,
-      index: json['index'] as int,
+      index: (idxVal is int) ? idxVal : int.tryParse('$idxVal') ?? 0,
       url: json['url'] as String? ?? '',
       isDownloaded: json['isDownloaded'] as bool? ?? false,
       content: json['content'] as String?,

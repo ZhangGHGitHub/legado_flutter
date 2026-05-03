@@ -726,6 +726,7 @@ class _ReaderPageState extends State<ReaderPage> {
   late ReaderSettings _settings;
   late ScrollController _scrollController;
   PageController? _pageController;
+  BookProvider? _bookProvider; // 缓存引用，避免 dispose 时 context.read 崩溃
 
   @override
   void initState() {
@@ -743,8 +744,14 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _bookProvider = context.read<BookProvider>();
+  }
+
+  @override
   void dispose() {
-    _saveProgress(); // 离开时保存进度
+    _saveProgress(); // 离开时保存进度（使用缓存的 _bookProvider）
     _scrollController.dispose();
     super.dispose();
   }
@@ -865,10 +872,12 @@ class _ReaderPageState extends State<ReaderPage> {
 
   /// 自动保存阅读进度
   void _saveProgress() {
+    final bp = _bookProvider;
+    if (bp == null) return;
     final progress = (_currentIndex + 1) / widget.allChapters.length;
     final currentChapter = widget.allChapters[_currentIndex].title;
     final pageIdx = _settings.pageMode == 'slide' ? _pageIndex : 0;
-    context.read<BookProvider>().updateProgress(
+    bp.updateProgress(
       widget.book.id,
       progress,
       currentChapter,
