@@ -230,32 +230,23 @@ class _BookDetailPageState extends State<BookDetailPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 书籍封面占位
-          Container(
-            width: 90,
-            height: 130,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 8,
-                  offset: const Offset(2, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.menu_book, size: 32, color: theme.colorScheme.primary),
-                Text(
-                  widget.book.author.isNotEmpty
-                      ? widget.book.author.substring(0, widget.book.author.length > 4 ? 4 : widget.book.author.length)
-                      : '',
-                  style: TextStyle(fontSize: 10, color: theme.colorScheme.primary),
-                ),
-              ],
+          // 书籍封面
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              width: 90,
+              height: 130,
+              child: widget.book.coverUrl.isNotEmpty
+                  ? Image.network(
+                      widget.book.coverUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => _buildCoverPlaceholder(theme),
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return _buildCoverPlaceholder(theme);
+                      },
+                    )
+                  : _buildCoverPlaceholder(theme),
             ),
           ),
           const SizedBox(width: 16),
@@ -323,6 +314,35 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 封面占位（无封面或加载失败时显示）
+  Widget _buildCoverPlaceholder(ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(2, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.menu_book, size: 32, color: theme.colorScheme.primary),
+          Text(
+            widget.book.author.isNotEmpty
+                ? widget.book.author.substring(0, widget.book.author.length > 4 ? 4 : widget.book.author.length)
+                : '',
+            style: TextStyle(fontSize: 10, color: theme.colorScheme.primary),
           ),
         ],
       ),

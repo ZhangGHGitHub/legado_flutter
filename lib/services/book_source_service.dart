@@ -342,6 +342,7 @@ class BookSourceService {
       id: '${sourceUrl}_${r['url'].hashCode}',
       name: r['name'] ?? '未知书名',
       author: r['author'] ?? '',
+      coverUrl: r['coverUrl'] ?? '',
       sourceUrl: r['url'] ?? '',
       description: r['note'] ?? '',
       bookSourceUrl: sourceUrl,
