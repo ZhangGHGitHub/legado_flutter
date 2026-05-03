@@ -45,6 +45,19 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
   }
 
+  /// 刷新章节列表（从阅读器返回时调用）
+  Future<void> _refreshChapters() async {
+    final source = context.read<SourceProvider>().findSourceForBook(widget.book);
+    if (source != null && mounted) {
+      await context.read<BookProvider>().loadChapters(widget.book, source: source);
+    }
+  }
+
+  /// 获取已下载的章节数
+  int _downloadedCount(BookProvider provider) {
+    return provider.currentChapters.where((c) => c.isDownloaded).length;
+  }
+
   Future<void> _addToShelf() async {
     final provider = context.read<BookProvider>();
     final book = widget.book.copyWith(
@@ -100,12 +113,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
   }
 
-  /// 批量缓存所有章节
+  /// 开始/继续/取消缓存章节
   Future<void> _downloadAllChapters(BookProvider provider) async {
+    // 正在下载 → 取消
     if (provider.isDownloading) {
       provider.cancelDownload();
       return;
     }
+
     final source = context.read<SourceProvider>().findSourceForBook(widget.book);
     if (source == null) {
       if (mounted) {
@@ -115,11 +130,22 @@ class _BookDetailPageState extends State<BookDetailPage> {
       }
       return;
     }
+
     final chapters = provider.currentChapters;
     if (chapters.isEmpty) return;
 
-    // 章节已有 ID（来自 book_source_service），直接下载
-    provider.downloadAllChapters(widget.book.id, chapters, source);
+    // 只下载未缓存的章节
+    final toDownload = chapters.where((c) => !c.isDownloaded).toList();
+    if (toDownload.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('所有章节已缓存')),
+        );
+      }
+      return;
+    }
+
+    provider.downloadAllChapters(widget.book.id, toDownload, source);
   }
 
   /// 章节列表加载后自动滚动到已读章节
@@ -421,31 +447,78 @@ class _BookDetailPageState extends State<BookDetailPage> {
           const Spacer(),
           Consumer<BookProvider>(
             builder: (context, provider, _) {
+              final total = provider.currentChapters.length;
+              final done = _downloadedCount(provider);
+
+              // 下载中 → 进度 + 取消
               if (provider.isDownloading && provider.downloadBookId == widget.book.id) {
+                return GestureDetector(
+                  onTap: () => provider.cancelDownload(),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 14, height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${provider.downloadCompleted}/${provider.downloadTotal} 取消',
+                        style: TextStyle(fontSize: 12, color: Colors.orange[600]),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              // 全部已缓存 → ✓
+              if (total > 0 && done == total) {
                 return Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(
-                      width: 16, height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${provider.downloadCompleted}/${provider.downloadTotal}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                    ),
+                    Text('共 $total 章',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                    const SizedBox(width: 6),
+                    Icon(Icons.check_circle, size: 16, color: Colors.green[400]),
                   ],
                 );
               }
+
+              // 部分/未缓存 → 下载/继续按钮
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('共 ${provider.currentChapters.length} 章',
+                  Text('共 $total 章',
                       style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                  if (done > 0) ...[
+                    const SizedBox(width: 4),
+                    Text('已缓存 $done',
+                        style: TextStyle(fontSize: 11, color: Colors.green[400])),
+                  ],
                   const SizedBox(width: 8),
                   GestureDetector(
                     onTap: () => _downloadAllChapters(provider),
-                    child: Icon(Icons.download, size: 18, color: Colors.blue[400]),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            done > 0 ? Icons.downloading : Icons.download,
+                            size: 14, color: Colors.blue[600],
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            done > 0 ? '继续缓存' : '缓存全部',
+                            style: TextStyle(fontSize: 11, color: Colors.blue[700]),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               );
@@ -528,9 +601,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
               title: Text(chapter.title, maxLines: 1, overflow: TextOverflow.ellipsis),
               trailing: chapter.isDownloaded
                   ? Icon(Icons.check_circle, size: 16, color: Colors.green[400])
-                  : null,
-              onTap: () {
-                Navigator.push(
+                  : Icon(Icons.circle_outlined, size: 16, color: Colors.grey[300]),
+              onTap: () async {
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => ReaderPage(
@@ -540,6 +613,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
                     ),
                   ),
                 );
+                // 从阅读器返回后刷新章节状态（阅读器可能自动缓存了章节）
+                if (mounted) _refreshChapters();
               },
             );
           },
