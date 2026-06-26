@@ -2,11 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:dio/dio.dart';
 import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
 import '../../services/book_source_service.dart';
+import '../../models/book.dart';
+import '../../models/chapter.dart';
 
-/// 书源规则编辑器 + 调试面板
+/// 书源规则编辑器 + 调试面板（增强版）
 class SourceEditorPage extends StatefulWidget {
   final BookSource source;
 
@@ -17,8 +20,9 @@ class SourceEditorPage extends StatefulWidget {
 }
 
 class _SourceEditorPageState extends State<SourceEditorPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
+  late TabController _debugTabController;
   late TextEditingController _jsonController;
   String? _jsonError;
   bool _isSaving = false;
@@ -26,13 +30,20 @@ class _SourceEditorPageState extends State<SourceEditorPage>
   // 调试状态
   String _searchKeyword = '';
   final _searchCtrl = TextEditingController();
+  final _urlCtrl = TextEditingController();
+  final _chapterUrlCtrl = TextEditingController();
   String _debugLog = '';
   bool _isDebugLoading = false;
+  String? _rawResponse; // 原始响应预览
+
+  // 章节测试
+  List<Chapter> _testChapters = [];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _debugTabController = TabController(length: 3, vsync: this);
     _jsonController = TextEditingController(
       text: _formatJson(widget.source.rawSourceJson.isNotEmpty
           ? widget.source.rawSourceJson
@@ -43,8 +54,11 @@ class _SourceEditorPageState extends State<SourceEditorPage>
   @override
   void dispose() {
     _tabController.dispose();
+    _debugTabController.dispose();
     _jsonController.dispose();
     _searchCtrl.dispose();
+    _urlCtrl.dispose();
+    _chapterUrlCtrl.dispose();
     super.dispose();
   }
 
@@ -206,7 +220,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
         controller: _tabController,
         children: [
           _buildEditorTab(theme),
-          _buildDebugTab(theme),
+          _buildEnhancedDebugTab(theme),
         ],
       ),
     );
@@ -253,10 +267,91 @@ class _SourceEditorPageState extends State<SourceEditorPage>
     );
   }
 
-  Widget _buildDebugTab(ThemeData theme) {
+  /// Enhanced debug tab with sub-tabs for search, chapters, content, and URL testing
+  Widget _buildEnhancedDebugTab(ThemeData theme) {
     return Column(
       children: [
-        // 搜索测试输入
+        // Debug sub-tabs
+        Container(
+          color: theme.colorScheme.surfaceContainerLow,
+          child: TabBar(
+            controller: _debugTabController,
+            labelStyle: const TextStyle(fontSize: 12),
+            tabs: const [
+              Tab(text: '搜索', icon: Icon(Icons.search, size: 16)),
+              Tab(text: '章节', icon: Icon(Icons.list_alt, size: 16)),
+              Tab(text: 'URL测试', icon: Icon(Icons.link, size: 16)),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _debugTabController,
+            children: [
+              _buildSearchDebugTab(theme),
+              _buildChapterDebugTab(theme),
+              _buildUrlDebugTab(theme),
+            ],
+          ),
+        ),
+        // Log output area
+        Expanded(
+          child: Container(
+            color: const Color(0xFF1E1E1E),
+            padding: const EdgeInsets.all(12),
+            child: SingleChildScrollView(
+              child: SelectableText(
+                _debugLog.isEmpty ? '操作日志会显示在这里...' : _debugLog,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 13,
+                  height: 1.5,
+                  color: Color(0xFFCCCCCC),
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Bottom action bar
+        Container(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('清空日志'),
+                  onPressed: () => setState(() => _debugLog = ''),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.content_copy, size: 18),
+                  label: const Text('保存日志'),
+                  onPressed: () {
+                    if (_debugLog.isNotEmpty) {
+                      final tempFile =
+                          '${widget.source.bookSourceName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')}_debug.txt';
+                      try {
+                        File(tempFile).writeAsStringSync(_debugLog);
+                        _appendLog('\n📋 日志已保存到: $tempFile');
+                      } catch (_) {}
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Search debug tab
+  Widget _buildSearchDebugTab(ThemeData theme) {
+    return Column(
+      children: [
         Container(
           padding: const EdgeInsets.all(12),
           color: theme.colorScheme.surfaceContainerLow,
@@ -279,69 +374,240 @@ class _SourceEditorPageState extends State<SourceEditorPage>
               FilledButton.tonal(
                 onPressed: _isDebugLoading ? null : _runSearchDebug,
                 child: _isDebugLoading
-                    ? const SizedBox(
-                        width: 20, height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Text('测试搜索'),
               ),
             ],
           ),
         ),
-        // 调试日志
-        Expanded(
-          child: Container(
-            color: const Color(0xFF1E1E1E),
-            padding: const EdgeInsets.all(12),
-            child: SingleChildScrollView(
-              child: SelectableText(
-                _debugLog.isEmpty ? '输入关键词后点击「测试搜索」开始调试...' : _debugLog,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 13,
-                  height: 1.5,
-                  color: Color(0xFFCCCCCC),
-                ),
-              ),
-            ),
+        // Rule info
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(8),
+          color: Colors.blue.shade50,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('搜索规则', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue[800])),
+              const SizedBox(height: 2),
+              Text('URL: ${widget.source.ruleSearchUrl}', style: TextStyle(fontSize: 10, color: Colors.blue[700]), maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text('列表: ${widget.source.ruleSearchList}', style: TextStyle(fontSize: 10, color: Colors.blue[700]), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text('书名: ${widget.source.ruleSearchName}', style: TextStyle(fontSize: 10, color: Colors.blue[700]), maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
           ),
         ),
-        // 底部操作
+        const Expanded(child: SizedBox.shrink()),
+      ],
+    );
+  }
+
+  /// Chapter debug tab
+  Widget _buildChapterDebugTab(ThemeData theme) {
+    return Column(
+      children: [
         Container(
-          padding: const EdgeInsets.all(8),
-          child: Row(
+          padding: const EdgeInsets.all(12),
+          color: theme.colorScheme.surfaceContainerLow,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.delete_outline, size: 18),
-                  label: const Text('清空日志'),
-                  onPressed: () => setState(() => _debugLog = ''),
+              TextField(
+                controller: _chapterUrlCtrl,
+                decoration: const InputDecoration(
+                  hintText: '输入书籍详情/目录页 URL...',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  isDense: true,
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.content_copy, size: 18),
-                  label: const Text('复制日志'),
-                  onPressed: () {
-                    if (_debugLog.isNotEmpty) {
-                      // 保存到剪贴板文件, 防止 Windows 剪贴板 API 问题
-                      final tempFile =
-                          '${widget.source.bookSourceName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')}_debug.txt';
-                      try {
-                        File(tempFile).writeAsStringSync(_debugLog);
-                        _appendLog('\n📋 日志已保存到: $tempFile');
-                      } catch (_) {
-                        // 忽略写入失败
-                      }
-                    }
-                  },
-                ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  FilledButton.tonal(
+                    onPressed: _isDebugLoading ? null : _runChapterDebug,
+                    child: const Text('测试章节列表'),
+                  ),
+                  const SizedBox(width: 8),
+                  if (_testChapters.isNotEmpty)
+                    Text('${_testChapters.length} 章', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                ],
               ),
             ],
           ),
         ),
+        // Rule info
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(8),
+          color: Colors.teal.shade50,
+          child: Text(
+            '目录规则: ${widget.source.ruleChapterList}',
+            style: TextStyle(fontSize: 10, color: Colors.teal[700]),
+            maxLines: 2, overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        // Chapter list preview
+        if (_testChapters.isNotEmpty)
+          Expanded(
+            child: ListView.builder(
+              itemCount: _testChapters.length > 20 ? 20 : _testChapters.length,
+              itemBuilder: (_, i) => ListTile(
+                dense: true,
+                leading: Text('${i + 1}', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                title: Text(_testChapters[i].title, style: const TextStyle(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(_testChapters[i].url, style: TextStyle(fontSize: 10, color: Colors.grey[500]), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+            ),
+          )
+        else
+          const Expanded(child: SizedBox.shrink()),
       ],
     );
+  }
+
+  /// URL test tab - test any URL with this source
+  Widget _buildUrlDebugTab(ThemeData theme) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          color: theme.colorScheme.surfaceContainerLow,
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _urlCtrl,
+                  decoration: const InputDecoration(
+                    hintText: '输入任意 URL 测试...',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _runUrlTest(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.tonal(
+                onPressed: _isDebugLoading ? null : _runUrlTest,
+                child: const Text('请求'),
+              ),
+            ],
+          ),
+        ),
+        // Raw response (truncated)
+        if (_rawResponse != null)
+          Expanded(
+            child: Container(
+              color: const Color(0xFF1E1E1E),
+              padding: const EdgeInsets.all(8),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  _rawResponse!.length > 5000
+                      ? '${_rawResponse!.substring(0, 5000)}\n\n... (truncated, ${_rawResponse!.length} chars total)'
+                      : _rawResponse!,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 11, height: 1.4, color: Color(0xFFAAAAAA)),
+                ),
+              ),
+            ),
+          )
+        else
+          const Expanded(child: SizedBox.shrink()),
+      ],
+    );
+  }
+
+  // ── Debug operations ──
+
+  Future<void> _runChapterDebug() async {
+    final url = _chapterUrlCtrl.text.trim();
+    if (url.isEmpty) {
+      _appendLog('⚠️ 请先输入书籍 URL');
+      return;
+    }
+    setState(() {
+      _isDebugLoading = true;
+      _testChapters = [];
+      _debugLog = '';
+    });
+
+    try {
+      final service = BookSourceService();
+      final book = Book(
+        id: 'test_book',
+        name: '测试书籍',
+        sourceUrl: url,
+        bookSourceUrl: widget.source.bookSourceUrl,
+      );
+      
+      _appendLog('📖 获取章节列表...');
+      _appendLog('URL: $url');
+      final chapters = await service.getChapters(book, source: widget.source);
+      
+      setState(() => _testChapters = chapters);
+      _appendLog('✅ 成功: ${chapters.length} 章');
+      for (int i = 0; i < chapters.length && i < 5; i++) {
+        _appendLog('  ${i + 1}. ${chapters[i].title}');
+      }
+      if (chapters.length > 5) {
+        _appendLog('  ... 还有 ${chapters.length - 5} 章');
+      }
+    } catch (e) {
+      _appendLog('❌ 出错: $e');
+    } finally {
+      if (mounted) setState(() => _isDebugLoading = false);
+    }
+  }
+
+  Future<void> _runUrlTest() async {
+    final url = _urlCtrl.text.trim();
+    if (url.isEmpty) return;
+
+    setState(() {
+      _isDebugLoading = true;
+      _debugLog = '';
+      _rawResponse = null;
+    });
+
+    try {
+      // Use a direct Dio client for URL testing
+      _appendLog('📡 请求: $url');
+      
+      final dio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 30),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept-Encoding': 'gzip, deflate',
+        },
+      ));
+      // Note: SSL certificate bypass not available in this context
+
+      final response = await dio.get(url,
+        options: Options(responseType: ResponseType.bytes),
+      );
+
+      List<int> bytes = response.data as List<int>? ?? [];
+      if (bytes.length >= 2 && bytes[0] == 0x1F && bytes[1] == 0x8B) {
+        bytes = gzip.decode(bytes);
+      }
+
+      // Try UTF-8 decode
+      String body;
+      try {
+        body = utf8.decode(bytes);
+      } catch (_) {
+        body = utf8.decode(bytes, allowMalformed: true);
+      }
+
+      _appendLog('✅ 状态码: ${response.statusCode}');
+      _appendLog('📊 大小: ${bytes.length} bytes');
+      _appendLog('🧪 内容预览: ${body.substring(0, body.length > 200 ? 200 : body.length)}');
+      
+      setState(() => _rawResponse = body);
+    } catch (e) {
+      _appendLog('❌ 请求失败: $e');
+    } finally {
+      if (mounted) setState(() => _isDebugLoading = false);
+    }
   }
 }

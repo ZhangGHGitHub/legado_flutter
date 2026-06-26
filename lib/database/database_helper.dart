@@ -25,7 +25,7 @@ class DatabaseHelper {
     final path = p.join(dbPath, 'legado.db');
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _createTables,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -57,6 +57,11 @@ class DatabaseHelper {
             await db.execute("ALTER TABLE books ADD COLUMN currentPageIndex INTEGER DEFAULT 0");
           } catch (_) {}
         }
+        if (oldV < 7) {
+          try {
+            await db.execute("ALTER TABLE books ADD COLUMN bookGroup TEXT DEFAULT ''");
+          } catch (_) {}
+        }
       },
     );
   }
@@ -78,6 +83,7 @@ class DatabaseHelper {
         sourceUrl TEXT DEFAULT '',
         description TEXT DEFAULT '',
         bookSourceUrl TEXT DEFAULT '',
+        bookGroup TEXT DEFAULT '',
         updatedAt TEXT DEFAULT (datetime('now'))
       )
     ''');
@@ -163,6 +169,7 @@ class DatabaseHelper {
       'sourceUrl': book.sourceUrl,
       'description': book.description,
       'bookSourceUrl': book.bookSourceUrl,
+      'bookGroup': book.group,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
@@ -172,6 +179,7 @@ class DatabaseHelper {
     return maps.map((m) => Book.fromJson({
       ...m,
       'isFavorite': m['isFavorite'] == 1,
+      'group': m['bookGroup'] ?? '',
     })).toList();
   }
 
@@ -194,6 +202,12 @@ class DatabaseHelper {
   Future<void> updateBookCover(String bookId, String coverUrl) async {
     final db = await database;
     await db.update('books', {'coverUrl': coverUrl},
+        where: 'id = ?', whereArgs: [bookId]);
+  }
+
+  Future<void> updateBookGroup(String bookId, String group) async {
+    final db = await database;
+    await db.update('books', {'bookGroup': group},
         where: 'id = ?', whereArgs: [bookId]);
   }
 

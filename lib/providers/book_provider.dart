@@ -62,6 +62,13 @@ class BookProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 更新书籍分组
+  Future<void> updateBookGroup(String bookId, String group) async {
+    await _db.updateBookGroup(bookId, group);
+    _books = await _db.getBooks();
+    notifyListeners();
+  }
+
   /// 从本地导入 TXT/EPUB
   Future<Book?> importLocalBook() async {
     _isLoading = true;

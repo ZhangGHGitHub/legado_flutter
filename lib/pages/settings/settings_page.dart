@@ -2,267 +2,134 @@ import 'dart:io' show exit;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../replace/replace_page.dart';
+import '../sources/sources_page.dart';
 
-/// 设置页面 - 仿 Legado "我的" 风格
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
-
-  @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  @override State<SettingsPage> createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _darkMode = false;
-  double _defaultFontSize = 18;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
+  @override void initState() { super.initState(); _load(); }
+  Future<void> _load() async {
+    final p = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() => _darkMode = p.getBool('darkMode') ?? false);
+  }
+  Future<void> _toggle(bool v) async {
+    setState(() => _darkMode = v);
+    (await SharedPreferences.getInstance()).setBool('darkMode', v);
   }
 
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _darkMode = prefs.getBool('darkMode') ?? false;
-      _defaultFontSize = prefs.getDouble('defaultFontSize') ?? 18;
-    });
-  }
-
-  Future<void> _setSetting(String key, bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(key, value);
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  @override Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
       body: ListView(
-        padding: const EdgeInsets.only(top: 8, bottom: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         children: [
-          // ── 书源管理 ──
-          _SettingTile(
-            icon: Icons.rss_feed_rounded,
-            iconColor: Colors.orange,
-            title: '书源管理',
-            subtitle: '新建、导入、编辑或管理书源',
-            onTap: () => Navigator.pushNamed(context, '/sources'),
-          ),
-          _divider(),
+          // ── Logo area ──
+          Card(child: Padding(padding: const EdgeInsets.symmetric(vertical: 20), child: Column(children: [
+            Container(width: 72, height: 72, decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer, borderRadius: BorderRadius.circular(18)),
+              child: Icon(Icons.auto_stories, size: 36, color: theme.colorScheme.primary)),
+            const SizedBox(height: 10),
+            const Text('Legado Flutter', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+            const SizedBox(height: 2),
+            Text('Flutter 复刻版阅读', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+          ]))),
 
-          // ── TXT目录规则 ──
-          _SettingTile(
-            icon: Icons.description_outlined,
-            iconColor: Colors.blue,
-            title: 'TXT目录规则',
-            subtitle: '配置TXT目录规则',
-            onTap: () => _notImplemented('TXT目录规则'),
-          ),
-          _divider(),
+          const SizedBox(height: 8),
 
-          // ── 替换净化 ──
-          _SettingTile(
-            icon: Icons.auto_fix_high_outlined,
-            iconColor: Colors.teal,
-            title: '替换净化',
-            subtitle: '配置替换净化规则',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ReplacePage()),
-            ),
-          ),
-          _divider(),
+          // ── 4 icon buttons ──
+          Card(child: Padding(padding: const EdgeInsets.symmetric(vertical: 14), child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _IconBtn(Icons.backup_outlined, '备份管理', () {}),
+              _IconBtn(Icons.cloud_outlined, 'WebDAV', () {}),
+              _IconBtn(Icons.wifi, 'Web服务', () {}),
+              _IconBtn(Icons.history, '阅读记录', () {}),
+            ],
+          ))),
 
-          // ── 字典规则 ──
-          _SettingTile(
-            icon: Icons.translate,
-            iconColor: Colors.indigo,
-            title: '字典规则',
-            subtitle: '配置字典规则',
-            onTap: () => _notImplemented('字典规则'),
-          ),
-          _divider(),
+          const SizedBox(height: 8),
 
-          // ── 主题模式 ──
-          _SettingTile(
-            icon: Icons.palette_outlined,
-            iconColor: Colors.pink,
-            title: '主题模式',
-            subtitle: _darkMode ? '当前：深色模式' : '当前：浅色模式',
-            trailing: Switch(
-              value: _darkMode,
-              activeColor: theme.colorScheme.primary,
-              onChanged: (v) {
-                setState(() => _darkMode = v);
-                _setSetting('darkMode', v);
-              },
-            ),
-            onTap: () => _notImplemented('主题模式'),
-          ),
-          _divider(),
+          // ── 【设置】section ──
+          _SectionHeader('设置'),
+          Card(child: Column(children: [
+            _Row(Icons.rss_feed, '书源管理', '新建、导入、编辑或管理书源', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SourcesPage()))),
+            _Div(),
+            _Row(Icons.article_outlined, 'TXT 目录规则', '配置 TXT 目录规则'),
+            _Div(),
+            _Row(Icons.cleaning_services_outlined, '替换净化', '配置替换净化规则', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReplacePage()))),
+            _Div(),
+            _Row(Icons.menu_book_outlined, '字典规则', '配置字典规则'),
+            _Div(),
+            _Row(Icons.palette_outlined, '主题模式', '浅色 / 深色模式切换', trailing: Switch(value: _darkMode, onChanged: _toggle)),
+            _Div(),
+            _Row(Icons.backup_outlined, '备份与恢复', '备份书源、书架、设置'),
+          ])),
 
-          // ── Web服务 ──
-          _SettingTile(
-            icon: Icons.language,
-            iconColor: Colors.green,
-            title: 'Web服务',
-            subtitle: '用浏览器写书源或看书',
-            onTap: () => _notImplemented('Web服务'),
-          ),
-          _divider(),
+          const SizedBox(height: 8),
 
-          // ── 备份与恢复 ──
-          _SettingTile(
-            icon: Icons.backup_rounded,
-            iconColor: Colors.amber.shade700,
-            title: '备份与恢复',
-            subtitle: 'WebDav设置/导入旧版本数据',
-            onTap: () => _notImplemented('备份与恢复'),
-          ),
-          _divider(),
-
-          // ── 主题设置 ──
-          _SettingTile(
-            icon: Icons.dashboard_customize_outlined,
-            iconColor: Colors.purple,
-            title: '主题设置',
-            subtitle: '与界面/颜色相关的一些设置',
-            onTap: () => _notImplemented('主题设置'),
-          ),
-          _divider(),
-
-          // ── 其他设置 ──
-          _SettingTile(
-            icon: Icons.settings_outlined,
-            iconColor: Colors.grey.shade600,
-            title: '其他设置',
-            subtitle: '与功能相关的一些设置',
-            onTap: () => _notImplemented('其他设置'),
-          ),
-          _divider(),
-
-          // ── 书签 ──
-          _SettingTile(
-            icon: Icons.bookmark_outline_rounded,
-            iconColor: Colors.red.shade400,
-            title: '书签',
-            subtitle: '所有书签',
-            onTap: () => _notImplemented('书签'),
-          ),
-          _divider(),
-
-          // ── 阅读记录 ──
-          _SettingTile(
-            icon: Icons.history_rounded,
-            iconColor: Colors.blueGrey,
-            title: '阅读记录',
-            subtitle: '阅读事件记录',
-            onTap: () => _notImplemented('阅读记录'),
-          ),
-          _divider(),
-
-          // ── 关于 ──
-          _SettingTile(
-            icon: Icons.info_outline_rounded,
-            iconColor: Colors.grey.shade500,
-            title: '关于',
-            subtitle: '版本 1.0.0',
-            trailing: const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
-            onTap: () => _notImplemented('关于'),
-          ),
-          _divider(),
-
-          // ── 退出 ──
-          _SettingTile(
-            icon: Icons.exit_to_app_rounded,
-            iconColor: Colors.red.shade400,
-            title: '退出',
-            subtitle: '',
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('退出'),
-                  content: const Text('确定退出应用？'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('取消'),
-                    ),
-                    FilledButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        exit(0);
-                      },
-                      style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                      child: const Text('退出'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+          // ── 【其他】section ──
+          _SectionHeader('其他'),
+          Card(child: Column(children: [
+            _Row(Icons.bookmark_outline, '书签', '管理阅读书签'),
+            _Div(),
+            _Row(Icons.file_upload_outlined, '导出到 Obsidian', '一键导出笔记到 Obsidian'),
+            _Div(),
+            _Row(Icons.folder_open, '文件管理', '管理本地书籍文件'),
+            _Div(),
+            _Row(Icons.terminal, 'Legado Skill', '安装社区技能扩展'),
+            _Div(),
+            _Row(Icons.smart_toy_outlined, 'AI 助手', '大模型智能辅助'),
+            _Div(),
+            _Row(Icons.info_outline, '关于', 'v1.0.0'),
+            _Div(),
+            _Row(Icons.logout, '退出', '关闭应用', onTap: () => exit(0)),
+          ])),
         ],
       ),
     );
   }
-
-  Widget _divider() => const Divider(height: 1, indent: 56, endIndent: 16);
-
-  void _notImplemented(String name) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$name（待实现）')),
-    );
-  }
 }
 
-/// 单个设置项（图标 + 标题 + 副标题）
-class _SettingTile extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
+class _SectionHeader extends StatelessWidget {
   final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-  final Widget? trailing;
+  const _SectionHeader(this.title);
+  @override Widget build(BuildContext c) => Padding(
+    padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+    child: Text(title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[600])),
+  );
+}
 
-  const _SettingTile({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    this.onTap,
-    this.trailing,
-  });
+class _Row extends StatelessWidget {
+  final IconData icon; final String title; final String subtitle; final Widget? trailing; final VoidCallback? onTap;
+  const _Row(this.icon, this.title, this.subtitle, {this.trailing, this.onTap});
+  @override Widget build(BuildContext c) => ListTile(
+    leading: Icon(icon, size: 22),
+    title: Text(title, style: const TextStyle(fontSize: 14)),
+    subtitle: Text(subtitle, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+    trailing: trailing ?? const Icon(Icons.chevron_right, size: 18),
+    onTap: onTap,
+  );
+}
 
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: iconColor.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, size: 20, color: iconColor),
-      ),
-      title: Text(
-        title,
-        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-      ),
-      subtitle: subtitle.isNotEmpty
-          ? Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-            )
-          : null,
-      trailing: trailing ?? const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-    );
-  }
+class _Div extends StatelessWidget {
+  @override Widget build(BuildContext c) => const Divider(height: 1, indent: 56);
+}
+
+class _IconBtn extends StatelessWidget {
+  final IconData icon; final String label; final VoidCallback onTap;
+  const _IconBtn(this.icon, this.label, this.onTap);
+  @override Widget build(BuildContext c) => GestureDetector(
+    onTap: onTap,
+    child: SizedBox(width: 64, child: Column(children: [
+      Icon(icon, size: 28, color: Theme.of(c).colorScheme.primary), const SizedBox(height: 4),
+      Text(label, style: const TextStyle(fontSize: 10)),
+    ])),
+  );
 }

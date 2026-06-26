@@ -360,7 +360,7 @@ class _SearchResultTile extends StatelessWidget {
                   width: 40,
                   height: 56,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _coverPlaceholder(theme),
+                  errorBuilder: (_, _, _) => _coverPlaceholder(theme),
                   loadingBuilder: (_, child, progress) {
                     if (progress == null) return child;
                     return _coverPlaceholder(theme);

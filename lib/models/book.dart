@@ -13,6 +13,7 @@ class Book {
   final String sourceUrl; // 书籍来源链接（如章节列表 URL）
   final String description; // 书籍简介
   final String bookSourceUrl; // 搜索到此书的书源 URL（用于匹配书源规则）
+  final String group; // 书架分组
 
   Book({
     required this.id,
@@ -28,6 +29,7 @@ class Book {
     this.sourceUrl = '',
     this.description = '',
     this.bookSourceUrl = '',
+    this.group = '',
   });
 
   /// 复制并修改部分字段
@@ -45,6 +47,7 @@ class Book {
     String? sourceUrl,
     String? description,
     String? bookSourceUrl,
+    String? group,
   }) {
     return Book(
       id: id ?? this.id,
@@ -60,6 +63,7 @@ class Book {
       sourceUrl: sourceUrl ?? this.sourceUrl,
       description: description ?? this.description,
       bookSourceUrl: bookSourceUrl ?? this.bookSourceUrl,
+      group: group ?? this.group,
     );
   }
 
@@ -79,6 +83,7 @@ class Book {
       sourceUrl: json['sourceUrl'] as String? ?? '',
       description: json['description'] as String? ?? '',
       bookSourceUrl: json['bookSourceUrl'] as String? ?? '',
+      group: json['group'] as String? ?? '',
     );
   }
 
@@ -98,6 +103,7 @@ class Book {
       'sourceUrl': sourceUrl,
       'description': description,
       'bookSourceUrl': bookSourceUrl,
+      'group': group,
     };
   }
 

@@ -158,6 +158,17 @@ class BookSource {
     return {};
   }
 
+  /// 获取书源的 jsLib（自定义 JavaScript 库，用于共享函数）
+  String get jsLib {
+    if (rawSourceJson.isEmpty) return '';
+    try {
+      final obj = jsonDecode(rawSourceJson) as Map<String, dynamic>;
+      final lib = obj['jsLib'];
+      if (lib is String) return lib;
+    } catch (_) {}
+    return '';
+  }
+
   factory BookSource.fromJson(Map<String, dynamic> json) {
     String? safeString(dynamic v) => (v is String) && v.isNotEmpty ? v : null;
     bool safeBool(dynamic v) {

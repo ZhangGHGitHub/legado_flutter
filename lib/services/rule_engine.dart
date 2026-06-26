@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:html/dom.dart' as dom;
 import 'package:flutter/foundation.dart';
 import '../models/book_source.dart';
@@ -284,18 +284,39 @@ class _XPathStep {
     String axis = 'child';
     String tagName = '*';
 
-    // 检测 // 前缀（descendant）
-    if (s.startsWith('//')) {
+    // axis:: prefix
+    if (s.contains('::')) {
+      final axisMatch = RegExp(r'^([a-z-]+)::').firstMatch(s);
+      if (axisMatch != null) {
+        const validAxes = ['child','descendant','parent','self','ancestor',
+            'ancestor-or-self','descendant-or-self','following',
+            'following-sibling','preceding','preceding-sibling'];
+        if (validAxes.contains(axisMatch.group(1))) {
+          axis = axisMatch.group(1)!;
+          s = s.substring(axisMatch.end);
+        }
+      }
+    } else if (s.startsWith('//')) {
       axis = 'descendant';
       s = s.substring(2);
     } else if (s.startsWith('/')) {
       s = s.substring(1);
     }
 
-    // 提取 tag 名（在第一个 [ 之前）
-    final bracketIdx = s.indexOf('[');
+    // . (self) and .. (parent)
+    if (s == '.' || s.startsWith('./') || s.startsWith('.[')) {
+      tagName = '*';
+      axis = 'self';
+      if (s != '.') s = s.substring(1); else s = '';
+    } else if (s == '..' || s.startsWith('../') || s.startsWith('..[')) {
+      tagName = '*';
+      axis = 'parent';
+      if (s != '..') s = s.substring(2); else s = '';
+    }
+
     String tagPart;
     String rest = '';
+    final bracketIdx = s.indexOf('[');
     if (bracketIdx >= 0) {
       tagPart = s.substring(0, bracketIdx);
       rest = s.substring(bracketIdx);
@@ -412,8 +433,28 @@ class _XPathPredicate {
 }
 class JsonPath {
   /// 按路径取值，支持 $.data.items[0].name 或 $.data.items
+  /// 支持 || 连接符：尝试多个路径，返回第一个非空结果
   static dynamic resolve(dynamic root, String path) {
     if (root == null || path.isEmpty) return null;
+
+    // -- || 连接符: 尝试多个路径，返回第一个非空 --
+    if (path.contains('||')) {
+      final parts = path.split('||');
+      for (final part in parts) {
+        final result = resolveSingle(root, part.trim());
+        if (result != null) {
+          if (result is List && result.isNotEmpty) return result;
+          if (result is! List) return result;
+        }
+      }
+      return null;
+    }
+
+    return resolveSingle(root, path);
+  }
+
+  /// 解析单个 JSONPath 路径（无 || 连接符）
+  static dynamic resolveSingle(dynamic root, String path) {
     String p = path;
     // 去掉开头的 $.
     if (p.startsWith('\$.')) p = p.substring(2);
@@ -429,22 +470,24 @@ class JsonPath {
 
       // 尝试按索引取值
       int? idx;
+      String key = clean;
       if (part.contains('[') && part.contains(']')) {
-        // 从 [] 中提取数字索引
         final match = RegExp(r'\[(\d+)\]').firstMatch(part);
         if (match != null) {
           idx = int.tryParse(match.group(1)!);
         }
+        key = part.replaceAll(RegExp(r'\[.*?\]'), '');
+        if (key.isEmpty && current is List) { continue; }
       }
 
       if (current is Map) {
-        current = current[clean];
+        current = current[key];
       } else if (current is List) {
         if (idx != null && idx < current.length) {
           current = current[idx];
         } else {
           // 遍历列表返回所有匹配值的列表
-          return current.map((e) => e is Map ? e[clean] : null).toList();
+          return current.map((e) => e is Map ? e[key] : null).toList();
         }
       } else {
         return null;
@@ -995,6 +1038,10 @@ class RuleEngine {
     if (rule.isEmpty) return false;
     // 连接符
     if (rule.contains('||') || rule.contains('&&') || rule.contains('%%')) return true;
+    // Rule prefixes
+    if (rule.startsWith('@XPath:') || rule.startsWith('@xpath:') ||
+        rule.startsWith('@Json:') || rule.startsWith('@json:') ||
+        rule.startsWith('@@') || rule.startsWith(':')) return true;
     // Legado 特征: 包含 @ 分隔符
     if (rule.contains('@')) return true;
     // 以 class./tag./id./children 开头
@@ -1028,17 +1075,42 @@ class RuleEngine {
       return parts.map((part) => _extractByRule(root, part.trim())).join('');
     }
 
-    if (_isLegadoRule(rule)) {
+    // -- Rule prefix system (Legado 3.0 compatible) --
+    String processed = rule.trim();
+    while (processed.startsWith('@') && !processed.startsWith('@@')) {
+      processed = processed.substring(1).trim();
+    }
+    if (processed.startsWith('@@')) {
+      processed = processed.substring(2).trim();
+    }
+    if (processed.startsWith('@XPath:') || processed.startsWith('@xpath:')) {
+      final expr = processed.substring(7).trim();
+      if (expr.isNotEmpty) return XPathParser.extractText(root, expr);
+    }
+    if (processed.startsWith('@Json:') || processed.startsWith('@json:')) {
+      return '';
+    }
+    if (processed.startsWith(':')) {
+      final expr = processed.substring(1).trim();
+      if (expr.isNotEmpty) {
+        try { return expr.split('&&').map((p) => CssSelector.extractOneText(root, p.trim())).join(''); } catch (_) {}
+      }
+    }
+    if (processed.startsWith('//') || processed.startsWith('/html')) {
+      return XPathParser.extractText(root, processed);
+    }
+
+    if (_isLegadoRule(processed)) {
       try {
-        final parsed = LegadoRule.parse(rule);
+        final parsed = LegadoRule.parse(processed);
         String result = parsed.extractText(root);
         return parsed.applyRegex(result);
       } catch (e) {
-        debugPrint('  ⚠ Legado规则解析失败: $e');
+        debugPrint('  Legado rule parse failed: $e');
         return '';
       }
     }
-    return CssSelector.extractOneText(root, rule);
+    return CssSelector.extractOneText(root, processed);
   }
 
   static String _extractAttrByRule(dom.Element root, String rule, String attr) {
@@ -1355,15 +1427,19 @@ class RuleEngine {
 
     try {
       final ruleSearch = jsonDecode(source.ruleSearchJson) as Map<String, dynamic>;
+      debugPrint('  ▸ ruleSearch: ${source.ruleSearchJson.substring(0, (source.ruleSearchJson.length > 200 ? 200 : source.ruleSearchJson.length))}');
 
       final root = jsonDecode(jsonStr);
+      debugPrint('  ▸ 响应根类型: ${root.runtimeType}');
 
       // 1. 获取书籍列表路径
       final bookListPath = ruleSearch['bookList'] as String? ?? '';
-      if (bookListPath.isEmpty) return results;
+      debugPrint('  ▸ bookList路径: "$bookListPath"');
+      if (bookListPath.isEmpty) { debugPrint('  ▸ bookList路径为空'); return results; }
 
       dynamic items = JsonPath.resolve(root, bookListPath);
-      if (items == null) return results;
+      debugPrint('  ▸ 解析结果类型: ${items.runtimeType}, 值: ${items is List ? "列表(${items.length}项)" : items}');
+      if (items == null) { debugPrint('  ▸ 解析结果为null'); return results; }
       if (items is! List) items = [items];
 
       // 2. 获取字段路径
@@ -1372,6 +1448,7 @@ class RuleEngine {
       final bookUrlPath = ruleSearch['bookUrl'] as String? ?? '';
       final coverUrlPath = ruleSearch['coverUrl'] as String? ?? '';
       final introPath = ruleSearch['intro'] as String? ?? '';
+      debugPrint('  ▸ namePath="$namePath" authorPath="$authorPath" bookUrlPath="$bookUrlPath"');
 
       for (final item in items) {
         final name = namePath.isNotEmpty ? JsonPath.resolveString(item, namePath) : '';

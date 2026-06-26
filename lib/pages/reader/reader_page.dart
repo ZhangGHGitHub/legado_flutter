@@ -290,7 +290,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       ? Image.network(
                           _coverUrl,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _buildCoverPlaceholder(theme),
+                          errorBuilder: (_, _, _) => _buildCoverPlaceholder(theme),
                           loadingBuilder: (_, child, progress) {
                             if (progress == null) return child;
                             return _buildCoverPlaceholder(theme);
@@ -823,6 +823,7 @@ class _ReaderPageState extends State<ReaderPage> {
   void dispose() {
     _saveProgress(); // 离开时保存进度（使用缓存的 _bookProvider）
     _scrollController.dispose();
+    _pageController?.dispose();
     super.dispose();
   }
 
@@ -937,7 +938,7 @@ class _ReaderPageState extends State<ReaderPage> {
       _pageIndex = clampedPage;
       _pendingTargetPage = null; // 消费完毕
     });
-    debugPrint('📖 分页完成: ${result.length} 页 (目标=${clampedPage}, 总高度=$totalHeight, 页高=$pageHeight)');
+    debugPrint('📖 分页完成: ${result.length} 页 (目标=$clampedPage, 总高度=$totalHeight, 页高=$pageHeight)');
   }
 
   /// 自动保存阅读进度

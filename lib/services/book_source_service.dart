@@ -8,6 +8,7 @@ import 'package:charset_converter/charset_converter.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/chapter.dart';
+import 'js_evaluator.dart';
 import 'rule_engine.dart';
 
 /// 书源服务 - 基于书源规则进行搜索、目录、正文提取
@@ -145,7 +146,13 @@ class BookSourceService {
   Options _buildOptions(BookSource source) => Options(
     responseType: ResponseType.bytes,
     headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+          'AppleWebKit/537.36 (KHTML, like Gecko) '
+          'Chrome/131.0.0.0 Safari/537.36',
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
       'Accept-Encoding': 'gzip, deflate',
+      'Referer': source.bookSourceUrl,
       ...source.customHeaders,
     },
   );
@@ -161,7 +168,13 @@ class BookSourceService {
     final opts = Options(
       responseType: ResponseType.bytes,
       headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/131.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         'Accept-Encoding': 'gzip, deflate',
+        if (source != null) 'Referer': source.bookSourceUrl,
         if (source != null) ...source.customHeaders,
       },
     );
@@ -288,11 +301,13 @@ class BookSourceService {
 
       // charset 解码
       final body = await _decodeResponse(rawBytes, charset: cfg.charset);
+      debugPrint('  ▸ 响应大小: ${body.length} 字符');
 
       // 尝试 JSON 解析
       dynamic data;
       try {
         data = jsonDecode(body);
+        debugPrint('  ▸ JSON 解析成功');
       } catch (e) {
         debugPrint('  ▸ JSON 解析失败: $e');
       }
@@ -302,19 +317,21 @@ class BookSourceService {
         if (source.isJsonApiSource) {
           final jsonStr = jsonEncode(data);
           final results = RuleEngine.parseJsonSearchResults(jsonStr, source: source);
-          final baseUrl = _baseUrl(source.bookSourceUrl);
-
-          return results.map((r) => {
-            'name': r['name'] ?? '',
-            'author': r['author'] ?? '',
-            'url': RuleEngine.resolveUrl(r['url'] ?? '', baseUrl),
-            'coverUrl': RuleEngine.resolveUrl(r['coverUrl'] ?? '', baseUrl),
-            'kind': r['kind'] ?? '',
-            'note': r['note'] ?? '',
-          }).toList();
+          if (results.isNotEmpty) {
+            final baseUrl = _baseUrl(source.bookSourceUrl);
+            return results.map((r) => {
+              'name': r['name'] ?? '',
+              'author': r['author'] ?? '',
+              'url': RuleEngine.resolveUrl(r['url'] ?? '', baseUrl),
+              'coverUrl': RuleEngine.resolveUrl(r['coverUrl'] ?? '', baseUrl),
+              'kind': r['kind'] ?? '',
+              'note': r['note'] ?? '',
+            }).toList();
+          }
+          debugPrint('  ▸ JSON API 返回空结果，回退 HTML 解析');
+        } else {
+          debugPrint('  ⚠ ${source.bookSourceName}: 返回 JSON 但无 JSON 规则，尝试 HTML 解析');
         }
-        debugPrint('  ⚠ ${source.bookSourceName}: 返回 JSON 但无 JSON 规则');
-        return [];
       }
 
       // HTML 页面 - CSS 选择器解析
@@ -412,32 +429,48 @@ class BookSourceService {
   /// JSON API 书源的章节列表获取
   Future<List<Chapter>> _getJsonApiChapters(Book book, BookSource source) async {
     try {
-      // 1. 获取书籍详情（提取 articleid）
-      final detailResp = await _dio.get(
-        book.sourceUrl,
-        options: _buildOptions(source),
-      );
-      List<int> detailBytes = detailResp.data as List<int>;
-      if (detailBytes.length >= 2 && detailBytes[0] == 0x1F && detailBytes[1] == 0x8B) {
-        detailBytes = gzip.decode(detailBytes);
+      // 1. 先尝试从 book.sourceUrl 末尾提取 articleid（适用于 URL 为纯 ID 的情况）
+      String articleId = '';
+      final urlMatch = RegExp(r'/(\d+)(?:/|$|\.)').firstMatch(book.sourceUrl);
+      if (urlMatch != null) {
+        articleId = urlMatch.group(1)!;
+        debugPrint('  >> 从 URL 提取 articleid: $articleId');
       }
-      final detailStr = utf8.decode(detailBytes);
-      final detailData = jsonDecode(detailStr);
 
-      // 提取 articleid
-      final articleId = JsonPath.resolveString(detailData, 'data.articleid');
+      // 如果 URL 中没有数字 ID，请求详情页获取 articleid
+      if (articleId.isEmpty) {
+        final detailResp = await _dio.get(
+          book.sourceUrl,
+          options: _buildOptions(source),
+        );
+        List<int> detailBytes = detailResp.data as List<int>;
+        if (detailBytes.length >= 2 && detailBytes[0] == 0x1F && detailBytes[1] == 0x8B) {
+          detailBytes = gzip.decode(detailBytes);
+        }
+        final detailStr = await _decodeResponse(Uint8List.fromList(detailBytes));
+        final detailData = jsonDecode(detailStr);
+        articleId = JsonPath.resolveString(detailData, 'data.articleid');
+      }
 
-      // 2. 构造章节列表 URL
+      // 2. 构造章节列表 URL - 处理 <js> 模板
       String tocUrl = source.ruleBookInfoTocUrl;
-      if (tocUrl.contains('{{result.articleid}}')) {
-        tocUrl = tocUrl.replaceAll('{{result.articleid}}', articleId);
-      }
-      if (!tocUrl.startsWith('http')) {
-        final base = _baseUrl(source.bookSourceUrl);
-        tocUrl = tocUrl.startsWith('/') ? '$base$tocUrl' : '$base/$tocUrl';
+      if (tocUrl.contains('<js>')) {
+        // 执行 JS 模板生成 URL
+        tocUrl = await _evaluateJsTemplate(tocUrl, book.sourceUrl, articleId);
+        debugPrint('  >> JS 模板执行结果: $tocUrl');
+      } else {
+        // 普通 URL 模板替换
+        if (tocUrl.contains('{{result.articleid}}')) {
+          tocUrl = tocUrl.replaceAll('{{result.articleid}}', articleId);
+        }
+        if (!tocUrl.startsWith('http')) {
+          final base = _baseUrl(source.bookSourceUrl);
+          tocUrl = tocUrl.startsWith('/') ? '$base$tocUrl' : '$base/$tocUrl';
+        }
       }
 
       // 3. 获取章节列表
+      debugPrint('  >> 章节 API URL: $tocUrl (articleId: $articleId)');
       final tocResp = await _dio.get(
         tocUrl,
         options: _buildOptions(source),
@@ -446,7 +479,7 @@ class BookSourceService {
       if (tocBytes.length >= 2 && tocBytes[0] == 0x1F && tocBytes[1] == 0x8B) {
         tocBytes = gzip.decode(tocBytes);
       }
-      final tocStr = utf8.decode(tocBytes);
+      final tocStr = await _decodeResponse(Uint8List.fromList(tocBytes));
       final tocData = jsonDecode(tocStr);
 
       // 4. 用 JSONPath 解析章节列表
@@ -472,9 +505,35 @@ class BookSourceService {
             : '第${i + 1}章';
         if (title.isEmpty) continue;
 
+        // Resolve chapter URL: handle JSONPath + <js> combo
+        // Format: "$.chapterid\n<js>...Base()+result...</js>"
         String url = chapterUrlTemplate;
-        if (url.contains('{{')) {
-          url = JsonPath.resolveTemplate(url, item);
+        if (url.contains('<js>')) {
+          // 1. Resolve JSONPath prefix (before \n or <js>)
+          String rawValue = '';
+          final newlineIdx = url.indexOf('\n');
+          final jsIdx = url.indexOf('<js>');
+          final pathEnd = newlineIdx >= 0 && newlineIdx < jsIdx ? newlineIdx : jsIdx;
+          final pathPart = url.substring(0, pathEnd).trim();
+          if (pathPart.isNotEmpty) {
+            rawValue = JsonPath.resolveString(item, pathPart);
+          }
+          // 2. Replace {{}} templates
+          var resolved = url.substring(pathEnd);
+          if (resolved.contains('{{')) {
+            resolved = JsonPath.resolveTemplate(resolved, item);
+          }
+          // 3. Execute <js> with result = rawValue
+          final fullJs = resolved.contains('result')
+              ? resolved.replaceAll('result', "'$rawValue'")
+              : resolved;
+          url = await _evaluateJsTemplate(fullJs, source.bookSourceUrl, articleId);
+          if (url.isEmpty) url = rawValue;
+          debugPrint('  >> 章节URL: $url');
+        } else {
+          if (url.contains('{{')) {
+            url = JsonPath.resolveTemplate(url, item);
+          }
         }
 
         result.add(Chapter(
@@ -508,6 +567,13 @@ class BookSourceService {
       String contentUrl = url;
       if (source.ruleContentUrl.isNotEmpty) {
         contentUrl = source.ruleContentUrl.replaceAll('{{url}}', url);
+        if (contentUrl.contains('<js>')) {
+          contentUrl = await _evaluateJsTemplate(contentUrl, source.bookSourceUrl, url);
+        }
+        if (!contentUrl.startsWith('http')) {
+          final base = _baseUrl(source.bookSourceUrl);
+          contentUrl = contentUrl.startsWith('/') ? '$base$contentUrl' : '$base/$contentUrl';
+        }
       }
 
       debugPrint('📖 获取正文: $contentUrl');
@@ -531,12 +597,46 @@ class BookSourceService {
   /// JSON API 书源的正文获取
   Future<String> _getJsonApiContent(String url, BookSource source) async {
     try {
-      // 构造完整 URL（可能是相对路径）
+      // 构造完整 URL：优先用 ruleContentUrl 模板
       String contentUrl = url;
+      if (source.ruleContentUrl.isNotEmpty) {
+        contentUrl = source.ruleContentUrl.replaceAll('{{url}}', url);
+        // 处理 <js> 模板（注入 url/chapterid/articleid 等变量）
+        if (contentUrl.contains('<js>')) {
+          contentUrl = await _evaluateJsTemplate(contentUrl, source.bookSourceUrl, url);
+        }
+      }
+      
+      // 解析 URL 中的 ,{"js":"...","bodyJs":"..."} 选项
+      String? bodyJs;
+      final commaIdx = contentUrl.indexOf(',');
+      if (commaIdx > 0 && contentUrl.indexOf('{', commaIdx) == commaIdx + 1) {
+        final urlPart = contentUrl.substring(0, commaIdx);
+        final jsonPart = contentUrl.substring(commaIdx + 1);
+        try {
+          final opts = jsonDecode(jsonPart);
+          if (opts is Map) {
+            bodyJs = opts['bodyJs'] as String?;
+            final jsStr = opts['js'] as String?;
+            if (jsStr != null && jsStr.isNotEmpty) {
+              try {
+                final jsEval = JsEvaluatorService();
+                final jsResult = jsEval.runScript('var url = "$url"; $jsStr');
+                if (jsResult.isNotEmpty) contentUrl = jsResult;
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
+        contentUrl = urlPart; // Use clean URL without options
+      }
+      
+      // 解析为绝对 URL
       if (!contentUrl.startsWith('http')) {
         final base = _baseUrl(source.bookSourceUrl);
         contentUrl = contentUrl.startsWith('/') ? '$base$contentUrl' : '$base/$contentUrl';
       }
+      
+      debugPrint('📖 获取正文 (JSON API): $contentUrl');
 
       final resp = await _dio.get(
         contentUrl,
@@ -546,13 +646,48 @@ class BookSourceService {
       if (bytes.length >= 2 && bytes[0] == 0x1F && bytes[1] == 0x8B) {
         bytes = gzip.decode(bytes);
       }
-      final body = utf8.decode(bytes);
+      final body = await _decodeResponse(Uint8List.fromList(bytes));
+
+      // -- bodyJs: transform response body via JS --
+      if (bodyJs != null && bodyJs.isNotEmpty) {
+        try {
+          final jsEval = JsEvaluatorService();
+          final jsResult = jsEval.eval(bodyJs!, {'result': body});
+          if (jsResult.isNotEmpty) {
+            final decoded = jsonDecode(jsResult);
+            if (decoded is String) return decoded;
+          }
+        } catch (_) {}
+      }
+
       final data = jsonDecode(body);
 
       final contentPath = source.ruleContentPath;
+      debugPrint('  >> 正文规则: $contentPath');
       if (contentPath.isEmpty) return '（无正文规则）';
 
-      final content = JsonPath.resolveString(data, contentPath);
+      // Handle "JSONPath\n<js>Clean(result)</js>" format
+      String content;
+      final jsIdx = contentPath.indexOf('<js>');
+      if (jsIdx >= 0) {
+        // Step 1: Extract via JSONPath (prefix before <js>)
+        final pathPart = contentPath.substring(0, jsIdx).trim();
+        String rawContent = '';
+        if (pathPart.isNotEmpty) {
+          rawContent = JsonPath.resolveString(data, pathPart);
+        }
+        // Step 2: Execute <js> with result = rawContent (string)
+        if (rawContent.isNotEmpty || pathPart.isEmpty) {
+          final jsCode = contentPath.substring(jsIdx);
+          // Build a custom script for content cleaning
+          final cleaned = await _evaluateContentJs(jsCode, rawContent, source);
+          content = cleaned.isNotEmpty ? cleaned : rawContent;
+        } else {
+          content = rawContent;
+        }
+      } else {
+        content = JsonPath.resolveString(data, contentPath);
+      }
       return content.isNotEmpty ? content : '（此章节暂无内容）';
     } catch (e) {
       return '（加载失败: $e）';
@@ -564,6 +699,76 @@ class BookSourceService {
     final uri = Uri.tryParse(url);
     if (uri == null) return '';
     return '${uri.scheme}://${uri.host}${uri.port == 80 || uri.port == 443 ? '' : ':${uri.port}'}';
+  }
+
+  /// Evaluate a <js> content cleaning snippet with result as raw string.
+  /// Injects the source's jsLib for custom functions like Clean(), Base(), J().
+  Future<String> _evaluateContentJs(String template, String rawContent, BookSource source) async {
+    try {
+      final jsMatch = RegExp(r'<js>(.*?)</js>', dotAll: true).firstMatch(template);
+      if (jsMatch == null) return rawContent;
+      final jsCode = jsMatch.group(1)!;
+      final base = _baseUrl(source.bookSourceUrl);
+      final escaped = rawContent
+          .replaceAll('\\', '\\\\')
+          .replaceAll("'", "\\'")
+          .replaceAll('\n', '\\n')
+          .replaceAll('\r', '\\r');
+      
+      final wrappedCode = '''
+var result = '$escaped';
+var baseUrl = '$base';
+function Base() { return '$base'; }
+function J(obj) { try { return JSON.parse(String(obj||'{}')); } catch(e) { return {}; } }
+${source.jsLib}
+
+$jsCode''';
+      final jsEval = JsEvaluatorService();
+      return jsEval.runScript(wrappedCode);
+    } catch (e) {
+      debugPrint('  >> 内容JS处理失败: $e');
+      return rawContent;
+    }
+  }
+
+  /// Evaluate <js>...</js> template to produce a URL string.
+  /// Used for Legado rules like `ruleBookInfoTocUrl` that contain JS code.
+  Future<String> _evaluateJsTemplate(String template, String baseUrl, String articleId, {Map<String, dynamic>? resultData, String? jsLib}) async {
+    try {
+      final jsMatch = RegExp(r'<js>(.*?)</js>', dotAll: true).firstMatch(template);
+      if (jsMatch == null) return template;
+
+      final jsCode = jsMatch.group(1)!;
+      final base = _baseUrl(baseUrl);
+      final resultJson = (resultData != null) ? jsonEncode(resultData) : '{"articleid":"$articleId"}';
+
+      // Build as a full script (runScript doesn't wrap in ())
+      final wrappedCode = '''
+var result = $resultJson;
+var baseUrl = '$baseUrl';
+var articleid = '$articleId';
+function J(obj) { return obj; }
+function Base() { return '$base'; }
+var cache = { _data: { 'articleid': '$articleId' },
+  putMemory: function(key, val) { cache._data[key] = val; },
+  getFromMemory: function(key) { return cache._data[key] || ''; }
+};
+// Source jsLib (if provided)
+${jsLib ?? ''}
+
+$jsCode''';
+
+      final jsEval = JsEvaluatorService();
+      // Use runScript (not eval) to avoid expression wrapping that breaks var declarations
+      final result = jsEval.runScript(wrappedCode);
+      if (result.isNotEmpty && result.startsWith('http')) {
+        return result;
+      }
+      return result;
+    } catch (e) {
+      debugPrint('  >> JS 模板执行失败: $e');
+      return template;
+    }
   }
 
   /// 从 URL 获取书源 JSON 并解析
