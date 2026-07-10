@@ -3,12 +3,14 @@ import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io' show Platform;
 import 'app.dart';
+import 'bridge/legado_engine_bridge.dart';
+import 'config/engine_config.dart';
 import 'providers/book_provider.dart';
 import 'providers/source_provider.dart';
 import 'providers/replace_provider.dart';
 
 /// 应用入口
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // 桌面端 (Windows/Linux/macOS): 使用 sqflite_common_ffi 替代原生 sqflite
@@ -17,8 +19,11 @@ void main() {
     databaseFactory = databaseFactoryFfi;
   }
 
+  // 加载引擎配置并尝试初始化 Rust 书源引擎
+  await EngineConfig.load();
+  await LegadoEngineBridge.tryInit();
+
   runApp(
-    // 注入全局状态
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => BookProvider()),

@@ -44,7 +44,11 @@ class _ReplacePageState extends State<ReplacePage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.cleaning_services, size: 64, color: Colors.grey[400]),
+                  Icon(
+                    Icons.cleaning_services,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
                   const SizedBox(height: 16),
                   Text('暂无替换规则', style: TextStyle(color: Colors.grey[600])),
                   const SizedBox(height: 8),
@@ -73,8 +77,11 @@ class _ReplacePageState extends State<ReplacePage> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline, size: 20,
-                        color: Theme.of(context).colorScheme.tertiary),
+                    Icon(
+                      Icons.info_outline,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.tertiary,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -99,7 +106,9 @@ class _ReplacePageState extends State<ReplacePage> {
   void _showRuleEditor(BuildContext context, ReplaceRule? rule) {
     final nameController = TextEditingController(text: rule?.name ?? '');
     final patternController = TextEditingController(text: rule?.pattern ?? '');
-    final replacementController = TextEditingController(text: rule?.replacement ?? '');
+    final replacementController = TextEditingController(
+      text: rule?.replacement ?? '',
+    );
     bool isRegex = rule?.isRegex ?? true;
 
     showDialog(
@@ -157,7 +166,9 @@ class _ReplacePageState extends State<ReplacePage> {
               onPressed: () {
                 Navigator.pop(ctx);
                 final newRule = ReplaceRule(
-                  id: rule?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                  id:
+                      rule?.id ??
+                      DateTime.now().millisecondsSinceEpoch.toString(),
                   name: nameController.text,
                   pattern: patternController.text,
                   replacement: replacementController.text,
@@ -226,7 +237,10 @@ class _ReplaceRuleTile extends StatelessWidget {
               title: const Text('删除规则'),
               content: Text('确定删除「${rule.name}」？'),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('取消'),
+                ),
                 FilledButton(
                   onPressed: () {
                     Navigator.pop(ctx);

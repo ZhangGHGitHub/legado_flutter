@@ -30,36 +30,50 @@ class DatabaseHelper {
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
           try {
-            await db.execute("ALTER TABLE book_sources ADD COLUMN rawSourceJson TEXT DEFAULT ''");
+            await db.execute(
+              "ALTER TABLE book_sources ADD COLUMN rawSourceJson TEXT DEFAULT ''",
+            );
           } catch (_) {}
         }
         if (oldV < 3) {
           try {
-            await db.execute("ALTER TABLE book_sources ADD COLUMN rawSourceJson TEXT DEFAULT ''");
+            await db.execute(
+              "ALTER TABLE book_sources ADD COLUMN rawSourceJson TEXT DEFAULT ''",
+            );
           } catch (_) {}
           // 清理旧的列名数据
           try {
-            await db.execute("UPDATE book_sources SET rawSourceJson = ruleSearchJson");
+            await db.execute(
+              "UPDATE book_sources SET rawSourceJson = ruleSearchJson",
+            );
           } catch (_) {}
         }
         if (oldV < 4) {
           try {
-            await db.execute("ALTER TABLE books ADD COLUMN bookSourceUrl TEXT DEFAULT ''");
+            await db.execute(
+              "ALTER TABLE books ADD COLUMN bookSourceUrl TEXT DEFAULT ''",
+            );
           } catch (_) {}
         }
         if (oldV < 5) {
           try {
-            await db.execute("ALTER TABLE books ADD COLUMN lastChapter TEXT DEFAULT ''");
+            await db.execute(
+              "ALTER TABLE books ADD COLUMN lastChapter TEXT DEFAULT ''",
+            );
           } catch (_) {}
         }
         if (oldV < 6) {
           try {
-            await db.execute("ALTER TABLE books ADD COLUMN currentPageIndex INTEGER DEFAULT 0");
+            await db.execute(
+              "ALTER TABLE books ADD COLUMN currentPageIndex INTEGER DEFAULT 0",
+            );
           } catch (_) {}
         }
         if (oldV < 7) {
           try {
-            await db.execute("ALTER TABLE books ADD COLUMN bookGroup TEXT DEFAULT ''");
+            await db.execute(
+              "ALTER TABLE books ADD COLUMN bookGroup TEXT DEFAULT ''",
+            );
           } catch (_) {}
         }
       },
@@ -176,18 +190,32 @@ class DatabaseHelper {
   Future<List<Book>> getBooks() async {
     final db = await database;
     final maps = await db.query('books', orderBy: 'updatedAt DESC');
-    return maps.map((m) => Book.fromJson({
-      ...m,
-      'isFavorite': m['isFavorite'] == 1,
-      'group': m['bookGroup'] ?? '',
-    })).toList();
+    return maps
+        .map(
+          (m) => Book.fromJson({
+            ...m,
+            'isFavorite': m['isFavorite'] == 1,
+            'group': m['bookGroup'] ?? '',
+          }),
+        )
+        .toList();
   }
 
-  Future<void> updateBookProgress(String bookId, double progress, String? chapter, {int pageIndex = 0}) async {
+  Future<void> updateBookProgress(
+    String bookId,
+    double progress,
+    String? chapter, {
+    int pageIndex = 0,
+  }) async {
     final db = await database;
     await db.update(
       'books',
-      {'progress': progress, 'currentChapter': chapter, 'currentPageIndex': pageIndex, 'updatedAt': DateTime.now().toIso8601String()},
+      {
+        'progress': progress,
+        'currentChapter': chapter,
+        'currentPageIndex': pageIndex,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
       where: 'id = ?',
       whereArgs: [bookId],
     );
@@ -201,14 +229,22 @@ class DatabaseHelper {
 
   Future<void> updateBookCover(String bookId, String coverUrl) async {
     final db = await database;
-    await db.update('books', {'coverUrl': coverUrl},
-        where: 'id = ?', whereArgs: [bookId]);
+    await db.update(
+      'books',
+      {'coverUrl': coverUrl},
+      where: 'id = ?',
+      whereArgs: [bookId],
+    );
   }
 
   Future<void> updateBookGroup(String bookId, String group) async {
     final db = await database;
-    await db.update('books', {'bookGroup': group},
-        where: 'id = ?', whereArgs: [bookId]);
+    await db.update(
+      'books',
+      {'bookGroup': group},
+      where: 'id = ?',
+      whereArgs: [bookId],
+    );
   }
 
   // ═══════════════════ 书源操作 ═══════════════════
@@ -243,13 +279,21 @@ class DatabaseHelper {
       ruleSearchList: rawField('ruleSearchList', 'ruleSearch', 'bookList'),
       ruleSearchName: rawField('ruleSearchName', 'ruleSearch', 'name'),
       ruleSearchAuthor: rawField('ruleSearchAuthor', 'ruleSearch', 'author'),
-      ruleSearchCoverUrl: rawField('ruleSearchCoverUrl', 'ruleSearch', 'coverUrl'),
+      ruleSearchCoverUrl: rawField(
+        'ruleSearchCoverUrl',
+        'ruleSearch',
+        'coverUrl',
+      ),
       ruleSearchKind: rawField('ruleSearchKind', 'ruleSearch', 'kind'),
       ruleSearchNote: rawField('ruleSearchNote', 'ruleSearch', 'note'),
       ruleBookUrlPattern: (m['ruleBookUrlPattern'] as String?) ?? '',
       ruleBookName: rawField('ruleBookName', 'ruleBookInfo', 'name'),
       ruleBookAuthor: rawField('ruleBookAuthor', 'ruleBookInfo', 'author'),
-      ruleBookCoverUrl: rawField('ruleBookCoverUrl', 'ruleBookInfo', 'coverUrl'),
+      ruleBookCoverUrl: rawField(
+        'ruleBookCoverUrl',
+        'ruleBookInfo',
+        'coverUrl',
+      ),
       ruleBookKind: (m['ruleBookKind'] as String?) ?? '',
       ruleBookNote: (m['ruleBookNote'] as String?) ?? '',
       ruleBookLastChapter: (m['ruleBookLastChapter'] as String?) ?? '',
@@ -268,16 +312,22 @@ class DatabaseHelper {
 
   Future<void> insertBookSource(BookSource source) async {
     final db = await database;
-    await db.insert('book_sources', _sourceToMap(source),
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert(
+      'book_sources',
+      _sourceToMap(source),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   Future<void> insertBookSources(List<BookSource> sources) async {
     final db = await database;
     final batch = db.batch();
     for (final source in sources) {
-      batch.insert('book_sources', _sourceToMap(source),
-          conflictAlgorithm: ConflictAlgorithm.replace);
+      batch.insert(
+        'book_sources',
+        _sourceToMap(source),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     }
     await batch.commit(noResult: true);
   }
@@ -332,7 +382,8 @@ class DatabaseHelper {
 
   Future<List<BookSource>> getEnabledSources() async {
     final db = await database;
-    final maps = await db.query('book_sources',
+    final maps = await db.query(
+      'book_sources',
       where: 'enabled = ?',
       whereArgs: [1],
       orderBy: 'createdAt DESC',
@@ -342,7 +393,8 @@ class DatabaseHelper {
 
   Future<void> toggleSource(String url, bool enabled) async {
     final db = await database;
-    await db.update('book_sources',
+    await db.update(
+      'book_sources',
       {'enabled': enabled ? 1 : 0},
       where: 'bookSourceUrl = ?',
       whereArgs: [url],
@@ -351,7 +403,11 @@ class DatabaseHelper {
 
   Future<void> deleteSource(String url) async {
     final db = await database;
-    await db.delete('book_sources', where: 'bookSourceUrl = ?', whereArgs: [url]);
+    await db.delete(
+      'book_sources',
+      where: 'bookSourceUrl = ?',
+      whereArgs: [url],
+    );
   }
 
   // ═══════════════════ 章节操作 ═══════════════════
@@ -375,20 +431,24 @@ class DatabaseHelper {
 
   Future<List<Chapter>> getChapters(String bookId) async {
     final db = await database;
-    final maps = await db.query('chapters',
+    final maps = await db.query(
+      'chapters',
       where: 'bookId = ?',
       whereArgs: [bookId],
       orderBy: 'idx ASC',
     );
-    return maps.map((m) => Chapter.fromJson({
-      ...m,
-      'isDownloaded': m['isDownloaded'] == 1,
-    })).toList();
+    return maps
+        .map(
+          (m) =>
+              Chapter.fromJson({...m, 'isDownloaded': m['isDownloaded'] == 1}),
+        )
+        .toList();
   }
 
   Future<void> saveChapterContent(String chapterId, String content) async {
     final db = await database;
-    await db.update('chapters',
+    await db.update(
+      'chapters',
       {'content': content, 'isDownloaded': 1},
       where: 'id = ?',
       whereArgs: [chapterId],
@@ -428,16 +488,21 @@ class DatabaseHelper {
   Future<List<ReplaceRule>> getReplaceRules() async {
     final db = await database;
     final maps = await db.query('replace_rules', orderBy: 'name ASC');
-    return maps.map((m) => ReplaceRule.fromJson({
-      ...m,
-      'isEnabled': m['isEnabled'] == 1,
-      'isRegex': m['isRegex'] == 1,
-    })).toList();
+    return maps
+        .map(
+          (m) => ReplaceRule.fromJson({
+            ...m,
+            'isEnabled': m['isEnabled'] == 1,
+            'isRegex': m['isRegex'] == 1,
+          }),
+        )
+        .toList();
   }
 
   Future<void> toggleReplaceRule(String id, bool enabled) async {
     final db = await database;
-    await db.update('replace_rules',
+    await db.update(
+      'replace_rules',
       {'isEnabled': enabled ? 1 : 0},
       where: 'id = ?',
       whereArgs: [id],
@@ -446,13 +511,18 @@ class DatabaseHelper {
 
   Future<void> updateReplaceRule(ReplaceRule rule) async {
     final db = await database;
-    await db.update('replace_rules', {
-      'name': rule.name,
-      'pattern': rule.pattern,
-      'replacement': rule.replacement,
-      'isEnabled': rule.isEnabled ? 1 : 0,
-      'isRegex': rule.isRegex ? 1 : 0,
-    }, where: 'id = ?', whereArgs: [rule.id]);
+    await db.update(
+      'replace_rules',
+      {
+        'name': rule.name,
+        'pattern': rule.pattern,
+        'replacement': rule.replacement,
+        'isEnabled': rule.isEnabled ? 1 : 0,
+        'isRegex': rule.isRegex ? 1 : 0,
+      },
+      where: 'id = ?',
+      whereArgs: [rule.id],
+    );
   }
 
   Future<void> deleteReplaceRule(String id) async {

@@ -45,9 +45,11 @@ class _SourceEditorPageState extends State<SourceEditorPage>
     _tabController = TabController(length: 2, vsync: this);
     _debugTabController = TabController(length: 3, vsync: this);
     _jsonController = TextEditingController(
-      text: _formatJson(widget.source.rawSourceJson.isNotEmpty
-          ? widget.source.rawSourceJson
-          : _buildDefaultJson()),
+      text: _formatJson(
+        widget.source.rawSourceJson.isNotEmpty
+            ? widget.source.rawSourceJson
+            : _buildDefaultJson(),
+      ),
     );
   }
 
@@ -98,9 +100,13 @@ class _SourceEditorPageState extends State<SourceEditorPage>
       // 从 JSON 重建 BookSource
       final parsed = jsonDecode(jsonStr) as Map<String, dynamic>;
       final updated = BookSource(
-        bookSourceUrl: parsed['bookSourceUrl'] as String? ?? widget.source.bookSourceUrl,
-        bookSourceName: parsed['bookSourceName'] as String? ?? widget.source.bookSourceName,
-        bookSourceGroup: parsed['bookSourceGroup'] as String? ?? widget.source.bookSourceGroup,
+        bookSourceUrl:
+            parsed['bookSourceUrl'] as String? ?? widget.source.bookSourceUrl,
+        bookSourceName:
+            parsed['bookSourceName'] as String? ?? widget.source.bookSourceName,
+        bookSourceGroup:
+            parsed['bookSourceGroup'] as String? ??
+            widget.source.bookSourceGroup,
         enabled: widget.source.enabled,
         rawSourceJson: jsonStr,
         ruleSearchUrl: parsed['ruleSearchUrl'] as String? ?? '',
@@ -123,9 +129,9 @@ class _SourceEditorPageState extends State<SourceEditorPage>
 
       await context.read<SourceProvider>().updateSource(updated);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('书源已保存')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('书源已保存')));
       }
     } catch (e) {
       setState(() => _jsonError = 'JSON 格式错误: $e');
@@ -148,13 +154,15 @@ class _SourceEditorPageState extends State<SourceEditorPage>
       _appendLog('');
 
       // 获取原始响应
-      _appendLog('📡 请求URL: ${widget.source.ruleSearchUrl.replaceAll('{{key}}', _searchKeyword)}');
+      _appendLog(
+        '📡 请求URL: ${widget.source.ruleSearchUrl.replaceAll('{{key}}', _searchKeyword)}',
+      );
       final results = await service.search(widget.source, _searchKeyword);
-      
+
       _appendLog('✅ 搜索完成');
       _appendLog('📊 结果数量: ${results.length}');
       _appendLog('');
-      
+
       if (results.isEmpty) {
         _appendLog('⚠️ 无搜索结果');
         _appendLog('  可能原因:');
@@ -208,7 +216,8 @@ class _SourceEditorPageState extends State<SourceEditorPage>
               onPressed: _isSaving ? null : _saveJson,
               icon: _isSaving
                   ? const SizedBox(
-                      width: 16, height: 16,
+                      width: 16,
+                      height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.save),
@@ -218,10 +227,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildEditorTab(theme),
-          _buildEnhancedDebugTab(theme),
-        ],
+        children: [_buildEditorTab(theme), _buildEnhancedDebugTab(theme)],
       ),
     );
   }
@@ -239,8 +245,10 @@ class _SourceEditorPageState extends State<SourceEditorPage>
                 const Icon(Icons.error, color: Colors.red, size: 18),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(_jsonError!,
-                      style: const TextStyle(color: Colors.red, fontSize: 13)),
+                  child: Text(
+                    _jsonError!,
+                    style: const TextStyle(color: Colors.red, fontSize: 13),
+                  ),
                 ),
               ],
             ),
@@ -363,7 +371,10 @@ class _SourceEditorPageState extends State<SourceEditorPage>
                   decoration: const InputDecoration(
                     hintText: '输入搜索关键词...',
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     isDense: true,
                   ),
                   onChanged: (v) => _searchKeyword = v,
@@ -374,7 +385,11 @@ class _SourceEditorPageState extends State<SourceEditorPage>
               FilledButton.tonal(
                 onPressed: _isDebugLoading ? null : _runSearchDebug,
                 child: _isDebugLoading
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Text('测试搜索'),
               ),
             ],
@@ -388,11 +403,33 @@ class _SourceEditorPageState extends State<SourceEditorPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('搜索规则', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue[800])),
+              Text(
+                '搜索规则',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue[800],
+                ),
+              ),
               const SizedBox(height: 2),
-              Text('URL: ${widget.source.ruleSearchUrl}', style: TextStyle(fontSize: 10, color: Colors.blue[700]), maxLines: 2, overflow: TextOverflow.ellipsis),
-              Text('列表: ${widget.source.ruleSearchList}', style: TextStyle(fontSize: 10, color: Colors.blue[700]), maxLines: 1, overflow: TextOverflow.ellipsis),
-              Text('书名: ${widget.source.ruleSearchName}', style: TextStyle(fontSize: 10, color: Colors.blue[700]), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(
+                'URL: ${widget.source.ruleSearchUrl}',
+                style: TextStyle(fontSize: 10, color: Colors.blue[700]),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                '列表: ${widget.source.ruleSearchList}',
+                style: TextStyle(fontSize: 10, color: Colors.blue[700]),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                '书名: ${widget.source.ruleSearchName}',
+                style: TextStyle(fontSize: 10, color: Colors.blue[700]),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         ),
@@ -416,7 +453,10 @@ class _SourceEditorPageState extends State<SourceEditorPage>
                 decoration: const InputDecoration(
                   hintText: '输入书籍详情/目录页 URL...',
                   border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   isDense: true,
                 ),
               ),
@@ -429,7 +469,10 @@ class _SourceEditorPageState extends State<SourceEditorPage>
                   ),
                   const SizedBox(width: 8),
                   if (_testChapters.isNotEmpty)
-                    Text('${_testChapters.length} 章', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                    Text(
+                      '${_testChapters.length} 章',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    ),
                 ],
               ),
             ],
@@ -443,7 +486,8 @@ class _SourceEditorPageState extends State<SourceEditorPage>
           child: Text(
             '目录规则: ${widget.source.ruleChapterList}',
             style: TextStyle(fontSize: 10, color: Colors.teal[700]),
-            maxLines: 2, overflow: TextOverflow.ellipsis,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
         // Chapter list preview
@@ -453,9 +497,22 @@ class _SourceEditorPageState extends State<SourceEditorPage>
               itemCount: _testChapters.length > 20 ? 20 : _testChapters.length,
               itemBuilder: (_, i) => ListTile(
                 dense: true,
-                leading: Text('${i + 1}', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-                title: Text(_testChapters[i].title, style: const TextStyle(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text(_testChapters[i].url, style: TextStyle(fontSize: 10, color: Colors.grey[500]), maxLines: 1, overflow: TextOverflow.ellipsis),
+                leading: Text(
+                  '${i + 1}',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                ),
+                title: Text(
+                  _testChapters[i].title,
+                  style: const TextStyle(fontSize: 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  _testChapters[i].url,
+                  style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
           )
@@ -480,7 +537,10 @@ class _SourceEditorPageState extends State<SourceEditorPage>
                   decoration: const InputDecoration(
                     hintText: '输入任意 URL 测试...',
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     isDense: true,
                   ),
                   onSubmitted: (_) => _runUrlTest(),
@@ -505,7 +565,12 @@ class _SourceEditorPageState extends State<SourceEditorPage>
                   _rawResponse!.length > 5000
                       ? '${_rawResponse!.substring(0, 5000)}\n\n... (truncated, ${_rawResponse!.length} chars total)'
                       : _rawResponse!,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 11, height: 1.4, color: Color(0xFFAAAAAA)),
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    height: 1.4,
+                    color: Color(0xFFAAAAAA),
+                  ),
                 ),
               ),
             ),
@@ -538,11 +603,11 @@ class _SourceEditorPageState extends State<SourceEditorPage>
         sourceUrl: url,
         bookSourceUrl: widget.source.bookSourceUrl,
       );
-      
+
       _appendLog('📖 获取章节列表...');
       _appendLog('URL: $url');
       final chapters = await service.getChapters(book, source: widget.source);
-      
+
       setState(() => _testChapters = chapters);
       _appendLog('✅ 成功: ${chapters.length} 章');
       for (int i = 0; i < chapters.length && i < 5; i++) {
@@ -571,18 +636,22 @@ class _SourceEditorPageState extends State<SourceEditorPage>
     try {
       // Use a direct Dio client for URL testing
       _appendLog('📡 请求: $url');
-      
-      final dio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 30),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept-Encoding': 'gzip, deflate',
-        },
-      ));
+
+      final dio = Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 30),
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept-Encoding': 'gzip, deflate',
+          },
+        ),
+      );
       // Note: SSL certificate bypass not available in this context
 
-      final response = await dio.get(url,
+      final response = await dio.get(
+        url,
         options: Options(responseType: ResponseType.bytes),
       );
 
@@ -601,8 +670,10 @@ class _SourceEditorPageState extends State<SourceEditorPage>
 
       _appendLog('✅ 状态码: ${response.statusCode}');
       _appendLog('📊 大小: ${bytes.length} bytes');
-      _appendLog('🧪 内容预览: ${body.substring(0, body.length > 200 ? 200 : body.length)}');
-      
+      _appendLog(
+        '🧪 内容预览: ${body.substring(0, body.length > 200 ? 200 : body.length)}',
+      );
+
       setState(() => _rawResponse = body);
     } catch (e) {
       _appendLog('❌ 请求失败: $e');

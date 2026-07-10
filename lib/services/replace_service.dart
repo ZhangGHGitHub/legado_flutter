@@ -17,7 +17,10 @@ class ReplaceService {
     for (final rule in _rules) {
       try {
         if (rule.isRegex) {
-          result = result.replaceAll(RegExp(rule.pattern, multiLine: true), rule.replacement);
+          result = result.replaceAll(
+            RegExp(rule.pattern, multiLine: true),
+            rule.replacement,
+          );
         } else {
           result = result.replaceAll(rule.pattern, rule.replacement);
         }

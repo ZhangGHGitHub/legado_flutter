@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_js/flutter_js.dart';
 import 'package:flutter_js/quickjs/quickjs_runtime2.dart';
+import 'jsoup_polyfill.dart';
 
 /// Legado `@js:` 规则执行器
 ///
@@ -12,6 +13,7 @@ class JsEvaluatorService {
   QuickJsRuntime2? _runtime;
   bool _initialized = false;
   bool _libLoaded = false;
+  bool _jsoupLoaded = false;
   int _evalCount = 0;
   static const _maxEvalBeforeCleanup = 100;
 
@@ -155,10 +157,7 @@ function parseUrl(url, base) {
   void _ensureInit() {
     if (_initialized) return;
     try {
-      _runtime = QuickJsRuntime2(
-        stackSize: 1024 * 512,
-        timeout: 1000,
-      );
+      _runtime = QuickJsRuntime2(stackSize: 1024 * 512, timeout: 5000);
       _initialized = true;
       _evalCount = 0;
       _libLoaded = false;
@@ -180,6 +179,43 @@ function parseUrl(url, base) {
     }
   }
 
+  /// 注入 Jsoup 兼容层（Packages.org.jsoup.Jsoup）
+  void _ensureJsoupLoaded() {
+    if (_jsoupLoaded || _runtime == null) return;
+    try {
+      _runtime!.evaluate(jsoupPolyfill);
+      _jsoupLoaded = true;
+      debugPrint('📚 Jsoup 兼容层已注入');
+    } catch (e) {
+      debugPrint('⚠️ Jsoup 兼容层注入失败: $e');
+    }
+  }
+
+  /// 对 HTML 字符串执行 Legado <js> 脚本（result = html）
+  String runHtmlJs(String script, String html, {String jsLib = ''}) {
+    _ensureInit();
+    if (_runtime == null) return '';
+    try {
+      _ensureLibLoaded();
+      _ensureJsoupLoaded();
+      _evalCount++;
+      if (_evalCount > _maxEvalBeforeCleanup) _recreateEngine();
+      final escaped = jsonEncode(html);
+      final code =
+          'legadoResult = $escaped;\nvar result = legadoResult;\n$jsLib\n$script';
+      final jsResult = _runtime!.evaluate(code);
+      final raw = jsResult.rawResult;
+      final str = jsResult.stringResult;
+      if (raw is String) return raw;
+      if (str.isNotEmpty) return str;
+      if (raw != null) return raw.toString();
+      return '';
+    } catch (e) {
+      debugPrint('⚠️ HTML JS 脚本执行失败: $e');
+      return '';
+    }
+  }
+
   /// 执行 JS 表达式，[data] 作为 `result` 变量注入
   String eval(String expression, [Map<String, dynamic>? data]) {
     _ensureInit();
@@ -194,7 +230,8 @@ function parseUrl(url, base) {
       // 构造 JS 代码：注入 data 为 result 变量，然后执行表达式
       final escaped = jsonEncode(data ?? {});
       // 将数据同时注入 result 和 legadoResult（供标准库函数访问）
-      final code = 'legadoResult = $escaped;\nvar result = legadoResult;\n($expression)';
+      final code =
+          'legadoResult = $escaped;\nvar result = legadoResult;\n($expression)';
 
       _evalCount++;
       if (_evalCount > _maxEvalBeforeCleanup) {
@@ -223,12 +260,10 @@ function parseUrl(url, base) {
     try {
       _runtime?.dispose();
     } catch (_) {}
-    _runtime = QuickJsRuntime2(
-      stackSize: 1024 * 512,
-      timeout: 1000,
-    );
+    _runtime = QuickJsRuntime2(stackSize: 1024 * 512, timeout: 5000);
     _evalCount = 0;
     _libLoaded = false;
+    _jsoupLoaded = false;
     debugPrint('🔧 JS 引擎已重建');
   }
 
@@ -240,6 +275,7 @@ function parseUrl(url, base) {
     _runtime = null;
     _initialized = false;
     _libLoaded = false;
+    _jsoupLoaded = false;
   }
 
   /// Execute a full script (not wrapped in expression parens).

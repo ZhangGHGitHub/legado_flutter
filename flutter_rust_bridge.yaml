@@ -1,0 +1,5 @@
+rust_input: crate::api
+rust_root: rust/legado_engine/
+dart_output: lib/src/rust
+dart_entrypoint_class_name: LegadoEngine
+web: false

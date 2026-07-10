@@ -54,7 +54,9 @@ class RateLimiter {
         final elapsed = now - times.last;
         if (elapsed < config.intervalMs) {
           final waitMs = config.intervalMs - elapsed;
-          debugPrint('  RateLimiter: wait ${waitMs}ms (interval ${config.intervalMs}ms)');
+          debugPrint(
+            '  RateLimiter: wait ${waitMs}ms (interval ${config.intervalMs}ms)',
+          );
           await Future.delayed(Duration(milliseconds: waitMs));
         }
       }
@@ -68,7 +70,9 @@ class RateLimiter {
         final oldest = times.first;
         final waitMs = (oldest + config.windowMs) - now + 1;
         if (waitMs > 0) {
-          debugPrint('  RateLimiter: wait ${waitMs}ms (${config.count}/${config.windowMs}ms window)');
+          debugPrint(
+            '  RateLimiter: wait ${waitMs}ms (${config.count}/${config.windowMs}ms window)',
+          );
           await Future.delayed(Duration(milliseconds: waitMs));
         }
       }
@@ -99,13 +103,9 @@ class RateLimiter {
 }
 
 class _RateConfig {
-  final int intervalMs;  // e.g. 1000ms between requests
-  final int count;       // e.g. 20 requests
-  final int windowMs;    // e.g. per 60000ms
+  final int intervalMs; // e.g. 1000ms between requests
+  final int count; // e.g. 20 requests
+  final int windowMs; // e.g. per 60000ms
 
-  const _RateConfig({
-    this.intervalMs = 0,
-    this.count = 0,
-    this.windowMs = 0,
-  });
+  const _RateConfig({this.intervalMs = 0, this.count = 0, this.windowMs = 0});
 }

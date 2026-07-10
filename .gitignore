@@ -44,6 +44,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Temp files created during development
-read_lines*.py
-.dart_files.txt
+# Rust build artifacts
+/rust/target/
+/lib/src/rust/frb_generated*.dart

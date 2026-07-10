@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/replace_rule.dart';
 import '../database/database_helper.dart';
+import '../help/content_processor.dart';
 import '../services/replace_service.dart';
 
 /// 替换净化 Provider — 替换规则管理
@@ -21,6 +22,7 @@ class ReplaceProvider extends ChangeNotifier {
       _replaceRules = await _db.getReplaceRules();
     }
     _replaceService.loadRules(_replaceRules);
+    ContentProcessor.instance.loadRules(_replaceRules);
     notifyListeners();
   }
 
@@ -29,6 +31,7 @@ class ReplaceProvider extends ChangeNotifier {
     await _db.insertReplaceRule(rule);
     _replaceRules = await _db.getReplaceRules();
     _replaceService.loadRules(_replaceRules);
+    ContentProcessor.instance.loadRules(_replaceRules);
     notifyListeners();
   }
 
@@ -37,6 +40,7 @@ class ReplaceProvider extends ChangeNotifier {
     await _db.updateReplaceRule(rule);
     _replaceRules = await _db.getReplaceRules();
     _replaceService.loadRules(_replaceRules);
+    ContentProcessor.instance.loadRules(_replaceRules);
     notifyListeners();
   }
 
@@ -45,6 +49,7 @@ class ReplaceProvider extends ChangeNotifier {
     await _db.deleteReplaceRule(ruleId);
     _replaceRules = await _db.getReplaceRules();
     _replaceService.loadRules(_replaceRules);
+    ContentProcessor.instance.loadRules(_replaceRules);
     notifyListeners();
   }
 
@@ -53,6 +58,7 @@ class ReplaceProvider extends ChangeNotifier {
     await _db.toggleReplaceRule(ruleId, enabled);
     _replaceRules = await _db.getReplaceRules();
     _replaceService.loadRules(_replaceRules);
+    ContentProcessor.instance.loadRules(_replaceRules);
     notifyListeners();
   }
 
@@ -63,6 +69,7 @@ class ReplaceProvider extends ChangeNotifier {
     await _db.insertReplaceRules(ReplaceService.builtInRules());
     _replaceRules = await _db.getReplaceRules();
     _replaceService.loadRules(_replaceRules);
+    ContentProcessor.instance.loadRules(_replaceRules);
     notifyListeners();
   }
 }

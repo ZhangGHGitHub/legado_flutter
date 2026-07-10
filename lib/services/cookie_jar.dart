@@ -17,7 +17,8 @@ class CookieJar {
     final domain = _extractDomain(url);
     if (domain.isEmpty) return;
 
-    final setCookieHeaders = headers['set-cookie'] ?? headers['Set-Cookie'] ?? <String>[];
+    final setCookieHeaders =
+        headers['set-cookie'] ?? headers['Set-Cookie'] ?? <String>[];
     for (final header in setCookieHeaders) {
       _parseAndStore(domain, header);
     }

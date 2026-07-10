@@ -121,7 +121,7 @@ class LocalBookService {
   /// 分割章节 - 支持常见章节标题格式
   List<Chapter> _splitChapters(String text) {
     final chapters = <Chapter>[];
-    
+
     // 常见的章节标题正则
     final patterns = [
       RegExp(r'第[一二三四五六七八九十百千零0-9]+章\s*[^\n]*'),
@@ -154,20 +154,21 @@ class LocalBookService {
       final end = (i + 1 < matches.length) ? matches[i + 1].start : text.length;
       final content = text.substring(start, end).trim();
 
-      chapters.add(Chapter(
-        id: '${matches[i].start}',
-        bookId: '', // 稍后设置
-        title: title,
-        index: i,
-        url: '',
-        isDownloaded: true,
-        content: content,
-      ));
+      chapters.add(
+        Chapter(
+          id: '${matches[i].start}',
+          bookId: '', // 稍后设置
+          title: title,
+          index: i,
+          url: '',
+          isDownloaded: true,
+          content: content,
+        ),
+      );
     }
 
     return chapters;
   }
 
   /// 分割章节 - 支持常见章节标题格式
-  
-} 
+}

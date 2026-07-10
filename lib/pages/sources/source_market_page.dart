@@ -5,13 +5,29 @@ import '../../providers/source_provider.dart';
 import '../../services/book_source_service.dart';
 
 /// 书源市场 - 内置推荐书源，一键导入
-class SourceMarketPage extends StatelessWidget {
+class SourceMarketPage extends StatefulWidget {
   const SourceMarketPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final market = BookSourceService.sourceMarket();
+  State<SourceMarketPage> createState() => _SourceMarketPageState();
+}
 
+class _SourceMarketPageState extends State<SourceMarketPage> {
+  late Future<Map<String, List<BookSource>>> _marketFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _marketFuture = _loadMarket();
+  }
+
+  Future<Map<String, List<BookSource>>> _loadMarket() async {
+    final sources = await BookSourceService.loadBuiltInSources();
+    return BookSourceService.sourceMarketFrom(sources);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('书源市场'),
@@ -19,18 +35,30 @@ class SourceMarketPage extends StatelessWidget {
           TextButton.icon(
             icon: const Icon(Icons.download),
             label: const Text('全部导入'),
-            onPressed: () => _importAll(context, market),
+            onPressed: () async {
+              final market = await _marketFuture;
+              if (context.mounted) _importAll(context, market);
+            },
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: market.entries.map((entry) {
-          return _CategoryGroup(
-            category: entry.key,
-            sources: entry.value,
+      body: FutureBuilder<Map<String, List<BookSource>>>(
+        future: _marketFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('加载书源失败: ${snapshot.error}'));
+          }
+          final market = snapshot.data ?? {};
+          return ListView(
+            padding: const EdgeInsets.all(12),
+            children: market.entries.map((entry) {
+              return _CategoryGroup(category: entry.key, sources: entry.value);
+            }).toList(),
           );
-        }).toList(),
+        },
       ),
     );
   }
@@ -42,9 +70,9 @@ class SourceMarketPage extends StatelessWidget {
         provider.addSource(source);
       }
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已导入所有书源')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已导入所有书源')));
     Navigator.pop(context);
   }
 }
@@ -53,10 +81,7 @@ class _CategoryGroup extends StatelessWidget {
   final String category;
   final List<BookSource> sources;
 
-  const _CategoryGroup({
-    required this.category,
-    required this.sources,
-  });
+  const _CategoryGroup({required this.category, required this.sources});
 
   @override
   Widget build(BuildContext context) {

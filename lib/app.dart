@@ -47,9 +47,8 @@ class LegadoApp extends StatelessWidget {
       routes: {
         '/sources': (context) => const SourcesPage(),
         '/settings': (context) => const SettingsPage(),
-        '/reader': (context) => const Scaffold(
-          body: Center(child: Text('阅读器页面')),
-        ),
+        '/reader': (context) =>
+            const Scaffold(body: Center(child: Text('阅读器页面'))),
       },
     );
   }
@@ -84,7 +83,7 @@ class _MainShellState extends State<MainShell> {
     // 加载书源（首次运行导入默认书源）
     var sources = await db.getBookSources();
     if (sources.isEmpty) {
-      await db.insertBookSources(BookSourceService.builtInSources());
+      await db.insertBookSources(await BookSourceService.loadBuiltInSources());
       sources = await db.getBookSources();
     }
     await sourceProvider.loadSources();
@@ -104,15 +103,10 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     if (!_initialized) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {

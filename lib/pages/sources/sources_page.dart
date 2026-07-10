@@ -31,24 +31,33 @@ class SourcesPage extends StatelessWidget {
               }
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(value: 'import_json', child: ListTile(
-                leading: Icon(Icons.file_open, size: 20),
-                title: Text('从JSON文件导入'),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-              )),
-              const PopupMenuItem(value: 'paste_json', child: ListTile(
-                leading: Icon(Icons.content_paste, size: 20),
-                title: Text('粘贴JSON代码'),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-              )),
-              const PopupMenuItem(value: 'import_url', child: ListTile(
-                leading: Icon(Icons.cloud_download, size: 20),
-                title: Text('从URL导入'),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-              )),
+              const PopupMenuItem(
+                value: 'import_json',
+                child: ListTile(
+                  leading: Icon(Icons.file_open, size: 20),
+                  title: Text('从JSON文件导入'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'paste_json',
+                child: ListTile(
+                  leading: Icon(Icons.content_paste, size: 20),
+                  title: Text('粘贴JSON代码'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'import_url',
+                child: ListTile(
+                  leading: Icon(Icons.cloud_download, size: 20),
+                  title: Text('从URL导入'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
             ],
           ),
           IconButton(
@@ -83,7 +92,9 @@ class SourcesPage extends StatelessWidget {
                         label: const Text('书源市场'),
                         onPressed: () => Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const SourceMarketPage()),
+                          MaterialPageRoute(
+                            builder: (_) => const SourceMarketPage(),
+                          ),
                         ),
                       ),
                     ),
@@ -101,11 +112,17 @@ class SourcesPage extends StatelessWidget {
               // 书源列表
               Expanded(
                 child: sources.isEmpty
-                    ? Center(child: Text('暂无书源', style: TextStyle(color: Colors.grey[500])))
+                    ? Center(
+                        child: Text(
+                          '暂无书源',
+                          style: TextStyle(color: Colors.grey[500]),
+                        ),
+                      )
                     : ListView.separated(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         itemCount: sources.length,
-                        separatorBuilder: (context, i) => const Divider(height: 1, indent: 72),
+                        separatorBuilder: (context, i) =>
+                            const Divider(height: 1, indent: 72),
                         itemBuilder: (context, index) {
                           return _SourceTile(source: sources[index]);
                         },
@@ -130,13 +147,19 @@ class SourcesPage extends StatelessWidget {
               color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.rss_feed, size: 48, color: theme.colorScheme.primary),
+            child: Icon(
+              Icons.rss_feed,
+              size: 48,
+              color: theme.colorScheme.primary,
+            ),
           ),
           const SizedBox(height: 16),
           const Text('还没有书源', style: TextStyle(fontSize: 18)),
           const SizedBox(height: 8),
-          Text('去书源市场一键导入，或从JSON文件导入',
-              style: TextStyle(color: Colors.grey[600])),
+          Text(
+            '去书源市场一键导入，或从JSON文件导入',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
           const SizedBox(height: 24),
           FilledButton.icon(
             icon: const Icon(Icons.store),
@@ -169,10 +192,13 @@ class SourcesPage extends StatelessWidget {
 
       final file = File(result.files.single.path!);
       final jsonText = await file.readAsString();
-      await provider.importSources(jsonText);
+      final success = await provider.importSources(jsonText);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ 书源导入成功')),
+          SnackBar(
+            content: Text(success ? '✅ 书源导入成功' : '❌ 导入失败，请检查文件内容'),
+            backgroundColor: success ? null : Colors.red,
+          ),
         );
       }
     } catch (e) {
@@ -191,23 +217,40 @@ class SourcesPage extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('粘贴书源JSON'),
-        content: TextField(
-          controller: controller,
-          maxLines: 8,
-          decoration: const InputDecoration(
-            hintText: '粘贴 legado 书源 JSON 代码...',
-            border: OutlineInputBorder(),
-          ),
-        ),
+        content:             TextField(
+              controller: controller,
+              maxLines: 8,
+              decoration: const InputDecoration(
+                hintText: '粘贴 legado 书源 JSON，或书源订阅 URL...',
+                border: OutlineInputBorder(),
+              ),
+            ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
+              final text = controller.text.trim();
               Navigator.pop(ctx);
-              context.read<SourceProvider>().importSources(controller.text);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('✅ 书源导入成功')),
-              );
+              if (text.isEmpty) return;
+              final provider = context.read<SourceProvider>();
+              final success = await provider.importSources(text);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      success
+                          ? '✅ 书源导入成功'
+                          : (provider.statusMessage.isNotEmpty
+                              ? '❌ ${provider.statusMessage}'
+                              : '❌ 导入失败'),
+                    ),
+                    backgroundColor: success ? null : Colors.red,
+                  ),
+                );
+              }
             },
             child: const Text('导入'),
           ),
@@ -236,13 +279,18 @@ class SourcesPage extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              '示例：可从 Legado 社区获取书源仓库地址',
+              '示例：\n'
+              'https://www.yckceo.com/yuedu/shuyuan/json/id/7497.json\n'
+              'https://www.yckceo.com/yuedu/shuyuan/json/id/7565.json',
               style: TextStyle(fontSize: 12, color: Colors.grey[500]),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
           FilledButton.icon(
             icon: const Icon(Icons.cloud_download, size: 18),
             label: const Text('获取并导入'),
@@ -256,7 +304,10 @@ class SourcesPage extends StatelessWidget {
                 ScaffoldMessenger.of(context).showSnackBar(
                   success
                       ? const SnackBar(content: Text('✅ 书源导入成功'))
-                      : const SnackBar(content: Text('❌ 导入失败，请检查URL'), backgroundColor: Colors.red),
+                      : const SnackBar(
+                          content: Text('❌ 导入失败，请检查URL'),
+                          backgroundColor: Colors.red,
+                        ),
                 );
               }
             },
@@ -310,7 +361,8 @@ class _SourceTile extends StatelessWidget {
       trailing: Switch(
         value: source.enabled,
         onChanged: (v) => context.read<SourceProvider>().toggleSource(
-          source.bookSourceUrl, v,
+          source.bookSourceUrl,
+          v,
         ),
       ),
       onLongPress: () {
@@ -320,11 +372,16 @@ class _SourceTile extends StatelessWidget {
             title: const Text('删除书源'),
             content: Text('确定删除「${source.bookSourceName}」？'),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('取消'),
+              ),
               FilledButton(
                 onPressed: () {
                   Navigator.pop(ctx);
-                  context.read<SourceProvider>().deleteSource(source.bookSourceUrl);
+                  context.read<SourceProvider>().deleteSource(
+                    source.bookSourceUrl,
+                  );
                 },
                 style: FilledButton.styleFrom(backgroundColor: Colors.red),
                 child: const Text('删除'),

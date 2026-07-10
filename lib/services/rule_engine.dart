@@ -1,8 +1,20 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:html/dom.dart' as dom;
+import 'package:html/parser.dart' show parse;
 import 'package:flutter/foundation.dart';
 import '../models/book_source.dart';
 import 'js_evaluator.dart';
+import 'legado_json_path.dart';
+
+part 'analyze_rule.dart';
+
+/// JSON 章节 URL 解析回调（含 `<js>` 模板）
+typedef JsonChapterUrlResolver =
+    Future<String> Function({
+      required String template,
+      required dynamic item,
+      required String rawValue,
+    });
 
 /// 全局懒加载的 JS 执行器实例
 JsEvaluatorService? _jsEval;
@@ -150,7 +162,10 @@ class XPathParser {
   }
 
   /// 对元素列表应用一个 XPath 步骤
-  static List<dom.Element> _applyStep(List<dom.Element> elements, _XPathStep step) {
+  static List<dom.Element> _applyStep(
+    List<dom.Element> elements,
+    _XPathStep step,
+  ) {
     List<dom.Element> result = [];
 
     if (step.isTerminal) return elements;
@@ -165,8 +180,11 @@ class XPathParser {
         if (step.tagName == '*') {
           candidates = List.from(el.children);
         } else {
-          candidates = el.children.where((c) =>
-              c.localName?.toLowerCase() == step.tagName.toLowerCase()).toList();
+          candidates = el.children
+              .where(
+                (c) => c.localName?.toLowerCase() == step.tagName.toLowerCase(),
+              )
+              .toList();
         }
       }
 
@@ -195,12 +213,14 @@ class XPathParser {
     final result = <dom.Element>[];
     void walk(dom.Element node) {
       for (final child in node.children) {
-        if (tagName == '*' || child.localName?.toLowerCase() == tagName.toLowerCase()) {
+        if (tagName == '*' ||
+            child.localName?.toLowerCase() == tagName.toLowerCase()) {
           result.add(child);
         }
         walk(child);
       }
     }
+
     walk(root);
     // debugPrint('  ▸ _queryDescendants(tag=$tagName): root=${root.localName}, total=${result.length}');
     if (result.isNotEmpty) {
@@ -213,7 +233,10 @@ class XPathParser {
   }
 
   /// 应用 predicate 过滤
-  static List<dom.Element> _applyPredicate(List<dom.Element> elements, _XPathPredicate pred) {
+  static List<dom.Element> _applyPredicate(
+    List<dom.Element> elements,
+    _XPathPredicate pred,
+  ) {
     if (pred.type == 'position') {
       // position 是 1-based
       final idx = pred.position - 1;
@@ -224,8 +247,9 @@ class XPathParser {
     }
 
     if (pred.type == 'attr_eq') {
-      return elements.where((e) =>
-          (e.attributes[pred.attrName] ?? '') == pred.attrValue).toList();
+      return elements
+          .where((e) => (e.attributes[pred.attrName] ?? '') == pred.attrValue)
+          .toList();
     }
 
     if (pred.type == 'contains') {
@@ -237,8 +261,9 @@ class XPathParser {
 
     if (pred.type == 'has_child') {
       return elements.where((e) {
-        return e.children.any((c) =>
-            c.localName?.toLowerCase() == pred.tagName?.toLowerCase());
+        return e.children.any(
+          (c) => c.localName?.toLowerCase() == pred.tagName?.toLowerCase(),
+        );
       }).toList();
     }
 
@@ -248,8 +273,8 @@ class XPathParser {
 
 /// XPath 的一个步骤（轴 + 节点测试 + 谓语）
 class _XPathStep {
-  final String axis;     // 'child' or 'descendant'
-  final String tagName;  // tag name or '*'
+  final String axis; // 'child' or 'descendant'
+  final String tagName; // tag name or '*'
   final bool isTerminal;
   final String? terminalType; // 'text', 'attr'
   final String? attrName;
@@ -288,9 +313,19 @@ class _XPathStep {
     if (s.contains('::')) {
       final axisMatch = RegExp(r'^([a-z-]+)::').firstMatch(s);
       if (axisMatch != null) {
-        const validAxes = ['child','descendant','parent','self','ancestor',
-            'ancestor-or-self','descendant-or-self','following',
-            'following-sibling','preceding','preceding-sibling'];
+        const validAxes = [
+          'child',
+          'descendant',
+          'parent',
+          'self',
+          'ancestor',
+          'ancestor-or-self',
+          'descendant-or-self',
+          'following',
+          'following-sibling',
+          'preceding',
+          'preceding-sibling',
+        ];
         if (validAxes.contains(axisMatch.group(1))) {
           axis = axisMatch.group(1)!;
           s = s.substring(axisMatch.end);
@@ -307,11 +342,19 @@ class _XPathStep {
     if (s == '.' || s.startsWith('./') || s.startsWith('.[')) {
       tagName = '*';
       axis = 'self';
-      if (s != '.') s = s.substring(1); else s = '';
+      if (s != '.') {
+        s = s.substring(1);
+      } else {
+        s = '';
+      }
     } else if (s == '..' || s.startsWith('../') || s.startsWith('..[')) {
       tagName = '*';
       axis = 'parent';
-      if (s != '..') s = s.substring(2); else s = '';
+      if (s != '..') {
+        s = s.substring(2);
+      } else {
+        s = '';
+      }
     }
 
     String tagPart;
@@ -349,11 +392,7 @@ class _XPathStep {
       }
     }
 
-    return _XPathStep(
-      axis: axis,
-      tagName: tagName,
-      predicates: predicates,
-    );
+    return _XPathStep(axis: axis, tagName: tagName, predicates: predicates);
   }
 
   static int _findBracketEnd(String s, int start) {
@@ -371,7 +410,7 @@ class _XPathStep {
 
 /// XPath predicate （[条件]）
 class _XPathPredicate {
-  final String type;    // 'position', 'attr_eq', 'contains', 'has_child'
+  final String type; // 'position', 'attr_eq', 'contains', 'has_child'
   final int position;
   final String? attrName;
   final String? attrValue;
@@ -404,7 +443,9 @@ class _XPathPredicate {
     }
 
     // @attr="value"
-    final attrEqMatch = RegExp(r"""@([\w-]+)\s*=\s*"([^"]*)"|@([\w-]+)\s*=\s*'([^']*)'""").firstMatch(s);
+    final attrEqMatch = RegExp(
+      r"""@([\w-]+)\s*=\s*"([^"]*)"|@([\w-]+)\s*=\s*'([^']*)'""",
+    ).firstMatch(s);
     if (attrEqMatch != null) {
       return _XPathPredicate(
         type: 'attr_eq',
@@ -414,7 +455,9 @@ class _XPathPredicate {
     }
 
     // contains(@attr, "value")
-    final containsMatch = RegExp(r"""contains\s*\(\s*@([\w-]+)\s*,\s*"([^"]*)"\s*\)""").firstMatch(s);
+    final containsMatch = RegExp(
+      r"""contains\s*\(\s*@([\w-]+)\s*,\s*"([^"]*)"\s*\)""",
+    ).firstMatch(s);
     if (containsMatch != null) {
       return _XPathPredicate(
         type: 'contains',
@@ -431,86 +474,17 @@ class _XPathPredicate {
     return _XPathPredicate();
   }
 }
+
+/// @deprecated 使用 [LegadoJsonPath]
 class JsonPath {
-  /// 按路径取值，支持 $.data.items[0].name 或 $.data.items
-  /// 支持 || 连接符：尝试多个路径，返回第一个非空结果
-  static dynamic resolve(dynamic root, String path) {
-    if (root == null || path.isEmpty) return null;
-
-    // -- || 连接符: 尝试多个路径，返回第一个非空 --
-    if (path.contains('||')) {
-      final parts = path.split('||');
-      for (final part in parts) {
-        final result = resolveSingle(root, part.trim());
-        if (result != null) {
-          if (result is List && result.isNotEmpty) return result;
-          if (result is! List) return result;
-        }
-      }
-      return null;
-    }
-
-    return resolveSingle(root, path);
-  }
-
-  /// 解析单个 JSONPath 路径（无 || 连接符）
-  static dynamic resolveSingle(dynamic root, String path) {
-    String p = path;
-    // 去掉开头的 $.
-    if (p.startsWith('\$.')) p = p.substring(2);
-    if (p.startsWith('.')) p = p.substring(1);
-
-    dynamic current = root;
-    // 按 . 或 [] 分割
-    final parts = p.split(RegExp(r'\.|(?=\[)'));
-    for (final part in parts) {
-      if (current == null) return null;
-      final clean = part.replaceAll('[', '').replaceAll(']', '').replaceAll("'", '').replaceAll('"', '');
-      if (clean.isEmpty) continue;
-
-      // 尝试按索引取值
-      int? idx;
-      String key = clean;
-      if (part.contains('[') && part.contains(']')) {
-        final match = RegExp(r'\[(\d+)\]').firstMatch(part);
-        if (match != null) {
-          idx = int.tryParse(match.group(1)!);
-        }
-        key = part.replaceAll(RegExp(r'\[.*?\]'), '');
-        if (key.isEmpty && current is List) { continue; }
-      }
-
-      if (current is Map) {
-        current = current[key];
-      } else if (current is List) {
-        if (idx != null && idx < current.length) {
-          current = current[idx];
-        } else {
-          // 遍历列表返回所有匹配值的列表
-          return current.map((e) => e is Map ? e[key] : null).toList();
-        }
-      } else {
-        return null;
-      }
-    }
-    return current;
-  }
-
-  /// 从路径取字符串值
-  static String resolveString(dynamic root, String path) {
-    final v = resolve(root, path);
-    if (v == null) return '';
-    if (v is List) return v.join(', ');
-    return v.toString();
-  }
-
-  /// 替换模板中的 {{$.xxx}} 占位符
-  static String resolveTemplate(String template, dynamic data) {
-    return template.replaceAllMapped(
-      RegExp(r'\{\{(.+?)\}\}'),
-      (m) => resolveString(data, m.group(1)!.trim()),
-    );
-  }
+  static dynamic resolve(dynamic root, String path) =>
+      LegadoJsonPath.resolve(root, path);
+  static dynamic resolveSingle(dynamic root, String path) =>
+      LegadoJsonPath.resolveSingle(root, path);
+  static String resolveString(dynamic root, String path) =>
+      LegadoJsonPath.resolveString(root, path);
+  static String resolveTemplate(String template, dynamic data) =>
+      LegadoJsonPath.resolveTemplate(template, data);
 }
 
 /// CSS 选择器工具类
@@ -569,7 +543,10 @@ class CssSelector {
   static List<String> extractRegex(String text, String pattern) {
     try {
       final regex = RegExp(pattern, multiLine: true);
-      return regex.allMatches(text).map((m) => m.group(1) ?? m.group(0) ?? '').toList();
+      return regex
+          .allMatches(text)
+          .map((m) => m.group(1) ?? m.group(0) ?? '')
+          .toList();
     } catch (_) {
       return [];
     }
@@ -604,7 +581,7 @@ class LegadoRule {
   /// 解析 Legado 规则字符串
   factory LegadoRule.parse(String rule) {
     String r = rule.trim();
-    
+
     // 1) 提取 ##regex##replacement
     String? regexPattern;
     String? regexReplacement;
@@ -621,7 +598,9 @@ class LegadoRule {
 
     // 2) 按 @ 分割为选择段（避开 [] 内部的 @）
     final rawSegments = _splitByAt(r);
-    final segments = rawSegments.map((s) => LegadoSegment.parse(s.trim())).toList();
+    final segments = rawSegments
+        .map((s) => LegadoSegment.parse(s.trim()))
+        .toList();
 
     return LegadoRule(
       raw: rule,
@@ -738,11 +717,11 @@ class LegadoRule {
 /// Legado 规则的一个选择段
 class LegadoSegment {
   final String raw;
-  final String type;    // class, id, tag, text, children, css, css:
+  final String type; // class, id, tag, text, children, css, css:
   final String name;
-  final List<int> positions;  // 空=全部
+  final List<int> positions; // 空=全部
   final bool reversed;
-  final bool isTerminal;  // text, href, src, html, ownText, textNodes
+  final bool isTerminal; // text, href, src, html, ownText, textNodes
   final String? terminalType; // text, href, src, html, ownText, textNodes, all
   final List<int> excluded;
 
@@ -769,7 +748,15 @@ class LegadoSegment {
     }
 
     // 检查是否为终端类型
-    final terminalTypes = ['text', 'href', 'src', 'html', 'ownText', 'textNodes', 'all'];
+    final terminalTypes = [
+      'text',
+      'href',
+      'src',
+      'html',
+      'ownText',
+      'textNodes',
+      'all',
+    ];
     if (terminalTypes.contains(s)) {
       return LegadoSegment(
         raw: raw,
@@ -783,7 +770,9 @@ class LegadoSegment {
 
     // 检查 CSS 选择器 @css:
     if (s.startsWith('css:') || s.startsWith('css ')) {
-      final cssSelector = s.contains(':') ? s.substring(4).trim() : s.substring(3).trim();
+      final cssSelector = s.contains(':')
+          ? s.substring(4).trim()
+          : s.substring(3).trim();
       return LegadoSegment(
         raw: raw,
         type: 'css',
@@ -794,7 +783,9 @@ class LegadoSegment {
 
     // 检查显式 @xpath: 前缀
     if (s.startsWith('xpath:') || s.startsWith('xpath ')) {
-      final xpathExpr = s.contains(':') ? s.substring(6).trim() : s.substring(5).trim();
+      final xpathExpr = s.contains(':')
+          ? s.substring(6).trim()
+          : s.substring(5).trim();
       return LegadoSegment(
         raw: raw,
         type: 'xpath',
@@ -805,7 +796,9 @@ class LegadoSegment {
 
     // 检查 @js: 前缀（Legado 的 JS 表达式）
     if (s.startsWith('js:') || s.startsWith('js ')) {
-      final jsExpr = s.contains(':') ? s.substring(3).trim() : s.substring(2).trim();
+      final jsExpr = s.contains(':')
+          ? s.substring(3).trim()
+          : s.substring(2).trim();
       return LegadoSegment(
         raw: raw,
         type: 'js',
@@ -835,9 +828,16 @@ class LegadoSegment {
     List<int> excluded = [];
 
     if (parts.length == 1) {
-      // 只有 name → 默认 tag 类型
-      type = 'tag';
-      name = parts[0];
+      if (s.startsWith('#')) {
+        type = 'id';
+        name = s.substring(1);
+      } else if (s.startsWith('.')) {
+        type = 'class';
+        name = s.substring(1);
+      } else {
+        type = 'tag';
+        name = parts[0];
+      }
     } else if (parts[0].isEmpty) {
       // 以 . 开头 → class 类型（如 ".itemtxt h3 a"）
       type = 'class';
@@ -862,7 +862,11 @@ class LegadoSegment {
     );
   }
 
-  static void _parsePositions(String posStr, List<int> positions, List<int> excluded) {
+  static void _parsePositions(
+    String posStr,
+    List<int> positions,
+    List<int> excluded,
+  ) {
     // 处理排除: !0, !0:2
     if (posStr.startsWith('!')) {
       final rest = posStr.substring(1);
@@ -912,7 +916,11 @@ class LegadoSegment {
     for (final el in elements) {
       switch (type) {
         case 'tag':
-          result.addAll(el.querySelectorAll(name));
+          if (el.localName == name) {
+            result.add(el);
+          } else {
+            result.addAll(el.querySelectorAll(name));
+          }
           break;
         case 'class':
           result.addAll(el.querySelectorAll('.$name'));
@@ -922,8 +930,9 @@ class LegadoSegment {
           if (found != null) result.add(found);
           break;
         case 'children':
-          result.addAll(el.children.where((c) =>
-              name.isEmpty || c.localName == name));
+          result.addAll(
+            el.children.where((c) => name.isEmpty || c.localName == name),
+          );
           break;
         case 'xpath':
           try {
@@ -936,6 +945,11 @@ class LegadoSegment {
           try {
             result.addAll(el.querySelectorAll(name));
           } catch (_) {}
+          break;
+        case 'text':
+          for (final node in el.querySelectorAll('a')) {
+            if (node.text.contains(name)) result.add(node);
+          }
           break;
         case 'js':
           // @js: 是终端类型，选择器层面不做处理，透传元素
@@ -952,7 +966,9 @@ class LegadoSegment {
 
     // 排除
     if (excluded.isNotEmpty) {
-      result = result.where((e) => !excluded.contains(result.indexOf(e))).toList();
+      result = result
+          .where((e) => !excluded.contains(result.indexOf(e)))
+          .toList();
     }
 
     // 位置过滤
@@ -1037,11 +1053,17 @@ class RuleEngine {
   static bool _isLegadoRule(String rule) {
     if (rule.isEmpty) return false;
     // 连接符
-    if (rule.contains('||') || rule.contains('&&') || rule.contains('%%')) return true;
+    if (rule.contains('||') || rule.contains('&&') || rule.contains('%%'))
+      return true;
     // Rule prefixes
-    if (rule.startsWith('@XPath:') || rule.startsWith('@xpath:') ||
-        rule.startsWith('@Json:') || rule.startsWith('@json:') ||
-        rule.startsWith('@@') || rule.startsWith(':')) return true;
+    if (rule.startsWith('@XPath:') ||
+        rule.startsWith('@xpath:') ||
+        rule.startsWith('@Json:') ||
+        rule.startsWith('@json:') ||
+        rule.startsWith('@@') ||
+        rule.startsWith(':')) {
+      return true;
+    }
     // Legado 特征: 包含 @ 分隔符
     if (rule.contains('@')) return true;
     // 以 class./tag./id./children 开头
@@ -1051,19 +1073,32 @@ class RuleEngine {
     // XPath 选择器（以 // 或 / 开头）
     if (rule.startsWith('//') || rule.startsWith('/')) return true;
     // 终端类型
-    if (['text', 'href', 'src', 'html', 'ownText', 'textNodes', 'all'].contains(rule)) return true;
+    if ([
+      'text',
+      'href',
+      'src',
+      'html',
+      'ownText',
+      'textNodes',
+      'all',
+    ].contains(rule))
+      return true;
     return false;
   }
 
   /// 统一提取 - 自动识别 CSS / Legado 规则，支持 || 和 && 连接符
-  static String _extractByRule(dom.Element root, String rule) {
+  static String _extractByRule(
+    dom.Element root,
+    String rule, {
+    RuleContext? ctx,
+  }) {
     if (rule.isEmpty) return '';
 
     // ── || 连接符: 多个规则依次尝试，返回第一个非空 ──
     if (rule.contains('||')) {
       final parts = _splitTopLevel(rule, '||');
       for (final part in parts) {
-        final result = _extractByRule(root, part.trim());
+        final result = _extractByRule(root, part.trim(), ctx: ctx);
         if (result.isNotEmpty) return result;
       }
       return '';
@@ -1072,7 +1107,18 @@ class RuleEngine {
     // ── && 连接符: 多个规则的结果拼接 ──
     if (rule.contains('&&')) {
       final parts = _splitTopLevel(rule, '&&');
-      return parts.map((part) => _extractByRule(root, part.trim())).join('');
+      return parts
+          .map((part) => _extractByRule(root, part.trim(), ctx: ctx))
+          .join('');
+    }
+
+    // ── %% 连接符: 多个规则结果换行合并 ──
+    if (rule.contains('%%')) {
+      final parts = _splitTopLevel(rule, '%%');
+      return parts
+          .map((part) => _extractByRule(root, part.trim(), ctx: ctx))
+          .where((s) => s.isNotEmpty)
+          .join('\n');
     }
 
     // -- Rule prefix system (Legado 3.0 compatible) --
@@ -1088,12 +1134,35 @@ class RuleEngine {
       if (expr.isNotEmpty) return XPathParser.extractText(root, expr);
     }
     if (processed.startsWith('@Json:') || processed.startsWith('@json:')) {
+      final expr = processed.substring(processed.indexOf(':') + 1).trim();
+      if (expr.isNotEmpty && ctx?.result != null) {
+        return AnalyzeRule(ctx!).getJsonString(expr, ctx.result);
+      }
+      return '';
+    }
+    if (processed.startsWith('@Regex:') || processed.startsWith('@regex:')) {
+      final expr = processed.substring(processed.indexOf(':') + 1).trim();
+      final hash = expr.indexOf('##');
+      if (hash >= 0) {
+        try {
+          final text = root.text;
+          return text.replaceAll(
+            RegExp(expr.substring(0, hash), multiLine: true),
+            expr.substring(hash + 2),
+          );
+        } catch (_) {}
+      }
       return '';
     }
     if (processed.startsWith(':')) {
       final expr = processed.substring(1).trim();
       if (expr.isNotEmpty) {
-        try { return expr.split('&&').map((p) => CssSelector.extractOneText(root, p.trim())).join(''); } catch (_) {}
+        try {
+          return expr
+              .split('&&')
+              .map((p) => CssSelector.extractOneText(root, p.trim()))
+              .join('');
+        } catch (_) {}
       }
     }
     if (processed.startsWith('//') || processed.startsWith('/html')) {
@@ -1113,14 +1182,19 @@ class RuleEngine {
     return CssSelector.extractOneText(root, processed);
   }
 
-  static String _extractAttrByRule(dom.Element root, String rule, String attr) {
+  static String _extractAttrByRule(
+    dom.Element root,
+    String rule,
+    String attr, {
+    RuleContext? ctx,
+  }) {
     if (rule.isEmpty) return '';
 
     // ── || 连接符 ──
     if (rule.contains('||')) {
       final parts = _splitTopLevel(rule, '||');
       for (final part in parts) {
-        final result = _extractAttrByRule(root, part.trim(), attr);
+        final result = _extractAttrByRule(root, part.trim(), attr, ctx: ctx);
         if (result.isNotEmpty) return result;
       }
       return '';
@@ -1129,7 +1203,17 @@ class RuleEngine {
     // ── && 连接符 ──
     if (rule.contains('&&')) {
       final parts = _splitTopLevel(rule, '&&');
-      return parts.map((part) => _extractAttrByRule(root, part.trim(), attr)).join('');
+      return parts
+          .map((part) => _extractAttrByRule(root, part.trim(), attr, ctx: ctx))
+          .join('');
+    }
+
+    // ── %% 连接符 ──
+    if (rule.contains('%%')) {
+      return _splitTopLevel(rule, '%%')
+          .map((part) => _extractAttrByRule(root, part.trim(), attr, ctx: ctx))
+          .where((s) => s.isNotEmpty)
+          .join('\n');
     }
 
     if (_isLegadoRule(rule)) {
@@ -1170,26 +1254,210 @@ class RuleEngine {
     return parts;
   }
 
+  /// 解析列表规则（搜索/目录通用），支持 `<js>...</js>` 后缀选择器
+  static List<dom.Element> _queryListItems(
+    dom.Document document,
+    String listRule, {
+    RuleContext? ctx,
+  }) {
+    var rule = listRule.trim();
+
+    // @css: 前缀 → 纯 CSS
+    final lower = rule.toLowerCase();
+    if (lower.startsWith('@css:')) {
+      rule = rule.substring(5).trim();
+      return document.querySelectorAll(rule);
+    }
+
+    // 笔书网等: 多个 ul.chapter 时，第一个为「最新章节」，取最后一个
+    final ulChapter = RegExp(r'^ul\.chapter(?:\s+(.+))?$').firstMatch(rule);
+    if (ulChapter != null) {
+      return _queryUlChapterItems(
+        document,
+        ulChapter.group(1)?.trim() ?? 'li a',
+      );
+    }
+
+    if (rule.contains('<js>')) {
+      final m = RegExp(
+        r'<js>([\s\S]*?)</js>\s*([\s\S]*)',
+        dotAll: true,
+      ).firstMatch(rule);
+      if (m != null) {
+        final js = m.group(1)!.trim();
+        final suffix = m.group(2)!.trim();
+        var transformed = _getJsEval().runHtmlJs(
+          js,
+          document.outerHtml,
+          jsLib: ctx?.jsLib ?? '',
+        );
+        if (transformed.isEmpty) {
+          transformed = _dartTransformListJs(document, js);
+        }
+        if (transformed.isNotEmpty) {
+          debugPrint('  ▸ <js> 列表规则转换成功 (${transformed.length} 字符)');
+          final newDoc = parse(transformed);
+          if (suffix.isNotEmpty) {
+            return newDoc.querySelectorAll(suffix);
+          }
+          return newDoc.body != null ? [newDoc.body!] : [];
+        }
+        debugPrint('  ⚠ <js> 列表规则执行失败');
+        return [];
+      }
+    }
+
+    if (_isLegadoRule(rule)) {
+      final parsed = LegadoRule.parse(rule);
+      return parsed.queryAll(document.body!);
+    }
+    return document.querySelectorAll(rule);
+  }
+
+  /// 多个 ul.chapter 时取最后一个（正文章节列表）
+  static List<dom.Element> _queryUlChapterItems(
+    dom.Document document,
+    String innerSelector,
+  ) {
+    final uls = document.querySelectorAll('ul.chapter');
+    if (uls.isEmpty) {
+      return document.querySelectorAll(
+        'ul.chapter ${innerSelector.isEmpty ? 'li a' : innerSelector}',
+      );
+    }
+    final target = uls.length > 1 ? uls.last : uls.first;
+    return target.querySelectorAll(
+      innerSelector.isEmpty ? 'li a' : innerSelector,
+    );
+  }
+
+  /// Dart 原生回退：处理常见 Jsoup 列表 JS 模式
+  static String _dartTransformListJs(dom.Document document, String js) {
+    // 搜索列表: ul.fk li + a.blue
+    if (js.contains('ul.fk')) {
+      final lis = document.querySelectorAll('ul.fk li');
+      if (lis.isNotEmpty)
+        return _buildBkNameListHtml(lis, linkSelector: 'a.blue');
+    }
+    // 目录列表: ul.chapter li
+    if (js.contains('ul.chapter') ||
+        js.contains("'ul.chapter li'") ||
+        js.contains('"ul.chapter li"')) {
+      final uls = document.querySelectorAll('ul.chapter');
+      final target = uls.length > 1
+          ? uls.last
+          : (uls.isNotEmpty ? uls.first : null);
+      if (target != null) {
+        final lis = target.querySelectorAll('li');
+        if (lis.isNotEmpty) return _buildBkNameListHtml(lis);
+      }
+    }
+    // 宽松: 任意 ul li 中含章节链接
+    if (js.contains('chapter') || js.contains('目录')) {
+      final lis = document.querySelectorAll('ul.chapter li, ul li');
+      if (lis.isNotEmpty) return _buildBkNameListHtml(lis);
+    }
+    return '';
+  }
+
+  static String _buildBkNameListHtml(
+    List<dom.Element> lis, {
+    String? linkSelector,
+  }) {
+    final sb = StringBuffer('<html><body><ul>');
+    for (final li in lis) {
+      final a =
+          (linkSelector != null ? li.querySelector(linkSelector) : null) ??
+          li.querySelector('a');
+      if (a == null) continue;
+      final name = a.text.trim();
+      final url = a.attributes['href'] ?? '';
+      if (name.isEmpty || url.isEmpty) continue;
+      final fullText = li.text;
+      var author = '';
+      final slashIdx = fullText.indexOf('/');
+      if (slashIdx >= 0) {
+        author = fullText.substring(slashIdx + 1).trim();
+      }
+      var kind = '';
+      final bracketMatch = RegExp(r'\[(.+?)\]').firstMatch(fullText);
+      if (bracketMatch != null) {
+        kind = bracketMatch.group(1) ?? '';
+      }
+      sb.write('<li>');
+      sb.write(
+        '<div class="bk-name"><a href="${_escapeHtml(url)}">${_escapeHtml(name)}</a></div>',
+      );
+      if (author.isNotEmpty) {
+        sb.write('<div class="bk-author">${_escapeHtml(author)}</div>');
+      }
+      if (kind.isNotEmpty) {
+        sb.write('<div class="bk-kind">${_escapeHtml(kind)}</div>');
+      }
+      sb.write('</li>');
+    }
+    sb.write('</ul></body></html>');
+    return sb.toString();
+  }
+
+  static String _escapeHtml(String s) => s
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
+
+  /// 从目录列表项提取章节名和 URL
+  static ({String title, String url}) _extractChapterFields(
+    dom.Element item, {
+    required String nameRule,
+    required String urlRule,
+  }) {
+    var title = nameRule.isNotEmpty ? _extractByRule(item, nameRule) : '';
+    var url = '';
+    if (urlRule.isNotEmpty) {
+      if (_isLegadoRule(urlRule)) {
+        url = LegadoRule.parse(urlRule).extractAttr(item, 'href');
+      } else if (urlRule == '@href' || urlRule == 'href') {
+        url = item.attributes['href'] ?? '';
+      } else {
+        url = CssSelector.extractOneAttr(item, urlRule, 'href');
+      }
+    }
+
+    final isLink = item.localName?.toLowerCase() == 'a';
+    if (isLink) {
+      if (title.isEmpty) title = item.text.trim();
+      if (url.isEmpty) url = item.attributes['href'] ?? '';
+    } else {
+      final link = item.querySelector('a');
+      if (title.isEmpty && link != null) title = link.text.trim();
+      if (title.isEmpty) title = item.text.trim();
+      if (url.isEmpty && link != null) url = link.attributes['href'] ?? '';
+      if (url.isEmpty) url = item.attributes['href'] ?? '';
+    }
+    return (title: title, url: url);
+  }
+
   /// 从搜索结果页提取书籍列表
   static List<Map<String, String>> parseSearchResults(
     dom.Document document, {
     required BookSource source,
+    RuleContext? ctx,
   }) {
+    final ruleCtx =
+        ctx ?? RuleContext.fromSource(source, baseUrl: source.bookSourceUrl);
+    final analyzer = AnalyzeRule(ruleCtx, htmlRoot: document.body);
     final results = <Map<String, String>>[];
     final hasCustomRules = source.ruleSearchList.isNotEmpty;
 
     List<dom.Element> items;
     if (hasCustomRules) {
       try {
-        if (_isLegadoRule(source.ruleSearchList)) {
-          // Legado 规则搜索列表
-          final parsed = LegadoRule.parse(source.ruleSearchList);
-          items = parsed.queryAll(document.body!);
-        } else {
-          items = document.querySelectorAll(source.ruleSearchList);
-        }
+        items = analyzer.getElements(source.ruleSearchList, document);
       } catch (e) {
-        debugPrint('  ⚠ 搜索列表规则无效 ("${source.ruleSearchList}"): $e');
+        debugPrint(
+          '  ⚠ 搜索列表规则无效 ("${source.ruleSearchList.substring(0, source.ruleSearchList.length > 80 ? 80 : source.ruleSearchList.length)}..."): $e',
+        );
         items = _smartFindSearchItems(document);
       }
     } else {
@@ -1205,33 +1473,38 @@ class RuleEngine {
       String note = '';
 
       if (hasCustomRules) {
-        name = _extractByRule(item, source.ruleSearchName);
-        author = _extractByRule(item, source.ruleSearchAuthor);
-        // URL 提取: 优先用 ruleSearch.bookUrl，回退从 ruleSearchName 提取 href
+        name = analyzer.getString(source.ruleSearchName, element: item);
+        author = analyzer.getString(source.ruleSearchAuthor, element: item);
         final urlRule = source.ruleSearchBookUrl.isNotEmpty
             ? source.ruleSearchBookUrl
             : source.ruleSearchName;
-        if (_isLegadoRule(urlRule)) {
-          final parsed = LegadoRule.parse(urlRule);
-          url = parsed.extractAttr(item, 'href');
-          if (url.isEmpty) url = parsed.extractText(item);
-        } else {
-          url = CssSelector.extractOneAttr(item, urlRule, 'href');
-        }
-        if (url.isEmpty) url = CssSelector.extractOneAttr(item, 'a', 'href');
+        url = analyzer.getAttr(urlRule, 'href', element: item);
+        if (url.isEmpty) url = analyzer.getString(urlRule, element: item);
+        if (url.isEmpty) url = analyzer.getAttr('a', 'href', element: item);
         if (source.ruleSearchCoverUrl.isNotEmpty) {
-          coverUrl = _extractByRule(item, source.ruleSearchCoverUrl);
-          if (coverUrl.isEmpty && _isLegadoRule(source.ruleSearchCoverUrl)) {
-            // Legado 规则提取 src
-          } else if (coverUrl.isEmpty) {
-            coverUrl = CssSelector.extractOneAttr(item, source.ruleSearchCoverUrl, 'src');
+          coverUrl = analyzer.getAttr(
+            source.ruleSearchCoverUrl,
+            'src',
+            element: item,
+          );
+          if (coverUrl.isEmpty) {
+            coverUrl = analyzer.getString(
+              source.ruleSearchCoverUrl,
+              element: item,
+            );
           }
         }
-        // 兜底：自动查找第一张图片
+        if (source.ruleSearchKind.isNotEmpty) {
+          kind = analyzer.getString(source.ruleSearchKind, element: item);
+        }
+        if (source.ruleSearchNote.isNotEmpty) {
+          note = analyzer.getString(source.ruleSearchNote, element: item);
+        }
         if (coverUrl.isEmpty) {
           final img = item.querySelector('img');
           if (img != null) {
-            coverUrl = img.attributes['src'] ?? img.attributes['data-src'] ?? '';
+            coverUrl =
+                img.attributes['src'] ?? img.attributes['data-src'] ?? '';
           }
         }
       } else {
@@ -1272,22 +1545,41 @@ class RuleEngine {
   }) {
     final info = <String, String>{};
     if (source.ruleBookName.isNotEmpty) {
-      info['name'] = CssSelector.extractOneText(document.body!, source.ruleBookName);
+      info['name'] = CssSelector.extractOneText(
+        document.body!,
+        source.ruleBookName,
+      );
     }
     if (source.ruleBookAuthor.isNotEmpty) {
-      info['author'] = CssSelector.extractOneText(document.body!, source.ruleBookAuthor);
+      info['author'] = CssSelector.extractOneText(
+        document.body!,
+        source.ruleBookAuthor,
+      );
     }
     if (source.ruleBookCoverUrl.isNotEmpty) {
-      info['coverUrl'] = CssSelector.extractOneAttr(document.body!, source.ruleBookCoverUrl, 'src');
+      info['coverUrl'] = CssSelector.extractOneAttr(
+        document.body!,
+        source.ruleBookCoverUrl,
+        'src',
+      );
     }
     if (source.ruleBookKind.isNotEmpty) {
-      info['kind'] = CssSelector.extractOneText(document.body!, source.ruleBookKind);
+      info['kind'] = CssSelector.extractOneText(
+        document.body!,
+        source.ruleBookKind,
+      );
     }
     if (source.ruleBookNote.isNotEmpty) {
-      info['note'] = CssSelector.extractInnerHtml(document.body!, source.ruleBookNote);
+      info['note'] = CssSelector.extractInnerHtml(
+        document.body!,
+        source.ruleBookNote,
+      );
     }
     if (source.ruleBookLastChapter.isNotEmpty) {
-      info['lastChapter'] = CssSelector.extractOneText(document.body!, source.ruleBookLastChapter);
+      info['lastChapter'] = CssSelector.extractOneText(
+        document.body!,
+        source.ruleBookLastChapter,
+      );
     }
     return info;
   }
@@ -1296,25 +1588,39 @@ class RuleEngine {
   static List<Map<String, String>> parseChapters(
     dom.Document document, {
     required BookSource source,
+    RuleContext? ctx,
   }) {
+    final ruleCtx =
+        ctx ?? RuleContext.fromSource(source, baseUrl: source.bookSourceUrl);
+    final analyzer = AnalyzeRule(ruleCtx, htmlRoot: document.body);
     final chapters = <Map<String, String>>[];
     final hasCustomRules = source.ruleChapterList.isNotEmpty;
 
     List<dom.Element> items;
     if (hasCustomRules) {
       try {
-        if (_isLegadoRule(source.ruleChapterList)) {
-          final parsed = LegadoRule.parse(source.ruleChapterList);
-          items = parsed.queryAll(document.body!);
-        } else {
-          items = document.querySelectorAll(source.ruleChapterList);
+        var listRule = source.ruleChapterList.trim();
+        var reverse = false;
+        if (listRule.startsWith('-')) {
+          reverse = true;
+          listRule = listRule.substring(1).trim();
         }
+        items = analyzer.getElements(listRule, document);
+        if (reverse) {
+          items = items.reversed.toList();
+        }
+        debugPrint(
+          '  ▸ 目录列表匹配 ${items.length} 项 (规则: ${listRule.length > 60 ? '${listRule.substring(0, 60)}...' : listRule})',
+        );
       } catch (e) {
-        debugPrint('  ⚠ 目录列表规则无效 ("${source.ruleChapterList}"): $e');
+        debugPrint(
+          '  ⚠ 目录列表规则无效 ("${source.ruleChapterList.substring(0, source.ruleChapterList.length > 80 ? 80 : source.ruleChapterList.length)}..."): $e',
+        );
         items = _smartFindChapterItems(document);
       }
     } else {
       items = _smartFindChapterItems(document);
+      debugPrint('  ▸ 智能目录匹配 ${items.length} 项');
     }
 
     for (final item in items) {
@@ -1322,14 +1628,22 @@ class RuleEngine {
       String url = '';
 
       if (hasCustomRules) {
-        title = _extractByRule(item, source.ruleChapterName);
-        if (_isLegadoRule(source.ruleChapterUrl)) {
-          final parsed = LegadoRule.parse(source.ruleChapterUrl);
-          url = parsed.extractAttr(item, 'href');
+        title = analyzer.getString(source.ruleChapterName, element: item);
+        url = analyzer.getAttr(source.ruleChapterUrl, 'href', element: item);
+        if (url.isEmpty)
+          url = analyzer.getString(source.ruleChapterUrl, element: item);
+
+        final isLink = item.localName?.toLowerCase() == 'a';
+        if (isLink) {
+          if (title.isEmpty) title = item.text.trim();
+          if (url.isEmpty) url = item.attributes['href'] ?? '';
         } else {
-          url = CssSelector.extractOneAttr(item, source.ruleChapterUrl, 'href');
+          final link = item.querySelector('a');
+          if (title.isEmpty && link != null) title = link.text.trim();
+          if (title.isEmpty) title = item.text.trim();
+          if (url.isEmpty && link != null) url = link.attributes['href'] ?? '';
+          if (url.isEmpty) url = item.attributes['href'] ?? '';
         }
-        if (url.isEmpty) url = CssSelector.extractOneAttr(item, 'a', 'href');
       } else {
         final link = item.querySelector('a');
         if (link != null) {
@@ -1344,43 +1658,123 @@ class RuleEngine {
         chapters.add({'title': title, 'url': url});
       }
     }
+    debugPrint('  ▸ 有效章节 ${chapters.length} 个');
     return chapters;
   }
 
-  /// 提取正文
+  /// 提取目录下一页 URL
+  static String extractNextTocUrl(
+    dom.Document document, {
+    required BookSource source,
+    required String baseUrl,
+    RuleContext? ctx,
+  }) {
+    final body = document.body;
+    if (body == null) return '';
+
+    final ruleCtx = ctx ?? RuleContext.fromSource(source, baseUrl: baseUrl);
+    final analyzer = AnalyzeRule(ruleCtx, htmlRoot: body);
+
+    final rules = <String>[];
+    if (source.ruleTocNextTocUrl.isNotEmpty) {
+      rules.add(source.ruleTocNextTocUrl);
+    }
+    rules.add('text.下一页@href');
+
+    for (final rule in rules) {
+      for (final part in rule.split('||')) {
+        final url = analyzer.getLinkUrl(part.trim(), element: body);
+        if (_isValidChapterLink(url)) {
+          return resolveUrl(url, baseUrl);
+        }
+      }
+    }
+
+    // 仅取 .listpage .right 中带 href 的「下一页」（末页为无 href 的占位链接）
+    for (final el in body.querySelectorAll('.listpage .right a')) {
+      if (el.classes.contains('before')) continue;
+      final href = el.attributes['href'] ?? '';
+      if (_isValidChapterLink(href)) return resolveUrl(href, baseUrl);
+    }
+
+    // 文本匹配「下一页」，排除「上一页」
+    for (final el in body.querySelectorAll('a')) {
+      final text = el.text.trim();
+      if (!text.contains('下一') || text.contains('上一')) continue;
+      final href = el.attributes['href'] ?? '';
+      if (_isValidChapterLink(href)) return resolveUrl(href, baseUrl);
+    }
+    return '';
+  }
+
+  static bool _isValidChapterLink(String url) {
+    if (url.isEmpty) return false;
+    final lower = url.toLowerCase();
+    if (lower.startsWith('javascript') || lower == '#') return false;
+    return true;
+  }
+
+  static String _extractLinkUrl(dom.Element root, String rule) {
+    if (rule.isEmpty) return '';
+    if (rule.startsWith('@css:') || rule.startsWith('@CSS:')) {
+      return CssSelector.extractOneAttr(root, rule.substring(5).trim(), 'href');
+    }
+    if (_isLegadoRule(rule)) {
+      return LegadoRule.parse(rule).extractAttr(root, 'href');
+    }
+    if (rule.endsWith('@href')) {
+      return LegadoRule.parse(rule).extractAttr(root, 'href');
+    }
+    return CssSelector.extractOneAttr(root, rule, 'href');
+  }
+
+  /// 提取正文（支持多页合并前的单页解析）
   static String parseContent(
     dom.Document document, {
     required BookSource source,
+    RuleContext? ctx,
   }) {
+    final ruleCtx =
+        ctx ?? RuleContext.fromSource(source, baseUrl: source.bookSourceUrl);
+    final analyzer = AnalyzeRule(ruleCtx, htmlRoot: document.body);
     String content;
 
     if (source.ruleContent.isNotEmpty) {
-      // 兜底: 如果 ruleContent 是 {content: ...} 格式（脏数据），提取 content 值
       String effectiveRule = source.ruleContent;
-      if (effectiveRule.trimLeft().startsWith('{') && effectiveRule.contains(':')) {
+      if (effectiveRule.trimLeft().startsWith('{') &&
+          effectiveRule.contains(':')) {
         try {
-          // 尝试解析为 Legado 嵌套格式: {content: "XPath", replaceRegex: "##...##"}
-          // 用冒号分割取 content 后的值
-          // 宽松提取: content: <值>（值可能含引号如 //div[@id="chaptercontent"]）
           final contentStart = effectiveRule.indexOf('content:');
-          final replaceStart = effectiveRule.indexOf(', replaceRegex:', contentStart + 8);
+          final replaceStart = effectiveRule.indexOf(
+            ', replaceRegex:',
+            contentStart + 8,
+          );
           if (contentStart >= 0 && replaceStart > contentStart) {
-            var extracted = effectiveRule.substring(contentStart + 8, replaceStart).trim();
-            // 去掉可能包裹的引号
+            var extracted = effectiveRule
+                .substring(contentStart + 8, replaceStart)
+                .trim();
             extracted = extracted.replaceAll(RegExp(r'''^['"]|['"]$'''), '');
             effectiveRule = extracted;
           }
         } catch (_) {}
       }
 
-      if (_isLegadoRule(effectiveRule)) {
-        content = _extractByRule(document.body!, effectiveRule);
-      } else {
-        content = CssSelector.extractInnerHtml(document.body!, source.ruleContent);
-      }
+      content = analyzer.getContentHtml(effectiveRule, document);
     } else {
       content = _smartExtractContent(document);
     }
+
+    if (content.isEmpty) {
+      debugPrint(
+        '  ⚠ 正文规则未匹配 (规则: ${source.ruleContent.isNotEmpty ? source.ruleContent.substring(0, source.ruleContent.length > 60 ? 60 : source.ruleContent.length) : "智能识别"})',
+      );
+    }
+
+    // replaceRegex（Legado ruleContent.replaceRegex）
+    content = _applyContentReplaceRegex(
+      content,
+      source.ruleContentReplaceRegex,
+    );
 
     // 去除不需要的元素
     if (source.ruleContentRemove.isNotEmpty && content.isNotEmpty) {
@@ -1395,7 +1789,109 @@ class RuleEngine {
       } catch (_) {}
     }
 
-    // 清理 HTML 标签
+    content = _cleanContentHtml(content);
+    return content;
+  }
+
+  /// 提取正文 HTML（Legado @html / CSS / XPath）
+  static String _extractContentHtml(
+    dom.Document doc,
+    dom.Element root,
+    String rule,
+  ) {
+    if (rule.isEmpty) return '';
+
+    if (rule.contains('||')) {
+      for (final part in _splitTopLevel(rule, '||')) {
+        final result = _extractContentHtml(doc, root, part.trim());
+        if (result.isNotEmpty) return result;
+      }
+      return '';
+    }
+
+    var processed = rule.trim();
+    while (processed.startsWith('@') && !processed.startsWith('@@')) {
+      processed = processed.substring(1).trim();
+    }
+
+    if (processed.contains('<js>')) {
+      final m = RegExp(
+        r'<js>([\s\S]*?)</js>\s*([\s\S]*)',
+        dotAll: true,
+      ).firstMatch(processed);
+      if (m != null) {
+        final js = m.group(1)!.trim();
+        final suffix = m.group(2)!.trim();
+        var transformed = _getJsEval().runHtmlJs(js, doc.outerHtml);
+        if (transformed.isEmpty && js.contains('nr')) {
+          final el =
+              root.querySelector('#nr') ?? root.querySelector('article#nr');
+          if (el != null)
+            transformed = '<html><body>${el.innerHtml}</body></html>';
+        }
+        if (transformed.isNotEmpty) {
+          final doc = parse(transformed);
+          if (suffix.isNotEmpty) {
+            return CssSelector.extractInnerHtml(doc.body!, suffix);
+          }
+          return doc.body?.text ?? transformed;
+        }
+      }
+    }
+
+    if (processed.startsWith('@XPath:') || processed.startsWith('@xpath:')) {
+      final expr = processed.substring(processed.indexOf(':') + 1).trim();
+      return XPathParser.extractText(root, expr);
+    }
+    if (processed.startsWith('//') || processed.startsWith('/html')) {
+      return XPathParser.extractText(root, processed);
+    }
+
+    if (_isLegadoRule(processed)) {
+      try {
+        final parsed = LegadoRule.parse(processed);
+        final last = parsed.segments.last;
+        String result;
+        if (last.isTerminal) {
+          result = parsed.extractText(root);
+        } else {
+          final els = parsed.queryAll(root);
+          result = els.isNotEmpty ? els.first.innerHtml : '';
+        }
+        return parsed.applyRegex(result);
+      } catch (e) {
+        debugPrint('  Legado content rule failed: $e');
+      }
+    }
+
+    // 纯 CSS，支持 #nr@html 写法
+    var cssRule = processed;
+    if (cssRule.endsWith('@html'))
+      cssRule = cssRule.substring(0, cssRule.length - 5).trim();
+    if (cssRule.endsWith('@text'))
+      cssRule = cssRule.substring(0, cssRule.length - 5).trim();
+    final html = CssSelector.extractInnerHtml(root, cssRule);
+    if (html.isNotEmpty) return html;
+    return CssSelector.extractOneText(root, cssRule);
+  }
+
+  static String _applyContentReplaceRegex(String content, String replaceRegex) {
+    if (content.isEmpty || replaceRegex.isEmpty) return content;
+    var rule = replaceRegex.trim();
+    if (rule.startsWith('##')) rule = rule.substring(2);
+    final idx = rule.indexOf('##');
+    if (idx < 0) return content;
+    final pattern = rule.substring(0, idx);
+    final replacement = rule.substring(idx + 2);
+    try {
+      return content.replaceAll(RegExp(pattern, multiLine: true), replacement);
+    } catch (_) {
+      return content;
+    }
+  }
+
+  static String _cleanContentHtml(String content) {
+    if (content.isEmpty) return content;
     content = content
         .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
         .replaceAll(RegExp(r'<[^>]*>'), '')
@@ -1404,14 +1900,75 @@ class RuleEngine {
         .replaceAll(RegExp(r'&gt;'), '>')
         .replaceAll(RegExp(r'&amp;'), '&')
         .trim();
-
-    // 压缩连续空行
     content = content.replaceAll(RegExp(r'\n{3,}'), '\n\n');
-
-    // 去掉 script 残留文本（如 js 函数调用 txt_center()）
     content = content.replaceAll(RegExp(r'^\s*txt_center\s*\(\s*\)\s*'), '');
-
     return content;
+  }
+
+  /// 正文下一页 URL
+  static String extractNextContentUrl(
+    dom.Document document, {
+    required BookSource source,
+    required String baseUrl,
+    required String currentUrl,
+    RuleContext? ctx,
+  }) {
+    final body = document.body;
+    if (body == null) return '';
+
+    final ruleCtx =
+        ctx ??
+        RuleContext.fromSource(
+          source,
+          baseUrl: baseUrl,
+          chapterUrl: currentUrl,
+        );
+    final analyzer = AnalyzeRule(ruleCtx, htmlRoot: body);
+
+    final rules = <String>[];
+    if (source.ruleContentNextContentUrl.isNotEmpty) {
+      rules.add(source.ruleContentNextContentUrl);
+    }
+    rules.add('text.下一页@href');
+
+    for (final rule in rules) {
+      for (final part in rule.split('||')) {
+        final url = analyzer.getLinkUrl(part.trim(), element: body);
+        if (_isValidChapterLink(url) &&
+            isContentPageNext(currentUrl, url, baseUrl)) {
+          return resolveUrl(url, baseUrl);
+        }
+      }
+    }
+
+    for (final el in body.querySelectorAll('.nr_page a, .listpage .right a')) {
+      if (el.classes.contains('before')) continue;
+      final text = el.text.trim();
+      if (!text.contains('下一') || text.contains('上一')) continue;
+      final href = el.attributes['href'] ?? '';
+      if (_isValidChapterLink(href) &&
+          isContentPageNext(currentUrl, href, baseUrl)) {
+        return resolveUrl(href, baseUrl);
+      }
+    }
+    return '';
+  }
+
+  /// 判断是否为同一章节的正文分页（6144552.html → 6144552_2.html）
+  static bool isContentPageNext(
+    String currentUrl,
+    String nextUrl,
+    String baseUrl,
+  ) {
+    final cur = RegExp(r'/(\d+)(?:_(\d+))?\.html').firstMatch(currentUrl);
+    final nxt = RegExp(r'/(\d+)(?:_(\d+))?\.html').firstMatch(
+      nextUrl.startsWith('http') ? nextUrl : resolveUrl(nextUrl, baseUrl),
+    );
+    if (cur == null || nxt == null) return false;
+    if (cur.group(1) != nxt.group(1)) return false;
+    final curPage = int.tryParse(cur.group(2) ?? '1') ?? 1;
+    final nxtPage = int.tryParse(nxt.group(2) ?? '1') ?? 1;
+    return nxtPage > curPage;
   }
 
   /// 从 JSON API 搜索结果中提取书籍列表
@@ -1419,6 +1976,7 @@ class RuleEngine {
   static List<Map<String, String>> parseJsonSearchResults(
     String jsonStr, {
     required BookSource source,
+    RuleContext? ctx,
   }) {
     final results = <Map<String, String>>[];
     if (source.rawSourceJson.isEmpty) {
@@ -1426,51 +1984,76 @@ class RuleEngine {
     }
 
     try {
-      final ruleSearch = jsonDecode(source.ruleSearchJson) as Map<String, dynamic>;
-      debugPrint('  ▸ ruleSearch: ${source.ruleSearchJson.substring(0, (source.ruleSearchJson.length > 200 ? 200 : source.ruleSearchJson.length))}');
+      final ruleSearch =
+          jsonDecode(source.ruleSearchJson) as Map<String, dynamic>;
+      debugPrint(
+        '  ▸ ruleSearch: ${source.ruleSearchJson.substring(0, (source.ruleSearchJson.length > 200 ? 200 : source.ruleSearchJson.length))}',
+      );
 
       final root = jsonDecode(jsonStr);
       debugPrint('  ▸ 响应根类型: ${root.runtimeType}');
 
-      // 1. 获取书籍列表路径
+      final ruleCtx =
+          ctx ??
+          RuleContext.fromSource(
+            source,
+            baseUrl: source.bookSourceUrl,
+            result: root,
+          );
+      ruleCtx.result = root;
+      final analyzer = AnalyzeRule.json(root, ruleCtx);
+
       final bookListPath = ruleSearch['bookList'] as String? ?? '';
       debugPrint('  ▸ bookList路径: "$bookListPath"');
-      if (bookListPath.isEmpty) { debugPrint('  ▸ bookList路径为空'); return results; }
+      if (bookListPath.isEmpty) {
+        debugPrint('  ▸ bookList路径为空');
+        return results;
+      }
 
-      dynamic items = JsonPath.resolve(root, bookListPath);
-      debugPrint('  ▸ 解析结果类型: ${items.runtimeType}, 值: ${items is List ? "列表(${items.length}项)" : items}');
-      if (items == null) { debugPrint('  ▸ 解析结果为null'); return results; }
-      if (items is! List) items = [items];
+      final items = analyzer.getJsonList(bookListPath, root);
+      debugPrint('  ▸ 解析结果: 列表(${items.length}项)');
+      if (items.isEmpty) {
+        debugPrint('  ▸ 解析结果为空');
+        return results;
+      }
 
-      // 2. 获取字段路径
       final namePath = ruleSearch['name'] as String? ?? '';
       final authorPath = ruleSearch['author'] as String? ?? '';
       final bookUrlPath = ruleSearch['bookUrl'] as String? ?? '';
       final coverUrlPath = ruleSearch['coverUrl'] as String? ?? '';
       final introPath = ruleSearch['intro'] as String? ?? '';
-      debugPrint('  ▸ namePath="$namePath" authorPath="$authorPath" bookUrlPath="$bookUrlPath"');
+      debugPrint(
+        '  ▸ namePath="$namePath" authorPath="$authorPath" bookUrlPath="$bookUrlPath"',
+      );
 
       for (final item in items) {
-        final name = namePath.isNotEmpty ? JsonPath.resolveString(item, namePath) : '';
+        final name = namePath.isNotEmpty
+            ? analyzer.getJsonString(namePath, item)
+            : '';
         if (name.isEmpty) continue;
 
         String url = '';
         if (bookUrlPath.isNotEmpty) {
-          // 可能是模板（含 {{}}）或直接路径
           if (bookUrlPath.contains('{{')) {
-            url = JsonPath.resolveTemplate(bookUrlPath, item);
+            url = LegadoJsonPath.resolveTemplate(bookUrlPath, item);
           } else {
-            url = JsonPath.resolveString(item, bookUrlPath);
+            url = analyzer.getJsonString(bookUrlPath, item);
           }
         }
 
         results.add({
           'name': name,
-          'author': authorPath.isNotEmpty ? JsonPath.resolveString(item, authorPath) : '',
+          'author': authorPath.isNotEmpty
+              ? analyzer.getJsonString(authorPath, item)
+              : '',
           'url': url,
-          'coverUrl': coverUrlPath.isNotEmpty ? JsonPath.resolveString(item, coverUrlPath) : '',
+          'coverUrl': coverUrlPath.isNotEmpty
+              ? analyzer.getJsonString(coverUrlPath, item)
+              : '',
           'kind': '',
-          'note': introPath.isNotEmpty ? JsonPath.resolveString(item, introPath) : '',
+          'note': introPath.isNotEmpty
+              ? analyzer.getJsonString(introPath, item)
+              : '',
         });
       }
     } catch (e) {
@@ -1479,10 +2062,126 @@ class RuleEngine {
     return results;
   }
 
+  /// 从 JSON 目录响应解析章节列表
+  static Future<List<Map<String, String>>> parseJsonChapters(
+    dynamic tocData, {
+    required BookSource source,
+    RuleContext? ctx,
+    String articleId = '',
+    JsonChapterUrlResolver? resolveChapterUrl,
+  }) async {
+    final ruleCtx =
+        ctx ??
+        RuleContext.fromSource(
+          source,
+          baseUrl: source.bookSourceUrl,
+          result: tocData,
+        );
+    ruleCtx.result = tocData;
+    if (articleId.isNotEmpty) ruleCtx.putCache('articleid', articleId);
+    final analyzer = AnalyzeRule.json(tocData, ruleCtx);
+
+    final listPath = source.ruleTocChapterList;
+    final namePath = source.ruleTocChapterName;
+    final urlTemplate = source.ruleTocChapterUrl;
+    if (listPath.isEmpty) return [];
+
+    final items = analyzer.getJsonList(listPath, tocData);
+    final chapters = <Map<String, String>>[];
+
+    for (int i = 0; i < items.length; i++) {
+      final item = items[i];
+      final title = namePath.isNotEmpty
+          ? analyzer.getJsonString(namePath, item)
+          : '第${i + 1}章';
+      if (title.isEmpty) continue;
+
+      String url = '';
+      if (urlTemplate.isNotEmpty) {
+        if (urlTemplate.contains('<js>')) {
+          final rawValue = analyzer.extractJsonPrefix(urlTemplate, item);
+          var jsTemplate = AnalyzeRule.splitJsonJsRule(urlTemplate).jsPart;
+          if (jsTemplate.contains('{{')) {
+            jsTemplate = LegadoJsonPath.resolveTemplate(jsTemplate, item);
+          }
+          if (resolveChapterUrl != null) {
+            url = await resolveChapterUrl(
+              template: jsTemplate,
+              item: item,
+              rawValue: rawValue,
+            );
+          }
+          if (url.isEmpty) url = rawValue;
+        } else {
+          url = analyzer.resolveChapterUrlTemplate(
+            urlTemplate,
+            item,
+            articleId: articleId,
+          );
+        }
+      }
+
+      chapters.add({'title': title, 'url': url});
+    }
+    return chapters;
+  }
+
+  /// 从 JSON 响应提取下一页 URL（目录/正文分页）
+  static String extractJsonNextUrl(
+    dynamic data, {
+    required String nextUrlRule,
+    RuleContext? ctx,
+  }) {
+    if (nextUrlRule.isEmpty || data == null) return '';
+    final ruleCtx = ctx ?? RuleContext();
+    ruleCtx.result = data;
+    final analyzer = AnalyzeRule.json(data, ruleCtx);
+    return analyzer.getJsonNextUrl(nextUrlRule, data);
+  }
+
+  /// 从 JSON 响应解析单页正文
+  static Future<String> parseJsonContentPage(
+    dynamic data, {
+    required BookSource source,
+    RuleContext? ctx,
+    Future<String> Function(String jsTemplate, String rawContent)? cleanContent,
+  }) async {
+    final contentPath = source.ruleContentPath;
+    if (contentPath.isEmpty) return '';
+
+    final ruleCtx =
+        ctx ??
+        RuleContext.fromSource(
+          source,
+          baseUrl: source.bookSourceUrl,
+          result: data,
+        );
+    ruleCtx.result = data;
+    final analyzer = AnalyzeRule.json(data, ruleCtx);
+
+    String content;
+    if (contentPath.contains('<js>')) {
+      final raw = analyzer.extractJsonPrefix(contentPath, data);
+      final jsPart = AnalyzeRule.splitJsonJsRule(contentPath).jsPart;
+      if (cleanContent != null && (raw.isNotEmpty || jsPart.isNotEmpty)) {
+        final cleaned = await cleanContent(jsPart, raw);
+        content = cleaned.isNotEmpty ? cleaned : raw;
+      } else {
+        content = raw;
+      }
+    } else {
+      content = analyzer.getJsonString(contentPath, data);
+    }
+
+    return _applyContentReplaceRegex(content, source.ruleContentReplaceRegex);
+  }
+
   /// URL 补全
   static String resolveUrl(String url, String baseUrl) {
     if (url.startsWith('http')) return url;
-    final base = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    final base = baseUrl.endsWith('/')
+        ? baseUrl.substring(0, baseUrl.length - 1)
+        : baseUrl;
     if (url.startsWith('/')) return '$base$url';
     return '$base/$url';
   }
@@ -1492,7 +2191,13 @@ class RuleEngine {
   static List<dom.Element> _smartFindSearchItems(dom.Document document) {
     final body = document.body!;
     // 尝试常见容器
-    for (final sel in ['.result-item', '.search-item', '.list-item', 'li', '.book-list a']) {
+    for (final sel in [
+      '.result-item',
+      '.search-item',
+      '.list-item',
+      'li',
+      '.book-list a',
+    ]) {
       try {
         final items = body.querySelectorAll(sel);
         if (items.length >= 3) return items;
@@ -1508,7 +2213,14 @@ class RuleEngine {
   static List<dom.Element> _smartFindChapterItems(dom.Document document) {
     final body = document.body!;
     // 智能容器识别
-    for (final sel in ['#list a', '.chapter-list a', '.chapters a', 'ul a', '.list a']) {
+    for (final sel in [
+      'ul.chapter li a',
+      '#list a',
+      '.chapter-list a',
+      '.chapters a',
+      'ul a',
+      '.list a',
+    ]) {
       try {
         final items = body.querySelectorAll(sel);
         if (items.length >= 3) return items;
@@ -1516,7 +2228,9 @@ class RuleEngine {
     }
     // 尝试找包含"章"的链接
     final allLinks = body.querySelectorAll('a').where((a) {
-      return a.text.contains('章') || a.text.contains('节') || a.text.contains('Chapter');
+      return a.text.contains('章') ||
+          a.text.contains('节') ||
+          a.text.contains('Chapter');
     }).toList();
     if (allLinks.length >= 3) return allLinks;
 
@@ -1530,7 +2244,16 @@ class RuleEngine {
   static String _smartExtractContent(dom.Document document) {
     final body = document.body!;
     // 尝试常见正文容器
-    for (final sel in ['#content', '.content', '.chapter-content', '.read-content', '#chaptercontent', '.txtnav']) {
+    for (final sel in [
+      '#nr',
+      'article#nr',
+      '#content',
+      '.content',
+      '.chapter-content',
+      '.read-content',
+      '#chaptercontent',
+      '.txtnav',
+    ]) {
       try {
         final el = body.querySelector(sel);
         if (el != null && el.text.trim().length > 100) {

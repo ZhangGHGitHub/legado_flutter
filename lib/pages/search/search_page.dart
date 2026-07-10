@@ -122,19 +122,19 @@ class _SearchPageState extends State<SearchPage> {
                   _showPreciseSearchDialog();
                   break;
                 case 'multi_group':
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('多分组/书源（待实现）')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('多分组/书源（待实现）')));
                   break;
                 case 'all_sources':
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('全部书源（待实现）')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('全部书源（待实现）')));
                   break;
                 case 'source_tags':
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('书源标签（待实现）')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('书源标签（待实现）')));
                   break;
               }
             },
@@ -199,7 +199,10 @@ class _SearchPageState extends State<SearchPage> {
                   SizedBox(height: 16),
                   Text('正在搜索多个书源...'),
                   SizedBox(height: 8),
-                  Text('请耐心等待', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text(
+                    '请耐心等待',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                 ],
               ),
             );
@@ -213,11 +216,12 @@ class _SearchPageState extends State<SearchPage> {
                   children: [
                     Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
                     const SizedBox(height: 16),
-                    Text(provider.statusMessage,
-                        style: const TextStyle(fontSize: 16)),
+                    Text(
+                      provider.statusMessage,
+                      style: const TextStyle(fontSize: 16),
+                    ),
                     const SizedBox(height: 8),
-                    Text('试试其他关键词',
-                        style: TextStyle(color: Colors.grey[500])),
+                    Text('试试其他关键词', style: TextStyle(color: Colors.grey[500])),
                     const SizedBox(height: 16),
                     TextButton.icon(
                       icon: const Icon(Icons.info_outline, size: 16),
@@ -236,20 +240,24 @@ class _SearchPageState extends State<SearchPage> {
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer
-                          .withValues(alpha: 0.3),
+                      color: theme.colorScheme.primaryContainer.withValues(
+                        alpha: 0.3,
+                      ),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.search,
-                        size: 48, color: theme.colorScheme.primary),
+                    child: Icon(
+                      Icons.search,
+                      size: 48,
+                      color: theme.colorScheme.primary,
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  Text('输入关键词搜索',
-                      style: TextStyle(color: Colors.grey[600])),
+                  Text('输入关键词搜索', style: TextStyle(color: Colors.grey[600])),
                   const SizedBox(height: 8),
-                  Text('从所有已启用的书源中查找',
-                      style:
-                          TextStyle(fontSize: 12, color: Colors.grey[500])),
+                  Text(
+                    '从所有已启用的书源中查找',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                  ),
                 ],
               ),
             );
@@ -274,7 +282,10 @@ class _SearchPageState extends State<SearchPage> {
               // 统计栏
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surfaceContainerLow,
                   border: Border(
@@ -327,10 +338,7 @@ class _SearchResultTile extends StatelessWidget {
   final Book book;
   final String sourceName;
 
-  const _SearchResultTile({
-    required this.book,
-    required this.sourceName,
-  });
+  const _SearchResultTile({required this.book, required this.sourceName});
 
   @override
   Widget build(BuildContext context) {
@@ -338,10 +346,11 @@ class _SearchResultTile extends StatelessWidget {
 
     // 提取书源名（去除图标 emoji）
     String cleanSourceName = sourceName;
-    final emojiRegex = RegExp(r'^[\u{1F000}-\u{1FFFF}\u{2000}-\u{2FFF}]\s*',
-        unicode: true);
-    cleanSourceName =
-        cleanSourceName.replaceAll(emojiRegex, '').trim();
+    final emojiRegex = RegExp(
+      r'^[\u{1F000}-\u{1FFFF}\u{2000}-\u{2FFF}]\s*',
+      unicode: true,
+    );
+    cleanSourceName = cleanSourceName.replaceAll(emojiRegex, '').trim();
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -390,16 +399,12 @@ class _SearchResultTile extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer
-                  .withValues(alpha: 0.5),
+              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
               cleanSourceName,
-              style: TextStyle(
-                fontSize: 10,
-                color: theme.colorScheme.primary,
-              ),
+              style: TextStyle(fontSize: 10, color: theme.colorScheme.primary),
             ),
           ),
         ],
@@ -408,9 +413,7 @@ class _SearchResultTile extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => BookDetailPage(book: book),
-          ),
+          MaterialPageRoute(builder: (_) => BookDetailPage(book: book)),
         );
       },
     );
@@ -419,8 +422,7 @@ class _SearchResultTile extends StatelessWidget {
   Widget _coverPlaceholder(ThemeData theme) {
     return Container(
       color: theme.colorScheme.primaryContainer,
-      child: Icon(Icons.menu_book,
-          size: 20, color: theme.colorScheme.primary),
+      child: Icon(Icons.menu_book, size: 20, color: theme.colorScheme.primary),
     );
   }
 }

@@ -1,0 +1,3 @@
+[workspace]
+members = ["legado_engine"]
+resolver = "2"

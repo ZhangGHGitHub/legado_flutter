@@ -89,10 +89,14 @@ class BookSource {
       bool hasJsonRule(String key) {
         final val = obj[key];
         if (val is String) return val.startsWith(r'$');
-        if (val is Map) return val.values.any((v) => v is String && v.startsWith(r'$'));
+        if (val is Map)
+          return val.values.any((v) => v is String && v.startsWith(r'$'));
         return false;
       }
-      return hasJsonRule('ruleSearch') || hasJsonRule('ruleContent') || hasJsonRule('ruleToc');
+
+      return hasJsonRule('ruleSearch') ||
+          hasJsonRule('ruleContent') ||
+          hasJsonRule('ruleToc');
     } catch (_) {
       return false;
     }
@@ -126,10 +130,13 @@ class BookSource {
 
   /// ruleSearch JSON 对象
   String get ruleSearchJson => _rawSubObject('ruleSearch');
+
   /// ruleBookInfo JSON 对象
   String get ruleBookInfoJson => _rawSubObject('ruleBookInfo');
+
   /// ruleToc JSON 对象
   String get ruleTocJson => _rawSubObject('ruleToc');
+
   /// ruleContent JSON 对象
   String get ruleContentRuleJson => _rawSubObject('ruleContent');
 
@@ -137,10 +144,17 @@ class BookSource {
   String get ruleTocChapterList => _rawExtract('ruleToc', 'chapterList');
   String get ruleTocChapterName => _rawExtract('ruleToc', 'chapterName');
   String get ruleTocChapterUrl => _rawExtract('ruleToc', 'chapterUrl');
+  String get ruleTocNextTocUrl => _rawExtract('ruleToc', 'nextTocUrl');
+
   /// 获取 ruleBookInfo 的 tocUrl
   String get ruleBookInfoTocUrl => _rawExtract('ruleBookInfo', 'tocUrl');
+
   /// 获取 ruleContent 的 content 路径
   String get ruleContentPath => _rawExtract('ruleContent', 'content');
+  String get ruleContentNextContentUrl =>
+      _rawExtract('ruleContent', 'nextContentUrl');
+  String get ruleContentReplaceRegex =>
+      _rawExtract('ruleContent', 'replaceRegex');
 
   /// 获取 ruleSearch 的 bookUrl（搜索结果中书本链接的提取规则）
   String get ruleSearchBookUrl => _rawExtract('ruleSearch', 'bookUrl');
@@ -169,6 +183,18 @@ class BookSource {
     return '';
   }
 
+  /// 并发限速配置，如 "1000" 或 "20/60000"
+  String get concurrentRate {
+    if (rawSourceJson.isEmpty) return '';
+    try {
+      final obj = jsonDecode(rawSourceJson) as Map<String, dynamic>;
+      final rate = obj['concurrentRate'];
+      if (rate is String) return rate;
+      if (rate is num) return rate.toString();
+    } catch (_) {}
+    return '';
+  }
+
   factory BookSource.fromJson(Map<String, dynamic> json) {
     String? safeString(dynamic v) => (v is String) && v.isNotEmpty ? v : null;
     bool safeBool(dynamic v) {
@@ -179,7 +205,9 @@ class BookSource {
 
     // Legado 兼容: searchUrl → ruleSearchUrl
     final resolvedSearchUrl =
-        safeString(json['ruleSearchUrl']) ?? safeString(json['searchUrl']) ?? '';
+        safeString(json['ruleSearchUrl']) ??
+        safeString(json['searchUrl']) ??
+        '';
 
     // 兼容 Legado 嵌套格式: ruleSearch.bookList → ruleSearchList
     String? nested(String outerKey, String innerKey, {String? flatKey}) {
@@ -210,25 +238,38 @@ class BookSource {
       bookSourceGroup: safeString(json['bookSourceGroup']) ?? '',
       enabled: safeBool(json['enabled']),
       ruleSearchUrl: resolvedSearchUrl,
-      ruleSearchList: nested('ruleSearch', 'bookList', flatKey: 'ruleSearchList') ?? '',
-      ruleSearchName: nested('ruleSearch', 'name', flatKey: 'ruleSearchName') ?? '',
-      ruleSearchAuthor: nested('ruleSearch', 'author', flatKey: 'ruleSearchAuthor') ?? '',
-      ruleSearchCoverUrl: nested('ruleSearch', 'coverUrl', flatKey: 'ruleSearchCoverUrl') ?? '',
-      ruleSearchKind: nested('ruleSearch', 'kind', flatKey: 'ruleSearchKind') ?? '',
-      ruleSearchNote: nested('ruleSearch', 'note', flatKey: 'ruleSearchNote') ?? '',
+      ruleSearchList:
+          nested('ruleSearch', 'bookList', flatKey: 'ruleSearchList') ?? '',
+      ruleSearchName:
+          nested('ruleSearch', 'name', flatKey: 'ruleSearchName') ?? '',
+      ruleSearchAuthor:
+          nested('ruleSearch', 'author', flatKey: 'ruleSearchAuthor') ?? '',
+      ruleSearchCoverUrl:
+          nested('ruleSearch', 'coverUrl', flatKey: 'ruleSearchCoverUrl') ?? '',
+      ruleSearchKind:
+          nested('ruleSearch', 'kind', flatKey: 'ruleSearchKind') ?? '',
+      ruleSearchNote:
+          nested('ruleSearch', 'note', flatKey: 'ruleSearchNote') ?? '',
       ruleBookUrlPattern: safeString(json['ruleBookUrlPattern']) ?? '',
-      ruleBookName: nested('ruleBookInfo', 'name', flatKey: 'ruleBookName') ?? '',
-      ruleBookAuthor: nested('ruleBookInfo', 'author', flatKey: 'ruleBookAuthor') ?? '',
-      ruleBookCoverUrl: nested('ruleBookInfo', 'coverUrl', flatKey: 'ruleBookCoverUrl') ?? '',
+      ruleBookName:
+          nested('ruleBookInfo', 'name', flatKey: 'ruleBookName') ?? '',
+      ruleBookAuthor:
+          nested('ruleBookInfo', 'author', flatKey: 'ruleBookAuthor') ?? '',
+      ruleBookCoverUrl:
+          nested('ruleBookInfo', 'coverUrl', flatKey: 'ruleBookCoverUrl') ?? '',
       ruleBookKind: safeString(json['ruleBookKind']) ?? '',
       ruleBookNote: safeString(json['ruleBookNote']) ?? '',
       ruleBookLastChapter: safeString(json['ruleBookLastChapter']) ?? '',
-      ruleChapterList: nested('ruleToc', 'chapterList', flatKey: 'ruleChapterList') ?? '',
-      ruleChapterName: nested('ruleToc', 'chapterName', flatKey: 'ruleChapterName') ?? '',
-      ruleChapterUrl: nested('ruleToc', 'chapterUrl', flatKey: 'ruleChapterUrl') ?? '',
+      ruleChapterList:
+          nested('ruleToc', 'chapterList', flatKey: 'ruleChapterList') ?? '',
+      ruleChapterName:
+          nested('ruleToc', 'chapterName', flatKey: 'ruleChapterName') ?? '',
+      ruleChapterUrl:
+          nested('ruleToc', 'chapterUrl', flatKey: 'ruleChapterUrl') ?? '',
       ruleChapterUrlIsFull: safeString(json['ruleChapterUrlIsFull']) ?? '',
       ruleContentUrl: safeString(json['ruleContentUrl']) ?? '',
-      ruleContent: nested('ruleContent', 'content', flatKey: 'ruleContent') ?? '',
+      ruleContent:
+          nested('ruleContent', 'content', flatKey: 'ruleContent') ?? '',
       ruleContentRemove: safeString(json['ruleContentRemove']) ?? '',
       rulePageUrl: safeString(json['rulePageUrl']) ?? '',
       rulePageNext: safeString(json['rulePageNext']) ?? '',
