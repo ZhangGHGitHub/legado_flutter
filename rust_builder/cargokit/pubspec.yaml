@@ -7,4 +7,4 @@ environment:
 
 dependencies:
   build_tool:
-    path: D:/OH-WorkSpace/Projects/legado_flutter/rust_builder/cargokit/build_tool
+    path: build_tool

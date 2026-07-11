@@ -38,6 +38,33 @@
 - 首次构建较慢（~5–15 分钟），后续增量较快
 - iOS 需 Xcode + Apple 开发者账号
 
+## iOS / macOS 构建（Phase 3.4）
+
+在 **macOS** 上执行：
+
+```bash
+chmod +x scripts/setup_apple_rust.sh scripts/build_apple.sh
+./scripts/setup_apple_rust.sh
+./scripts/build_apple.sh macos   # 或 ios / all
+```
+
+或手动：
+
+```bash
+flutter pub get
+flutter build macos --release
+flutter build ios --release --no-codesign
+```
+
+**要点**：
+
+- Cargokit 通过 CocoaPods 脚本编译 `liblegado_engine.a` 并静态链接
+- iOS/macOS/Android 上 `LegadoEngine.init()` 使用进程内符号，无需手动加载 `.dylib`
+- iOS `Info.plist` 已配置 ATS（允许书源 HTTP）
+- macOS 沙盒 entitlements 已开启网络与文件选择权限
+
+CI：`.github/workflows/apple-build.yml`（GitHub Actions `macos-latest`）
+
 ## Web 限制
 
 - Web 平台 **不支持** Rust FFI 引擎（`LegadoEngineBridge` 会标记不可用）

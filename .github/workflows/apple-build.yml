@@ -1,0 +1,38 @@
+name: Apple Build
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Apple Rust targets
+        run: |
+          rustup target add \
+            aarch64-apple-darwin \
+            x86_64-apple-darwin \
+            aarch64-apple-ios \
+            aarch64-apple-ios-sim \
+            x86_64-apple-ios
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build macOS
+        run: flutter build macos --release
+
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign

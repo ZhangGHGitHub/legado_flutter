@@ -22,8 +22,13 @@ class LegadoEngineBridge {
     _initialized = true;
 
     try {
-      final lib = await _loadExternalLibrary();
-      await LegadoEngine.init(externalLibrary: lib);
+      if (Platform.isWindows || Platform.isLinux) {
+        final lib = await _loadExternalLibrary();
+        await LegadoEngine.init(externalLibrary: lib);
+      } else {
+        // iOS / macOS / Android：Cargokit 静态链接 Rust，使用进程内符号
+        await LegadoEngine.init();
+      }
       rust_api.initEngine();
       _available = true;
       debugPrint('[Engine] Rust 书源引擎 v${engineVersion()} 已加载');
