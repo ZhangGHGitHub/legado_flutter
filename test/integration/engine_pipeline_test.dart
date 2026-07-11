@@ -86,6 +86,34 @@ void main() {
       expect(dbBooks.any((b) => b.id == book.id), isTrue);
     }, timeout: const Timeout(Duration(minutes: 2)));
 
+    test('书源开关: rawSourceJson 与 enabled 列同步', () async {
+      if (!rustReady) return;
+
+      final db = DatabaseHelper();
+      final source7565 = _firstSource(await _loadBuiltinJson('7565.json'));
+      final source7497 = _firstSource(await _loadBuiltinJson('7497.json'));
+      await db.insertBookSources([source7565, source7497]);
+
+      await db.toggleSource(source7565.bookSourceUrl, false);
+      final enabled = await db.getEnabledSources();
+      expect(
+        enabled.any((s) => s.bookSourceUrl == source7565.bookSourceUrl),
+        isFalse,
+      );
+      expect(
+        enabled.any((s) => s.bookSourceUrl == source7497.bookSourceUrl),
+        isTrue,
+      );
+
+      final all = await db.getBookSources();
+      final disabled = all.firstWhere(
+        (s) => s.bookSourceUrl == source7565.bookSourceUrl,
+      );
+      expect(disabled.enabled, isFalse);
+
+      await db.toggleSource(source7565.bookSourceUrl, true);
+    });
+
     test('7497 番茄: 搜索→目录→正文', () async {
       if (!rustReady) return;
 

@@ -236,7 +236,8 @@ impl EngineDb {
                rulePageUrl, rulePageNext, rawSourceJson)
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29)
              ON CONFLICT(bookSourceUrl) DO UPDATE SET
-               bookSourceName=excluded.bookSourceName, enabled=excluded.enabled,
+               bookSourceName=excluded.bookSourceName,
+               enabled=book_sources.enabled,
                bookSourceType=excluded.bookSourceType, bookSourceGroup=excluded.bookSourceGroup,
                ruleSearchUrl=excluded.ruleSearchUrl, rawSourceJson=excluded.rawSourceJson",
             params![
@@ -284,18 +285,7 @@ impl EngineDb {
         };
         let mut stmt = self.conn.prepare(sql)?;
         let rows = stmt.query_map([], |row| {
-            let raw: String = row.get(0)?;
-            if !raw.is_empty() {
-                return Ok(raw);
-            }
-            Ok(json!({
-                "bookSourceUrl": row.get::<_, String>(1)?,
-                "bookSourceName": row.get::<_, String>(2)?,
-                "enabled": row.get::<_, i64>(3)? == 1,
-                "bookSourceGroup": row.get::<_, String>(4)?,
-                "ruleSearchUrl": row.get::<_, String>(5)?,
-            })
-            .to_string())
+            Ok(source_row_to_json(row)?)
         })?;
         rows.map(|r| r.map_err(|e| DbError::Message(e.to_string())))
             .collect()
@@ -575,7 +565,38 @@ fn opt_str_field(v: &Value, key: &str) -> Option<String> {
 fn bool_field(v: &Value, key: &str) -> bool {
     v.get(key)
         .and_then(|x| x.as_bool())
-        .unwrap_or_else(|| v.get(key).and_then(|x| x.as_i64()).unwrap_or(0) == 1)
+        .unwrap_or_else(|| v.get(key).and_then(|x| x.as_i64()).unwrap_or(1) == 1)
+}
+
+/// 将 DB 行合并为书源 JSON：`rawSourceJson` 保留规则，但 `enabled` 等以列为准。
+fn source_row_to_json(row: &rusqlite::Row<'_>) -> Result<String, rusqlite::Error> {
+    let raw: String = row.get(0)?;
+    let url: String = row.get(1)?;
+    let name: String = row.get(2)?;
+    let enabled: i64 = row.get(3)?;
+    let group: String = row.get(4)?;
+    let search_url: String = row.get(5)?;
+
+    if !raw.is_empty() {
+        if let Ok(mut v) = serde_json::from_str::<Value>(&raw) {
+            if let Some(obj) = v.as_object_mut() {
+                obj.insert("enabled".to_string(), json!(enabled == 1));
+                if !group.is_empty() {
+                    obj.insert("bookSourceGroup".to_string(), json!(group));
+                }
+            }
+            return Ok(v.to_string());
+        }
+    }
+
+    Ok(json!({
+        "bookSourceUrl": url,
+        "bookSourceName": name,
+        "enabled": enabled == 1,
+        "bookSourceGroup": group,
+        "ruleSearchUrl": search_url,
+    })
+    .to_string())
 }
 
 fn f64_field(v: &Value, key: &str) -> f64 {
@@ -611,5 +632,23 @@ mod tests {
         let books = db.get_books_json().unwrap();
         assert_eq!(books.len(), 1);
         assert!(books[0].contains("斗破"));
+    }
+
+    #[test]
+    fn source_toggle_persists_over_raw_json() {
+        let db = EngineDb::open_in_memory().unwrap();
+        db.upsert_source_json(
+            r#"{"bookSourceUrl":"https://a.test","bookSourceName":"A","enabled":true,"rawSourceJson":"{\"bookSourceUrl\":\"https://a.test\",\"enabled\":true}"}"#,
+        )
+        .unwrap();
+        db.toggle_source("https://a.test", false).unwrap();
+
+        let all = db.get_sources_json(false).unwrap();
+        assert_eq!(all.len(), 1);
+        let v: Value = serde_json::from_str(&all[0]).unwrap();
+        assert_eq!(v.get("enabled").and_then(|x| x.as_bool()), Some(false));
+
+        let enabled_only = db.get_sources_json(true).unwrap();
+        assert!(enabled_only.is_empty());
     }
 }

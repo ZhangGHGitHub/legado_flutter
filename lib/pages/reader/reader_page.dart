@@ -25,6 +25,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   String? _errorMessage;
   String _coverUrl = ''; // 可能从搜索获取的封面 URL
   final ScrollController _chapterScrollController = ScrollController();
+  Timer? _snackBarHideTimer;
 
   @override
   void initState() {
@@ -39,6 +40,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final isInShelf = bookProvider.books.any((b) => b.name == widget.book.name);
     if (mounted) setState(() => _isInShelf = isInShelf);
 
+    if (!mounted) return;
     setState(() => _errorMessage = null);
     final source = sourceProvider.findSourceForBook(widget.book);
     if (source != null) {
@@ -111,32 +113,31 @@ class _BookDetailPageState extends State<BookDetailPage> {
     await provider.addBook(book);
     if (mounted) {
       setState(() => _isInShelf = true);
-      if (context.mounted) {
-        final messenger = ScaffoldMessenger.of(context);
-        messenger.hideCurrentSnackBar();
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('《${widget.book.name}》已加入书架'),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 10), // 给 action 足够时间
-            action: SnackBarAction(
-              label: '去阅读',
-              onPressed: () {
-                messenger.hideCurrentSnackBar();
-                if (mounted) {
-                  _startReading(provider);
-                }
-              },
-            ),
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('《${widget.book.name}》已加入书架'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 10), // 给 action 足够时间
+          action: SnackBarAction(
+            label: '去阅读',
+            onPressed: () {
+              messenger.hideCurrentSnackBar();
+              if (mounted) {
+                _startReading(provider);
+              }
+            },
           ),
-        );
-        // 手动 3 秒后强制关闭（解决 Windows 上 SnackBar 不自动消失的 bug）
-        Timer(const Duration(seconds: 3), () {
-          if (context.mounted) {
-            messenger.hideCurrentSnackBar();
-          }
-        });
-      }
+        ),
+      );
+      // 手动 3 秒后强制关闭（解决 Windows 上 SnackBar 不自动消失的 bug）
+      _snackBarHideTimer?.cancel();
+      _snackBarHideTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted) {
+          messenger.hideCurrentSnackBar();
+        }
+      });
     }
   }
 
@@ -146,17 +147,15 @@ class _BookDetailPageState extends State<BookDetailPage> {
     await provider.removeBook(widget.book.id);
     if (mounted) {
       setState(() => _isInShelf = false);
-      if (context.mounted) {
-        final messenger = ScaffoldMessenger.of(context);
-        messenger.hideCurrentSnackBar();
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('已从书架移除《${widget.book.name}》'),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('已从书架移除《${widget.book.name}》'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -249,6 +248,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   @override
   void dispose() {
+    _snackBarHideTimer?.cancel();
     _chapterScrollController.dispose();
     super.dispose();
   }
