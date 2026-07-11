@@ -1,5 +1,5 @@
 use crate::model::book_source::BookSource;
-use crate::rule::engine;
+use crate::rule::{engine, js_engine};
 use scraper::{Html, Selector};
 
 /// 搜索结果条目（内部）
@@ -15,15 +15,20 @@ pub struct HtmlSearchResult {
 
 /// 从 HTML 页面解析搜索结果
 pub fn parse_html_search(html: &str, source: &BookSource) -> Result<Vec<HtmlSearchResult>, String> {
-    let document = Html::parse_document(html);
+    let base = source.book_source_url.as_str();
+    let js_lib = source.js_lib.as_str();
+    let html = preprocess_book_list_html(html, &source.rule_search_list, js_lib, base);
+    let list_rule = js_engine::css_suffix_after_js(&source.rule_search_list);
+
+    let document = Html::parse_document(&html);
     let body = document
         .select(&Selector::parse("body").unwrap())
         .next()
         .ok_or("HTML 无 body 元素")?;
 
-    let has_custom = !source.rule_search_list.is_empty();
+    let has_custom = !list_rule.is_empty();
     let items = if has_custom {
-        engine::query_all(&document, &body, &source.rule_search_list)
+        engine::query_all(&document, &body, list_rule)
     } else {
         engine::query_all(&document, &body, "")
     };
@@ -84,6 +89,21 @@ pub fn parse_html_search(html: &str, source: &BookSource) -> Result<Vec<HtmlSear
     }
 
     Ok(results)
+}
+
+pub fn preprocess_book_list_html(
+    html: &str,
+    book_list_rule: &str,
+    js_lib: &str,
+    base_url: &str,
+) -> String {
+    if !js_engine::contains_js_block(book_list_rule) {
+        return html.to_string();
+    }
+    let Some(script) = js_engine::extract_js_block(book_list_rule) else {
+        return html.to_string();
+    };
+    js_engine::run_html_js(&script, html, js_lib, base_url).unwrap_or_else(|_| html.to_string())
 }
 
 fn smart_text(element: &scraper::ElementRef<'_>, selector: &str) -> String {

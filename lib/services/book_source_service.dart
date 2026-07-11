@@ -21,48 +21,24 @@ class BookSourceService {
 
   WebBook get webBook => _webBook;
 
-    /// 书源含 JS 规则时需走 Dart 引擎
+  /// 仅 `@js:` URL 模板需强制 Dart；`<js>` 规则由 Rust rquickjs 处理
   /// [operation]: search | toc | content | bookInfo | explore | all
   static bool needsDartEngine(BookSource source, {String operation = 'all'}) {
-    bool hasJs(String s) => s.contains('<js>') || s.contains('@js:');
-
-    bool sectionHasJs(String key) {
-      final raw = source.rawSourceJson;
-      if (raw.isEmpty) return false;
-      try {
-        final obj = jsonDecode(raw) as Map<String, dynamic>;
-        final section = obj[key];
-        if (section == null) return false;
-        final text =
-            section is String ? section : const JsonEncoder().convert(section);
-        return hasJs(text);
-      } catch (_) {
-        return false;
-      }
-    }
+    bool urlNeedsDart(String s) => s.contains('@js:');
 
     switch (operation) {
       case 'search':
-        return sectionHasJs('ruleSearch') ||
-            hasJs(source.ruleSearchUrl) ||
-            hasJs(source.ruleSearchList);
+        return urlNeedsDart(source.ruleSearchUrl);
       case 'toc':
-        return sectionHasJs('ruleToc') ||
-            hasJs(source.ruleChapterList) ||
-            hasJs(source.ruleChapterName) ||
-            hasJs(source.ruleChapterUrl);
+        return urlNeedsDart(source.ruleChapterUrl);
       case 'content':
-        return sectionHasJs('ruleContent') ||
-            hasJs(source.ruleContent) ||
-            hasJs(source.rulePageNext);
+        return false;
       case 'bookInfo':
-        return sectionHasJs('ruleBookInfo') ||
-            hasJs(source.ruleBookName) ||
-            hasJs(source.ruleBookAuthor);
+        return false;
       case 'explore':
-        return sectionHasJs('ruleExplore');
+        return source.rawSourceJson.contains('@js:');
       default:
-        return hasJs(source.rawSourceJson);
+        return source.rawSourceJson.contains('@js:');
     }
   }
 

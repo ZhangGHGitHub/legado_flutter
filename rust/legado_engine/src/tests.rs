@@ -130,14 +130,6 @@ mod engine_tests {
     }
 
     #[test]
-    fn needs_dart_js_detects_js_rules() {
-        let js_source = r#"{"bookSourceUrl":"http://x.com","ruleSearch":{"bookList":"<js>1</js>"}}"#;
-        let js = BookSource::from_json(js_source).unwrap();
-        assert!(js.needs_dart_js());
-        assert!(!fixture_source().needs_dart_js());
-    }
-
-    #[test]
     fn parse_url_config_replaces_page_placeholder() {
         let cfg = crate::http::client::parse_url_config_with_page(
             "/sort/1_{{page}}/",
@@ -148,7 +140,15 @@ mod engine_tests {
     }
 
     #[test]
-    fn scoped_js_detection_for_bishu_toc() {
+    fn needs_dart_js_only_for_at_js_url() {
+        let js_source = r#"{"bookSourceUrl":"http://x.com","searchUrl":"@js:java.ajax(...)"}"#;
+        let js = BookSource::from_json(js_source).unwrap();
+        assert!(js.needs_dart_js_for_search());
+        assert!(!fixture_source().needs_dart_js_for_search());
+    }
+
+    #[test]
+    fn scoped_js_rust_handles_bishu_html_js() {
         let raw = include_str!("../../../assets/builtin_sources/7565.json");
         let json = raw.trim_start_matches('\u{feff}');
         let source = if json.starts_with('[') {
@@ -157,10 +157,57 @@ mod engine_tests {
         } else {
             BookSource::from_json(json).unwrap()
         };
-        assert!(source.needs_dart_js());
-        assert!(source.needs_dart_js_for_search());
-        assert!(source.needs_dart_js_for_content());
+        assert!(!source.needs_dart_js_for_search());
+        assert!(!source.needs_dart_js_for_content());
         assert!(!source.needs_dart_js_for_toc());
         assert!(!source.needs_dart_js_for_book_info());
+        assert!(!source.needs_dart_js_for_explore());
+    }
+
+    #[test]
+    fn tomato_json_content_clean_js() {
+        let raw = include_str!("../../../assets/builtin_sources/7497.json");
+        let json = raw.trim_start_matches('\u{feff}');
+        let source = if json.starts_with('[') {
+            let arr: Vec<serde_json::Value> = serde_json::from_str(json).unwrap();
+            BookSource::from_json(&arr[0].to_string()).unwrap()
+        } else {
+            BookSource::from_json(json).unwrap()
+        };
+        let data: serde_json::Value = serde_json::json!({
+            "data": { "content": "<p>第一段</p><br><p>第二段</p>" }
+        });
+        let content =
+            crate::rule::json_content::parse_json_content(&data, &source).unwrap();
+        assert!(content.contains("第一段"));
+        assert!(content.contains("第二段"));
+        assert!(!content.contains("<p>"));
+    }
+
+    #[test]
+    fn tomato_json_book_info_resolves_toc_url() {
+        let raw = include_str!("../../../assets/builtin_sources/7497.json");
+        let json = raw.trim_start_matches('\u{feff}');
+        let source = if json.starts_with('[') {
+            let arr: Vec<serde_json::Value> = serde_json::from_str(json).unwrap();
+            BookSource::from_json(&arr[0].to_string()).unwrap()
+        } else {
+            BookSource::from_json(json).unwrap()
+        };
+        let _ = crate::rule::js_engine::reset_cache();
+        let data: serde_json::Value = serde_json::json!({
+            "data": {
+                "articlename": "测试书",
+                "author": "作者",
+                "articleid": "12345",
+                "intro": "简介",
+                "lastchapter": "第1章"
+            }
+        });
+        let book_url = "https://novel.cooks.tw/api/novel/detail/12345?lang=zh-CN";
+        let info = crate::rule::json_book_info::parse_json_book_info(&data, &source, book_url)
+            .unwrap();
+        assert_eq!(info.name, "测试书");
+        assert!(info.toc_url.contains("/api/chapter/list/12345"));
     }
 }

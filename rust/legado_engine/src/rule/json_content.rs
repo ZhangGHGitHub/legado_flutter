@@ -1,5 +1,5 @@
 use crate::model::book_source::BookSource;
-use crate::rule::json_util;
+use crate::rule::{json_rule, replace_regex};
 use serde_json::Value;
 
 pub fn parse_json_content(data: &Value, source: &BookSource) -> Result<String, String> {
@@ -16,17 +16,18 @@ pub fn parse_json_content(data: &Value, source: &BookSource) -> Result<String, S
         return Ok(String::new());
     }
 
-    if content_path.contains("<js>") {
-        return Err("JSON 正文含 JS 规则".to_string());
+    let base = source.book_source_url.as_str();
+    let js_lib = source.js_lib.as_str();
+    let mut content = json_rule::resolve_field(data, content_path, js_lib, base);
+
+    if let Some(re) = rule_content
+        .get("replaceRegex")
+        .and_then(|v| v.as_str())
+        .or(source.rule_content_replace_regex.as_deref())
+    {
+        content = replace_regex::apply_replace_regex(&content, re);
     }
 
-    let raw_path = content_path
-        .split("<js>")
-        .next()
-        .unwrap_or(content_path)
-        .trim();
-
-    let content = json_util::resolve_string(data, raw_path);
     Ok(content.trim().to_string())
 }
 
@@ -34,5 +35,5 @@ pub fn extract_json_next_url(data: &Value, next_rule: &str) -> String {
     if next_rule.is_empty() {
         return String::new();
     }
-    json_util::resolve_string(data, next_rule)
+    crate::rule::json_util::resolve_string(data, next_rule)
 }

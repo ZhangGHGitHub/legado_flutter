@@ -38,6 +38,7 @@ pub struct BookSource {
     pub rule_content_next_url: String,
     pub rule_content_replace_regex: Option<String>,
     pub concurrent_rate: Option<String>,
+    pub js_lib: String,
     pub raw_json: String,
     pub rule_search_obj: Option<Value>,
     pub rule_toc_obj: Option<Value>,
@@ -129,6 +130,7 @@ impl BookSource {
                 .get("concurrentRate")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
+            js_lib: str_field(map, "jsLib"),
             raw_json: json_str.to_string(),
             rule_search_obj,
             rule_toc_obj,
@@ -139,89 +141,53 @@ impl BookSource {
     }
 
     pub fn is_json_api(&self) -> bool {
-        if let Some(rule) = &self.rule_search_obj {
-            if has_json_rule(rule) {
-                return true;
-            }
-        }
-        if let Some(rule) = &self.rule_toc_obj {
-            if has_json_rule(rule) {
-                return true;
-            }
-        }
-        if let Some(rule) = &self.rule_content_obj {
-            if has_json_rule(rule) {
-                return true;
+        for rule in [
+            &self.rule_search_obj,
+            &self.rule_toc_obj,
+            &self.rule_content_obj,
+            &self.rule_book_info_obj,
+            &self.rule_explore_obj,
+        ] {
+            if let Some(r) = rule {
+                if has_json_rule(r) {
+                    return true;
+                }
             }
         }
         false
     }
 
     pub fn needs_dart_js(&self) -> bool {
-        field_needs_js(&self.raw_json)
+        self.raw_json.contains("@js:")
     }
 
     pub fn needs_dart_js_for_search(&self) -> bool {
-        json_needs_js(&self.rule_search_obj)
-            || any_field_needs_js(&[
-                &self.rule_search_url,
-                &self.rule_search_list,
-                &self.rule_search_name,
-                &self.rule_search_author,
-                &self.rule_search_book_url,
-            ])
+        field_needs_js(&self.rule_search_url)
     }
 
     pub fn needs_dart_js_for_toc(&self) -> bool {
-        json_needs_js(&self.rule_toc_obj)
-            || any_field_needs_js(&[
-                &self.rule_toc_chapter_list,
-                &self.rule_toc_chapter_name,
-                &self.rule_toc_chapter_url,
-                &self.rule_toc_next_toc_url,
-                &self.rule_book_info_toc_url,
-            ])
+        false
     }
 
     pub fn needs_dart_js_for_content(&self) -> bool {
-        json_needs_js(&self.rule_content_obj)
-            || any_field_needs_js(&[
-                &self.rule_content,
-                &self.rule_content_next_url,
-            ])
-            || self
-                .rule_content_replace_regex
-                .as_deref()
-                .map(field_needs_js)
-                .unwrap_or(false)
+        false
     }
 
     pub fn needs_dart_js_for_book_info(&self) -> bool {
-        json_needs_js(&self.rule_book_info_obj)
-            || any_field_needs_js(&[
-                &self.rule_book_info_name,
-                &self.rule_book_info_author,
-                &self.rule_book_info_cover_url,
-                &self.rule_book_info_intro,
-                &self.rule_book_info_kind,
-                &self.rule_book_info_last_chapter,
-                &self.rule_book_info_toc_url,
-            ])
+        false
     }
 
     pub fn needs_dart_js_for_explore(&self) -> bool {
-        json_needs_js(&self.rule_explore_obj)
-            || any_field_needs_js(&[
-                &self.rule_explore_url,
-                &self.rule_explore_list,
-                &self.rule_explore_name,
-                &self.rule_explore_book_url,
-            ])
+        false
     }
 }
 
-/// 是否含 JS 规则片段
+/// 是否含 JS 规则片段（仅 @js: URL 模板需强制 Dart）
 pub fn field_needs_js(s: &str) -> bool {
+    s.contains("@js:")
+}
+
+pub fn field_has_js_block(s: &str) -> bool {
     s.contains("<js>") || s.contains("@js:")
 }
 

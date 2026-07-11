@@ -1,9 +1,11 @@
 use crate::model::book_source::BookSource;
-use crate::rule::{engine, legado_rule};
+use crate::rule::{engine, js_engine, legado_rule, replace_regex};
 use regex::Regex;
 use scraper::{Html, Selector};
 
 pub fn parse_html_content(html: &str, source: &BookSource) -> Result<String, String> {
+    let base = source.book_source_url.as_str();
+    let js_lib = source.js_lib.as_str();
     let document = Html::parse_document(html);
     let body = document
         .select(&Selector::parse("body").unwrap())
@@ -12,23 +14,26 @@ pub fn parse_html_content(html: &str, source: &BookSource) -> Result<String, Str
 
     let rule = source.rule_content.trim();
     let mut content = if !rule.is_empty() {
-        if rule.contains("<js>") {
-            return Ok(String::new());
-        }
-        let legado = legado_rule::extract_text(&body, rule);
-        if !legado.is_empty() || legado_rule::is_legado_chain_rule(rule) {
-            legado
+        if js_engine::contains_js_block(rule) {
+            if let Some(script) = js_engine::extract_js_block(rule) {
+                js_engine::run_html_js(&script, html, js_lib, base)?
+            } else {
+                String::new()
+            }
         } else {
-            extract_content_by_rule(&document, &body, rule)
+            let legado = legado_rule::extract_text(&body, rule);
+            if !legado.is_empty() || legado_rule::is_legado_chain_rule(rule) {
+                legado
+            } else {
+                extract_content_by_rule(&document, &body, rule)
+            }
         }
     } else {
         smart_extract_content(&document)
     };
 
     if let Some(re) = &source.rule_content_replace_regex {
-        if let Ok(regex) = Regex::new(re) {
-            content = regex.replace_all(&content, "").to_string();
-        }
+        content = replace_regex::apply_replace_regex(&content, re);
     }
 
     content = clean_content(&content);
@@ -81,7 +86,7 @@ fn extract_content_by_rule(
         processed = processed[1..].trim().to_string();
     }
 
-    if processed.contains("<js>") {
+    if js_engine::contains_js_block(&processed) {
         return String::new();
     }
 

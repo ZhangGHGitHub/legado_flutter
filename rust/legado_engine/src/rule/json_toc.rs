@@ -1,5 +1,5 @@
 use crate::model::book_source::BookSource;
-use crate::rule::json_util;
+use crate::rule::{json_rule, json_util};
 use serde_json::Value;
 
 #[derive(Debug, Clone)]
@@ -22,6 +22,8 @@ pub fn parse_json_toc(data: &Value, source: &BookSource) -> Result<Vec<JsonChapt
         return Ok(vec![]);
     }
 
+    let base = source.book_source_url.as_str();
+    let js_lib = source.js_lib.as_str();
     let name_paths = rule_toc
         .get("chapterName")
         .and_then(|v| v.as_str())
@@ -34,8 +36,8 @@ pub fn parse_json_toc(data: &Value, source: &BookSource) -> Result<Vec<JsonChapt
     let items = json_util::collect_array(data, list_path);
     let mut chapters = Vec::new();
     for item in items {
-        let title = json_util::resolve_first_string(&item, name_paths);
-        let mut url = json_util::resolve_first_string(&item, url_paths);
+        let title = json_rule::resolve_field(&item, name_paths, js_lib, base);
+        let mut url = json_rule::resolve_field(&item, url_paths, js_lib, base);
         if url.contains("{{") {
             url = json_util::resolve_template(&url, &item);
         }
