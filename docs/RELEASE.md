@@ -62,8 +62,19 @@ flutter build ios --release --no-codesign
 - iOS/macOS/Android 上 `LegadoEngine.init()` 使用进程内符号，无需手动加载 `.dylib`
 - iOS `Info.plist` 已配置 ATS（允许书源 HTTP）
 - macOS 沙盒 entitlements 已开启网络与文件选择权限
+- Rust `reqwest` 在 Apple 平台需链接 **SystemConfiguration**（见 `rust_builder/*/rust_lib_legado_flutter.podspec`）
 
 CI：`.github/workflows/apple-build.yml`（GitHub Actions `macos-latest`）
+
+### Apple 构建故障排查
+
+若 `flutter build macos` / `ios` 报 `Undefined symbols: _SCDynamicStoreCopyProxies` 等链接错误，确认 podspec 含：
+
+```ruby
+s.frameworks = 'SystemConfiguration'
+```
+
+修改 podspec 后执行 `flutter clean` 再重新构建。
 
 ## Web 限制
 

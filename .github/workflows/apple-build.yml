@@ -31,6 +31,9 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Precache Flutter macOS/iOS
+        run: flutter precache --macos --ios
+
       - name: Build macOS
         run: flutter build macos --release
 
