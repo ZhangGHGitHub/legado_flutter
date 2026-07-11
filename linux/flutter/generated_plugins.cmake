@@ -5,7 +5,6 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   charset_converter
   dynamic_color
-  flutter_js
   url_launcher_linux
 )
 

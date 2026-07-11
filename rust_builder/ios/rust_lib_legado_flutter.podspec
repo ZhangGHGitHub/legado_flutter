@@ -13,31 +13,28 @@ A new Flutter FFI plugin project.
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Your Company' => 'email@example.com' }
 
-  # This will ensure the source files in Classes/ are included in the native
-  # builds of apps using this FFI plugin. Podspec does not support relative
-  # paths, so Classes contains a forwarder C file that relatively imports
-  # `../src/*` so that the C sources can be shared among all target platforms.
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
   s.dependency 'Flutter'
   s.platform = :ios, '13.0'
-  s.frameworks = 'SystemConfiguration'
+  s.frameworks = 'SystemConfiguration', 'Security', 'CoreFoundation'
   s.swift_version = '5.0'
+
+  rust_ldflags = '$(inherited) -force_load ${BUILT_PRODUCTS_DIR}/liblegado_engine.a -lc++ -framework SystemConfiguration -framework Security -framework CoreFoundation'
 
   s.script_phase = {
     :name => 'Build Rust library',
-    # First argument is relative path to the `rust` folder, second is name of rust library
     :script => 'sh "$PODS_TARGET_SRCROOT/../cargokit/build_pod.sh" ../../rust/legado_engine legado_engine',
     :execution_position => :before_compile,
     :input_files => ['${BUILT_PRODUCTS_DIR}/cargokit_phony'],
-    # Let XCode know that the static library referenced in -force_load below is
-    # created by this build step.
     :output_files => ["${BUILT_PRODUCTS_DIR}/liblegado_engine.a"],
   }
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
-    # Flutter.framework does not contain a i386 slice.
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386',
-    'OTHER_LDFLAGS' => '-force_load ${BUILT_PRODUCTS_DIR}/liblegado_engine.a',
+    'OTHER_LDFLAGS' => rust_ldflags,
+  }
+  s.user_target_xcconfig = {
+    'OTHER_LDFLAGS' => '$(inherited) -force_load ${PODS_CONFIGURATION_BUILD_DIR}/rust_lib_legado_flutter/liblegado_engine.a -lc++ -framework SystemConfiguration -framework Security -framework CoreFoundation',
   }
 end
