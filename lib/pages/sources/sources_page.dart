@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
 import '../../providers/book_provider.dart';
+import '../../widgets/section_header.dart';
+import '../../widgets/source_status_dot.dart';
 import 'source_editor_page.dart';
 import 'source_market_page.dart';
 
@@ -109,24 +111,9 @@ class SourcesPage extends StatelessWidget {
                   ],
                 ),
               ),
-              // 书源列表
+              // 书源列表（按 bookSourceGroup 分组）
               Expanded(
-                child: sources.isEmpty
-                    ? Center(
-                        child: Text(
-                          '暂无书源',
-                          style: TextStyle(color: Colors.grey[500]),
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        itemCount: sources.length,
-                        separatorBuilder: (context, i) =>
-                            const Divider(height: 1, indent: 72),
-                        itemBuilder: (context, index) {
-                          return _SourceTile(source: sources[index]);
-                        },
-                      ),
+                child: _GroupedSourceList(sources: sources),
               ),
             ],
           );
@@ -323,6 +310,51 @@ class SourcesPage extends StatelessWidget {
   }
 }
 
+/// 按 bookSourceGroup 分组的书源列表
+class _GroupedSourceList extends StatelessWidget {
+  final List<BookSource> sources;
+  const _GroupedSourceList({required this.sources});
+
+  Map<String, List<BookSource>> _grouped() {
+    final map = <String, List<BookSource>>{};
+    for (final s in sources) {
+      final g = s.bookSourceGroup.isNotEmpty ? s.bookSourceGroup : '未分组';
+      map.putIfAbsent(g, () => []).add(s);
+    }
+    return map;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = _grouped();
+    final keys = groups.keys.toList()
+      ..sort((a, b) => a == '未分组' ? 1 : b == '未分组' ? -1 : a.compareTo(b));
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      itemCount: keys.length,
+      itemBuilder: (_, gi) {
+        final groupName = keys[gi];
+        final items = groups[groupName]!;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionHeader('$groupName (${items.length})'),
+            ...items.map(
+              (s) => Column(
+                children: [
+                  _SourceTile(source: s),
+                  const Divider(height: 1, indent: 72),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 /// 单个书源码 Tile
 class _SourceTile extends StatelessWidget {
   final BookSource source;
@@ -343,12 +375,19 @@ class _SourceTile extends StatelessWidget {
           color: source.enabled ? theme.colorScheme.primary : Colors.grey,
         ),
       ),
-      title: Text(
-        source.bookSourceName,
-        style: TextStyle(
-          fontWeight: FontWeight.w500,
-          color: source.enabled ? null : Colors.grey,
-        ),
+      title: Row(
+        children: [
+          SourceStatusDot(source: source),
+          Expanded(
+            child: Text(
+              source.bookSourceName,
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: source.enabled ? null : Colors.grey,
+              ),
+            ),
+          ),
+        ],
       ),
       subtitle: Text(
         source.bookSourceGroup.isNotEmpty

@@ -164,23 +164,31 @@ JS：Rhino + `JsExtensions.kt` + `SharedJsScope` + 书源 `jsLib`
 
 ## 7. UI 层
 
-`ui/` 按功能域分包，Activity + ViewModel + Adapter：
+[`Jingshiro/legado` `ui/`](https://github.com/Jingshiro/legado/tree/main/app/src/main/java/io/legado/app/ui) 按功能域分包。**legado_flutter Phase F** 按此结构复刻：
 
 ```
-ui/
-├── main/           底部 Tab：书架/发现/订阅/我的
+ui/                          lib/pages/ (Phase F 目标)
+├── main/                    main/main_shell.dart
+│   ├── bookshelf/style1|2   bookshelf/bookshelf_style*_page.dart
+│   ├── explore/             explore/explore_tab_page.dart
+│   ├── rss/                 rss/rss_tab_page.dart
+│   └── my/                  my/my_page.dart, read_record_page.dart
 ├── book/
-│   ├── search/     联合搜索
-│   ├── source/     书源管理/编辑/调试
-│   ├── read/       阅读器（AI、书票）
-│   ├── info/       书籍详情
-│   ├── toc/        目录
-│   ├── explore/    发现
-│   └── changesource/ 换源
-├── replace/        替换规则
-├── config/         设置
-└── rss/            RSS 订阅
+│   ├── search/              search/search_page.dart
+│   ├── explore/             explore/explore_list_page.dart
+│   ├── info/                book/book_info_page.dart
+│   ├── toc/                 book/toc_sheet.dart
+│   ├── bookmark/            book/bookmark_page.dart (F4)
+│   ├── changeSource/        book/change_source_page.dart (F3)
+│   └── changeCover/         book/change_cover_page.dart (F3)
+├── reader/                  reader/reader_page.dart, ai_chat_page.dart (F4)
+├── config/                  config/config_page.dart, theme_config_page.dart
+├── sources/                 sources/sources_page.dart
+├── replace/                 replace/replace_page.dart
+└── rss/                     rss/ (文章/源 F2+)
 ```
+
+**主导航：** BottomNav + ViewPager 等价 → Flutter `NavigationBar` + `IndexedStack`（见 Phase F spec）。
 
 ---
 

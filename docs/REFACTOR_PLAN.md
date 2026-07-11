@@ -635,6 +635,12 @@ pub struct SourceValidation {
 
 ## Phase 1.3：Flutter UI 核心页面（2 周）
 
+> **UI 复刻 Jingshiro/Legado（Phase F v2）：**  
+> - 设计规格：`docs/superpowers/specs/2026-07-11-phase-f-ui-design.md`  
+> - 实施计划：`docs/superpowers/plans/2026-07-11-phase-f-ui-implementation.md`  
+> - 对标：[Jingshiro/legado](https://github.com/Jingshiro/legado) — 书架/发现/订阅/我的 + 独立搜索 + MyFragment 完整菜单  
+> - 子阶段：**F0** 主框架 → **F1** 阅读链路 → **F2** 双布局 → **F3–F4** Jingshiro 增量 UI
+
 ### 1.3.1 书架页增强
 
 | 功能 | 实现 |

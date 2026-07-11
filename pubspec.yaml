@@ -32,6 +32,8 @@ dependencies:
   file_picker: ^8.1.6
   charset_converter: ^2.3.0
   flutter_js: ^0.8.7
+  webview_flutter: ^4.10.0
+  url_launcher: ^6.3.1
 
   # ── Rust 书源引擎 FFI ──
   flutter_rust_bridge: 2.11.1

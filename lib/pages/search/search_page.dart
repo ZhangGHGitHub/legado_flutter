@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/book.dart';
 import '../../providers/source_provider.dart';
-import '../reader/reader_page.dart';
+import '../../services/search_history.dart';
+import '../../widgets/book_list_tile.dart';
+import '../book/book_info_page.dart';
 
-/// 搜索页面 - 扁平列表（仿 Legado 风格）
+/// 搜索页面 — 按书源分组 + 搜索历史
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
 
@@ -15,6 +16,18 @@ class SearchPage extends StatefulWidget {
 class _SearchPageState extends State<SearchPage> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
+  List<String> _history = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final list = await SearchHistory.load();
+    if (mounted) setState(() => _history = list);
+  }
 
   @override
   void dispose() {
@@ -24,8 +37,67 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   void _search(String keyword) {
-    if (keyword.trim().isEmpty) return;
-    context.read<SourceProvider>().searchAll(keyword.trim());
+    final q = keyword.trim();
+    if (q.isEmpty) return;
+    SearchHistory.add(q);
+    _loadHistory();
+    context.read<SourceProvider>().searchAll(q);
+  }
+
+  Widget _buildHistoryBar() {
+    if (_history.isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.3)),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                '搜索历史',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () async {
+                  await SearchHistory.clear();
+                  _loadHistory();
+                },
+                child: const Text('清空', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+          SizedBox(
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _history.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (_, i) {
+                final item = _history[i];
+                return InputChip(
+                  label: Text(item, style: const TextStyle(fontSize: 12)),
+                  onPressed: () {
+                    _searchController.text = item;
+                    _search(item);
+                  },
+                  onDeleted: () async {
+                    await SearchHistory.remove(item);
+                    _loadHistory();
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// 根据书源 URL 获取书源名称
@@ -188,7 +260,11 @@ class _SearchPageState extends State<SearchPage> {
           ),
         ],
       ),
-      body: Consumer<SourceProvider>(
+      body: Column(
+        children: [
+          _buildHistoryBar(),
+          Expanded(
+            child: Consumer<SourceProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading) {
             return const Center(
@@ -263,23 +339,15 @@ class _SearchPageState extends State<SearchPage> {
             );
           }
 
-          // ── 构建扁平搜索结果列表 ──
-          // 收集所有结果并记录来源名称
-          final flatResults = <_SearchResultItem>[];
-          provider.searchResults.forEach((sourceUrl, books) {
-            final name = _sourceName(provider, sourceUrl);
-            for (final book in books) {
-              flatResults.add(_SearchResultItem(book: book, sourceName: name));
-            }
-          });
+          // ── 按书源分组展示 ──
+          final groups = provider.searchResults.entries.toList()
+            ..sort((a, b) => _sourceName(provider, a.key).compareTo(_sourceName(provider, b.key)));
 
-          // 总结果数统计
-          final totalCount = flatResults.length;
-          final sourceCount = provider.searchResults.length;
+          final totalCount = groups.fold<int>(0, (s, e) => s + e.value.length);
+          final sourceCount = groups.length;
 
           return Column(
             children: [
-              // 统计栏
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(
@@ -302,17 +370,36 @@ class _SearchPageState extends State<SearchPage> {
                   ),
                 ),
               ),
-              // 结果列表
               Expanded(
                 child: ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.symmetric(vertical: 4),
-                  itemCount: flatResults.length,
+                  itemCount: groups.length,
                   itemBuilder: (context, index) {
-                    final item = flatResults[index];
-                    return _SearchResultTile(
-                      book: item.book,
-                      sourceName: item.sourceName,
+                    final entry = groups[index];
+                    final name = _sourceName(provider, entry.key);
+                    return ExpansionTile(
+                      initiallyExpanded: true,
+                      title: Text(
+                        '$name (${entry.value.length})',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      children: entry.value
+                          .map(
+                            (book) => BookListTile(
+                              book: book,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => BookInfoPage(book: book),
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
                     );
                   },
                 ),
@@ -320,109 +407,10 @@ class _SearchPageState extends State<SearchPage> {
             ],
           );
         },
-      ),
-    );
-  }
-}
-
-/// 扁平搜索结果条目
-class _SearchResultItem {
-  final Book book;
-  final String sourceName;
-
-  const _SearchResultItem({required this.book, required this.sourceName});
-}
-
-/// 单个搜索结果的展示 Tile（仿 Legado 风格）
-class _SearchResultTile extends StatelessWidget {
-  final Book book;
-  final String sourceName;
-
-  const _SearchResultTile({required this.book, required this.sourceName});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    // 提取书源名（去除图标 emoji）
-    String cleanSourceName = sourceName;
-    final emojiRegex = RegExp(
-      r'^[\u{1F000}-\u{1FFFF}\u{2000}-\u{2FFF}]\s*',
-      unicode: true,
-    );
-    cleanSourceName = cleanSourceName.replaceAll(emojiRegex, '').trim();
-
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      leading: Container(
-        width: 40,
-        height: 56,
-        decoration: BoxDecoration(
-          color: theme.colorScheme.primaryContainer,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: book.coverUrl.isNotEmpty
-              ? Image.network(
-                  book.coverUrl,
-                  width: 40,
-                  height: 56,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => _coverPlaceholder(theme),
-                  loadingBuilder: (_, child, progress) {
-                    if (progress == null) return child;
-                    return _coverPlaceholder(theme);
-                  },
-                )
-              : _coverPlaceholder(theme),
-        ),
-      ),
-      title: Text(
-        book.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-      ),
-      subtitle: Row(
-        children: [
-          if (book.author.isNotEmpty) ...[
-            Text(
-              book.author,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-            const SizedBox(width: 8),
-          ],
-          // 书源标签（小圆角 chip）
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              cleanSourceName,
-              style: TextStyle(fontSize: 10, color: theme.colorScheme.primary),
             ),
           ),
         ],
       ),
-      trailing: Icon(Icons.chevron_right, size: 18, color: Colors.grey[400]),
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => BookDetailPage(book: book)),
-        );
-      },
-    );
-  }
-
-  Widget _coverPlaceholder(ThemeData theme) {
-    return Container(
-      color: theme.colorScheme.primaryContainer,
-      child: Icon(Icons.menu_book, size: 20, color: theme.colorScheme.primary),
     );
   }
 }

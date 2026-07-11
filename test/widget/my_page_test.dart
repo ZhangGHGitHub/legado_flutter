@@ -1,0 +1,46 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:legado_flutter/pages/my/my_page.dart';
+import 'package:legado_flutter/theme/app_theme.dart';
+
+void main() {
+  SharedPreferences.setMockInitialValues({});
+
+  testWidgets('MyPage shows all 14 settings list items', (
+    WidgetTester tester,
+  ) async {
+    final themeController = ThemeModeController();
+    await themeController.load();
+
+    const items = [
+      '书源管理',
+      'TXT 目录规则',
+      '替换净化',
+      '字典规则',
+      '主题模式',
+      '备份与恢复',
+      '主题设置',
+      '其它设置',
+      '书签与想法',
+      '文件管理',
+      '阅读 Skill',
+      'AI 助手',
+      '关于',
+      '退出',
+    ];
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: themeController,
+        child: const MaterialApp(home: MyPage()),
+      ),
+    );
+    await tester.pump();
+
+    for (final title in items) {
+      expect(find.text(title), findsOneWidget);
+    }
+  });
+}
