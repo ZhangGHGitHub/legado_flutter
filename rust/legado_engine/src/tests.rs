@@ -210,4 +210,28 @@ mod engine_tests {
         assert_eq!(info.name, "测试书");
         assert!(info.toc_url.contains("/api/chapter/list/12345"));
     }
+
+    #[test]
+    fn tomato_json_toc_chapter_url_uses_list_base() {
+        let raw = include_str!("../../../assets/builtin_sources/7497.json");
+        let json = raw.trim_start_matches('\u{feff}');
+        let source = if json.starts_with('[') {
+            let arr: Vec<serde_json::Value> = serde_json::from_str(json).unwrap();
+            BookSource::from_json(&arr[0].to_string()).unwrap()
+        } else {
+            BookSource::from_json(json).unwrap()
+        };
+        let data: serde_json::Value = serde_json::json!({
+            "data": [{ "chapterid": "100", "chaptername": "第一章" }]
+        });
+        let list_url = "https://novel.cooks.tw/api/chapter/list/3814?lang=zh-CN";
+        let chapters =
+            crate::rule::json_toc::parse_json_toc(&data, &source, list_url).unwrap();
+        assert_eq!(chapters.len(), 1);
+        assert!(
+            chapters[0].url.contains("/api/chapter/content/3814/100"),
+            "chapterUrl 应含 articleid: {}",
+            chapters[0].url
+        );
+    }
 }

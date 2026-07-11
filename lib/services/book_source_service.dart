@@ -42,17 +42,13 @@ class BookSourceService {
     required BookSource source,
   }) async {
     _requireRust();
-    var chapters = await LegadoEngineBridge.getToc(source, book);
-    if (chapters.isEmpty) {
-      final info = await getBookInfo(source, book.sourceUrl);
-      final tocUrl = info['tocUrl'] ?? '';
-      if (tocUrl.isNotEmpty && tocUrl != book.sourceUrl) {
-        chapters = await LegadoEngineBridge.getToc(
-          source,
-          book.copyWith(sourceUrl: tocUrl),
-        );
-      }
-    }
+    // 先拉详情：ruleBookInfo.init 等 JS 会写入 cache（如番茄 articleid）
+    final info = await getBookInfo(source, book.sourceUrl);
+    final tocUrl = info['tocUrl'] ?? '';
+    final tocBook = (tocUrl.isNotEmpty && tocUrl != book.sourceUrl)
+        ? book.copyWith(sourceUrl: tocUrl)
+        : book;
+    final chapters = await LegadoEngineBridge.getToc(source, tocBook);
     debugPrint('  ✓ Rust 目录: ${chapters.length} 章');
     return chapters;
   }

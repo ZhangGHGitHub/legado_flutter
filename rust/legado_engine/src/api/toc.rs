@@ -45,7 +45,7 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
 
         let batch = if let Ok(data) = serde_json::from_str::<serde_json::Value>(&body) {
             if source.is_json_api() {
-                rule::json_toc::parse_json_toc(&data, &source)?
+                rule::json_toc::parse_json_toc(&data, &source, &current_url)?
                     .into_iter()
                     .map(|c| ChapterItem {
                         title: c.title,

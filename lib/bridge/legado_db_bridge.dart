@@ -1,5 +1,5 @@
 import 'package:path/path.dart' as p;
-import 'package:sqflite/sqflite.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../bridge/legado_engine_bridge.dart';
 import '../src/rust/api/db.dart' as rust_db;
@@ -10,10 +10,11 @@ class LegadoDbBridge {
 
   static bool get isReady => _ready && LegadoEngineBridge.isAvailable;
 
-  static Future<void> init() async {
+  /// [dbPathOverride] 仅用于测试，指定完整数据库文件路径。
+  static Future<void> init({String? dbPathOverride}) async {
     if (!LegadoEngineBridge.isAvailable || _ready) return;
-    final dbPath = await getDatabasesPath();
-    final path = p.join(dbPath, 'legado.db');
+    final path = dbPathOverride ??
+        p.join((await getApplicationSupportDirectory()).path, 'legado.db');
     rust_db.dbInit(path: path);
     _ready = true;
   }

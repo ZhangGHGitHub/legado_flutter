@@ -8,7 +8,11 @@ pub struct JsonChapter {
     pub url: String,
 }
 
-pub fn parse_json_toc(data: &Value, source: &BookSource) -> Result<Vec<JsonChapter>, String> {
+pub fn parse_json_toc(
+    data: &Value,
+    source: &BookSource,
+    js_base_url: &str,
+) -> Result<Vec<JsonChapter>, String> {
     let rule_toc = source
         .rule_toc_obj
         .as_ref()
@@ -29,7 +33,7 @@ pub fn parse_json_toc(data: &Value, source: &BookSource) -> Result<Vec<JsonChapt
         list_paths = list_paths[1..].trim().to_string();
     }
 
-    let base = source.book_source_url.as_str();
+    let base = js_base_url;
     let js_lib = source.js_lib.as_str();
     let name_paths = rule_toc
         .get("chapterName")
