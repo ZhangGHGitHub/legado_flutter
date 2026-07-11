@@ -2,7 +2,6 @@ import 'dart:io' show exit;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../bridge/legado_engine_bridge.dart';
-import '../../config/engine_config.dart';
 import '../replace/replace_page.dart';
 import '../sources/sources_page.dart';
 
@@ -14,7 +13,6 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _darkMode = false;
-  bool _useRust = true;
 
   @override
   void initState() {
@@ -27,22 +25,12 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) return;
     setState(() {
       _darkMode = p.getBool('darkMode') ?? false;
-      _useRust = EngineConfig.useRust;
     });
   }
 
   Future<void> _toggle(bool v) async {
     setState(() => _darkMode = v);
     (await SharedPreferences.getInstance()).setBool('darkMode', v);
-  }
-
-  Future<void> _toggleRust(bool v) async {
-    setState(() => _useRust = v);
-    await EngineConfig.setUseRust(v);
-    if (v && !LegadoEngineBridge.isAvailable) {
-      await LegadoEngineBridge.tryInit();
-    }
-    if (mounted) setState(() {});
   }
 
   @override
@@ -147,9 +135,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   Icons.memory_outlined,
                   'Rust 书源引擎',
                   LegadoEngineBridge.isAvailable
-                      ? 'Rust 引擎已加载'
+                      ? 'v${LegadoEngineBridge.engineVersion()} 已加载'
                       : '未编译，书源功能不可用',
-                  trailing: Switch(value: _useRust, onChanged: _toggleRust),
                 ),
                 _Div(),
                 _Row(Icons.backup_outlined, '备份与恢复', '备份书源、书架、设置'),

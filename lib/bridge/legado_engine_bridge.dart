@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-import '../config/engine_config.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/chapter.dart';
@@ -21,11 +20,6 @@ class LegadoEngineBridge {
   static Future<void> tryInit() async {
     if (_initialized) return;
     _initialized = true;
-
-    if (!EngineConfig.useRust) {
-      debugPrint('[Engine] Rust 引擎已禁用（设置）');
-      return;
-    }
 
     try {
       final lib = await _loadExternalLibrary();

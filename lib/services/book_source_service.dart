@@ -6,7 +6,6 @@ import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 
 import '../bridge/legado_engine_bridge.dart';
-import '../config/engine_config.dart';
 import '../data/builtin_book_sources.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
@@ -21,9 +20,6 @@ class BookSourceService {
       false;
 
   void _requireRust() {
-    if (!EngineConfig.useRust) {
-      throw StateError('请先在设置中启用 Rust 书源引擎');
-    }
     if (!LegadoEngineBridge.isAvailable) {
       throw StateError('Rust 引擎未加载，请编译 legado_engine 后重试');
     }
