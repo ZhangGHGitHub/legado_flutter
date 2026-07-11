@@ -1,4 +1,5 @@
 /// Legado 书源 JS 中常用的 Jsoup API 兼容层（QuickJS 环境）
+/// 与 rust/legado_engine/src/rule/js_assets/jsoup.js 保持同步
 const String jsoupPolyfill = r'''
 var Packages = {
   org: {
@@ -39,6 +40,9 @@ _JsoupElement.prototype.text = function() {
 _JsoupElement.prototype.attr = function(name) {
   if (!this._node || !this._node.attrs) return '';
   return this._node.attrs[name] || this._node.attrs[name.toLowerCase()] || '';
+};
+_JsoupElement.prototype.html = function() {
+  return _nodeHtml(this._node);
 };
 
 function _JsoupElements(arr) {
@@ -128,29 +132,91 @@ function _nodeText(node) {
   return t;
 }
 
+function _nodeHtml(node) {
+  if (!node) return '';
+  if (node.tag === '#root') {
+    var sb = '';
+    for (var i = 0; i < (node.children || []).length; i++) {
+      sb += _nodeHtml(node.children[i]);
+    }
+    return sb;
+  }
+  var attrs = node.attrs || {};
+  var attrStr = '';
+  for (var k in attrs) attrStr += ' ' + k + '="' + attrs[k] + '"';
+  var inner = node.text || '';
+  for (var j = 0; j < (node.children || []).length; j++) {
+    inner += _nodeHtml(node.children[j]);
+  }
+  return '<' + node.tag + attrStr + '>' + inner + '</' + node.tag + '>';
+}
+
+function _parseAttrSelector(raw) {
+  var m = raw.match(/^([^\]=]+)(\*=|=)(.+)$/);
+  if (!m) return null;
+  var val = m[3].trim();
+  if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+    val = val.substring(1, val.length - 1);
+  }
+  return { name: m[1].trim(), op: m[2], value: val };
+}
+
+function _parseSelectorPart(part) {
+  part = part.trim();
+  if (!part) return null;
+  var step = { tag: '*', id: null, cls: null, attrs: [] };
+  var attrRe = /\[([^\]]+)\]/g;
+  var am;
+  while ((am = attrRe.exec(part)) !== null) {
+    var attr = _parseAttrSelector(am[1]);
+    if (attr) step.attrs.push(attr);
+  }
+  part = part.replace(/\[([^\]]+)\]/g, '');
+  var hash = part.indexOf('#');
+  if (hash >= 0) {
+    var after = part.substring(hash + 1);
+    var cut = after.search(/[.\[]/);
+    step.id = cut >= 0 ? after.substring(0, cut) : after;
+    part = part.substring(0, hash) + (cut >= 0 ? after.substring(cut) : '');
+  }
+  var dot = part.indexOf('.');
+  if (dot >= 0) {
+    var afterCls = part.substring(dot + 1);
+    var cutCls = afterCls.search(/[.\[]/);
+    step.cls = cutCls >= 0 ? afterCls.substring(0, cutCls) : afterCls;
+    part = part.substring(0, dot);
+  }
+  part = part.trim();
+  if (part && part !== '*') step.tag = part.toLowerCase();
+  return step;
+}
+
+function _parseSelector(sel) {
+  return sel.trim().split(/\s+/).map(_parseSelectorPart).filter(Boolean);
+}
+
+function _attrValue(node, name) {
+  if (!node || !node.attrs) return '';
+  return node.attrs[name] || node.attrs[name.toLowerCase()] || '';
+}
+
 function _matchStep(node, step) {
   if (!node || node.tag === '#root') {
     return step.tag === '*';
   }
   if (step.tag !== '*' && node.tag !== step.tag) return false;
+  if (step.id && _attrValue(node, 'id') !== step.id) return false;
   if (step.cls) {
-    var cls = (node.attrs['class'] || '').split(/\s+/);
+    var cls = (_attrValue(node, 'class') || '').split(/\s+/);
     if (cls.indexOf(step.cls) < 0) return false;
   }
+  for (var i = 0; i < step.attrs.length; i++) {
+    var a = step.attrs[i];
+    var val = _attrValue(node, a.name);
+    if (a.op === '=' && val !== a.value) return false;
+    if (a.op === '*=' && val.indexOf(a.value) < 0) return false;
+  }
   return true;
-}
-
-function _parseSelector(sel) {
-  return sel.trim().split(/\s+/).map(function(part) {
-    part = part.trim();
-    if (!part) return null;
-    if (part.indexOf('.') > 0) {
-      var dot = part.indexOf('.');
-      return { tag: part.substring(0, dot).toLowerCase(), cls: part.substring(dot + 1) };
-    }
-    if (part.startsWith('.')) return { tag: '*', cls: part.substring(1) };
-    return { tag: part.toLowerCase(), cls: null };
-  }).filter(Boolean);
 }
 
 function _selectAll(node, sel) {

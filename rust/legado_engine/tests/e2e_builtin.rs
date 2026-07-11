@@ -53,13 +53,17 @@ async fn pipeline_bishu() {
         .expect("笔书网目录");
     assert!(!chapters.is_empty(), "笔书网目录为空");
     println!("  笔书网目录: {} 章", chapters.len());
+    if let (Some(first), Some(last)) = (chapters.first(), chapters.last()) {
+        println!("  笔书网目录序: {} -> {}", first.title, last.title);
+    }
 
     let content = get_content(source, chapters[0].url.clone())
         .await
         .expect("笔书网正文");
     assert!(
-        !content.is_empty(),
-        "笔书网正文为空: {:?}",
+        content.len() > 500,
+        "笔书网正文过短 ({} 字符): {:?}",
+        content.len(),
         &content[..content.len().min(80)]
     );
     println!("  笔书网正文: {} 字符", content.len());

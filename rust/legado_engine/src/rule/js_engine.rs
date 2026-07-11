@@ -131,4 +131,86 @@ a ? a.text() : '';
         let out = run_html_js(script, "<a href='/1'>书名</a>", "", "").unwrap();
         assert_eq!(out, "书名");
     }
+
+    #[test]
+    fn run_jsoup_select_id() {
+        let script = r#"
+var doc = Packages.org.jsoup.Jsoup.parse(String(result));
+var el = doc.selectFirst('#nr');
+el ? el.text() : '';
+"#;
+        let html = r#"<article id="nr">正文内容</article>"#;
+        let out = run_html_js(script, html, "", "").unwrap();
+        assert_eq!(out, "正文内容");
+    }
+
+    #[test]
+    fn run_jsoup_select_tag_id() {
+        let script = r#"
+var doc = Packages.org.jsoup.Jsoup.parse(String(result));
+var el = doc.selectFirst('article#nr');
+el ? el.text() : '';
+"#;
+        let html = r#"<div><article id="nr">第一章</article></div>"#;
+        let out = run_html_js(script, html, "", "").unwrap();
+        assert_eq!(out, "第一章");
+    }
+
+    #[test]
+    fn run_jsoup_select_attr_equals() {
+        let script = r#"
+var doc = Packages.org.jsoup.Jsoup.parse(String(result));
+var el = doc.selectFirst('[id=nr]');
+el ? el.text() : '';
+"#;
+        let html = r#"<article id="nr">属性选择</article>"#;
+        let out = run_html_js(script, html, "", "").unwrap();
+        assert_eq!(out, "属性选择");
+    }
+
+    #[test]
+    fn run_jsoup_html_method() {
+        let script = r#"
+var doc = Packages.org.jsoup.Jsoup.parse(String(result));
+var el = doc.selectFirst('article#nr');
+el ? el.html() : '';
+"#;
+        let html = r#"<article id="nr"><p>段落</p></article>"#;
+        let out = run_html_js(script, html, "", "").unwrap();
+        assert!(out.contains("<p>段落</p>"), "html() 应含 inner HTML: {out}");
+    }
+
+    #[test]
+    fn run_jsoup_7565_content_script() {
+        let script = r#"
+var html = String(result);
+var doc = Packages.org.jsoup.Jsoup.parse(html);
+var nr = doc.selectFirst('article#nr');
+var lines = [];
+if (nr) {
+    var rawHtml = String(nr.html());
+    rawHtml = rawHtml.replace(/<br\s*\/?>/gi, '\n');
+    var parts = rawHtml.split('\n');
+    for (var i = 0; i < parts.length; i++) {
+        var line = parts[i].replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\u00a0/g, ' ').trim();
+        if (line) {
+            lines.push(line);
+        }
+    }
+}
+lines.join('\n');
+"#;
+        let html = r#"
+<html><body>
+<article id="nr">
+<p>第一章 开端</p><br/>
+<p>这是测试正文段落，字数需要足够多以验证清洗逻辑正常工作。</p>
+<p>第二段继续补充内容，确保 join 后超过一百个字符。</p>
+</article>
+</body></html>
+"#;
+        let out = run_html_js(script, html, "", "").unwrap();
+        assert!(out.len() > 100, "7565 脚本输出过短: {} chars", out.len());
+        assert!(out.contains("测试正文"), "应含正文: {out}");
+    }
 }
