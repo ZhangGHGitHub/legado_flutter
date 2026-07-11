@@ -1,979 +1,430 @@
-# Legado Flutter → Rust + Flutter 多平台重构方案
+# Legado Flutter — 当前进度 & 后续开发计划
 
-> 基于 [Jingshiro/legado](https://github.com/Jingshiro/legado) 功能对齐  
+> **开发流程：** [DEVELOPMENT_PROCESS.md](./DEVELOPMENT_PROCESS.md) · **文档索引：** [README.md](./README.md)  
+> 目标：对齐 [Jingshiro/legado](https://github.com/Jingshiro/legado) 增强版  
 > 目标平台：Android / iOS / Windows / macOS / Linux / Web (WASM)  
 > 最后更新：2026-07-11  
-> 架构参考：[`docs/LEGADO_ARCH_REFERENCE.md`](LEGADO_ARCH_REFERENCE.md)
+> 引擎版本：**v0.5.6** | DB Schema：**v9** | FRB：**2.11.1**
 
 ---
 
-## 项目现状 (2026-07)
+## 一、项目现状总览
 
-| 维度 | 当前状态 |
-|------|---------|
-| **Flutter** | 3.x + Dart 3.11.5，基础 UI 完成（书架/搜索/书源管理/阅读器/设置） |
-| **Dart 引擎分层** | Phase A ✅ `lib/engine/` + Phase B ✅ ReadBook/BookHelp/ContentProcessor |
-| **Rust 引擎** | v0.3.0：search/explore/get_book_info/get_toc/get_content (async FRB)，JS 书源仍回退 Dart |
-| **Dart 规则引擎** | CSS / XPath（基础）/ JSONPath / QuickJS / Legado 规则 ✅ |
-| **平台支持** | Android ✅ / Windows ✅ / Web（配置但未测试）/ iOS ❌ / macOS ❌ / Linux ❌ |
-| **Jingshiro 功能** | AI 助手 / 阅读记录 / 想法笔记 / 阅读小票 / WebDAV / Web API / 主题导出 ❌ |
+### 1.1 核心数据
 
----
+| 维度 | 状态 |
+|------|------|
+| Rust 引擎版本 | **v0.5.6** |
+| DB Schema | **v9**（5 张表：books, book_sources, chapters, replace_rules, reading_records, notes） |
+| FRB | **已完成 codegen**，`lib/src/rust/` 16 个生成文件，全部 async |
+| Rust crate 数量 | **2**（`legado_engine` + `legado-webdav`） |
+| Flutter .dart 文件 | **93 个** |
+| 测试文件 | **31 个**（Rust 单元/E2E/bench + Dart widget/service/integration） |
+| 已构建平台 | Android ✅ / Windows ✅ |
+| 未构建平台 | iOS ❌ / macOS ❌ / Linux ❌ / Web（配置未测试）⚠️ |
 
-## 总体架构
+### 1.2 架构
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                     Flutter UI (Dart)                         │
-│                    Provider / ChangeNotifier                  │
-│              ~~~~ async FFI calls ~~~~                        │
-├──────────────────────────┬───────────────────────────────────┤
-│    flutter_rust_bridge   │         wasm-pack                 │
-│    (Android/iOS/Win/     │         (Web)                     │
-│     Mac/Linux)           │                                   │
-│    #[frb] async fn       │    #[wasm_bindgen] async fn       │
-├──────────────────────────┴───────────────────────────────────┤
-│                    Rust Core                                  │
-│                                                               │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │ legado-core │  │legado-engine│  │   legado-bridge     │  │
-│  │ types/error │  │             │  │   (FRB DTO 薄壳)    │  │
-│  │ + trait     │  │ • rule/     │  │                     │  │
-│  │             │  │ • http/     │  │ search()            │  │
-│  │             │  │ • js/       │  │ get_toc()           │  │
-│  │             │  │ • db/       │  │ get_content()       │  │
-│  │             │  │             │  │ get_book_info()     │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
-│                                                               │
-│  内部 (不导出 FRB，使用扁平 DTO 桥接):                         │
-│  ┌──────────┐ ┌──────────┐ ┌──────┐ ┌─────────┐            │
-│  │ XPath    │ │JSONPath  │ │JsEng │ │rusqlite │            │
-│  │ Parser   │ │(Legado)  │ │(rqjs)│ │(bundled)│            │
-│  └──────────┘ └──────────┘ └──────┘ └─────────┘            │
-└──────────────────────────────────────────────────────────────┘
-```
-
-**核心原则**：
-- Rust 负责全部业务逻辑，Flutter 纯 UI，零 Dart 端规则引擎
-- **全部 FRB 调用为 async**，不阻塞 UI 线程
-- Rust 内部使用复杂类型（递归 enum / trait object），**FRB 导出层使用扁平 DTO**
-- 数据库统一使用 `rusqlite(bundled)` 全平台编译（含 WASM）
-- JS 引擎统一使用 rquickjs（QuickJS），Web 端编译为 WASM
-
----
-
-## 关键架构决策
-
-### 1. async FFI（非阻塞）
-
-**所有 FRB 调用标记为 `#[frb]` (async)，禁止 `#[frb(sync)]`**。
-
-原因：HTTP 请求可能耗时 1-30 秒，同步调用会冻结 Flutter UI 线程。
-
-```rust
-// ✅ 正确
-#[frb]
-pub async fn search(source_json: String, keyword: String) -> Result<Vec<SearchItem>, String> { ... }
-
-// ❌ 禁止
-#[frb(sync)]
-pub fn search(source_json: String, keyword: String) -> Result<Vec<SearchItem>, String> { ... }
-```
-
-```toml
-# 依赖变化
-[dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-reqwest = { version = "0.12", features = ["gzip", "deflate", "brotli", "rustls-tls"] }
-# 去掉 reqwest "blocking" feature
-# 去掉 tokio "sync" → 改为 tokio::sync::Mutex
-```
-
-### 2. 渐进式 Crate 拆分
-
-**Phase 0-1：3 个 crate**
-```
-rust/
-├── legado-core/       # 核心类型 + LegadoError + 内部 trait
-├── legado-engine/     # 所有业务逻辑（rule/http/js/db）
-└── legado-bridge/     # FRB 导出薄壳（类型映射 + 扁平 DTO）
-```
-
-**Phase 4 按需新增**（这些是独立模块，不需要提前创建）：
-```
-rust/
-├── legado-ai/         # AI 助手（LLM client + tools）
-├── legado-webdav/     # WebDAV 客户端
-└── legado-api/        # 内置 Web API 服务器（axum）
-```
-
-好处：减少初始编译时间、简化依赖管理、Phase 0 更快启动。
-
-### 3. 统一数据库后端
-
-**rusqlite(bundled) 全平台**：`bundled` feature 将 SQLite C 源码编译到目标平台（含 WASM）。
-
-```toml
-# legado-engine/Cargo.toml
-[dependencies]
-rusqlite = { version = "0.32", features = ["bundled"] }
-```
-
-取消原方案中 rusqlite + IndexedDB 双后端设计，好处：
-- 一套 SQL 迁移脚本，全平台共用
-- Dart 端不再直接操作数据库（消除 `database_helper.dart` 的直接 SQLite 调用）
-- 数据库迁移由 Rust 统一管理
-
-FRB 导出的 DB API：
-```rust
-#[frb] pub async fn db_get_books() -> Result<Vec<Book>, String>;
-#[frb] pub async fn db_add_book(book: Book) -> Result<(), String>;
-#[frb] pub async fn db_get_sources() -> Result<Vec<BookSource>, String>;
-#[frb] pub async fn db_add_source(source: BookSource) -> Result<(), String>;
-// ...
-```
-
-### 4. 统一 JS 引擎
-
-**rquickjs 全平台（含 WASM）**：QuickJS 的 Rust 绑定，ES2020 兼容。
-
-| 平台 | JS 引擎 | 方案 |
-|------|---------|------|
-| 原生 (Android/iOS/Win/Mac/Linux) | rquickjs | QuickJS native 编译 |
-| Web (WASM) | rquickjs | QuickJS 编译为 WASM（增加约 150KB） |
-
-好处：
-- **JS 执行行为完全一致**（同一引擎），书源兼容性只需验证一次
-- **一套 JS standard lib 注入代码**
-- 体积可通过 `wasm-opt` 压缩
-
-退化方案（如果 WASM 体积不可接受）：
-```rust
-pub trait JsEngine: Send {
-    fn evaluate(&self, code: &str, vars: &HashMap<String, Value>) -> Result<String, LegadoError>;
-}
-
-// #[cfg(not(target_arch = "wasm32"))] → rquickjs
-// #[cfg(target_arch = "wasm32")]      → 浏览器 eval (via wasm-bindgen callback)
-```
-
-### 5. FRB DTO 层（扁平类型映射）
-
-FRB v2 不支持：泛型、`Box<dyn Trait>`、递归 enum。
-
-**原则**：Rust 内部使用复杂类型，FRB 导出层只暴露扁平 struct/enum。
-
-```rust
-// ❌ 内部复杂类型 — 不导出
-pub(crate) enum Predicate {
-    And(Box<Predicate>, Box<Predicate>),  // 递归，FRB 不支持
-    Or(Box<Predicate>, Box<Predicate>),
-    // ...
-}
-
-// ✅ FRB DTO — 扁平结构
-#[frb]
-pub struct SearchItem {
-    pub name: String,
-    pub author: String,
-    pub cover_url: String,
-    pub book_url: String,
-    pub kind: String,
-    pub note: String,
-}
-```
-
-### 6. async 限速器
-
-```rust
-use tokio::sync::Mutex;
-use tokio::time::sleep;
-
-static RATE_LIMITER: Lazy<Mutex<RateLimiter>> = Lazy::new(|| Mutex::new(RateLimiter::new()));
-
-pub async fn wait_if_needed(source_url: &str) -> Result<(), String> {
-    let mut limiter = RATE_LIMITER.lock().await;
-    let wait_ms = limiter.calculate_wait(source_url);
-    if wait_ms > 0 {
-        sleep(Duration::from_millis(wait_ms)).await;  // 非阻塞
-    }
-    limiter.record_request(source_url);
-    Ok(())
-}
+┌──────────────────────────────────────────────┐
+│              Flutter UI (Dart)               │
+│          Provider / ChangeNotifier           │
+│         ~~ #[frb] async FFI ~~               │
+├──────────────────────────────────────────────┤
+│  flutter_rust_bridge 2.11.1                  │
+│  lib/src/rust/ (16 generated dart files)     │
+├──────────────────────────────────────────────┤
+│           legado_engine (Rust)               │
+│                                              │
+│  api/   — FRB 导出层（14 个 API 模块）        │
+│  rule/  — CSS/XPath/Legado DSL/JSONPath/rquickjs │
+│  http/  — reqwest async + Cookie + 限速 + 代理   │
+│  db/    — rusqlite (bundled) Schema v9       │
+│  web_server.rs — axum HTTP API               │
+│  notes_store.rs — 笔记 CRUD                  │
+├──────────────────────────────────────────────┤
+│           legado-webdav (Rust)               │
+│  WebDAV client (list/upload/download/delete) │
+└──────────────────────────────────────────────┘
 ```
 
 ---
 
-## 平台差异矩阵
+## 二、已完成清单 ✅（无需继续开发）
 
-| 平台 | FFI 方案 | Rust target | JS 引擎 | HTTP 客户端 | 数据库 |
-|------|---------|-------------|---------|------------|--------|
-| Android | flutter_rust_bridge (async) | `aarch64-linux-android` 等 | rquickjs (native) | reqwest (async) | rusqlite(bundled) |
-| iOS | flutter_rust_bridge (async) | `aarch64-apple-ios` | rquickjs (native) | reqwest (async) | rusqlite(bundled) |
-| Windows | flutter_rust_bridge (async) | `x86_64-pc-windows-msvc` | rquickjs (native) | reqwest (async) | rusqlite(bundled) |
-| macOS | flutter_rust_bridge (async) | `aarch64-apple-darwin` | rquickjs (native) | reqwest (async) | rusqlite(bundled) |
-| Linux | flutter_rust_bridge (async) | `x86_64-unknown-linux-gnu` | rquickjs (native) | reqwest (async) | rusqlite(bundled) |
-| Web | wasm-pack + dart:js | `wasm32-unknown-unknown` | rquickjs (WASM) | web_sys::fetch (async) | rusqlite(bundled) (WASM) |
+### 2.1 Rust 书源引擎 — 完成度 95%
+
+| 模块 | 状态 | 文件 |
+|------|:---:|------|
+| 搜索（HTML + JSON API） | ✅ | `api/search.rs` + `rule/html_search.rs` + `rule/json_search.rs` |
+| 发现（Explore） | ✅ | `api/explore.rs` + `rule/html_explore.rs` + `rule/json_explore.rs` |
+| 书籍详情 | ✅ | `api/book_info.rs` + `rule/html_book_info.rs` + `rule/json_book_info.rs` |
+| 目录获取（分页/HTML/JSON） | ✅ | `api/toc.rs` + `rule/html_toc.rs` + `rule/json_toc.rs` |
+| 正文获取（分页/替换/JS清洗） | ✅ | `api/content.rs` + `rule/html_content.rs` + `rule/json_content.rs` |
+| 书源校验 | ✅ | `api/validate.rs`（search→explore→toc→content 串行验证） |
+| 书源调试（逐步匹配日志） | ✅ | `api/debug.rs` |
+| JS 引擎 (rquickjs 0.12) | ✅ | `rule/js_engine.rs` |
+| CSS/XPath/Legado DSL/JSONPath | ✅ | `rule/` 模块 |
+| HTTP（代理/DNS/Cookie/Charset/Gzip） | ✅ | `http/` 模块 |
+| 限速器 (async tokio) | ✅ | `http/rate_limit.rs` |
+
+### 2.2 Rust 数据库 & 基础设施 — 完成度 95%
+
+| 功能 | 状态 |
+|------|:---:|
+| SQLite CRUD（全部 5 张表） | ✅ |
+| 书籍/书源/章节/替换规则 CRUD | ✅ |
+| 阅读记录 CRUD + 统计 + 导出 (CSV/JSON) | ✅ |
+| 笔记 CRUD + Markdown 导出 | ✅ |
+| 数据库备份/恢复 (JSON) | ✅ |
+| WebDAV 客户端 (list/up/down/del) | ✅ |
+| Web API 服务器 (axum + token auth + CORS) | ✅ |
+| 网络代理/DNS 配置 | ✅ |
+| 本地 TXT/EPUB 解析 | ✅ |
+
+### 2.3 Flutter UI — 完成度 85%
+
+| 页面 | 状态 |
+|------|:---:|
+| MainShell（4 标签页） | ✅ |
+| 书架（列表/网格/分组切换） | ✅ |
+| 发现页（书源选择器/分页） | ✅ |
+| 搜索页（跨源聚合/历史） | ✅ |
+| 书籍详情页 + 目录 Sheet | ✅ |
+| 阅读器（分页/主题/字体/亮度/章节切换） | ✅ |
+| 阅读器设置（字体/行距/翻页模式/主题） | ✅ |
+| 书源管理（CRUD/导入/校验/调试面板） | ✅ |
+| 书源编辑器 + 书源市场 | ✅ |
+| 替换规则管理（含预览面板） | ✅ |
+| RSS 订阅管理 | ✅ |
+| 设置中心 + 主题配置 + 备份配置 | ✅ |
+| Web API 配置 + 网络配置 | ✅ |
+| "我的"页（阅读记录/统计图表） | ✅ |
+| AI 聊天页（基础聊天 UI） | ✅ |
+| 修改封面/换源功能 | ✅ |
+| 隐私协议弹窗 | ✅ |
+
+### 2.4 Flutter 服务层 — 完成度 90%
+
+| 服务 | 状态 |
+|------|:---:|
+| BookSourceService（Rust 门面） | ✅ |
+| DatabaseHelper（→ Rust rusqlite） | ✅ |
+| BackupService（本地 + WebDAV） | ✅ |
+| CacheService | ✅ |
+| LocalBookService（TXT/EPUB 导入） | ✅ |
+| ReadingRecordService | ✅ |
+| ReplaceService + 预设库（20+） | ✅ |
+| BookplateService（数据层） | ✅ |
+| NoteService + NoteExportService（Markdown 导出） | ✅ |
+| ThemeImportService | ✅ |
+| WebApiService + WebApiPrefs | ✅ |
+| WebDavPrefs | ✅ |
+| NetworkPrefs | ✅ |
+| SettingsBackup | ✅ |
+| SearchHistory | ✅ |
+| AppPaths | ✅ |
+| SourceDebugFormatter | ✅ |
+| ContentProcessor | ✅ |
+| BookHelp（章节文件缓存） | ✅ |
+
+### 2.5 测试
+
+| 类型 | 文件数 |
+|------|:---:|
+| Rust 单元测试 | `src/tests.rs` |
+| Rust E2E 测试 | 3 个（builtin / phase3 / web_api） |
+| Rust 性能基准 | `benches/rule_bench.rs` |
+| Dart Widget 测试 | 11 个 |
+| Dart Service 测试 | 10 个 |
+| Dart Integration 测试 | 5 个 |
+| **总计** | **31+** |
 
 ---
 
-## 功能优先级分层
+## 三、仍需开发 ❌ / ⚠️
 
-### 🔴 P0：核心阅读链路
+### 🔴 高优先级 — 核心缺位（6 项）
 
-书源引擎、书源管理、搜索与发现、书籍详情、目录获取、正文阅读、书架管理
+#### #1 — 多平台构建（iOS / macOS / Linux / Web）
 
-### 🟡 P1：体验增强
+| 平台 | 当前 | 目标 | 工作内容 |
+|------|:---:|:---:|------|
+| **iOS** | ❌ 从未构建 | 真机 + 模拟器 | `rustup target add aarch64-apple-ios{,sim}` → FRB generate → Xcode 配置 ATS → CocoaPods → TestFlight |
+| **macOS** | ❌ 从未构建 | Apple Silicon | `rustup target add aarch64-apple-darwin` → FRB generate → 构建 |
+| **Linux** | ❌ 从未构建 | x86_64 | 安装 GTK dev 库 → FRB generate → Snap/AppImage 打包 |
+| **Web** | ⚠️ 配置未测试 | PWA | WASM 编译链路验证 → `wasm-pack build` → dart:js interop → Service Worker → PWA deploy |
 
-本地书籍、替换规则、阅读记录、书源调试器、Web API、MD3 主题
-
-### 🟢 P2：增值功能（最后实现）
-
-AI 助手、想法笔记、阅读小票、备份与恢复、主题设置、其他设置、Legado Skill
-
----
-
-## 开发时间线总览
-
-| Phase | 内容 | 工期 | 里程碑 |
-|-------|------|:---:|--------|
-| **0** | 基础设施 | 2 周 | FRB async codegen / iOS build / WASM build / CI |
-| **1.1** | 规则引擎完整化 | 3-4 周 | XPath/JSONPath/JS(rquickjs) 全部就位 |
-| **1.2** | Rust 业务 API | 2 周 | search/get_toc/get_content/get_book_info (async) |
-| **1.3** | Flutter UI 核心 | 2 周 | 书架/搜索/阅读器/发现/iOS+Web 适配 |
-| **2** | 体验增强 | 3-4 周 | 本地书籍/阅读记录/调试器/Web API/MD3 |
-| **3** | 去 Dart + 发布 | 3-4 周 | 移除 Dart 引擎 → 全平台上线 |
-| **4** | 增值功能 | 4-6 周 | AI/笔记/小票/备份/主题/Skill |
-| **总计** | | **19-24 周** | |
-
----
-
-## Phase 0：基础设施就位（2 周）
-
-### 0.1 FRB Codegen 完成（async 模式）
-
-**现状**：`lib/bridge/legado_engine_bridge.dart` 中所有 Rust 调用为 `throw UnsupportedError` 占位。现有 Rust API 使用 `#[frb(sync)]`。
-
-**变更**：全部改为 `#[frb]` async，HTTP 层从 `reqwest::blocking` 迁移到 `reqwest` async + tokio。
-
+**详细步骤（iOS 为例）**：
 ```bash
-# 1. 更新 Cargo.toml（去掉 "blocking"，加 tokio）
-# 2. 修改 api/mod.rs 和 api/search.rs 的 #[frb(sync)] → #[frb]
-# 3. 修改 http/client.rs 从 blocking 改为 async
-# 4. 修改 http/rate_limit.rs 从 thread::sleep 改为 tokio::time::sleep
-
-# 5. 运行 codegen
-cargo install flutter_rust_bridge_codegen --version 2.11.1
-flutter_rust_bridge_codegen integrate --rust-crate-dir rust/legado_engine
+# 1. iOS target (需要 macOS + Xcode)
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim
 flutter_rust_bridge_codegen generate
-flutter pub get
-```
+cd ios && pod install
+# 2. 修复编译错误（如有）
+flutter build ios --debug --no-codesign
+# 3. Info.plist ATS 例外
+# 4. TestFlight 分发
 
-**生成产物**：
-- `lib/src/rust/frb_generated.dart` — FRB 运行时
-- `lib/src/rust/frb_generated.io.dart` — 原生平台 FFI
-- `lib/src/rust/api/` — Rust API 的 Dart 绑定（async 方法）
-
-**桥接层改造**：
-```dart
-// lib/bridge/legado_engine_bridge.dart
-import '../src/rust/frb_generated.dart';
-import '../src/rust/api/mod.dart' as rust_api;
-
-static Future<void> _initRustLib() async {
-  await RustLib.init();
-}
-
-// 所有调用变为 async
-static Future<List<Map<String, String>>> search(BookSource source, String keyword) async {
-  final sourceJson = source.rawSourceJson.isNotEmpty
-      ? source.rawSourceJson
-      : jsonEncode(source.toJson());
-  final items = await rust_api.search(sourceJson: sourceJson, keyword: keyword);
-  return items.map((i) => {...}).toList();
-}
-```
-
-**验证**：Windows 端 `await LegadoEngineBridge.search()` 不阻塞 UI
-
-### 0.2 Rust 项目结构（3 crate workspace）
-
-```
-rust/
-├── Cargo.toml                      # [workspace] members = ["legado-core", "legado-engine", "legado-bridge"]
-├── legado-core/
-│   ├── Cargo.toml
-│   └── src/
-│       ├── lib.rs
-│       ├── types.rs                # Book, Chapter, BookSource, SearchItem 等
-│       └── error.rs                # LegadoError enum
-├── legado-engine/
-│   ├── Cargo.toml
-│   └── src/
-│       ├── lib.rs
-│       ├── rule/                   # 规则引擎
-│       │   ├── mod.rs
-│       │   ├── engine.rs
-│       │   ├── css.rs
-│       │   ├── xpath.rs
-│       │   ├── jsonpath.rs
-│       │   ├── js_engine.rs
-│       │   ├── js_lib.rs
-│       │   ├── prefix.rs
-│       │   └── regex_chain.rs
-│       ├── http/                   # HTTP 层（async）
-│       │   ├── mod.rs
-│       │   ├── client.rs           # reqwest async（去掉 blocking）
-│       │   ├── cookie.rs
-│       │   ├── charset.rs
-│       │   └── rate_limit.rs       # tokio::sync::Mutex + tokio::time::sleep
-│       └── db/                     # 数据库（rusqlite bundled）
-│           ├── mod.rs
-│           ├── models.rs
-│           └── migrations.rs
-└── legado-bridge/
-    ├── Cargo.toml
-    └── src/
-        ├── lib.rs
-        └── api.rs                  # 所有 #[frb] async fn（扁平 DTO）
-```
-
-**验证**：`cargo build --workspace` 编译通过
-
-### 0.3 iOS Target 编译链
-
-```bash
-rustup target add aarch64-apple-ios
-rustup target add aarch64-apple-ios-sim
-flutter_rust_bridge_codegen generate
-```
-
-**Xcode 配置**：
-- 引入 `legado_engine.xcframework`
-- Info.plist 添加 ATS 例外：
-```xml
-<key>NSAppTransportSecurity</key>
-<dict>
-    <key>NSAllowsArbitraryLoads</key>
-    <true/>
-</dict>
-```
-
-### 0.4 WASM 编译链
-
-```bash
+# Web:
+cd rust/legado_engine
+# 条件编译 wasm32 target
 rustup target add wasm32-unknown-unknown
-cargo install wasm-pack
-
-cd rust/legado-bridge
-# WASM 需要单独的导出 crate，或使用 cfg 条件编译
-wasm-pack build --target web --out-dir ../../web/pkg
+# 配置 WASM 导出（当前 FRB 不支持 web，需要独立 wasm-pack 路线）
+wasm-pack build --target web
+# Flutter Web 侧集成 WASM 模块
+flutter build web
 ```
 
-**产出物**：`web/pkg/legado_wasm.js` + `legado_wasm_bg.wasm`
+#### #2 — <js> 书源兼容性验证 & 提升
 
-**Flutter Web 桥接**：
-```dart
-// lib/bridge/wasm_engine_bridge.dart
-import 'dart:js_interop';
+| 子任务 | 说明 |
+|--------|------|
+| 2a. 收集测试书源集 | 从社区收集 50+ 个不同类型的书源（HTML 搜索 / JSON API / @js: URL / <js> 正文清洗） |
+| 2b. 批量兼容性测试 | 对每个书源运行 search→toc→content 全流程，记录通过率 |
+| 2c. rquickjs 差异修复 | 分析失败案例，补充缺失的 JS API 注入（如 `java.headerMap`、`org.jsoup.Jsoup` 特殊用法） |
+| 2d. 建立 CI 回归测试 | 将测试书源集加入 CI，每次 PR 自动运行兼容性检测 |
 
-class WasmEngineBridge {
-  static Future<void> init() async {
-    final module = await WasmModule.load('assets/legado_wasm_bg.wasm');
-    // ... 导出函数绑定
-  }
+#### #3 — 书源登录 UI
 
-  static Future<List<Map<String, String>>> search(String sourceJson, String keyword) async {
-    // 通过 JS interop 调用 WASM 导出的 search 函数
-  }
-}
-```
+Legado 支持 `loginUrl` + `loginUi`（自定义表单）实现需要登录的书源。
 
-### 0.5 CI/CD
+| 子任务 | 说明 |
+|--------|------|
+| 3a. Flutter 登录表单页 | 根据书源 `loginUi` JSON 渲染动态表单（text/password/button/toggle/select/checkbox） |
+| 3b. JS 登录逻辑执行 | 用户填写表单→拼接 JS 变量→调用 rquickjs 执行登录脚本 |
+| 3c. Cookie 持久化 | 登录成功后 Cookie 由 Rust `CookieJar` 自动管理（✅ 已支持），验证手动登录后搜索/正文是否可复用 |
 
-GitHub Actions 多平台矩阵构建（Android / iOS / Web / Windows / macOS / Linux）。
+#### #4 — 想法/笔记系统（阅读器内交互）
 
-### 0.6 测试框架
+Rust 端笔记 CRUD 已完成 ✅，缺失的是阅读器内的交互 UI。
 
-**Rust**：单元测试 + 集成测试 + criterion benchmarks  
-**Flutter**：Widget tests + Integration tests  
-**测试数据**：真实 Legado 书源 JSON 和 HTML 样本作为 fixtures
+| 子任务 | 说明 |
+|--------|------|
+| 4a. 阅读器长按菜单 | `ReaderSelectableText` 选中文字 → 弹出菜单（复制/划线/写想法） |
+| 4b. 想法编辑器 | 半屏 `BottomSheet`：显示选中原文 + 文本输入框 + 保存按钮 |
+| 4c. 划线高亮展示 | 阅读器中已保存的想法位置显示下划线/高亮标记 |
+| 4d. "我的想法"聚合页 | 按书籍分组展示所有想法，支持编辑/删除 |
+
+#### #5 — AI 助手工具调用
+
+AI 聊天页已完成 ✅，缺失的是 LLM 工具调用能力。
+
+| 子任务 | 说明 |
+|--------|------|
+| 5a. Rust LLM Client | 实现 OpenAI/Claude 兼容的 chat completions + function calling |
+| 5b. 工具定义 | `search_books(kw)` — 搜索书架；`get_book_info(name)` — 书籍详情；`get_reading_stats()` — 阅读统计；`add_note(book, text)` — 添加想法 |
+| 5c. 流式输出 UI | `StreamBuilder` 逐 token 渲染，工具调用展示状态卡片（"正在搜索..."→"找到 3 本书"） |
+| 5d. 配置页 | API URL + Key + Model 配置，支持 OpenAI / Anthropic / 本地模型 |
+
+#### #6 — 阅读小票卡片 UI
+
+BookplateService（数据层）已完成 ✅，缺失的是 UI 卡片。
+
+| 子任务 | 说明 |
+|--------|------|
+| 6a. `BookplateOverlay` Widget | 书籍首页/尾部叠加卡片：评分 ⭐ + 阅读时长 + 开始/完成日期 + 阅读章数 |
+| 6b. 书架标记 | 书架上已读完的书显示小票图标，点击可查看 |
 
 ---
 
-## Phase 1.1：Rust 规则引擎完整化（3-4 周）
+### 🟡 中优先级 — 体验完善（4 项）
 
-### 1.1.1 XPath 1.0 完整实现
+#### #7 — 读完/N刷标签
 
-文件：`rust/legado-engine/src/rule/xpath.rs`
+| 子任务 | 说明 |
+|--------|------|
+| 7a. Book 模型 | 新增 `readStatus` 字段（unread / reading / finished / rereading） |
+| 7b. 数据库迁移 | Schema v10：`books` 表添加 `read_status TEXT DEFAULT 'reading'` |
+| 7c. 书架 UI | 书籍卡片角标（"已读完" / "N刷"），筛选/分组支持按状态 |
 
-**当前**：Dart 端基础 XPath（child/descendant 轴 + 4 种谓语）  
-**目标**：13 种轴 + 15 种谓语类型
+#### #8 — 书签功能完善
 
-```rust
-pub struct XPath { steps: Vec<Step>; }
+页面已存在（`bookmark_page.dart`）✅，需确认功能完整性。
 
-struct Step {
-    axis: Axis,
-    node_test: NodeTest,
-    predicates: Vec<Predicate>,
-}
+| 子任务 | 说明 |
+|--------|------|
+| 8a. 阅读器内添加书签 | 点击书签按钮 → 保存 `(chapterIndex, position, text)` |
+| 8b. 书签列表跳转 | 书签页点击 → 跳转到对应章节和位置 |
 
-// 13 种轴
-enum Axis {
-    Child, Descendant, Parent, Ancestor, AncestorOrSelf,
-    DescendantOrSelf, Following, FollowingSibling, Preceding,
-    PrecedingSibling, Self_, Attribute, Namespace,
-}
+#### #9 — 发现页多源聚合
 
-// 节点测试
-enum NodeTest {
-    Name(String), Wildcard, Text, Node, Comment,
-}
+当前每次只能选一个书源查看发现内容。
 
-// 谓语（内部复杂类型，不导出 FRB）
-pub(crate) enum Predicate {
-    Position(usize),         // [n]
-    Last,                    // [last()]
-    PositionGt(usize),       // [position()>n]
-    AttrEq(String, String),  // [@attr="val"]
-    AttrExists(String),      // [@attr]
-    Contains(String, String),// [contains(@attr, "val")]
-    StartsWith(String, String), // [starts-with()]
-    Not(Box<Predicate>),     // [not(...)]
-    And(Box<Predicate>, Box<Predicate>),
-    Or(Box<Predicate>, Box<Predicate>),
-    NormalizeSpace,
-    StringLength(usize),
-    Substring(String, usize, Option<usize>),
-    HasChild(String),
-    Count(Box<XPath>),
-    Sum(Box<XPath>),
-}
-```
+| 子任务 | 说明 |
+|--------|------|
+| 9a. 多源并发发现 | 同时调用多个书源的 `explore()`，结果合并去重 |
+| 9b. 统一榜单 UI | 综合榜 / 分类榜 tabs，下拉可以筛选书源 |
 
-**解析器**：递归下降，完整 XPath 1.0 语法  
-**执行器**：基于 `scraper::ElementRef` 树遍历
+#### #10 — Web API 端点扩展
 
-### 1.1.2 JSONPath 增强
+当前有基础端点，对照 Jingshiro 的 `LEGADO_WEB_API.md` 扩展。
 
-文件：`rust/legado-engine/src/rule/jsonpath.rs`
-
-Legado 专有语法扩展：
-- 多路径合并：`$.data[*].name + $.data[*].author`
-- 模板变量：`{{name}}`
-- 多字段选择：`$.data[*].{name, author}`
-- 过滤器：`[?(@.price > 10)]`
-
-```rust
-pub struct LegadoJsonPath;
-
-impl LegadoJsonPath {
-    pub fn resolve(root: &Value, path: &str) -> Result<Vec<Value>, LegadoError>;
-    pub fn resolve_template(template: &str, item: &Value) -> String;
-    pub fn resolve_multi(root: &Value, paths: &[&str]) -> Result<Vec<Value>, LegadoError>;
-    pub fn resolve_multi_field(root: &Value, base: &str, fields: &[&str]) -> Result<Vec<Value>, LegadoError>;
-}
-```
-
-### 1.1.3 规则前缀系统
-
-文件：`rust/legado-engine/src/rule/prefix.rs`
-
-| 输入 | 识别为 | 引擎 |
-|------|--------|------|
-| `@@css_selector` | 默认规则 | CSS |
-| `@XPath://div` | XPath | XPath |
-| `@Json:$.data` | JSONPath | JSONPath |
-| `@js:code` | JavaScript | JS |
-| `:regex` | 正则 | Regex |
-| `<js>code</js>` | JS 块 | JS |
-| `//div[@class]` | 自动 XPath | XPath |
-| `$.data[*]` | 自动 JSONPath | JSONPath |
-| `tag.class#id` | 默认 CSS | CSS |
-
-**操作符**：
-- `||` — OR 链：第一个非空结果返回
-- `&&` — AND 链：所有非空结果拼接
-- `%%` — XOR 链：互斥匹配
-
-**正则链**：`##pattern##replacement##` 格式
-
-### 1.1.4 JS 引擎集成（rquickjs，全平台统一）
-
-文件：`rust/legado-engine/src/rule/js_engine.rs`
-
-```toml
-[dependencies]
-rquickjs = { version = "0.8", features = ["full-async", "rust-alloc"] }
-```
-
-**注入的 `java` 对象方法**：
-
-| 方法 | 说明 |
-|------|------|
-| `java.ajax(url, options)` | HTTP 请求（调用 legado-engine http 模块） |
-| `java.get(url)` | GET 请求 |
-| `java.post(url, body)` | POST 请求 |
-| `java.connect(url)` | 重定向拦截（返回最终 URL + body） |
-| `java.md5Encode(str)` | MD5 哈希 |
-| `java.base64Decode(str)` | Base64 解码 |
-| `java.base64Encode(str)` | Base64 编码 |
-| `java.createSymmetricCrypto(type, key, iv)` | 对称加密（AES/DES） |
-| `java.encodeURI(str)` | URL 编码 |
-| `java.randomUUID()` | 随机 UUID |
-| `java.log(msg)` | 调试日志 |
-| `java.toast(msg)` | Toast（通过 FRB callback 到 Flutter） |
-| `java.startBrowser(url)` | 打开浏览器（通过 FRB callback 到 Flutter） |
-| `java.webView(url, js)` | WebView 渲染（通过 FRB callback 到 Flutter） |
-| `java.queryTTF(path)` | 查询字体 |
-| `java.replaceFont(text, font)` | 替换字体 |
-
-**注入的 `cache` 对象**：
-
-| 方法 | 说明 |
-|------|------|
-| `cache.put(key, value)` | 写入内存 HashMap |
-| `cache.get(key)` | 读取 |
-| `cache.getFromMemory(key)` | 仅内存读取 |
-| `cache.putFile(key, content)` | 写入 SQLite |
-| `cache.delete(key)` | 删除 |
-
-**注入的全局变量**：`baseUrl`, `result`, `book`, `source`, `chapter`, `cookie`, `src`
-
-### 1.1.5 Legado JS 标准库
-
-文件：`rust/legado-engine/src/rule/js_lib.rs`
-
-将 Dart 端 `js_evaluator.dart` 的 `_legadoStdLib` 和 Jsoup polyfill 迁移为 JS 字符串，在 rquickjs 初始化时注入。
-
-### 1.1.6 Rust HTTP 层增强（async）
-
-文件：`rust/legado-engine/src/http/`
-
-- reqwest 从 blocking 改为 async
-- URL JS 参数：请求前执行 JS 设置自定义头
-- bodyJs 参数：二次处理响应内容
-- dnsIp 参数：强制 DNS 解析
-- socks5/http 代理：reqwest proxy 配置
-- 重定向拦截：`java.connect()` → 返回最终 URL + body
+| 缺失端点 | 说明 |
+|----------|------|
+| `GET/POST /api/notes` | 想法 CRUD |
+| `GET /api/records` | 阅读记录查询 |
+| `GET /api/books/search` | 跨源搜索 API |
+| `POST /api/sources/validate` | 远程触发书源校验 |
+| `GET /api/export/notes` | 笔记导出下载 |
 
 ---
 
-## Phase 1.2：Rust 业务 API（2 周）
+### 🟢 低优先级 — 锦上添花（5 项）
 
-### 1.2.1 search() — 搜索书籍
+#### #11 — 图片/封面解密
 
-```rust
-#[frb]
-pub async fn search(source_json: String, keyword: String) -> Result<Vec<SearchItem>, String>;
+rquickjs 中未注入图片解密相关回调。
+
+| 子任务 | 说明 |
+|--------|------|
+| 11a. `java.decryptImage(bytes, sourceKey)` | JS 返回解密后的 `ByteArray` → Rust 侧应用解密并缓存 |
+| 11b. `java.decryptCover(stream, sourceKey)` | 封面 InputStream 解密 |
+
+#### #12 — 字体解析/替换
+
+| 子任务 | 说明 |
+|--------|------|
+| 12a. `java.queryTTF(fontPath)` | 解析 TTF 字体元数据 |
+| 12b. `java.replaceFont(text, fontFamily)` | 将文本中的字体替换为指定字体 |
+
+#### #13 — Legado Skill 系统
+
+书源自动化脚本引擎（独立功能，不影响核心阅读链路）。
+
+| 子任务 | 说明 |
+|--------|------|
+| 13a. Skill 模型 | `id, name, trigger (manual/schedule/webhook), actions[]` |
+| 13b. Skill 引擎 | 注册 Skills → 触发执行 → Action 链 |
+| 13c. Skill 市场 | 从 URL 导入 Skill 包 |
+
+#### #14 — 分享卡片生成
+
+| 子任务 | 说明 |
+|--------|------|
+| 14a. 想法卡片截图 | `Screenshot` widget → PNG → `share_plus` 分享 |
+| 14b. 阅读小票分享 | 书籍评分卡片生成并分享 |
+
+#### #15 — Web PWA 完善
+
+| 子任务 | 说明 |
+|--------|------|
+| 15a. Service Worker | 离线缓存策略（HTML/JS/WASM + 书籍数据 IndexedDB） |
+| 15b. manifest.json | PWA 图标/名称/主题色配置 |
+| 15c. 响应式适配 | 移动端/平板/桌面端布局自适应 |
+
+---
+
+## 四、已完成 vs 计划对比
+
+| 计划 Phase | 计划内容 | 实际状态 |
+|------------|----------|:---:|
+| Phase 0 | FRB codegen + iOS/WASM 编译链 + CI | FRB codegen ✅ / iOS ❌ / WASM ❌ / CI ❌ |
+| Phase 1.1 | 规则引擎完整化（XPath/JSONPath/JS） | ✅ **已完成** |
+| Phase 1.2 | Rust 业务 API（search/toc/content/book_info） | ✅ **已完成**（远超计划：额外完成 explore/validate/debug/read_record/notes/backup） |
+| Phase 1.3 | Flutter UI 核心页面 | ✅ **已完成**（远超计划：额外完成 RSS/AI 聊天/主题配置/备份配置） |
+| Phase 2 | 体验增强（本地书籍/阅读记录/调试器/Web API/MD3） | ✅ **全部已完成** |
+| Phase 3 | 移除 Dart 引擎 + 发布 | ⚠️ Dart 引擎已移除 ✅ / 多平台发布 ❌ |
+| Phase 4 | 增值功能（AI/笔记/小票/备份/主题/Skill） | ⚠️ 备份/WebDAV/主题 ✅ / AI/笔记 部分完成 / Skill ❌ |
+
+---
+
+## 五、详细开发路线图（剩余工作）
+
+### 第一步：补齐缺失的核心功能（4-6 周）
+
+```
+Week 1-2:  <js> 书源兼容性验证
+  ├── 收集测试书源集（50+）
+  ├── 批量兼容性测试
+  ├── rquickjs 差异修复
+  └── CI 回归测试集成
+
+Week 3-4:  想法/笔记系统（阅读器交互）
+  ├── 阅读器长按菜单 + 选择文字
+  ├── 想法编辑器 BottomSheet
+  ├── 划线高亮展示
+  └── "我的想法"聚合页
+
+Week 5-6:  AI 助手工具调用
+  ├── Rust LLM Client
+  ├── 工具定义 + function calling
+  ├── 流式输出 UI
+  └── 配置页（API/Key/Model）
 ```
 
-流程：解析书源 → 处理 @js:/<js> URL → async 限速 → async HTTP → JSON/HTML 分支解析 → 返回
+### 第二步：多平台构建验证（2-3 周）
 
-### 1.2.2 get_book_info() — 书籍详情
+```
+Week 7:    iOS + macOS
+  ├── iOS target 编译链配置
+  ├── macOS target 编译链配置
+  ├── 修复平台兼容问题
+  └── 真机/模拟器验证
 
-```rust
-#[frb]
-pub async fn get_book_info(source_json: String, book_url: String) -> Result<BookInfo, String>;
+Week 8:    Linux + Web
+  ├── Linux GTK 编译 + AppImage 打包
+  ├── Web WASM 编译链路
+  ├── WASM ↔ Flutter Web 桥接
+  └── PWA 部署验证
 
-// FRB DTO（扁平）
-#[frb]
-pub struct BookInfo {
-    pub name: String,
-    pub author: String,
-    pub cover_url: String,
-    pub kind: String,
-    pub intro: String,
-    pub last_chapter: String,
-    pub word_count: String,
-    pub status: String,
-    pub toc_url: String,
-}
+Week 9:    全平台 CI
+  ├── GitHub Actions 矩阵构建
+  ├── 自动发布流水线
+  └── 平台特定问题修复
 ```
 
-### 1.2.3 get_toc() — 目录获取
+### 第三步：体验完善（2-3 周）
 
-```rust
-#[frb]
-pub async fn get_toc(source_json: String, toc_url: String) -> Result<Vec<ChapterItem>, String>;
+```
+Week 10-11:
+  ├── 读完/N刷标签（模型 + DB + UI）
+  ├── 书源登录 UI（动态表单 + JS 登录）
+  ├── 发现页多源聚合
+  ├── Web API 端点扩展
+  └── 阅读小票卡片 UI
+
+Week 12:
+  ├── 书签功能完善
+  ├── 分享卡片生成
+  └── Web PWA 完善
 ```
 
-支持：HTML 分页抓取、JSON API 分页、JS 模板 URL、最多 50 页、URL 去重
+### 第四步：锦上添花（按需，2-3 周）
 
-### 1.2.4 get_content() — 正文获取
-
-```rust
-#[frb]
-pub async fn get_content(
-    source_json: String,
-    chapter_url: String,
-    content_url_rule: String,
-) -> Result<String, String>;
 ```
-
-支持：正文提取、替换规则、分页合并（最多 20 页）、bodyJs 处理、<js> 清洗
-
-### 1.2.5 validate_source() — 书源校验
-
-```rust
-#[frb]
-pub async fn validate_source(source_json: String) -> Result<SourceValidation, String>;
-
-#[frb]
-pub struct SourceValidation {
-    pub search_ok: bool,
-    pub discovery_ok: bool,
-    pub toc_ok: bool,
-    pub content_ok: bool,
-    pub search_time_ms: u64,
-    pub errors: Vec<String>,
-}
+  ├── 图片/封面解密（rquickjs 注入）
+  ├── 字体解析/替换（rquickjs 注入）
+  ├── Legado Skill 系统
+  └── Obsidian 一键导出笔记
 ```
 
 ---
 
-## Phase 1.3：Flutter UI 核心页面（2 周）
+## 六、功能完成度总结
 
-> **UI 复刻 Jingshiro/Legado（Phase F v2）：**  
-> - 设计规格：`docs/superpowers/specs/2026-07-11-phase-f-ui-design.md`  
-> - 实施计划：`docs/superpowers/plans/2026-07-11-phase-f-ui-implementation.md`  
-> - 对标：[Jingshiro/legado](https://github.com/Jingshiro/legado) — 书架/发现/订阅/我的 + 独立搜索 + MyFragment 完整菜单  
-> - 子阶段：**F0** 主框架 → **F1** 阅读链路 → **F2** 双布局 → **F3–F4** Jingshiro 增量 UI
-
-### 1.3.1 书架页增强
-
-| 功能 | 实现 |
-|------|------|
-| 网格/列表切换 | `SliverGrid` + `SliverList`，偏好持久化 |
-| 读完/N刷标签 | Book 模型新增 `readStatus` 字段 |
-| 拖拽排序 | `ReorderableListView` |
-| 批量操作 | 长按多选 → 删除/移动分组 |
-
-### 1.3.2 书源管理页增强
-
-| 功能 | 实现 |
-|------|------|
-| 绿点/红点 | 有发现且启用 → 绿；有发现未启用 → 红 |
-| 批量操作 | 启用/禁用/分组/校验 |
-| 书源校验 | 调用 Rust `validate_source()` (async) |
-| 书源分享 | 选中 → JSON → 剪贴板/文件 |
-
-### 1.3.3 搜索页增强
-
-| 功能 | 实现 |
-|------|------|
-| 跨源聚合 | 多源并发搜索，去重合并 |
-| 搜索历史 | 最近 20 条持久化 |
-| 结果缓存 | 内存缓存 5 分钟 |
-| 封面预加载 | `CachedNetworkImage` |
-
-### 1.3.4 阅读器页增强
-
-| 功能 | 实现 |
-|------|------|
-| 仿真翻页 | `PageView.builder` + 手势动画 |
-| 预加载 | 当前章 ±1 章 |
-| 进度保存 | chapterIndex + pageIndex + scrollOffset |
-| TTS 朗读 | `flutter_tts` |
-| 亮度调节 | `ScreenBrightness` 插件 |
-| 章节列表 | 底部浮窗快速跳转 |
-
-### 1.3.5 发现页
-
-展示已启用书源的发现规则（榜单/分类），点击展示书籍列表。
-
-```rust
-#[frb]
-pub async fn get_discovery(source_json: String, url: String, page: i32) -> Result<Vec<SearchItem>, String>;
-```
-
-### 1.3.6 iOS 适配
-
-安全区域、Cupertino 风格可选、手势导航兼容
-
-### 1.3.7 Web 适配
-
-响应式布局、PWA 配置（Service Worker + manifest）、WASM bridge 初始化
+| 大类 | 完成度 | 说明 |
+|------|:---:|------|
+| **Rust 书源引擎** | 95% | 核心全完成，缺图片解密/字体替换（低优） |
+| **Rust DB & 基础设施** | 95% | rusqlite + WebDAV + Web API + 备份 + 笔记 全部完成 |
+| **Flutter UI** | 85% | 核心页面全有，缺笔记交互/小票卡片/登录表单 |
+| **Jingshiro 差异化功能** | 60% | 笔记后端✅/AI 基础✅，缺交互+工具调用+小票UI |
+| **多平台** | 29% | 仅 Android/Windows 可用 |
+| **测试覆盖** | 70% | 31+ 测试文件，缺 <js> 兼容率系统测试 |
+| **综合** | **~72%** | 核心引擎极强，缺多平台 + 笔记交互 + AI tool |
 
 ---
 
-## Phase 2：体验增强（3-4 周）
+## 七、时间线预估（剩余工作）
 
-### 2.1 本地书籍（TXT/EPUB）
-
-**Rust 端**（legado-engine 内）：
-
-```rust
-// TXT 分章：正则匹配 "第X章" / "Chapter X" 等模式
-pub fn parse_txt_chapters(content: &str) -> Vec<ChapterItem>;
-
-// EPUB 解析：zip 解压 → XML 解析 → 提取章节
-pub fn parse_epub(data: &[u8]) -> Result<Vec<ChapterItem>, String>;
-```
-
-**Flutter**：`file_picker` 选择文件 → 调用 Rust 解析 → 存入 DB
-
-### 2.2 替换规则
-
-- 实时预览：输入测试文本 → 实时显示替换结果
-- 预设规则库：常见广告过滤
-
-### 2.3 阅读记录
-
-**数据库**：
-```sql
-CREATE TABLE reading_records (
-    id TEXT PRIMARY KEY,
-    book_id TEXT NOT NULL,
-    date TEXT NOT NULL,
-    duration_seconds INTEGER DEFAULT 0,
-    read_chars INTEGER DEFAULT 0,
-    FOREIGN KEY (book_id) REFERENCES books(id)
-);
-```
-
-**Rust API**：
-```rust
-#[frb] pub async fn record_reading(book_id: String, book_name: String, chars: i32) -> Result<(), String>;
-#[frb] pub async fn get_reading_stats(range: &str) -> Result<ReadingStats, String>;
-#[frb] pub async fn export_reading_records(format: &str) -> Result<String, String>;
-```
-
-**Flutter UI**：`fl_chart` 柱状图 + 日历热力图 + CSV/JSON 导出
-
-### 2.4 书源调试器
-
-分步展示：请求信息 → 响应信息 → 规则逐步匹配 → 结果预览
-
-```rust
-#[frb]
-pub async fn debug_search(source_json: String, keyword: String) -> Result<DebugResult, String>;
-
-#[frb]
-pub struct DebugResult {
-    pub request_url: String,
-    pub response_status: String,
-    pub response_charset: String,
-    pub response_body_preview: String,
-    pub rule_steps: Vec<RuleDebugStep>,  // 逐步匹配日志
-    pub results: Vec<DebugItem>,
-}
-```
-
-### 2.5 Web API 服务
-
-**Rust 端**（Phase 4 拆分为独立 crate `legado-api`）：
-
-```rust
-// 基于 axum 的嵌入式 HTTP 服务器
-GET    /api/books              # 书架列表
-POST   /api/books              # 添加书籍
-DELETE /api/books/:id          # 删除书籍
-GET    /api/books/:id/chapters # 章节列表
-GET    /api/sources            # 书源列表
-GET    /api/records            # 阅读记录
-```
-
-**Flutter**：设置页 → Web API 开关 + 端口 + Token
-
-### 2.6 MD3 主题
-
-- Material Design 3 + Dynamic Color (`dynamic_color` 包)
-- 预设 5+ 套方案（浅色/深色/护眼/纸质/夜间）
+| 步骤 | 内容 | 工期 |
+|------|------|:---:|
+| 第一步 | <js> 兼容性 + 笔记交互 + AI tool | 4-6 周 |
+| 第二步 | iOS/macOS/Linux/Web 构建 | 2-3 周 |
+| 第三步 | 体验完善（标签/登录/聚合/Web API/小票） | 2-3 周 |
+| 第四步 | 锦上添花（解密/字体/Skill/Obsidian） | 2-3 周 |
+| **总计** | | **10-15 周** |
 
 ---
 
-## Phase 3：移除 Dart 引擎 + 多平台发布（3-4 周）
-
-### 3.1 功能对齐验证
-
-| 功能 | Rust API | 验证方法 |
-|------|----------|---------|
-| 搜索（HTML） | `search()` | 笔趣阁搜索"斗破" → ≥ 1 条 |
-| 搜索（JSON） | `search()` | JSON API 书源搜索 |
-| 搜索（@js: URL） | `search()` | JS 搜索书源 |
-| 书籍详情 | `get_book_info()` | 封面+简介+最新章节 |
-| 目录（HTML） | `get_toc()` | ≥ 10 章 |
-| 目录（JSON） | `get_toc()` | JSON 目录返回 |
-| 目录（分页） | `get_toc()` | 多页正确合并 |
-| 正文（HTML） | `get_content()` | 非空正文 |
-| 正文（JSON） | `get_content()` | JSON 正文 |
-| 正文（分页） | `get_content()` | 多页合并 |
-| 正文（替换） | `get_content()` | replaceRegex 生效 |
-| 正文（<js>） | `get_content()` | JS 清洗执行 |
-
-### 3.2 移除代码清单
-
-- `lib/services/rule_engine.dart` ✂️
-- `lib/services/analyze_rule.dart` ✂️
-- `lib/services/legado_json_path.dart` ✂️
-- `lib/services/jsoup_polyfill.dart` ✂️
-- `lib/config/engine_config.dart` → 简化为始终 Rust
-- `lib/bridge/legado_engine_bridge.dart` 中 Dart 回退 ✂️
-- `lib/services/book_source_service.dart` 中 Dart 搜索实现 ✂️
-- `lib/database/database_helper.dart` → 简化为调用 Rust DB API
-
-### 3.3 性能基准
-
-```rust
-// criterion benchmarks
-- XPath 解析性能
-- 搜索全流程性能（async）
-- Rust vs Dart 引擎对比
-```
-
-### 3.4 多平台发布
-
-| 平台 | 发布方式 |
-|------|---------|
-| Android | Google Play |
-| iOS | TestFlight → App Store |
-| Windows | Microsoft Store + 独立 EXE |
-| macOS | Mac App Store |
-| Linux | AppImage / Snap / Flatpak |
-| Web | Vercel / Cloudflare Pages (PWA) |
-
----
-
-## Phase 4：增值功能（4-6 周，最后实现）
-
-### 4.1 主题设置
-
-- 主题编辑器（12 色板）
-- 主题 JSON 导出/导入
-- 主题市场（URL 加载）
-- 5+ 预设主题
-
-### 4.2 备份与恢复
-
-**独立 crate**：`legado-webdav`（Phase 4 才创建）
-
-```rust
-pub struct WebDavClient {
-    pub fn new(url: &str, username: &str, password: &str) -> Self;
-    pub async fn list(&self, path: &str) -> Result<Vec<WebDavItem>, String>;
-    pub async fn upload(&self, local: &[u8], remote: &str) -> Result<(), String>;
-    pub async fn download(&self, remote: &str) -> Result<Vec<u8>, String>;
-    pub async fn delete(&self, remote: &str) -> Result<(), String>;
-}
-```
-
-**Flutter**：WebDAV 配置 → 一键备份（DB+配置打包）→ 一键恢复
-
-### 4.3 其他设置
-
-代理（socks5/http）、DNS 自定义、缓存管理、数据目录配置
-
-### 4.4 阅读小票
-
-书籍首页/尾部卡片：评分 + 阅读时长 + 开始/完成日期 + 阅读章数
-
-### 4.5 想法笔记
-
-```sql
-CREATE TABLE notes (
-    id TEXT PRIMARY KEY,
-    book_id TEXT NOT NULL,
-    chapter_title TEXT,
-    selected_text TEXT NOT NULL,
-    note_content TEXT,
-    position INTEGER,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (book_id) REFERENCES books(id)
-);
-```
-
-- 阅读器长按 → 写想法（半屏编辑器）
-- 分享卡片：`Screenshot` → PNG → 分享
-- Obsidian 导出：REST API 或本地文件
-
-### 4.6 AI 助手
-
-**独立 crate**：`legado-ai`（Phase 4 才创建）
-
-```rust
-pub struct LlmClient {
-    pub fn new(api_url: &str, api_key: &str, model: &str) -> Self;
-    pub async fn chat_stream(
-        &self,
-        messages: Vec<ChatMessage>,
-        tools: Vec<ToolDefinition>,
-    ) -> Result<impl Stream<Item = Result<ChatChunk, String>>, String>;
-}
-```
-
-**预置 Tools**：`search_books` / `get_book_info` / `get_reading_stats` / `add_note`
-
-**Flutter UI**：聊天界面 + 流式输出 + Markdown + 工具调用状态卡片
-
-### 4.7 Legado Skill
-
-书源自动化脚本引擎：
-
-```rust
-pub struct Skill {
-    pub id: String,
-    pub name: String,
-    pub trigger: SkillTrigger,   // manual / schedule / webhook / source_event
-    pub actions: Vec<SkillAction>,
-}
-
-pub enum SkillAction {
-    SearchAndAdd(String),
-    BackupSources,
-    CleanCache,
-    SendWebhook(String, String),
-    ExecuteJs(String),
-}
-```
-
-- Skill 市场（URL 导入）
-- 定时任务（cron 表达式）
-- Webhook 触发
-
----
-
-## Web 端特殊处理
-
-| 限制 | 降级方案 |
-|------|---------|
-| 无原生 Web API 服务器 | 不提供 localhost API，仅作客户端 |
-| CORS 跨域 | WASM 内 `web_sys::fetch` 或 Service Worker 代理 |
-| 无本地文件 | 导入导出用 File API + 内存处理 |
-| WASM 性能 | 约原生 60-80%，阅读器场景可接受 |
-| WASM 体积 | QuickJS WASM 约 150KB，可通过 `wasm-opt` 压缩 |
-| 离线 | Service Worker + PWA 缓存策略 |
-
----
-
-## 风险与缓解
-
-| 风险 | 影响 | 缓解 |
-|------|------|------|
-| rquickjs 不足以替代 Rhino | 部分 <js> 书源不可用 | 保留 Dart flutter_js 作为 fallback，逐步验证 |
-| XPath 完整实现工作量大 | 进度延迟 | 先实现 80% 常用语法，边缘 case 后续迭代 |
-| WASM 体积过大 | Web 端加载慢 | QuickJS WASM 压缩 + lazy load + 退化到浏览器 eval |
-| FRB async 稳定性 | 某些平台可能有问题 | Phase 0 即验证所有目标平台 |
-| iOS 签名 & 审核 | 上架延迟 | Phase 0 验证构建，Phase 3 提前提交 |
-
----
-
-## 关键技术选型
-
-| 维度 | 选择 | 理由 |
-|------|------|------|
-| FFI 调用方式 | `#[frb]` async（全平台） | 不阻塞 UI 线程 |
-| 运行时 | tokio (multi-thread) | Rust 异步标准 |
-| JS 引擎 | rquickjs (全平台，WASM 编译) | QuickJS ES2020 兼容，与 Legado Rhino 对齐 |
-| HTTP 客户端 | reqwest async (native) / web_sys (WASM) | 平台最优 |
-| 数据库 | rusqlite(bundled) 全平台 | 一套 SQL 统一管理 |
-| HTML 解析 | scraper | Servo 的 CSS 选择器引擎 |
-| XPath | 自实现 | Legado 兼容语法 |
-| JSONPath | jsonpath-rust + 自研扩展 | Legado 专有语法 |
-| Web API 服务器 | axum | 轻量、高性能 |
-| 状态管理 | Provider（Phase 0-2）→ Riverpod 可选 | 渐进迁移 |
-
----
-
-> 最后更新：2026-07-10
+> 最后更新：2026-07-11 | 引擎 v0.5.6 | DB Schema v9

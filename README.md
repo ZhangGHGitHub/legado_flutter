@@ -2,6 +2,8 @@
 
 Legado 阅读器的 Flutter 复刻版，书源引擎使用 Rust 实现。
 
+**文档入口：** [docs/README.md](docs/README.md) · **开发流程：** [docs/DEVELOPMENT_PROCESS.md](docs/DEVELOPMENT_PROCESS.md)
+
 ## 架构
 
 ```
