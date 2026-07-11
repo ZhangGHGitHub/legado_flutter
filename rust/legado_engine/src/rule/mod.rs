@@ -15,3 +15,4 @@ pub mod json_toc;
 pub mod json_util;
 pub mod legado_rule;
 pub mod replace_regex;
+pub mod xpath;
