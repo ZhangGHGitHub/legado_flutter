@@ -47,15 +47,45 @@ pub fn resolve_first_string(item: &Value, paths: &str) -> String {
 
 pub fn resolve_template(template: &str, item: &Value) -> String {
     let mut result = template.to_string();
-    if let Some(obj) = item.as_object() {
-        for (key, val) in obj {
-            let placeholder = format!("{{{{{key}}}}}");
-            if result.contains(&placeholder) {
-                result = result.replace(&placeholder, &value_to_string(val));
-            }
-        }
+
+    while let Some(start) = result.find("{{") {
+        let Some(rel_end) = result[start..].find("}}") else {
+            break;
+        };
+        let end = start + rel_end;
+        let key = result[start + 2..end].trim();
+        let replacement = if key.starts_with('$') {
+            resolve_string(item, key)
+        } else if let Some(obj) = item.as_object() {
+            obj.get(key)
+                .map(value_to_string)
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+        result.replace_range(start..end + 2, &replacement);
     }
+
     result
+}
+
+#[cfg(test)]
+mod json_util_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn resolve_jsonpath_template_placeholder() {
+        let item = json!({"articleid": "998877"});
+        let url = resolve_template(
+            "https://novel.cooks.tw/api/novel/detail/{{$.articleid}}?lang=zh-CN",
+            &item,
+        );
+        assert_eq!(
+            url,
+            "https://novel.cooks.tw/api/novel/detail/998877?lang=zh-CN"
+        );
+    }
 }
 
 pub fn value_to_string(val: &Value) -> String {

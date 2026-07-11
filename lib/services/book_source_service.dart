@@ -71,7 +71,18 @@ class BookSourceService {
         EngineConfig.useRust &&
         LegadoEngineBridge.isAvailable) {
       try {
-        final chapters = await LegadoEngineBridge.getToc(source, book);
+        var chapters = await LegadoEngineBridge.getToc(source, book);
+        if (chapters.isEmpty) {
+          // JSON 书源 tocUrl 含 <js> 时 Rust 会先走 book_info；Dart 侧再兜底一次
+          final info = await getBookInfo(source, book.sourceUrl);
+          final tocUrl = info['tocUrl'] ?? '';
+          if (tocUrl.isNotEmpty && tocUrl != book.sourceUrl) {
+            chapters = await LegadoEngineBridge.getToc(
+              source,
+              book.copyWith(sourceUrl: tocUrl),
+            );
+          }
+        }
         if (chapters.isNotEmpty) {
           debugPrint('  ✓ Rust 目录: ${chapters.length} 章');
           return chapters;

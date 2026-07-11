@@ -92,6 +92,11 @@ pub fn is_legado_chain_rule(rule: &str) -> bool {
         || body.contains("@tag.")
         || body.contains("@class.")
         || body.contains("@text.")
+        || body.contains("@text")
+        || body.contains("@href")
+        || body.contains("@src")
+        || body.contains("@html")
+        || body.contains("@ownText")
 }
 
 fn split_regex_suffix(rule: &str) -> (String, Option<(String, String)>) {
@@ -204,10 +209,15 @@ fn apply_segment<'a>(parents: &[ElementRef<'a>], seg: &Segment) -> Vec<ElementRe
                     result.extend(parent.select(&s));
                 }
             }
-            "tag" => {
+            "tag" | "css" => {
                 let parsed = Selector::parse(seg.name.as_str());
                 if let Ok(s) = parsed {
                     result.extend(parent.select(&s));
+                    if result.is_empty()
+                        && parent.value().name().eq_ignore_ascii_case(&seg.name)
+                    {
+                        result.push(parent.clone());
+                    }
                 }
             }
             "id" => {
@@ -238,12 +248,6 @@ fn apply_segment<'a>(parents: &[ElementRef<'a>], seg: &Segment) -> Vec<ElementRe
                     format!("> {}", seg.name)
                 };
                 let parsed = Selector::parse(&sel_str);
-                if let Ok(s) = parsed {
-                    result.extend(parent.select(&s));
-                }
-            }
-            "css" => {
-                let parsed = Selector::parse(seg.name.as_str());
                 if let Ok(s) = parsed {
                     result.extend(parent.select(&s));
                 }
@@ -290,5 +294,17 @@ mod tests {
         let body = doc.select(&Selector::parse("div").unwrap()).next().unwrap();
         let out = extract_text(&body, "text.作者@text##.*作者[：:]\\s*##");
         assert_eq!(out, "天蚕土豆");
+    }
+
+    #[test]
+    fn short_tag_href_on_link_element() {
+        let html = r#"<ul class="chapter"><li><a href="/c/1">第一章</a></li></ul>"#;
+        let doc = Html::parse_document(html);
+        let link = doc
+            .select(&Selector::parse("ul.chapter li a").unwrap())
+            .next()
+            .unwrap();
+        assert_eq!(extract_text(&link, "a@text"), "第一章");
+        assert_eq!(extract_attr(&link, "a@href", "href"), "/c/1");
     }
 }

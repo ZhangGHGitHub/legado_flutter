@@ -27,3 +27,4 @@ thiserror = "2"
 log = "0.4"
 flate2 = "1"
 rquickjs = "0.12.1"
+rusqlite = { version = "0.32", features = ["bundled"] }

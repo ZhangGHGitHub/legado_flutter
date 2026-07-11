@@ -1,4 +1,5 @@
 use super::ChapterItem;
+use crate::api::book_info;
 use crate::http;
 use crate::model::book_source::BookSource;
 use crate::rule;
@@ -18,18 +19,7 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
         http::rate_limit::configure(&source.book_source_url, rate);
     }
 
-    let mut fetch_url = book_url.to_string();
-    if !source.rule_book_info_toc_url.is_empty() {
-        let toc = source.rule_book_info_toc_url.trim();
-        if !toc.contains("<js>") {
-            fetch_url = if toc.starts_with("http") {
-                toc.to_string()
-            } else {
-                http::client::resolve_url(toc, book_url)
-            };
-        }
-    }
-
+    let fetch_url = resolve_toc_fetch_url(&source, book_url).await?;
     let mut merged = Vec::new();
     let mut seen = HashSet::new();
     let mut visited_pages = HashSet::new();
@@ -102,6 +92,35 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
     }
 
     Ok(merged)
+}
+
+/// 解析目录页 URL：JSON 书源含 JS tocUrl 时先走 book_info
+async fn resolve_toc_fetch_url(source: &BookSource, book_url: &str) -> Result<String, String> {
+    let flat_rule = source.rule_book_info_toc_url.trim();
+    let obj_has_js = source
+        .rule_book_info_obj
+        .as_ref()
+        .and_then(|o| o.get("tocUrl"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.contains("<js>"))
+        .unwrap_or(false);
+
+    if source.is_json_api() && (flat_rule.contains("<js>") || obj_has_js) {
+        let info = book_info::get_book_info(&source.raw_json, book_url).await?;
+        if !info.toc_url.is_empty() {
+            return Ok(info.toc_url);
+        }
+    }
+
+    if !flat_rule.is_empty() && !flat_rule.contains("<js>") {
+        return Ok(if flat_rule.starts_with("http") {
+            flat_rule.to_string()
+        } else {
+            http::client::resolve_url(flat_rule, book_url)
+        });
+    }
+
+    Ok(book_url.to_string())
 }
 
 fn parse_html_toc_items(
