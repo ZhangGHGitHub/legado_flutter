@@ -20,7 +20,7 @@ flutter pub get
 flutter run -d windows   # 或 android / ios
 ```
 
-默认使用 Rust 引擎；若 Rust 库未编译，自动回退 Dart 引擎。
+默认使用 Rust 书源引擎；未编译时书源功能不可用（无 Dart 回退）。
 
 ## 编译 Rust 书源引擎
 

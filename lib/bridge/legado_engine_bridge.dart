@@ -35,7 +35,7 @@ class LegadoEngineBridge {
       debugPrint('[Engine] Rust 书源引擎 v${engineVersion()} 已加载');
     } catch (e) {
       _available = false;
-      debugPrint('[Engine] Rust 引擎不可用，回退 Dart: $e');
+      debugPrint('[Engine] Rust 引擎不可用: $e');
     }
   }
 

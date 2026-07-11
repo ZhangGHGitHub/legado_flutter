@@ -148,7 +148,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   'Rust 书源引擎',
                   LegadoEngineBridge.isAvailable
                       ? 'Rust 引擎已加载'
-                      : '未编译，当前使用 Dart 引擎',
+                      : '未编译，书源功能不可用',
                   trailing: Switch(value: _useRust, onChanged: _toggleRust),
                 ),
                 _Div(),
