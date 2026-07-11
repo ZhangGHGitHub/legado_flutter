@@ -162,7 +162,7 @@ impl BookSource {
     }
 
     pub fn needs_dart_js_for_search(&self) -> bool {
-        field_needs_js(&self.rule_search_url)
+        false
     }
 
     pub fn needs_dart_js_for_toc(&self) -> bool {

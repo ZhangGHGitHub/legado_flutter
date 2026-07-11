@@ -9,9 +9,6 @@ use crate::rule::js_engine;
 pub async fn search(source_json: &str, keyword: &str) -> Result<Vec<SearchItem>, String> {
     let source = BookSource::from_json(source_json)?;
     let _ = js_engine::reset_cache();
-    if source.needs_dart_js_for_search() {
-        return Err("书源含 JS 规则，需 Dart 引擎".to_string());
-    }
     if source.rule_search_url.is_empty() {
         return Ok(vec![]);
     }
@@ -21,7 +18,7 @@ pub async fn search(source_json: &str, keyword: &str) -> Result<Vec<SearchItem>,
     }
     http::rate_limit::wait_if_needed(&source.book_source_url).await?;
 
-    let cfg = http::client::parse_url_config(&source.rule_search_url, keyword);
+    let cfg = http::analyze_url::resolve_search_request(&source, keyword, 1)?;
     let mut resolved_url = cfg.url.clone();
     if !resolved_url.starts_with("http") {
         resolved_url = http::client::resolve_url(&resolved_url, &source.book_source_url);

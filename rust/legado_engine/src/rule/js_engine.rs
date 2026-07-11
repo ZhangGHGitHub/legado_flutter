@@ -55,6 +55,62 @@ pub fn reset_cache() -> Result<(), String> {
     Ok(())
 }
 
+/// 执行裸 JS 脚本（搜索 @js: / URL 模板用）
+pub fn run_eval_script(script: &str, js_lib: &str, base_url: &str) -> Result<String, String> {
+    let rt = Runtime::new().map_err(|e| format!("JS Runtime 失败: {e}"))?;
+    let ctx = Context::full(&rt).map_err(|e| format!("JS Context 失败: {e}"))?;
+    ctx.with(|ctx| {
+        init_context(&ctx, js_lib, base_url)?;
+        let v: Value = ctx
+            .eval(script.as_bytes())
+            .map_err(|e| format!("JS 执行失败: {e}"))?;
+        value_to_string(&ctx, v)
+    })
+}
+
+/// `@js:` 搜索 URL 脚本
+pub fn run_search_js(
+    script: &str,
+    keyword: &str,
+    js_lib: &str,
+    base_url: &str,
+    page: i32,
+) -> Result<String, String> {
+    let base_host = json_escape(&crate::http::client::base_url(base_url));
+    let code = format!(
+        "var key = {};\nvar page = {};\nvar baseUrl = {};\nfunction Base() {{ return {}; }}\n{}\n{}",
+        json_escape(keyword),
+        page,
+        json_escape(base_url),
+        base_host,
+        js_lib,
+        script
+    );
+    run_eval_script(&code, "", base_url)
+}
+
+/// 含 `<js>` 的 URL 模板
+pub fn run_url_template_js(
+    template: &str,
+    keyword: &str,
+    js_lib: &str,
+    base_url: &str,
+    page: i32,
+) -> Result<String, String> {
+    let script = extract_js_block(template).ok_or("URL 模板无 <js> 块")?;
+    let base_host = json_escape(&crate::http::client::base_url(base_url));
+    let code = format!(
+        "var result = {{\"articleid\":\"\"}};\nvar baseUrl = {};\nvar articleid = '';\nvar key = {};\nvar page = {};\nfunction J(obj) {{ return obj; }}\nfunction Base() {{ return {}; }}\n{}\n{}",
+        json_escape(base_url),
+        json_escape(keyword),
+        page,
+        base_host,
+        js_lib,
+        script
+    );
+    run_eval_script(&code, "", base_url)
+}
+
 /// 执行 Legado `<js>...</js>` 脚本，`result` 为输入数据
 pub fn run_with_result(
     script: &str,

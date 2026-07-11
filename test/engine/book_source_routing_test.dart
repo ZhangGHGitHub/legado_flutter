@@ -43,13 +43,13 @@ void main() {
       expect(BookSourceService.needsDartEngine(source, operation: 'bookInfo'), isFalse);
     });
 
-    test('仅 @js: URL 模板强制 Dart', () {
+    test('Rust 处理 @js: 搜索 URL，不强制 Dart', () {
       final source = BookSource.fromJson({
         'bookSourceUrl': 'http://x.com',
         'searchUrl': '@js:java.ajax(...)',
         'ruleChapterUrl': 'http://x.com/toc',
       });
-      expect(BookSourceService.needsDartEngine(source, operation: 'search'), isTrue);
+      expect(BookSourceService.needsDartEngine(source, operation: 'search'), isFalse);
       expect(BookSourceService.needsDartEngine(source, operation: 'toc'), isFalse);
     });
   });

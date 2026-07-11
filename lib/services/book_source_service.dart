@@ -21,24 +21,19 @@ class BookSourceService {
 
   WebBook get webBook => _webBook;
 
-  /// 仅 `@js:` URL 模板需强制 Dart；`<js>` 规则由 Rust rquickjs 处理
+  /// Rust rquickjs 处理 `@js:` / `<js>` 搜索 URL；无 Dart 强制路由
   /// [operation]: search | toc | content | bookInfo | explore | all
   static bool needsDartEngine(BookSource source, {String operation = 'all'}) {
-    bool urlNeedsDart(String s) => s.contains('@js:');
-
     switch (operation) {
       case 'search':
-        return urlNeedsDart(source.ruleSearchUrl);
       case 'toc':
-        return urlNeedsDart(source.ruleChapterUrl);
       case 'content':
-        return false;
       case 'bookInfo':
         return false;
       case 'explore':
-        return source.rawSourceJson.contains('@js:');
+        return false;
       default:
-        return source.rawSourceJson.contains('@js:');
+        return false;
     }
   }
 

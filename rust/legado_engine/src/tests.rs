@@ -143,7 +143,7 @@ mod engine_tests {
     fn needs_dart_js_only_for_at_js_url() {
         let js_source = r#"{"bookSourceUrl":"http://x.com","searchUrl":"@js:java.ajax(...)"}"#;
         let js = BookSource::from_json(js_source).unwrap();
-        assert!(js.needs_dart_js_for_search());
+        assert!(!js.needs_dart_js_for_search());
         assert!(!fixture_source().needs_dart_js_for_search());
     }
 
