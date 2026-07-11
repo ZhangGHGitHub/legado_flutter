@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use once_cell::sync::Lazy;
+use tokio::time::sleep;
 
+#[derive(Clone)]
 struct RateConfig {
     interval_ms: u64,
     count: u32,
@@ -55,10 +56,10 @@ impl RateLimiter {
         }
     }
 
-    fn wait_if_needed(&mut self, source_url: &str) -> Result<(), String> {
+    fn wait_ms(&mut self, source_url: &str) -> u64 {
         let config = match self.configs.get(source_url) {
             Some(c) => c.clone(),
-            None => return Ok(()),
+            None => return 0,
         };
 
         let now = now_ms();
@@ -68,8 +69,7 @@ impl RateLimiter {
             if let Some(&last) = times.last() {
                 let elapsed = now.saturating_sub(last);
                 if elapsed < config.interval_ms {
-                    let wait = config.interval_ms - elapsed;
-                    thread::sleep(Duration::from_millis(wait));
+                    return config.interval_ms - elapsed;
                 }
             }
         } else if config.count > 0 && config.window_ms > 0 {
@@ -79,18 +79,21 @@ impl RateLimiter {
                 if let Some(&oldest) = times.first() {
                     let wait = oldest + config.window_ms - now + 1;
                     if wait > 0 {
-                        thread::sleep(Duration::from_millis(wait));
+                        return wait;
                     }
                 }
             }
         }
+        0
+    }
 
+    fn record_request(&mut self, source_url: &str) {
+        let times = self.request_times.entry(source_url.to_string()).or_default();
         times.push(now_ms());
         if times.len() > 100 {
             let cutoff = now_ms().saturating_sub(60_000);
             times.retain(|&t| t >= cutoff);
         }
-        Ok(())
     }
 }
 
@@ -104,11 +107,16 @@ pub fn configure(source_url: &str, config_str: &str) {
         .configure(source_url, config_str);
 }
 
-pub fn wait_if_needed(source_url: &str) -> Result<(), String> {
-    RATE_LIMITER
-        .lock()
-        .unwrap()
-        .wait_if_needed(source_url)
+pub async fn wait_if_needed(source_url: &str) -> Result<(), String> {
+    let wait_ms = {
+        let mut limiter = RATE_LIMITER.lock().unwrap();
+        limiter.wait_ms(source_url)
+    };
+    if wait_ms > 0 {
+        sleep(Duration::from_millis(wait_ms)).await;
+    }
+    RATE_LIMITER.lock().unwrap().record_request(source_url);
+    Ok(())
 }
 
 fn now_ms() -> u64 {

@@ -39,7 +39,7 @@ class BookSourceService {
         EngineConfig.useRust &&
         LegadoEngineBridge.isAvailable) {
       try {
-        final results = LegadoEngineBridge.search(source, keyword);
+        final results = await LegadoEngineBridge.search(source, keyword);
         if (results.isNotEmpty) return results;
         debugPrint('  ⚠ Rust 搜索无结果，回退 Dart');
       } catch (e) {
@@ -59,7 +59,7 @@ class BookSourceService {
         EngineConfig.useRust &&
         LegadoEngineBridge.isAvailable) {
       try {
-        final chapters = LegadoEngineBridge.getToc(source, book);
+        final chapters = await LegadoEngineBridge.getToc(source, book);
         if (chapters.isNotEmpty) {
           debugPrint('  ✓ Rust 目录: ${chapters.length} 章');
           return chapters;
@@ -81,7 +81,7 @@ class BookSourceService {
         EngineConfig.useRust &&
         LegadoEngineBridge.isAvailable) {
       try {
-        final content = LegadoEngineBridge.getContent(source, url);
+        final content = await LegadoEngineBridge.getContent(source, url);
         if (content.isNotEmpty && !content.startsWith('（此章节暂无内容）')) {
           debugPrint('  ✓ Rust 正文: ${content.length} 字符');
           return content;
@@ -92,6 +92,47 @@ class BookSourceService {
       }
     }
     return _webBook.getContent(url: url, source: source);
+  }
+
+  /// 发现页（Rust 优先，JS 书源回退 Dart）
+  Future<List<Map<String, String>>> explore(
+    BookSource source,
+    String exploreUrl, {
+    int page = 1,
+  }) async {
+    if (!needsDartEngine(source) &&
+        EngineConfig.useRust &&
+        LegadoEngineBridge.isAvailable) {
+      try {
+        final results =
+            await LegadoEngineBridge.explore(source, exploreUrl, page: page);
+        if (results.isNotEmpty) return results;
+      } catch (e) {
+        debugPrint('  ⚠ Rust 发现页失败，回退 Dart: $e');
+      }
+    }
+    // Dart 发现页尚未实现，返回空
+    return [];
+  }
+
+  /// 书籍详情（Rust 优先，JS 书源回退 Dart）
+  Future<Map<String, String>> getBookInfo(
+    BookSource source,
+    String bookUrl,
+  ) async {
+    if (!needsDartEngine(source) &&
+        EngineConfig.useRust &&
+        LegadoEngineBridge.isAvailable) {
+      try {
+        final info = await LegadoEngineBridge.getBookInfo(source, bookUrl);
+        if (info['name']?.isNotEmpty == true) {
+          return info;
+        }
+      } catch (e) {
+        debugPrint('  ⚠ Rust 书籍详情失败: $e');
+      }
+    }
+    return {};
   }
 
   /// 搜索结果转 Book 对象

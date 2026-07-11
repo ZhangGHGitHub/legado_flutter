@@ -245,22 +245,21 @@ lib/help/content_processor.dart ← ContentProcessor 替换净化
 
 `BookProvider` 委托 `ReadBook` 加载正文；`ReplaceProvider` 同步规则到 `ContentProcessor`。
 
-### Phase C — Rust 按 WebBook 接口拆分
+### Phase C — Rust WebBook 接口（当前 ✅ v0.3.0）
 
 ```rust
-search() / explore() / get_book_info() / get_toc() / get_content()
+search() / explore() / get_book_info() / get_toc() / get_content()  // async FRB
 ```
 
-### Phase C — Rust 扩展 get_toc / get_content（当前 ✅）
-
 ```
-rust/legado_engine/src/api/toc.rs       ← WebBook.getChapterListAwait
-rust/legado_engine/src/api/content.rs ← WebBook.getContentAwait
-rust/legado_engine/src/rule/html_toc.rs / html_content.rs
-rust/legado_engine/src/rule/json_toc.rs / json_content.rs
+rust/legado_engine/src/api/
+  search.rs / explore.rs / book_info.rs / toc.rs / content.rs
+rust/legado_engine/src/rule/
+  html_search.rs / html_explore.rs / html_book_info.rs / html_toc.rs / html_content.rs
 ```
 
-Dart 桥接：`LegadoEngineBridge.getToc()` / `getContent()`，含 JS 书源自动回退 Dart。
+- HTTP：`reqwest` async + `tokio`（非阻塞 UI）
+- JS 书源（`<js>` / `@js:`）：仍回退 Dart，Rust JS 引擎待 Phase C.2
 
 ### Phase D — Jingshiro 增强
 

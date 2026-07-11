@@ -5,7 +5,7 @@ use crate::rule;
 use std::collections::HashSet;
 
 /// 获取目录
-pub fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterItem>, String> {
+pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterItem>, String> {
     let source = BookSource::from_json(source_json)?;
     if source.needs_dart_js() {
         return Err("书源含 JS 规则，需 Dart 引擎".to_string());
@@ -40,14 +40,15 @@ pub fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterItem>, St
         }
         visited_pages.insert(current_url.clone());
 
-        http::rate_limit::wait_if_needed(&source.book_source_url)?;
+        http::rate_limit::wait_if_needed(&source.book_source_url).await?;
         let body = http::client::fetch_with_source(
             &current_url,
             "GET",
             None,
             "UTF-8",
             &source.raw_json,
-        )?;
+        )
+        .await?;
 
         let batch = if let Ok(data) = serde_json::from_str::<serde_json::Value>(&body) {
             if source.is_json_api() {

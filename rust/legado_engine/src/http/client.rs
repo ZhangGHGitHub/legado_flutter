@@ -2,8 +2,8 @@ use super::charset;
 use super::cookie::CookieJar;
 use crate::model::book_source::custom_headers;
 use once_cell::sync::Lazy;
-use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, ACCEPT_LANGUAGE, USER_AGENT};
+use reqwest::Client;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -31,8 +31,12 @@ pub struct RequestConfig {
     pub charset: String,
 }
 
-/// 解析 Legado ruleSearchUrl 格式
+/// 解析 Legado ruleSearchUrl / exploreUrl 格式
 pub fn parse_url_config(raw_url: &str, keyword: &str) -> RequestConfig {
+    parse_url_config_with_page(raw_url, keyword, 1)
+}
+
+pub fn parse_url_config_with_page(raw_url: &str, keyword: &str, page: i32) -> RequestConfig {
     let raw = raw_url.trim();
     let mut url_part = String::new();
     let mut json_part: Option<String> = None;
@@ -71,15 +75,16 @@ pub fn parse_url_config(raw_url: &str, keyword: &str) -> RequestConfig {
     }
 
     let encoded_key = urlencoding_encode(keyword);
+    let page_str = page.to_string();
     url_part = url_part
         .replace("{{key}}", &encoded_key)
-        .replace("{{page}}", "1")
+        .replace("{{page}}", &page_str)
         .replace("{{limit}}", "20");
 
     if let Some(ref mut body) = body_str {
         *body = body
             .replace("{{key}}", keyword)
-            .replace("{{page}}", "1")
+            .replace("{{page}}", &page_str)
             .replace("{{limit}}", "20");
     }
 
@@ -104,7 +109,7 @@ pub fn parse_url_config(raw_url: &str, keyword: &str) -> RequestConfig {
 }
 
 /// 发送 HTTP 请求并返回解码文本
-pub fn fetch_text(
+pub async fn fetch_text(
     url: &str,
     method: &str,
     body: Option<&str>,
@@ -112,17 +117,7 @@ pub fn fetch_text(
     referer: Option<&str>,
     _source_key: &str,
 ) -> Result<String, String> {
-    let mut headers = HeaderMap::new();
-    headers.insert(USER_AGENT, HeaderValue::from_static(USER_AGENT_STR));
-    headers.insert(
-        ACCEPT,
-        HeaderValue::from_static("application/json, text/plain, */*"),
-    );
-    headers.insert(
-        ACCEPT_LANGUAGE,
-        HeaderValue::from_static("zh-CN,zh;q=0.9,en;q=0.8"),
-    );
-
+    let mut headers = default_headers();
     if let Some(r) = referer {
         if let Ok(v) = HeaderValue::from_str(r) {
             headers.insert("Referer", v);
@@ -136,45 +131,17 @@ pub fn fetch_text(
         }
     }
 
-    let response = if method == "POST" {
-        let post_body = body.unwrap_or("");
-        let encoded = charset::encode_form_body(post_body, charset);
-        headers.insert(
-            "Content-Type",
-            HeaderValue::from_static("application/x-www-form-urlencoded"),
-        );
-        CLIENT
-            .post(url)
-            .headers(headers)
-            .body(encoded)
-            .send()
-            .map_err(|e| format!("POST 请求失败: {e}"))?
-    } else {
-        CLIENT
-            .get(url)
-            .headers(headers)
-            .send()
-            .map_err(|e| format!("GET 请求失败: {e}"))?
-    };
-
-    let set_cookies: Vec<String> = response
-        .headers()
-        .get_all("set-cookie")
-        .iter()
-        .filter_map(|v| v.to_str().ok().map(|s| s.to_string()))
-        .collect();
-    if !set_cookies.is_empty() {
-        COOKIE_JAR.lock().unwrap().save_from_headers(url, &set_cookies);
-    }
-
+    let response = send_request(url, method, body, charset, headers).await?;
+    save_cookies(url, &response);
     let bytes = response
         .bytes()
+        .await
         .map_err(|e| format!("读取响应失败: {e}"))?;
     charset::decode_bytes(&bytes, charset)
 }
 
 /// 带书源自定义头发送请求
-pub fn fetch_with_source(
+pub async fn fetch_with_source(
     url: &str,
     method: &str,
     body: Option<&str>,
@@ -188,16 +155,7 @@ pub fn fetch_with_source(
         .and_then(|v| v.as_str())
         .unwrap_or(url);
 
-    let mut headers = HeaderMap::new();
-    headers.insert(USER_AGENT, HeaderValue::from_static(USER_AGENT_STR));
-    headers.insert(
-        ACCEPT,
-        HeaderValue::from_static("application/json, text/plain, */*"),
-    );
-    headers.insert(
-        ACCEPT_LANGUAGE,
-        HeaderValue::from_static("zh-CN,zh;q=0.9,en;q=0.8"),
-    );
+    let mut headers = default_headers();
     if let Ok(v) = HeaderValue::from_str(source_url) {
         headers.insert("Referer", v);
     }
@@ -218,7 +176,37 @@ pub fn fetch_with_source(
         }
     }
 
-    let response = if method == "POST" {
+    let response = send_request(url, method, body, charset, headers).await?;
+    save_cookies(url, &response);
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("读取响应失败: {e}"))?;
+    charset::decode_bytes(&bytes, charset)
+}
+
+fn default_headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(USER_AGENT, HeaderValue::from_static(USER_AGENT_STR));
+    headers.insert(
+        ACCEPT,
+        HeaderValue::from_static("application/json, text/plain, */*"),
+    );
+    headers.insert(
+        ACCEPT_LANGUAGE,
+        HeaderValue::from_static("zh-CN,zh;q=0.9,en;q=0.8"),
+    );
+    headers
+}
+
+async fn send_request(
+    url: &str,
+    method: &str,
+    body: Option<&str>,
+    charset: &str,
+    mut headers: HeaderMap,
+) -> Result<reqwest::Response, String> {
+    if method == "POST" {
         let post_body = body.unwrap_or("");
         let encoded = charset::encode_form_body(post_body, charset);
         headers.insert(
@@ -230,15 +218,19 @@ pub fn fetch_with_source(
             .headers(headers)
             .body(encoded)
             .send()
-            .map_err(|e| format!("POST 请求失败: {e}"))?
+            .await
+            .map_err(|e| format!("POST 请求失败: {e}"))
     } else {
         CLIENT
             .get(url)
             .headers(headers)
             .send()
-            .map_err(|e| format!("GET 请求失败: {e}"))?
-    };
+            .await
+            .map_err(|e| format!("GET 请求失败: {e}"))
+    }
+}
 
+fn save_cookies(url: &str, response: &reqwest::Response) {
     let set_cookies: Vec<String> = response
         .headers()
         .get_all("set-cookie")
@@ -246,13 +238,11 @@ pub fn fetch_with_source(
         .filter_map(|v| v.to_str().ok().map(|s| s.to_string()))
         .collect();
     if !set_cookies.is_empty() {
-        COOKIE_JAR.lock().unwrap().save_from_headers(url, &set_cookies);
+        COOKIE_JAR
+            .lock()
+            .unwrap()
+            .save_from_headers(url, &set_cookies);
     }
-
-    let bytes = response
-        .bytes()
-        .map_err(|e| format!("读取响应失败: {e}"))?;
-    charset::decode_bytes(&bytes, charset)
 }
 
 pub fn resolve_url(url: &str, base_url: &str) -> String {

@@ -4,7 +4,7 @@ use crate::rule;
 use std::collections::HashSet;
 
 /// 获取章节正文
-pub fn get_content(source_json: &str, chapter_url: &str) -> Result<String, String> {
+pub async fn get_content(source_json: &str, chapter_url: &str) -> Result<String, String> {
     let source = BookSource::from_json(source_json)?;
     if source.needs_dart_js() {
         return Err("书源含 JS 规则，需 Dart 引擎".to_string());
@@ -25,14 +25,15 @@ pub fn get_content(source_json: &str, chapter_url: &str) -> Result<String, Strin
             break;
         }
 
-        http::rate_limit::wait_if_needed(&source.book_source_url)?;
+        http::rate_limit::wait_if_needed(&source.book_source_url).await?;
         let body = http::client::fetch_with_source(
             &current_url,
             "GET",
             None,
             "UTF-8",
             &source.raw_json,
-        )?;
+        )
+        .await?;
 
         let chunk = if let Ok(data) = serde_json::from_str::<serde_json::Value>(&body) {
             if source.is_json_api() {

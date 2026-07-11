@@ -4,4 +4,7 @@ mod http;
 mod model;
 mod rule;
 
+#[cfg(test)]
+mod tests;
+
 pub use api::*;

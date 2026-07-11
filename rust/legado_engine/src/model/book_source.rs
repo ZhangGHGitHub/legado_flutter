@@ -19,6 +19,21 @@ pub struct BookSource {
     pub rule_toc_chapter_url: String,
     pub rule_toc_next_toc_url: String,
     pub rule_book_info_toc_url: String,
+    pub rule_book_info_name: String,
+    pub rule_book_info_author: String,
+    pub rule_book_info_cover_url: String,
+    pub rule_book_info_intro: String,
+    pub rule_book_info_kind: String,
+    pub rule_book_info_last_chapter: String,
+    pub rule_explore_url: String,
+    pub rule_explore_list: String,
+    pub rule_explore_name: String,
+    pub rule_explore_author: String,
+    pub rule_explore_cover_url: String,
+    pub rule_explore_book_url: String,
+    pub rule_explore_kind: String,
+    pub rule_explore_note: String,
+    pub rule_explore_intro: String,
     pub rule_content: String,
     pub rule_content_next_url: String,
     pub rule_content_replace_regex: Option<String>,
@@ -27,6 +42,8 @@ pub struct BookSource {
     pub rule_search_obj: Option<Value>,
     pub rule_toc_obj: Option<Value>,
     pub rule_content_obj: Option<Value>,
+    pub rule_book_info_obj: Option<Value>,
+    pub rule_explore_obj: Option<Value>,
 }
 
 impl BookSource {
@@ -51,6 +68,8 @@ impl BookSource {
         let rule_search_obj = map.get("ruleSearch").cloned();
         let rule_toc_obj = map.get("ruleToc").cloned();
         let rule_content_obj = map.get("ruleContent").cloned();
+        let rule_book_info_obj = map.get("ruleBookInfo").cloned();
+        let rule_explore_obj = map.get("ruleExplore").cloned();
 
         let rule_content_replace_regex = rule_content_obj
             .as_ref()
@@ -81,6 +100,28 @@ impl BookSource {
             rule_toc_chapter_url: nested("ruleToc", "chapterUrl", "ruleChapterUrl"),
             rule_toc_next_toc_url: nested("ruleToc", "nextTocUrl", "rulePageNext"),
             rule_book_info_toc_url: nested("ruleBookInfo", "tocUrl", "ruleBookTocUrl"),
+            rule_book_info_name: nested("ruleBookInfo", "name", "ruleBookName"),
+            rule_book_info_author: nested("ruleBookInfo", "author", "ruleBookAuthor"),
+            rule_book_info_cover_url: nested("ruleBookInfo", "coverUrl", "ruleBookCoverUrl"),
+            rule_book_info_intro: nested("ruleBookInfo", "intro", "ruleBookNote"),
+            rule_book_info_kind: nested("ruleBookInfo", "kind", "ruleBookKind"),
+            rule_book_info_last_chapter: nested("ruleBookInfo", "lastChapter", "ruleBookLastChapter"),
+            rule_explore_url: {
+                let a = str_field(map, "exploreUrl");
+                if a.is_empty() {
+                    str_field(map, "ruleExploreUrl")
+                } else {
+                    a
+                }
+            },
+            rule_explore_list: nested("ruleExplore", "bookList", "ruleExploreList"),
+            rule_explore_name: nested("ruleExplore", "name", "ruleExploreName"),
+            rule_explore_author: nested("ruleExplore", "author", "ruleExploreAuthor"),
+            rule_explore_cover_url: nested("ruleExplore", "coverUrl", "ruleExploreCoverUrl"),
+            rule_explore_book_url: nested("ruleExplore", "bookUrl", "ruleExploreBookUrl"),
+            rule_explore_kind: nested("ruleExplore", "kind", "ruleExploreKind"),
+            rule_explore_note: nested("ruleExplore", "note", "ruleExploreNote"),
+            rule_explore_intro: nested("ruleExplore", "intro", "ruleExploreIntro"),
             rule_content: nested("ruleContent", "content", "ruleContent"),
             rule_content_next_url: nested("ruleContent", "nextContentUrl", "rulePageNext"),
             rule_content_replace_regex,
@@ -92,6 +133,8 @@ impl BookSource {
             rule_search_obj,
             rule_toc_obj,
             rule_content_obj,
+            rule_book_info_obj,
+            rule_explore_obj,
         })
     }
 

@@ -6,7 +6,7 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
 
 /// 初始化 Rust 书源引擎
 void initEngine() => LegadoEngine.instance.api.crateApiInitEngine();
@@ -15,7 +15,7 @@ void initEngine() => LegadoEngine.instance.api.crateApiInitEngine();
 String engineVersion() => LegadoEngine.instance.api.crateApiEngineVersion();
 
 /// 搜索书籍
-List<SearchItem> search({
+Future<List<SearchItem>> search({
   required String sourceJson,
   required String keyword,
 }) => LegadoEngine.instance.api.crateApiSearch(
@@ -23,8 +23,28 @@ List<SearchItem> search({
   keyword: keyword,
 );
 
+/// 发现页 / 分类页
+Future<List<SearchItem>> explore({
+  required String sourceJson,
+  required String exploreUrl,
+  required int page,
+}) => LegadoEngine.instance.api.crateApiExplore(
+  sourceJson: sourceJson,
+  exploreUrl: exploreUrl,
+  page: page,
+);
+
+/// 获取书籍详情
+Future<BookInfoItem> getBookInfo({
+  required String sourceJson,
+  required String bookUrl,
+}) => LegadoEngine.instance.api.crateApiGetBookInfo(
+  sourceJson: sourceJson,
+  bookUrl: bookUrl,
+);
+
 /// 获取目录
-List<ChapterItem> getToc({
+Future<List<ChapterItem>> getToc({
   required String sourceJson,
   required String bookUrl,
 }) => LegadoEngine.instance.api.crateApiGetToc(
@@ -33,14 +53,16 @@ List<ChapterItem> getToc({
 );
 
 /// 获取章节正文
-String getContent({required String sourceJson, required String chapterUrl}) =>
-    LegadoEngine.instance.api.crateApiGetContent(
-      sourceJson: sourceJson,
-      chapterUrl: chapterUrl,
-    );
+Future<String> getContent({
+  required String sourceJson,
+  required String chapterUrl,
+}) => LegadoEngine.instance.api.crateApiGetContent(
+  sourceJson: sourceJson,
+  chapterUrl: chapterUrl,
+);
 
 /// HTTP 请求并返回解码后的文本（调试用）
-String httpFetch({
+Future<String> httpFetch({
   required String url,
   required String method,
   String? body,
@@ -57,6 +79,50 @@ String httpFetch({
   sourceUrl: sourceUrl,
   concurrentRate: concurrentRate,
 );
+
+/// 书籍详情
+class BookInfoItem {
+  final String name;
+  final String author;
+  final String coverUrl;
+  final String intro;
+  final String kind;
+  final String lastChapter;
+  final String tocUrl;
+
+  const BookInfoItem({
+    required this.name,
+    required this.author,
+    required this.coverUrl,
+    required this.intro,
+    required this.kind,
+    required this.lastChapter,
+    required this.tocUrl,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      author.hashCode ^
+      coverUrl.hashCode ^
+      intro.hashCode ^
+      kind.hashCode ^
+      lastChapter.hashCode ^
+      tocUrl.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BookInfoItem &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          author == other.author &&
+          coverUrl == other.coverUrl &&
+          intro == other.intro &&
+          kind == other.kind &&
+          lastChapter == other.lastChapter &&
+          tocUrl == other.tocUrl;
+}
 
 /// 目录章节条目
 class ChapterItem {

@@ -1,6 +1,8 @@
 pub mod css;
 pub mod engine;
+pub mod html_book_info;
 pub mod html_content;
+pub mod html_explore;
 pub mod html_search;
 pub mod html_toc;
 pub mod json_content;

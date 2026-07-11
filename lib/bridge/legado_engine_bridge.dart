@@ -44,10 +44,13 @@ class LegadoEngineBridge {
           ? source.rawSourceJson
           : jsonEncode(source.toJson());
 
-  static List<Map<String, String>> search(BookSource source, String keyword) {
+  static Future<List<Map<String, String>>> search(
+    BookSource source,
+    String keyword,
+  ) async {
     if (!_available) throw StateError('Rust engine not available');
 
-    final items = rust_api.search(
+    final items = await rust_api.search(
       sourceJson: _sourceJson(source),
       keyword: keyword,
     );
@@ -65,10 +68,57 @@ class LegadoEngineBridge {
         .toList();
   }
 
-  static List<Chapter> getToc(BookSource source, Book book) {
+  static Future<List<Map<String, String>>> explore(
+    BookSource source,
+    String exploreUrl, {
+    int page = 1,
+  }) async {
     if (!_available) throw StateError('Rust engine not available');
 
-    final items = rust_api.getToc(
+    final items = await rust_api.explore(
+      sourceJson: _sourceJson(source),
+      exploreUrl: exploreUrl,
+      page: page,
+    );
+    return items
+        .map(
+          (item) => {
+            'name': item.name,
+            'author': item.author,
+            'url': item.bookUrl,
+            'coverUrl': item.coverUrl,
+            'kind': item.kind,
+            'note': item.note,
+          },
+        )
+        .toList();
+  }
+
+  static Future<Map<String, String>> getBookInfo(
+    BookSource source,
+    String bookUrl,
+  ) async {
+    if (!_available) throw StateError('Rust engine not available');
+
+    final info = await rust_api.getBookInfo(
+      sourceJson: _sourceJson(source),
+      bookUrl: bookUrl,
+    );
+    return {
+      'name': info.name,
+      'author': info.author,
+      'coverUrl': info.coverUrl,
+      'intro': info.intro,
+      'kind': info.kind,
+      'lastChapter': info.lastChapter,
+      'tocUrl': info.tocUrl,
+    };
+  }
+
+  static Future<List<Chapter>> getToc(BookSource source, Book book) async {
+    if (!_available) throw StateError('Rust engine not available');
+
+    final items = await rust_api.getToc(
       sourceJson: _sourceJson(source),
       bookUrl: book.sourceUrl,
     );
@@ -85,7 +135,10 @@ class LegadoEngineBridge {
     }).toList();
   }
 
-  static String getContent(BookSource source, String chapterUrl) {
+  static Future<String> getContent(
+    BookSource source,
+    String chapterUrl,
+  ) async {
     if (!_available) throw StateError('Rust engine not available');
 
     return rust_api.getContent(

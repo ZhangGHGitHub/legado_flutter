@@ -13,7 +13,7 @@
 |------|---------|
 | **Flutter** | 3.x + Dart 3.11.5，基础 UI 完成（书架/搜索/书源管理/阅读器/设置） |
 | **Dart 引擎分层** | Phase A ✅ `lib/engine/` + Phase B ✅ ReadBook/BookHelp/ContentProcessor |
-| **Rust 引擎** | v0.2.0：search + get_toc + get_content（无 JS 书源），FRB 已 codegen |
+| **Rust 引擎** | v0.3.0：search/explore/get_book_info/get_toc/get_content (async FRB)，JS 书源仍回退 Dart |
 | **Dart 规则引擎** | CSS / XPath（基础）/ JSONPath / QuickJS / Legado 规则 ✅ |
 | **平台支持** | Android ✅ / Windows ✅ / Web（配置但未测试）/ iOS ❌ / macOS ❌ / Linux ❌ |
 | **Jingshiro 功能** | AI 助手 / 阅读记录 / 想法笔记 / 阅读小票 / WebDAV / Web API / 主题导出 ❌ |
