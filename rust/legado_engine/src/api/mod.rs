@@ -21,7 +21,7 @@ pub fn init_engine() -> Result<(), String> {
 /// 引擎版本号
 #[frb(sync)]
 pub fn engine_version() -> String {
-    "0.3.0".to_string()
+    "0.3.1".to_string()
 }
 
 /// 搜索结果条目

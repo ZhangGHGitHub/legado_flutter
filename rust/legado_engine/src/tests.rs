@@ -106,6 +106,7 @@ mod engine_tests {
         let source = fixture_source();
         let info = html_book_info::parse_html_book_info(BOOK_INFO_HTML, &source).unwrap();
         assert_eq!(info.name, "斗破苍穹");
+        // Legado 链式规则由 legado_rule 模块单独测试
         assert_eq!(info.author, "作者：天蚕土豆");
         assert_eq!(info.intro, "这是一个测试简介。");
         assert_eq!(info.toc_url, "/book/1/toc");
@@ -144,5 +145,22 @@ mod engine_tests {
             3,
         );
         assert_eq!(cfg.url, "/sort/1_3/");
+    }
+
+    #[test]
+    fn scoped_js_detection_for_bishu_toc() {
+        let raw = include_str!("../../../assets/builtin_sources/7565.json");
+        let json = raw.trim_start_matches('\u{feff}');
+        let source = if json.starts_with('[') {
+            let arr: Vec<serde_json::Value> = serde_json::from_str(json).unwrap();
+            BookSource::from_json(&arr[0].to_string()).unwrap()
+        } else {
+            BookSource::from_json(json).unwrap()
+        };
+        assert!(source.needs_dart_js());
+        assert!(source.needs_dart_js_for_search());
+        assert!(source.needs_dart_js_for_content());
+        assert!(!source.needs_dart_js_for_toc());
+        assert!(!source.needs_dart_js_for_book_info());
     }
 }

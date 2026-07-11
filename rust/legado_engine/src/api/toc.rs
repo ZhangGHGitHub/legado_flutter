@@ -7,7 +7,7 @@ use std::collections::HashSet;
 /// 获取目录
 pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterItem>, String> {
     let source = BookSource::from_json(source_json)?;
-    if source.needs_dart_js() {
+    if source.needs_dart_js_for_toc() {
         return Err("书源含 JS 规则，需 Dart 引擎".to_string());
     }
 

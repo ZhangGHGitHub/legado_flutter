@@ -21,13 +21,49 @@ class BookSourceService {
 
   WebBook get webBook => _webBook;
 
-  /// 书源含 JS 规则时需走 Dart 引擎
-  static bool needsDartEngine(BookSource source) {
-    final raw = source.rawSourceJson;
-    if (raw.contains('<js>') || raw.contains('@js:')) return true;
-    return source.ruleSearchList.contains('<js>') ||
-        source.ruleSearchUrl.contains('<js>') ||
-        source.ruleSearchUrl.contains('@js:');
+    /// 书源含 JS 规则时需走 Dart 引擎
+  /// [operation]: search | toc | content | bookInfo | explore | all
+  static bool needsDartEngine(BookSource source, {String operation = 'all'}) {
+    bool hasJs(String s) => s.contains('<js>') || s.contains('@js:');
+
+    bool sectionHasJs(String key) {
+      final raw = source.rawSourceJson;
+      if (raw.isEmpty) return false;
+      try {
+        final obj = jsonDecode(raw) as Map<String, dynamic>;
+        final section = obj[key];
+        if (section == null) return false;
+        final text =
+            section is String ? section : const JsonEncoder().convert(section);
+        return hasJs(text);
+      } catch (_) {
+        return false;
+      }
+    }
+
+    switch (operation) {
+      case 'search':
+        return sectionHasJs('ruleSearch') ||
+            hasJs(source.ruleSearchUrl) ||
+            hasJs(source.ruleSearchList);
+      case 'toc':
+        return sectionHasJs('ruleToc') ||
+            hasJs(source.ruleChapterList) ||
+            hasJs(source.ruleChapterName) ||
+            hasJs(source.ruleChapterUrl);
+      case 'content':
+        return sectionHasJs('ruleContent') ||
+            hasJs(source.ruleContent) ||
+            hasJs(source.rulePageNext);
+      case 'bookInfo':
+        return sectionHasJs('ruleBookInfo') ||
+            hasJs(source.ruleBookName) ||
+            hasJs(source.ruleBookAuthor);
+      case 'explore':
+        return sectionHasJs('ruleExplore');
+      default:
+        return hasJs(source.rawSourceJson);
+    }
   }
 
   /// 搜索书籍（Rust 引擎优先，失败或无结果回退 Dart/WebBook）
@@ -35,7 +71,7 @@ class BookSourceService {
     BookSource source,
     String keyword,
   ) async {
-    if (!needsDartEngine(source) &&
+    if (!needsDartEngine(source, operation: 'search') &&
         EngineConfig.useRust &&
         LegadoEngineBridge.isAvailable) {
       try {
@@ -55,7 +91,7 @@ class BookSourceService {
     Book book, {
     required BookSource source,
   }) async {
-    if (!needsDartEngine(source) &&
+    if (!needsDartEngine(source, operation: 'toc') &&
         EngineConfig.useRust &&
         LegadoEngineBridge.isAvailable) {
       try {
@@ -77,7 +113,7 @@ class BookSourceService {
     String url, {
     required BookSource source,
   }) async {
-    if (!needsDartEngine(source) &&
+    if (!needsDartEngine(source, operation: 'content') &&
         EngineConfig.useRust &&
         LegadoEngineBridge.isAvailable) {
       try {
@@ -100,7 +136,7 @@ class BookSourceService {
     String exploreUrl, {
     int page = 1,
   }) async {
-    if (!needsDartEngine(source) &&
+    if (!needsDartEngine(source, operation: 'explore') &&
         EngineConfig.useRust &&
         LegadoEngineBridge.isAvailable) {
       try {
@@ -120,7 +156,7 @@ class BookSourceService {
     BookSource source,
     String bookUrl,
   ) async {
-    if (!needsDartEngine(source) &&
+    if (!needsDartEngine(source, operation: 'bookInfo') &&
         EngineConfig.useRust &&
         LegadoEngineBridge.isAvailable) {
       try {

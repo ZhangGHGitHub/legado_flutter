@@ -1,5 +1,5 @@
 use crate::model::book_source::BookSource;
-use crate::rule::engine;
+use crate::rule::{engine, legado_rule};
 use regex::Regex;
 use scraper::{Html, Selector};
 
@@ -12,7 +12,15 @@ pub fn parse_html_content(html: &str, source: &BookSource) -> Result<String, Str
 
     let rule = source.rule_content.trim();
     let mut content = if !rule.is_empty() {
-        extract_content_by_rule(&document, &body, rule)
+        if rule.contains("<js>") {
+            return Ok(String::new());
+        }
+        let legado = legado_rule::extract_text(&body, rule);
+        if !legado.is_empty() || legado_rule::is_legado_chain_rule(rule) {
+            legado
+        } else {
+            extract_content_by_rule(&document, &body, rule)
+        }
     } else {
         smart_extract_content(&document)
     };

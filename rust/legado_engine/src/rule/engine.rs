@@ -1,4 +1,5 @@
 use super::css;
+use super::legado_rule;
 use scraper::{ElementRef, Html, Selector};
 
 /// 从 HTML 元素按规则提取文本
@@ -39,6 +40,12 @@ pub fn extract_text(element: &ElementRef<'_>, rule: &str) -> String {
     if let Some(expr) = processed.strip_prefix("@CSS:") {
         return css::extract_text(element, expr.trim());
     }
+
+    let legado = legado_rule::extract_text(element, &processed);
+    if !legado.is_empty() || legado_rule::is_legado_chain_rule(&processed) {
+        return legado;
+    }
+
     if processed.starts_with(':') {
         let expr = processed[1..].trim();
         return expr
@@ -75,6 +82,11 @@ pub fn extract_attr(element: &ElementRef<'_>, rule: &str, attr: &str) -> String 
 
     if let Some(expr) = processed.strip_prefix("@css:") {
         return css::extract_attr(element, expr.trim(), attr);
+    }
+
+    let legado = legado_rule::extract_attr(element, &processed, attr);
+    if !legado.is_empty() || legado_rule::is_legado_chain_rule(&processed) {
+        return legado;
     }
 
     css::extract_attr(element, &processed, attr)

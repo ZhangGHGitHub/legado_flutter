@@ -32,7 +32,15 @@ pub fn parse_html_toc(html: &str, source: &BookSource) -> Result<Vec<HtmlChapter
     let mut chapters = Vec::new();
     for item in items {
         let mut title = engine::extract_text(&item, &source.rule_toc_chapter_name);
+        let name_rule = source.rule_toc_chapter_name.trim();
+        if title.is_empty() && (name_rule == "text" || name_rule.is_empty()) {
+            title = item.text().collect::<String>().trim().to_string();
+        }
         let mut url = engine::extract_attr(&item, &source.rule_toc_chapter_url, "href");
+        let url_rule = source.rule_toc_chapter_url.trim();
+        if url.is_empty() && (url_rule == "href" || url_rule.is_empty()) {
+            url = item.value().attr("href").unwrap_or("").to_string();
+        }
         if url.is_empty() {
             url = engine::extract_text(&item, &source.rule_toc_chapter_url);
         }

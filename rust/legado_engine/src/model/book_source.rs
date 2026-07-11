@@ -158,8 +158,85 @@ impl BookSource {
     }
 
     pub fn needs_dart_js(&self) -> bool {
-        self.raw_json.contains("<js>") || self.raw_json.contains("@js:")
+        field_needs_js(&self.raw_json)
     }
+
+    pub fn needs_dart_js_for_search(&self) -> bool {
+        json_needs_js(&self.rule_search_obj)
+            || any_field_needs_js(&[
+                &self.rule_search_url,
+                &self.rule_search_list,
+                &self.rule_search_name,
+                &self.rule_search_author,
+                &self.rule_search_book_url,
+            ])
+    }
+
+    pub fn needs_dart_js_for_toc(&self) -> bool {
+        json_needs_js(&self.rule_toc_obj)
+            || any_field_needs_js(&[
+                &self.rule_toc_chapter_list,
+                &self.rule_toc_chapter_name,
+                &self.rule_toc_chapter_url,
+                &self.rule_toc_next_toc_url,
+                &self.rule_book_info_toc_url,
+            ])
+    }
+
+    pub fn needs_dart_js_for_content(&self) -> bool {
+        json_needs_js(&self.rule_content_obj)
+            || any_field_needs_js(&[
+                &self.rule_content,
+                &self.rule_content_next_url,
+            ])
+            || self
+                .rule_content_replace_regex
+                .as_deref()
+                .map(field_needs_js)
+                .unwrap_or(false)
+    }
+
+    pub fn needs_dart_js_for_book_info(&self) -> bool {
+        json_needs_js(&self.rule_book_info_obj)
+            || any_field_needs_js(&[
+                &self.rule_book_info_name,
+                &self.rule_book_info_author,
+                &self.rule_book_info_cover_url,
+                &self.rule_book_info_intro,
+                &self.rule_book_info_kind,
+                &self.rule_book_info_last_chapter,
+                &self.rule_book_info_toc_url,
+            ])
+    }
+
+    pub fn needs_dart_js_for_explore(&self) -> bool {
+        json_needs_js(&self.rule_explore_obj)
+            || any_field_needs_js(&[
+                &self.rule_explore_url,
+                &self.rule_explore_list,
+                &self.rule_explore_name,
+                &self.rule_explore_book_url,
+            ])
+    }
+}
+
+/// 是否含 JS 规则片段
+pub fn field_needs_js(s: &str) -> bool {
+    s.contains("<js>") || s.contains("@js:")
+}
+
+fn json_needs_js(value: &Option<Value>) -> bool {
+    value
+        .as_ref()
+        .map(|v| {
+            let text = v.to_string();
+            field_needs_js(&text)
+        })
+        .unwrap_or(false)
+}
+
+fn any_field_needs_js(fields: &[&str]) -> bool {
+    fields.iter().any(|f| field_needs_js(f))
 }
 
 fn str_field(map: &serde_json::Map<String, Value>, key: &str) -> String {

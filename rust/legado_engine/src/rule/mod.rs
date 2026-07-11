@@ -9,3 +9,4 @@ pub mod json_content;
 pub mod json_search;
 pub mod json_toc;
 pub mod json_util;
+pub mod legado_rule;

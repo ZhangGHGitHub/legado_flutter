@@ -6,7 +6,7 @@ use crate::rule;
 /// 执行书源搜索
 pub async fn search(source_json: &str, keyword: &str) -> Result<Vec<SearchItem>, String> {
     let source = BookSource::from_json(source_json)?;
-    if source.needs_dart_js() {
+    if source.needs_dart_js_for_search() {
         return Err("书源含 JS 规则，需 Dart 引擎".to_string());
     }
     if source.rule_search_url.is_empty() {

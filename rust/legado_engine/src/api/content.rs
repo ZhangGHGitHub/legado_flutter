@@ -6,7 +6,7 @@ use std::collections::HashSet;
 /// 获取章节正文
 pub async fn get_content(source_json: &str, chapter_url: &str) -> Result<String, String> {
     let source = BookSource::from_json(source_json)?;
-    if source.needs_dart_js() {
+    if source.needs_dart_js_for_content() {
         return Err("书源含 JS 规则，需 Dart 引擎".to_string());
     }
 

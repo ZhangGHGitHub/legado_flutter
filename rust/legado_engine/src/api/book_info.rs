@@ -6,7 +6,7 @@ use crate::rule;
 /// 获取书籍详情
 pub async fn get_book_info(source_json: &str, book_url: &str) -> Result<BookInfoItem, String> {
     let source = BookSource::from_json(source_json)?;
-    if source.needs_dart_js() {
+    if source.needs_dart_js_for_book_info() {
         return Err("书源含 JS 规则，需 Dart 引擎".to_string());
     }
 

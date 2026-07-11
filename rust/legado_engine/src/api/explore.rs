@@ -10,7 +10,7 @@ pub async fn explore(
     page: i32,
 ) -> Result<Vec<SearchItem>, String> {
     let source = BookSource::from_json(source_json)?;
-    if source.needs_dart_js() {
+    if source.needs_dart_js_for_explore() {
         return Err("书源含 JS 规则，需 Dart 引擎".to_string());
     }
     if explore_url.trim().is_empty() {
