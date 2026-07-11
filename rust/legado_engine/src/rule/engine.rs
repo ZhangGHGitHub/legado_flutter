@@ -108,7 +108,7 @@ pub fn extract_attr(element: &ElementRef<'_>, rule: &str, attr: &str) -> String 
 }
 
 /// 查询匹配规则的元素列表
-pub fn query_all<'a>(html: &'a Html, body: &ElementRef<'a>, rule: &str) -> Vec<ElementRef<'a>> {
+pub fn query_all<'a>(_html: &'a Html, body: &ElementRef<'a>, rule: &str) -> Vec<ElementRef<'a>> {
     if rule.is_empty() {
         return vec![body.clone()];
     }
@@ -126,13 +126,13 @@ pub fn query_all<'a>(html: &'a Html, body: &ElementRef<'a>, rule: &str) -> Vec<E
     }
 
     if let Ok(sel) = Selector::parse(&processed) {
-        return html.select(&sel).collect();
+        return body.select(&sel).collect();
     }
 
-    // 智能兜底
+    // 智能兜底（限定 body）
     for fallback in [".result-item", ".search-item", ".list-item", "li"] {
         if let Ok(sel) = Selector::parse(fallback) {
-            let items: Vec<_> = html.select(&sel).collect();
+            let items: Vec<_> = body.select(&sel).collect();
             if items.len() >= 3 {
                 return items;
             }

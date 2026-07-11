@@ -141,24 +141,30 @@ class AnalyzeRule {
   List<dynamic> getJsonList(String rule, dynamic json) {
     if (rule.isEmpty || json == null) return [];
     var path = rule.trim();
+    var reverse = false;
+    if (path.startsWith('-')) {
+      reverse = true;
+      path = path.substring(1).trim();
+    }
     if (path.startsWith('@Json:') || path.startsWith('@json:')) {
       path = path.substring(path.indexOf(':') + 1).trim();
     }
     final hash = path.indexOf('##');
     if (hash >= 0) path = path.substring(0, hash);
 
-    if (rule.contains('%%')) {
+    if (path.contains('%%')) {
       final merged = <dynamic>[];
-      for (final part in RuleEngine._splitTopLevel(rule, '%%')) {
+      for (final part in RuleEngine._splitTopLevel(path, '%%')) {
         merged.addAll(getJsonList(part.trim(), json));
       }
+      if (reverse) return merged.reversed.toList();
       return merged;
     }
 
     final v = LegadoJsonPath.resolve(json, path);
     if (v == null) return [];
-    if (v is List) return v;
-    return [v];
+    if (v is List) return reverse ? v.reversed.toList() : v;
+    return reverse ? [v] : [v];
   }
 
   /// 解析列表规则 → DOM 元素列表

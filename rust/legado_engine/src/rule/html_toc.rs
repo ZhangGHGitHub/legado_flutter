@@ -1,6 +1,7 @@
 use crate::model::book_source::BookSource;
 use crate::rule::engine;
-use scraper::{Html, Selector};
+use scraper::{ElementRef, Html, Selector};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
 pub struct HtmlChapter {
@@ -24,12 +25,13 @@ pub fn parse_html_toc(html: &str, source: &BookSource) -> Result<Vec<HtmlChapter
     }
 
     let items = if !effective_rule.is_empty() {
-        engine::query_all(&document, &body, &effective_rule)
+        query_toc_list_items(&document, &body, &effective_rule)
     } else {
-        smart_chapter_items(&document)
+        smart_chapter_items(&body)
     };
 
     let mut chapters = Vec::new();
+    let mut seen_urls = HashSet::new();
     for item in items {
         let mut title = engine::extract_text(&item, &source.rule_toc_chapter_name);
         let name_rule = source.rule_toc_chapter_name.trim();
@@ -63,7 +65,7 @@ pub fn parse_html_toc(html: &str, source: &BookSource) -> Result<Vec<HtmlChapter
             title = item.text().collect::<String>().trim().to_string();
         }
 
-        if !title.is_empty() && !url.is_empty() {
+        if !title.is_empty() && !url.is_empty() && seen_urls.insert(url.clone()) {
             chapters.push(HtmlChapter { title, url });
         }
     }
@@ -72,6 +74,55 @@ pub fn parse_html_toc(html: &str, source: &BookSource) -> Result<Vec<HtmlChapter
         chapters.reverse();
     }
     Ok(chapters)
+}
+
+/// 目录列表查询：限定 body 范围；多容器时取章节最多的一块（避免「最新章节」干扰）
+fn query_toc_list_items<'a>(
+    document: &'a Html,
+    body: &ElementRef<'a>,
+    rule: &str,
+) -> Vec<ElementRef<'a>> {
+    if let Some((container, child)) = split_container_list_rule(rule) {
+        let Ok(c_sel) = Selector::parse(&container) else {
+            return engine::query_all(document, body, rule);
+        };
+        let child_sel = if child.is_empty() {
+            Selector::parse("a").ok()
+        } else {
+            Selector::parse(&child).ok()
+        };
+        if let Some(child_sel) = child_sel {
+            let mut best: Vec<ElementRef<'a>> = Vec::new();
+            for container_el in body.select(&c_sel) {
+                let items: Vec<_> = container_el.select(&child_sel).collect();
+                if items.len() > best.len() {
+                    best = items;
+                }
+            }
+            if best.len() >= 2 {
+                return best;
+            }
+        }
+    }
+    engine::query_all(document, body, rule)
+}
+
+/// 拆分「容器 + 子选择器」，如 `ul.chapter li a` → (`ul.chapter`, `li a`)
+fn split_container_list_rule(rule: &str) -> Option<(String, String)> {
+    let parts: Vec<&str> = rule.split_whitespace().collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    let head = parts[0];
+    if head.starts_with("ul.")
+        || head.starts_with('.')
+        || head.starts_with('#')
+        || head.starts_with("ol.")
+    {
+        Some((head.to_string(), parts[1..].join(" ")))
+    } else {
+        None
+    }
 }
 
 pub fn extract_next_toc_url(html: &str, source: &BookSource, base_url: &str) -> String {
@@ -95,14 +146,67 @@ pub fn extract_next_toc_url(html: &str, source: &BookSource, base_url: &str) -> 
     engine::resolve_url(&url, base_url)
 }
 
-fn smart_chapter_items(document: &Html) -> Vec<scraper::ElementRef<'_>> {
+fn smart_chapter_items<'a>(body: &'a ElementRef<'a>) -> Vec<ElementRef<'a>> {
+    if let Ok(ul_sel) = Selector::parse("ul.chapter") {
+        let mut best: Vec<ElementRef<'a>> = Vec::new();
+        if let Ok(a_sel) = Selector::parse("li a") {
+            for ul in body.select(&ul_sel) {
+                let items: Vec<_> = ul.select(&a_sel).collect();
+                if items.len() > best.len() {
+                    best = items;
+                }
+            }
+            if best.len() >= 3 {
+                return best;
+            }
+        }
+    }
     for fallback in ["#list a", ".chapter-list a", "ul.chapter li a", "#list li a"] {
         if let Ok(sel) = Selector::parse(fallback) {
-            let items: Vec<_> = document.select(&sel).collect();
+            let items: Vec<_> = body.select(&sel).collect();
             if items.len() >= 3 {
                 return items;
             }
         }
     }
     vec![]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::book_source::BookSource;
+
+    const SOURCE: &str = r##"{
+        "bookSourceUrl": "http://test.example.com/",
+        "ruleToc": {
+            "chapterList": "ul.chapter li a",
+            "chapterName": "a@text",
+            "chapterUrl": "a@href"
+        }
+    }"##;
+
+    #[test]
+    fn picks_largest_chapter_container_and_dedupes() {
+        let html = r#"
+        <html><body>
+          <ul class="chapter">
+            <li><a href="/b/99.html">第三十章 决战</a></li>
+            <li><a href="/b/98.html">第二十九章 前夕</a></li>
+          </ul>
+          <ul class="chapter">
+            <li><a href="/b/1.html">第一章 开始</a></li>
+            <li><a href="/b/2.html">第二章 修炼</a></li>
+            <li><a href="/b/3.html">第三章 突破</a></li>
+            <li><a href="/b/99.html">第三十章 决战</a></li>
+          </ul>
+        </body></html>
+        "#;
+        let source = BookSource::from_json(SOURCE).unwrap();
+        let chapters = parse_html_toc(html, &source).unwrap();
+        assert_eq!(chapters.len(), 4);
+        assert_eq!(chapters[0].title, "第一章 开始");
+        assert_eq!(chapters[0].url, "/b/1.html");
+        assert_eq!(chapters.last().unwrap().title, "第三十章 决战");
+    }
 }

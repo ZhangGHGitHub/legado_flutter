@@ -22,6 +22,13 @@ pub fn parse_json_toc(data: &Value, source: &BookSource) -> Result<Vec<JsonChapt
         return Ok(vec![]);
     }
 
+    let mut reverse = false;
+    let mut list_paths = list_path.trim().to_string();
+    if list_paths.starts_with('-') {
+        reverse = true;
+        list_paths = list_paths[1..].trim().to_string();
+    }
+
     let base = source.book_source_url.as_str();
     let js_lib = source.js_lib.as_str();
     let name_paths = rule_toc
@@ -33,7 +40,7 @@ pub fn parse_json_toc(data: &Value, source: &BookSource) -> Result<Vec<JsonChapt
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    let items = json_util::collect_array(data, list_path);
+    let items = json_util::collect_array(data, &list_paths);
     let mut chapters = Vec::new();
     for item in items {
         let title = json_rule::resolve_field(&item, name_paths, js_lib, base);
@@ -44,6 +51,9 @@ pub fn parse_json_toc(data: &Value, source: &BookSource) -> Result<Vec<JsonChapt
         if !title.is_empty() && !url.is_empty() {
             chapters.push(JsonChapter { title, url });
         }
+    }
+    if reverse {
+        chapters.reverse();
     }
     Ok(chapters)
 }

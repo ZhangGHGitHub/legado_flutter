@@ -1605,7 +1605,7 @@ class RuleEngine {
           reverse = true;
           listRule = listRule.substring(1).trim();
         }
-        items = analyzer.getElements(listRule, document);
+        items = _queryChapterListItems(document, listRule);
         if (reverse) {
           items = items.reversed.toList();
         }
@@ -1623,6 +1623,7 @@ class RuleEngine {
       debugPrint('  ▸ 智能目录匹配 ${items.length} 项');
     }
 
+    final seenUrls = <String>{};
     for (final item in items) {
       String title = '';
       String url = '';
@@ -1654,7 +1655,7 @@ class RuleEngine {
         if (url.isEmpty) url = item.attributes['href'] ?? '';
       }
 
-      if (title.isNotEmpty && url.isNotEmpty) {
+      if (title.isNotEmpty && url.isNotEmpty && seenUrls.add(url)) {
         chapters.add({'title': title, 'url': url});
       }
     }
@@ -2210,11 +2211,56 @@ class RuleEngine {
     }).toList();
   }
 
+  static List<dom.Element> _queryChapterListItems(
+    dom.Document document,
+    String listRule,
+  ) {
+    final body = document.body;
+    if (body == null) return [];
+
+    final parts = listRule.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      final head = parts.first;
+      if (head.startsWith('ul.') ||
+          head.startsWith('ol.') ||
+          head.startsWith('.') ||
+          head.startsWith('#')) {
+        final childRule = parts.sublist(1).join(' ');
+        try {
+          final containers = body.querySelectorAll(head);
+          List<dom.Element> best = [];
+          for (final container in containers) {
+            final items = container.querySelectorAll(childRule);
+            if (items.length > best.length) {
+              best = items;
+            }
+          }
+          if (best.length >= 2) return best;
+        } catch (_) {}
+      }
+    }
+
+    try {
+      return AnalyzeRule(RuleContext(), htmlRoot: body).getElements(
+        listRule,
+        document,
+      );
+    } catch (_) {
+      return [];
+    }
+  }
+
   static List<dom.Element> _smartFindChapterItems(dom.Document document) {
     final body = document.body!;
-    // 智能容器识别
+    if (body.querySelectorAll('ul.chapter').isNotEmpty) {
+      List<dom.Element> best = [];
+      for (final ul in body.querySelectorAll('ul.chapter')) {
+        final items = ul.querySelectorAll('li a');
+        if (items.length > best.length) best = items;
+      }
+      if (best.length >= 3) return best;
+    }
     for (final sel in [
-      'ul.chapter li a',
       '#list a',
       '.chapter-list a',
       '.chapters a',
