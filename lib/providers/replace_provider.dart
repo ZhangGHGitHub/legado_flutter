@@ -64,8 +64,7 @@ class ReplaceProvider extends ChangeNotifier {
 
   /// 重置为默认规则
   Future<void> resetReplaceRules() async {
-    final db = await _db.database;
-    await db.delete('replace_rules');
+    await _db.clearReplaceRules();
     await _db.insertReplaceRules(ReplaceService.builtInRules());
     _replaceRules = await _db.getReplaceRules();
     _replaceService.loadRules(_replaceRules);

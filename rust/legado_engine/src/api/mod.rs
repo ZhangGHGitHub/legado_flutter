@@ -1,5 +1,6 @@
 pub mod book_info;
 pub mod content;
+pub mod db;
 pub mod explore;
 pub mod search;
 pub mod toc;
@@ -21,7 +22,7 @@ pub fn init_engine() -> Result<(), String> {
 /// 引擎版本号
 #[frb(sync)]
 pub fn engine_version() -> String {
-    "0.4.4".to_string()
+    "0.4.5".to_string()
 }
 
 /// 搜索结果条目
@@ -87,6 +88,14 @@ pub async fn get_toc(source_json: String, book_url: String) -> Result<Vec<Chapte
 pub async fn get_content(source_json: String, chapter_url: String) -> Result<String, String> {
     content::get_content(&source_json, &chapter_url).await
 }
+
+pub use db::{
+    db_clear_replace_rules, db_delete_book, db_delete_replace_rule, db_delete_source,
+    db_get_books, db_get_chapters, db_get_replace_rules, db_get_sources, db_init,
+    db_insert_book, db_insert_chapters, db_save_chapter_content, db_schema_version,
+    db_toggle_replace_rule, db_toggle_source, db_update_book_cover, db_update_book_group,
+    db_update_book_progress, db_upsert_replace_rule, db_upsert_source,
+};
 
 /// HTTP 请求并返回解码后的文本（调试用）
 #[frb]

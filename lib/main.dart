@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io' show Platform;
 import 'app.dart';
+import 'bridge/legado_db_bridge.dart';
 import 'bridge/legado_engine_bridge.dart';
 import 'config/engine_config.dart';
 import 'providers/book_provider.dart';
@@ -22,6 +23,9 @@ void main() async {
   // 加载引擎配置并尝试初始化 Rust 书源引擎
   await EngineConfig.load();
   await LegadoEngineBridge.tryInit();
+  if (LegadoEngineBridge.isAvailable) {
+    await LegadoDbBridge.init();
+  }
 
   runApp(
     MultiProvider(
