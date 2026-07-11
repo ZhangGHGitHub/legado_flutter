@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../models/replace_rule.dart';
 import '../../providers/replace_provider.dart';
+import '../../services/replace_preset_library.dart';
+import '../../widgets/replace_preview_panel.dart';
 
-/// 替换净化页面 - 管理正则替换规则，去除广告
+/// 替换净化页面 - 规则管理 + 实时预览 + 预设库
 class ReplacePage extends StatefulWidget {
   const ReplacePage({super.key});
 
@@ -11,13 +14,40 @@ class ReplacePage extends StatefulWidget {
   State<ReplacePage> createState() => _ReplacePageState();
 }
 
-class _ReplacePageState extends State<ReplacePage> {
+class _ReplacePageState extends State<ReplacePage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('替换净化'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: '规则列表', icon: Icon(Icons.list_alt, size: 20)),
+            Tab(text: '实时预览', icon: Icon(Icons.preview, size: 20)),
+          ],
+        ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.library_add_outlined),
+            tooltip: '导入预设规则',
+            onPressed: () => _showPresetPicker(context),
+          ),
           IconButton(
             icon: const Icon(Icons.add),
             tooltip: '添加规则',
@@ -38,67 +68,146 @@ class _ReplacePageState extends State<ReplacePage> {
       body: Consumer<ReplaceProvider>(
         builder: (context, provider, _) {
           final rules = provider.replaceRules;
-
-          if (rules.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.cleaning_services,
-                    size: 64,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 16),
-                  Text('暂无替换规则', style: TextStyle(color: Colors.grey[600])),
-                  const SizedBox(height: 8),
-                  Text('点击右上角 + 添加', style: TextStyle(color: Colors.grey[500])),
-                  const SizedBox(height: 16),
-                  FilledButton.tonalIcon(
-                    icon: const Icon(Icons.restore),
-                    label: const Text('恢复默认规则'),
-                    onPressed: () => provider.resetReplaceRules(),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+          return TabBarView(
+            controller: _tabController,
             children: [
-              // 提示卡片
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.tertiaryContainer,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      size: 20,
-                      color: Theme.of(context).colorScheme.tertiary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '替换规则会在阅读时自动应用到正文，可有效去除广告和无关内容。',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).colorScheme.tertiary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              _RulesListTab(
+                rules: rules,
+                onEdit: (rule) => _showRuleEditor(context, rule),
               ),
-              ...rules.map((rule) => _ReplaceRuleTile(rule: rule)),
+              ReplacePreviewPanel(rules: rules),
             ],
           );
         },
+      ),
+    );
+  }
+
+  void _showPresetPicker(BuildContext context) {
+    final groups = ReplacePresetLibrary.grouped();
+    final selected = <String>{};
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          child: DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.65,
+            minChildSize: 0.4,
+            maxChildSize: 0.9,
+            builder: (_, scrollController) => Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          '预设规则库',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setSheet(() {
+                            if (selected.length == ReplacePresetLibrary.all.length) {
+                              selected.clear();
+                            } else {
+                              selected.addAll(
+                                ReplacePresetLibrary.all.map((p) => p.id),
+                              );
+                            }
+                          });
+                        },
+                        child: Text(
+                          selected.length == ReplacePresetLibrary.all.length
+                              ? '取消全选'
+                              : '全选',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    controller: scrollController,
+                    children: groups.entries.map((entry) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                            child: Text(
+                              entry.key,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(ctx).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                          ...entry.value.map(
+                            (preset) => CheckboxListTile(
+                              value: selected.contains(preset.id),
+                              onChanged: (v) {
+                                setSheet(() {
+                                  if (v == true) {
+                                    selected.add(preset.id);
+                                  } else {
+                                    selected.remove(preset.id);
+                                  }
+                                });
+                              },
+                              title: Text(preset.name),
+                              subtitle: Text(
+                                preset.pattern.length > 48
+                                    ? '${preset.pattern.substring(0, 48)}…'
+                                    : preset.pattern,
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                              dense: true,
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: FilledButton(
+                    onPressed: selected.isEmpty
+                        ? null
+                        : () async {
+                            final presets = ReplacePresetLibrary.all
+                                .where((p) => selected.contains(p.id));
+                            final rules = ReplacePresetLibrary.toRules(presets);
+                            final added = await context
+                                .read<ReplaceProvider>()
+                                .importPresets(rules);
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('已导入 $added 条预设规则'),
+                                ),
+                              );
+                            }
+                          },
+                    child: Text('导入选中 (${selected.length})'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -168,14 +277,19 @@ class _ReplacePageState extends State<ReplacePage> {
                 final newRule = ReplaceRule(
                   id:
                       rule?.id ??
-                      DateTime.now().millisecondsSinceEpoch.toString(),
+                      'rule_${DateTime.now().millisecondsSinceEpoch}',
                   name: nameController.text,
                   pattern: patternController.text,
                   replacement: replacementController.text,
                   isRegex: isRegex,
                   isEnabled: rule?.isEnabled ?? true,
                 );
-                context.read<ReplaceProvider>().addRule(newRule);
+                final provider = context.read<ReplaceProvider>();
+                if (rule == null) {
+                  provider.addRule(newRule);
+                } else {
+                  provider.updateRule(newRule);
+                }
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(rule == null ? '规则已添加' : '规则已更新')),
                 );
@@ -189,9 +303,83 @@ class _ReplacePageState extends State<ReplacePage> {
   }
 }
 
+class _RulesListTab extends StatelessWidget {
+  const _RulesListTab({
+    required this.rules,
+    required this.onEdit,
+  });
+
+  final List<ReplaceRule> rules;
+  final void Function(ReplaceRule rule) onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    if (rules.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.cleaning_services, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text('暂无替换规则', style: TextStyle(color: Colors.grey[600])),
+            const SizedBox(height: 8),
+            Text(
+              '点击右上角 + 添加，或导入预设规则',
+              style: TextStyle(color: Colors.grey[500]),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.tonalIcon(
+              icon: const Icon(Icons.restore),
+              label: const Text('恢复默认规则'),
+              onPressed: () =>
+                  context.read<ReplaceProvider>().resetReplaceRules(),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      children: [
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.tertiaryContainer,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.info_outline,
+                size: 20,
+                color: Theme.of(context).colorScheme.tertiary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '规则在阅读时自动应用。切换到「实时预览」可测试效果。',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.tertiary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        ...rules.map((rule) => _ReplaceRuleTile(rule: rule, onEdit: onEdit)),
+      ],
+    );
+  }
+}
+
 class _ReplaceRuleTile extends StatelessWidget {
   final ReplaceRule rule;
-  const _ReplaceRuleTile({required this.rule});
+  final void Function(ReplaceRule rule) onEdit;
+
+  const _ReplaceRuleTile({required this.rule, required this.onEdit});
 
   @override
   Widget build(BuildContext context) {
@@ -230,6 +418,7 @@ class _ReplaceRuleTile extends StatelessWidget {
             context.read<ReplaceProvider>().toggleRule(rule.id, v);
           },
         ),
+        onTap: () => onEdit(rule),
         onLongPress: () {
           showDialog(
             context: context,

@@ -71,4 +71,24 @@ class ReplaceProvider extends ChangeNotifier {
     ContentProcessor.instance.loadRules(_replaceRules);
     notifyListeners();
   }
+
+  /// 导入预设规则（按 pattern 去重，已存在则跳过）
+  Future<int> importPresets(List<ReplaceRule> presets) async {
+    final existingPatterns =
+        _replaceRules.map((r) => r.pattern).toSet();
+    var added = 0;
+    for (final rule in presets) {
+      if (existingPatterns.contains(rule.pattern)) continue;
+      await _db.insertReplaceRule(rule);
+      existingPatterns.add(rule.pattern);
+      added++;
+    }
+    if (added > 0) {
+      _replaceRules = await _db.getReplaceRules();
+      _replaceService.loadRules(_replaceRules);
+      ContentProcessor.instance.loadRules(_replaceRules);
+      notifyListeners();
+    }
+    return added;
+  }
 }

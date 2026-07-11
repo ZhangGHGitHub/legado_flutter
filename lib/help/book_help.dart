@@ -2,22 +2,14 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+
+import '../services/app_paths.dart';
 
 /// 书籍缓存 — 对齐 Legado `BookHelp.kt`（章节正文文件缓存）
 class BookHelp {
   BookHelp._();
 
-  static const _cacheFolder = 'book_cache';
-
-  static Future<Directory> _cacheRoot() async {
-    final base = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(base.path, _cacheFolder));
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-    return dir;
-  }
+  static Future<Directory> _cacheRoot() => AppPaths.bookCacheDir();
 
   static Future<File> _chapterFile(String bookId, String chapterId) async {
     final root = await _cacheRoot();
@@ -59,6 +51,24 @@ class BookHelp {
       await file.writeAsString(content, flush: true);
     } catch (e) {
       debugPrint('BookHelp 写入缓存失败: $e');
+    }
+  }
+
+  /// 删除全部书籍缓存
+  static Future<void> clearAllCache() async {
+    try {
+      final root = await _cacheRoot();
+      if (await root.exists()) {
+        await for (final entity in root.list()) {
+          if (entity is Directory) {
+            await entity.delete(recursive: true);
+          } else if (entity is File) {
+            await entity.delete();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('BookHelp 清除全部缓存失败: $e');
     }
   }
 

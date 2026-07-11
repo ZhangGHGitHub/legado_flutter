@@ -7,6 +7,7 @@ import '../../providers/source_provider.dart';
 import '../../providers/book_provider.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/source_status_dot.dart';
+import '../../widgets/source_validation_sheet.dart';
 import 'source_editor_page.dart';
 import 'source_market_page.dart';
 
@@ -21,6 +22,11 @@ class SourcesPage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('书源'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.fact_check_outlined),
+            tooltip: '校验已启用书源',
+            onPressed: () => _validateAllEnabled(context),
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
             onSelected: (v) {
@@ -104,7 +110,7 @@ class SourcesPage extends StatelessWidget {
                     Expanded(
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.file_open, size: 18),
-                        label: const Text('导入TXT'),
+                        label: const Text('导入本地'),
                         onPressed: () => _importLocalBook(context),
                       ),
                     ),
@@ -113,7 +119,10 @@ class SourcesPage extends StatelessWidget {
               ),
               // 书源列表（按 bookSourceGroup 分组）
               Expanded(
-                child: _GroupedSourceList(sources: sources),
+                child: _GroupedSourceList(
+                  sources: sources,
+                  onValidate: (s) => _validateOne(context, s),
+                ),
               ),
             ],
           );
@@ -308,12 +317,46 @@ class SourcesPage extends StatelessWidget {
   void _importLocalBook(BuildContext context) {
     context.read<BookProvider>().importLocalBook();
   }
+
+  Future<void> _validateAllEnabled(BuildContext context) async {
+    final provider = context.read<SourceProvider>();
+    if (!provider.sources.any((s) => s.enabled)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('没有已启用的书源可校验')),
+      );
+      return;
+    }
+
+    if (!context.mounted) return;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _BatchValidateDialog(provider: provider),
+    );
+  }
+
+  Future<void> _validateOne(BuildContext context, BookSource source) async {
+    final provider = context.read<SourceProvider>();
+    final result = await provider.validateSource(source);
+    if (!context.mounted || result == null) return;
+    await SourceValidationSheet.show(
+      context,
+      sourceName: source.bookSourceName,
+      result: result,
+    );
+  }
 }
 
 /// 按 bookSourceGroup 分组的书源列表
 class _GroupedSourceList extends StatelessWidget {
   final List<BookSource> sources;
-  const _GroupedSourceList({required this.sources});
+  final void Function(BookSource source) onValidate;
+
+  const _GroupedSourceList({
+    required this.sources,
+    required this.onValidate,
+  });
 
   Map<String, List<BookSource>> _grouped() {
     final map = <String, List<BookSource>>{};
@@ -343,7 +386,10 @@ class _GroupedSourceList extends StatelessWidget {
             ...items.map(
               (s) => Column(
                 children: [
-                  _SourceTile(source: s),
+                  _SourceTile(
+                    source: s,
+                    onValidate: () => onValidate(s),
+                  ),
                   const Divider(height: 1, indent: 72),
                 ],
               ),
@@ -355,91 +401,203 @@ class _GroupedSourceList extends StatelessWidget {
   }
 }
 
-/// 单个书源码 Tile
+/// 单个书源 Tile
 class _SourceTile extends StatelessWidget {
   final BookSource source;
-  const _SourceTile({required this.source});
+  final VoidCallback onValidate;
+
+  const _SourceTile({required this.source, required this.onValidate});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: source.enabled
-            ? theme.colorScheme.primaryContainer
-            : Colors.grey[200],
-        radius: 18,
-        child: Icon(
-          Icons.rss_feed,
-          size: 20,
-          color: source.enabled ? theme.colorScheme.primary : Colors.grey,
+    return Consumer<SourceProvider>(
+      builder: (context, provider, _) {
+        final validating =
+            provider.isValidating &&
+            provider.validatingSourceUrl == source.bookSourceUrl;
+        final validation = provider.validationOf(source.bookSourceUrl);
+
+        return ListTile(
+          leading: CircleAvatar(
+            backgroundColor: source.enabled
+                ? theme.colorScheme.primaryContainer
+                : Colors.grey[200],
+            radius: 18,
+            child: validating
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: theme.colorScheme.primary,
+                    ),
+                  )
+                : Icon(
+                    Icons.rss_feed,
+                    size: 20,
+                    color: source.enabled
+                        ? theme.colorScheme.primary
+                        : Colors.grey,
+                  ),
+          ),
+          title: Row(
+            children: [
+              SourceStatusDot(source: source),
+              Expanded(
+                child: Text(
+                  source.bookSourceName,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: source.enabled ? null : Colors.grey,
+                  ),
+                ),
+              ),
+              SourceValidationBadge(result: validation),
+            ],
+          ),
+          subtitle: Text(
+            source.bookSourceGroup.isNotEmpty
+                ? '${source.bookSourceGroup} | ${source.bookSourceUrl}'
+                : source.bookSourceUrl,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 11),
+          ),
+          trailing: Switch(
+            value: source.enabled,
+            onChanged: (v) => provider.toggleSource(source.bookSourceUrl, v),
+          ),
+          onLongPress: () => _showSourceMenu(context, source, onValidate),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChangeNotifierProvider.value(
+                  value: provider,
+                  child: SourceEditorPage(source: source),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showSourceMenu(
+    BuildContext context,
+    BookSource source,
+    VoidCallback onValidate,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.fact_check_outlined),
+              title: const Text('校验书源'),
+              onTap: () {
+                Navigator.pop(ctx);
+                onValidate();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text('删除书源', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(ctx);
+                showDialog(
+                  context: context,
+                  builder: (dctx) => AlertDialog(
+                    title: const Text('删除书源'),
+                    content: Text('确定删除「${source.bookSourceName}」？'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dctx),
+                        child: const Text('取消'),
+                      ),
+                      FilledButton(
+                        onPressed: () {
+                          Navigator.pop(dctx);
+                          context.read<SourceProvider>().deleteSource(
+                            source.bookSourceUrl,
+                          );
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.red,
+                        ),
+                        child: const Text('删除'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
-      title: Row(
+    );
+  }
+}
+
+class _BatchValidateDialog extends StatefulWidget {
+  final SourceProvider provider;
+
+  const _BatchValidateDialog({required this.provider});
+
+  @override
+  State<_BatchValidateDialog> createState() => _BatchValidateDialogState();
+}
+
+class _BatchValidateDialogState extends State<_BatchValidateDialog> {
+  int _done = 0;
+  int _total = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _total = widget.provider.sources.where((s) => s.enabled).length;
+    widget.provider
+        .validateEnabledSources(
+          onProgress: (done, total) {
+            if (mounted) {
+              setState(() {
+                _done = done;
+                _total = total;
+              });
+            }
+          },
+        )
+        .then((passed) {
+          if (!mounted) return;
+          final messenger = ScaffoldMessenger.maybeOf(context);
+          Navigator.pop(context);
+          messenger?.showSnackBar(
+            SnackBar(content: Text('校验完成：$passed/$_total 书源可用')),
+          );
+        });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('书源校验'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          SourceStatusDot(source: source),
-          Expanded(
-            child: Text(
-              source.bookSourceName,
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: source.enabled ? null : Colors.grey,
-              ),
-            ),
+          const LinearProgressIndicator(),
+          const SizedBox(height: 16),
+          Text('正在校验 $_done / $_total …'),
+          const SizedBox(height: 8),
+          Text(
+            '测试搜索、发现、目录与正文',
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
           ),
         ],
       ),
-      subtitle: Text(
-        source.bookSourceGroup.isNotEmpty
-            ? '${source.bookSourceGroup} | ${source.bookSourceUrl}'
-            : source.bookSourceUrl,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 11),
-      ),
-      trailing: Switch(
-        value: source.enabled,
-        onChanged: (v) => context.read<SourceProvider>().toggleSource(
-          source.bookSourceUrl,
-          v,
-        ),
-      ),
-      onLongPress: () {
-        showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('删除书源'),
-            content: Text('确定删除「${source.bookSourceName}」？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  context.read<SourceProvider>().deleteSource(
-                    source.bookSourceUrl,
-                  );
-                },
-                style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('删除'),
-              ),
-            ],
-          ),
-        );
-      },
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ChangeNotifierProvider.value(
-              value: context.read<SourceProvider>(),
-              child: SourceEditorPage(source: source),
-            ),
-          ),
-        );
-      },
     );
   }
 }

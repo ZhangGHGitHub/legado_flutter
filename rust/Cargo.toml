@@ -1,3 +1,3 @@
 [workspace]
-members = ["legado_engine"]
+members = ["legado_engine", "legado-webdav"]
 resolver = "2"

@@ -1,8 +1,12 @@
 import '../models/replace_rule.dart';
+import 'replace_preset_library.dart';
 
 /// 替换净化引擎 - 对正文应用正则替换规则
 class ReplaceService {
   List<ReplaceRule> _rules = [];
+
+  /// 预览默认样本文本
+  static String get defaultSampleText => ReplacePresetLibrary.sampleText;
 
   /// 加载规则
   void loadRules(List<ReplaceRule> rules) {
@@ -10,11 +14,15 @@ class ReplaceService {
   }
 
   /// 对文本执行所有启用的替换规则
-  String apply(String text) {
+  String apply(String text) => applyWithRules(text, _rules);
+
+  /// 对指定规则列表执行替换（预览/测试用）
+  static String applyWithRules(String text, List<ReplaceRule> rules) {
     if (text.isEmpty) return text;
 
     var result = text;
-    for (final rule in _rules) {
+    for (final rule in rules) {
+      if (!rule.isEnabled) continue;
       try {
         if (rule.isRegex) {
           result = result.replaceAll(
@@ -25,40 +33,21 @@ class ReplaceService {
           result = result.replaceAll(rule.pattern, rule.replacement);
         }
       } catch (_) {
-        // 规则出错时跳过
         continue;
       }
     }
     return result;
   }
 
-  /// 内置广告过滤规则
+  /// 内置广告过滤规则（首次启动默认）
   static List<ReplaceRule> builtInRules() {
-    return [
-      ReplaceRule(
-        id: 'builtin_1',
-        name: '去除「笔趣阁」广告脚注',
-        pattern: r'笔趣阁.*?为你提供.*?更新|一秒记住.*|手机用户请浏览.*|请收藏本站.*',
-        replacement: '',
-      ),
-      ReplaceRule(
-        id: 'builtin_2',
-        name: '去除「XX书屋」广告',
-        pattern: r'[\s\S]*?看书就找|天才一秒记住|推荐阅读.*',
-        replacement: '',
-      ),
-      ReplaceRule(
-        id: 'builtin_3',
-        name: '压缩连续空行',
-        pattern: r'\n{3,}',
-        replacement: '\n\n',
-      ),
-      ReplaceRule(
-        id: 'builtin_4',
-        name: '去除页面脚注版权',
-        pattern: r'本章未完，请点击下一页继续阅读|最新网址.*',
-        replacement: '',
-      ),
-    ];
+    return ReplacePresetLibrary.all
+        .where((p) =>
+            p.id == 'ad_biquge' ||
+            p.id == 'ad_shuwu' ||
+            p.id == 'fmt_blank_lines' ||
+            p.id == 'ad_next_page')
+        .map((p) => p.toRule())
+        .toList();
   }
 }

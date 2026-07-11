@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
+import '../models/source_validation_result.dart';
+import '../bridge/legado_engine_bridge.dart';
 import '../database/database_helper.dart';
 import '../services/book_source_service.dart';
 
@@ -14,13 +16,23 @@ class SourceProvider extends ChangeNotifier {
 
   List<BookSource> _sources = [];
   Map<String, List<Book>> _searchResults = {};
+  final Map<String, SourceValidationResult> _validationResults = {};
   bool _isLoading = false;
+  bool _isValidating = false;
   String _statusMessage = '';
+  String? _validatingSourceUrl;
 
   List<BookSource> get sources => _sources;
   Map<String, List<Book>> get searchResults => _searchResults;
+  Map<String, SourceValidationResult> get validationResults =>
+      Map.unmodifiable(_validationResults);
   bool get isLoading => _isLoading;
+  bool get isValidating => _isValidating;
+  String? get validatingSourceUrl => _validatingSourceUrl;
   String get statusMessage => _statusMessage;
+
+  SourceValidationResult? validationOf(String sourceUrl) =>
+      _validationResults[sourceUrl];
 
   /// 加载书源
   Future<void> loadSources() async {
@@ -265,5 +277,63 @@ class SourceProvider extends ChangeNotifier {
       if (book.sourceUrl.startsWith(s.bookSourceUrl)) return s;
     }
     return null;
+  }
+
+  /// 校验单个书源（搜索 → 发现 → 目录 → 正文）
+  Future<SourceValidationResult?> validateSource(
+    BookSource source, {
+    String? keyword,
+  }) async {
+    if (!LegadoEngineBridge.isAvailable) {
+      _statusMessage = 'Rust 引擎不可用，无法校验';
+      notifyListeners();
+      return null;
+    }
+
+    final key = defaultValidationKeyword(
+      source.bookSourceName,
+      source.bookSourceUrl,
+    );
+    final query = (keyword?.trim().isNotEmpty == true) ? keyword!.trim() : key;
+
+    _isValidating = true;
+    _validatingSourceUrl = source.bookSourceUrl;
+    notifyListeners();
+
+    try {
+      final raw = await LegadoEngineBridge.validateSource(
+        source,
+        keyword: query,
+      );
+      final result = SourceValidationResult.fromRust(raw);
+      _validationResults[source.bookSourceUrl] = result;
+      _statusMessage = result.allOk
+          ? '${source.bookSourceName} 校验通过'
+          : '${source.bookSourceName} 校验未完全通过';
+      return result;
+    } catch (e) {
+      debugPrint('  ✗ 校验失败 ${source.bookSourceName}: $e');
+      _statusMessage = '校验失败: $e';
+      return null;
+    } finally {
+      _isValidating = false;
+      _validatingSourceUrl = null;
+      notifyListeners();
+    }
+  }
+
+  /// 批量校验已启用书源
+  Future<int> validateEnabledSources({void Function(int done, int total)? onProgress}) async {
+    final enabled = _sources.where((s) => s.enabled).toList();
+    var passed = 0;
+    for (var i = 0; i < enabled.length; i++) {
+      onProgress?.call(i, enabled.length);
+      final result = await validateSource(enabled[i]);
+      if (result?.pipelineOk == true) passed++;
+    }
+    onProgress?.call(enabled.length, enabled.length);
+    _statusMessage = '批量校验完成：$passed/${enabled.length} 可用';
+    notifyListeners();
+    return passed;
   }
 }

@@ -1,23 +1,60 @@
 use super::charset;
 use super::cookie::CookieJar;
+use super::network_config::{self, NetworkConfig};
 use crate::model::book_source::custom_headers;
 use once_cell::sync::Lazy;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, ACCEPT_LANGUAGE, USER_AGENT};
-use reqwest::Client;
+use reqwest::{Client, Proxy};
 use std::sync::Mutex;
 use std::time::Duration;
 
-static CLIENT: Lazy<Client> = Lazy::new(|| {
-    Client::builder()
+static CLIENT: Lazy<Mutex<Client>> = Lazy::new(|| Mutex::new(build_http_client(&NetworkConfig::default())));
+
+static COOKIE_JAR: Lazy<Mutex<CookieJar>> = Lazy::new(|| Mutex::new(CookieJar::new()));
+
+fn build_http_client(cfg: &NetworkConfig) -> Client {
+    let mut builder = Client::builder()
         .timeout(Duration::from_secs(30))
         .connect_timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::limited(5))
-        .danger_accept_invalid_certs(true)
-        .build()
-        .expect("failed to build HTTP client")
-});
+        .danger_accept_invalid_certs(true);
 
-static COOKIE_JAR: Lazy<Mutex<CookieJar>> = Lazy::new(|| Mutex::new(CookieJar::new()));
+    if let Some(proxy_url) = network_config::build_proxy_url(cfg) {
+        if let Ok(mut proxy) = Proxy::all(&proxy_url) {
+            if !cfg.proxy_username.is_empty() {
+                proxy = proxy.basic_auth(&cfg.proxy_username, &cfg.proxy_password);
+            }
+            builder = builder.proxy(proxy);
+        }
+    }
+
+    builder.build().expect("failed to build HTTP client")
+}
+
+/// 应用网络配置后重建 HTTP 客户端
+pub fn rebuild_http_client() -> Result<(), String> {
+    let cfg = network_config::get_network_config();
+    let client = build_http_client(&cfg);
+    *CLIENT
+        .lock()
+        .map_err(|_| "HTTP 客户端锁失败".to_string())? = client;
+    Ok(())
+}
+
+/// 清空 Cookie 缓存
+pub fn clear_http_cookies() -> Result<(), String> {
+    *COOKIE_JAR
+        .lock()
+        .map_err(|_| "Cookie 锁失败".to_string())? = CookieJar::new();
+    Ok(())
+}
+
+fn http_client() -> Result<Client, String> {
+    Ok(CLIENT
+        .lock()
+        .map_err(|_| "HTTP 客户端锁失败".to_string())?
+        .clone())
+}
 
 const USER_AGENT_STR: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
 AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
@@ -140,14 +177,15 @@ pub async fn fetch_text(
     charset::decode_bytes(&bytes, charset)
 }
 
-/// 带书源自定义头发送请求
-pub async fn fetch_with_source(
-    url: &str,
-    method: &str,
-    body: Option<&str>,
-    charset: &str,
-    source_json: &str,
-) -> Result<String, String> {
+/// HTTP 响应元数据（调试用）
+#[derive(Debug, Clone)]
+pub struct FetchResponse {
+    pub status_code: u16,
+    pub body: String,
+    pub byte_len: usize,
+}
+
+fn build_source_headers(url: &str, source_json: &str) -> HeaderMap {
     let source: serde_json::Value =
         serde_json::from_str(source_json).unwrap_or(serde_json::json!({}));
     let source_url = source
@@ -175,14 +213,45 @@ pub async fn fetch_with_source(
             headers.insert("Cookie", v);
         }
     }
+    headers
+}
 
+/// 带书源自定义头发送请求
+pub async fn fetch_with_source(
+    url: &str,
+    method: &str,
+    body: Option<&str>,
+    charset: &str,
+    source_json: &str,
+) -> Result<String, String> {
+    Ok(fetch_with_source_meta(url, method, body, charset, source_json)
+        .await?
+        .body)
+}
+
+/// 带书源自定义头发送请求（含状态码）
+pub async fn fetch_with_source_meta(
+    url: &str,
+    method: &str,
+    body: Option<&str>,
+    charset: &str,
+    source_json: &str,
+) -> Result<FetchResponse, String> {
+    let headers = build_source_headers(url, source_json);
     let response = send_request(url, method, body, charset, headers).await?;
+    let status_code = response.status().as_u16();
     save_cookies(url, &response);
     let bytes = response
         .bytes()
         .await
         .map_err(|e| format!("读取响应失败: {e}"))?;
-    charset::decode_bytes(&bytes, charset)
+    let byte_len = bytes.len();
+    let body = charset::decode_bytes(&bytes, charset)?;
+    Ok(FetchResponse {
+        status_code,
+        body,
+        byte_len,
+    })
 }
 
 fn default_headers() -> HeaderMap {
@@ -213,7 +282,7 @@ async fn send_request(
             "Content-Type",
             HeaderValue::from_static("application/x-www-form-urlencoded"),
         );
-        CLIENT
+        http_client()?
             .post(url)
             .headers(headers)
             .body(encoded)
@@ -221,7 +290,7 @@ async fn send_request(
             .await
             .map_err(|e| format!("POST 请求失败: {e}"))
     } else {
-        CLIENT
+        http_client()?
             .get(url)
             .headers(headers)
             .send()

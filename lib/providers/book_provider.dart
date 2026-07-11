@@ -98,7 +98,8 @@ class BookProvider extends ChangeNotifier {
     try {
       final book = await _localService.importFromFile();
       if (book != null) {
-        await addBook(book);
+        _books = await _db.getBooks();
+        notifyListeners();
       }
       return book;
     } finally {

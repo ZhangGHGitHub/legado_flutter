@@ -116,3 +116,24 @@ async fn e2e_bishu_full_pipeline() {
 async fn e2e_tomato_full_pipeline() {
     pipeline_tomato().await;
 }
+
+#[tokio::test]
+#[ignore = "需要网络，运行: cargo test --test e2e_builtin -- --ignored"]
+async fn e2e_validate_bishu() {
+    let source = first_source_json("7565.json");
+    let result = legado_engine::validate_source(source, "斗破".to_string())
+        .await
+        .expect("校验应返回结果");
+    assert!(result.search_ok, "搜索应通过: {:?}", result.errors);
+    assert!(result.discovery_ok, "发现应通过: {:?}", result.errors);
+    assert!(result.toc_ok, "目录应通过: {:?}", result.errors);
+    assert!(result.content_ok, "正文应通过: {:?}", result.errors);
+    println!(
+        "  7565 校验: search={}ms search_ok={} discovery_ok={} toc_ok={} content_ok={}",
+        result.search_time_ms,
+        result.search_ok,
+        result.discovery_ok,
+        result.toc_ok,
+        result.content_ok
+    );
+}

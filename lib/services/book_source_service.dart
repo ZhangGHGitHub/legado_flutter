@@ -15,10 +15,7 @@ import '../models/chapter.dart';
 class BookSourceService {
   BookSourceService();
 
-  /// 历史 API：Rust 已覆盖全部操作，恒为 false
-  static bool needsDartEngine(BookSource source, {String operation = 'all'}) =>
-      false;
-
+  /// 全部书源操作走 Rust 引擎（Phase 3：无 Dart 回退）
   void _requireRust() {
     if (!LegadoEngineBridge.isAvailable) {
       throw StateError('Rust 引擎未加载，请编译 legado_engine 后重试');

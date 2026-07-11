@@ -141,7 +141,137 @@ class LegadoEngineBridge {
     );
   }
 
+  static Future<rust_api.SourceValidation> validateSource(
+    BookSource source, {
+    String keyword = '测试',
+  }) async {
+    if (!_available) throw StateError('Rust engine not available');
+
+    return rust_api.validateSource(
+      sourceJson: _sourceJson(source),
+      keyword: keyword,
+    );
+  }
+
+  static List<({String title, String content})> parseTxtChapters(
+    String content,
+  ) {
+    if (!_available) throw StateError('Rust engine not available');
+    return rust_api
+        .parseTxtChapters(content: content)
+        .map((c) => (title: c.title, content: c.content))
+        .toList();
+  }
+
+  static ({String title, String author, List<({String title, String content})> chapters})
+      parseEpub(List<int> data) {
+    if (!_available) throw StateError('Rust engine not available');
+    final info = rust_api.parseEpub(data: data);
+    return (
+      title: info.title,
+      author: info.author,
+      chapters: info.chapters
+          .map((c) => (title: c.title, content: c.content))
+          .toList(),
+    );
+  }
+
   static String engineVersion() => rust_api.engineVersion();
+
+  static void recordReading({
+    required String bookId,
+    required String bookName,
+    required int chars,
+    required int durationSeconds,
+  }) {
+    if (!_available) return;
+    rust_api.recordReading(
+      bookId: bookId,
+      bookName: bookName,
+      chars: chars,
+      durationSeconds: durationSeconds,
+    );
+  }
+
+  static rust_api.ReadingStats? getReadingStats(String range) {
+    if (!_available) return null;
+    try {
+      return rust_api.getReadingStats(range: range);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String? exportReadingRecords(String format) {
+    if (!_available) return null;
+    try {
+      return rust_api.exportReadingRecords(format: format);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<rust_api.WebApiStatus> startWebApi({
+    required int port,
+    required String token,
+  }) async {
+    if (!_available) throw StateError('Rust engine not available');
+    return rust_api.startWebApi(port: port, token: token);
+  }
+
+  static Future<void> stopWebApi() async {
+    if (!_available) return;
+    await rust_api.stopWebApi();
+  }
+
+  static rust_api.WebApiStatus? webApiStatus() {
+    if (!_available) return null;
+    try {
+      return rust_api.webApiStatus();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<rust_api.DebugResult> debugSearch(
+    BookSource source,
+    String keyword,
+  ) async {
+    if (!_available) throw StateError('Rust engine not available');
+    return rust_api.debugSearch(
+      sourceJson: _sourceJson(source),
+      keyword: keyword,
+    );
+  }
+
+  static Future<rust_api.DebugResult> debugToc(
+    BookSource source,
+    String bookUrl,
+  ) async {
+    if (!_available) throw StateError('Rust engine not available');
+    return rust_api.debugToc(
+      sourceJson: _sourceJson(source),
+      bookUrl: bookUrl,
+    );
+  }
+
+  static Future<String> httpFetch(
+    String url, {
+    String method = 'GET',
+    String? referer,
+    String charset = 'UTF-8',
+    BookSource? source,
+  }) async {
+    if (!_available) throw StateError('Rust engine not available');
+    return rust_api.httpFetch(
+      url: url,
+      method: method,
+      charset: charset,
+      referer: referer,
+      sourceUrl: source?.bookSourceUrl,
+      concurrentRate: null,
+    );
+  }
 
   static Future<ExternalLibrary> _loadExternalLibrary() async {
     if (kIsWeb) {

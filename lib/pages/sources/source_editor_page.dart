@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:dio/dio.dart';
+import '../../bridge/legado_engine_bridge.dart';
 import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
-import '../../services/book_source_service.dart';
-import '../../models/book.dart';
-import '../../models/chapter.dart';
+import '../../services/source_debug_formatter.dart';
+import '../../src/rust/api.dart' as rust_api;
+import '../../widgets/source_debug_panel.dart';
+import '../../widgets/source_validation_sheet.dart';
 
 /// 书源规则编辑器 + 调试面板（增强版）
 class SourceEditorPage extends StatefulWidget {
@@ -34,10 +35,12 @@ class _SourceEditorPageState extends State<SourceEditorPage>
   final _chapterUrlCtrl = TextEditingController();
   String _debugLog = '';
   bool _isDebugLoading = false;
+  bool _isValidating = false;
   String? _rawResponse; // 原始响应预览
+  rust_api.DebugResult? _lastDebugResult;
 
-  // 章节测试
-  List<Chapter> _testChapters = [];
+  // 章节测试（来自调试结果）
+  List<rust_api.DebugItem> _testChapters = [];
 
   @override
   void initState() {
@@ -145,49 +148,31 @@ class _SourceEditorPageState extends State<SourceEditorPage>
     setState(() {
       _isDebugLoading = true;
       _debugLog = '';
+      _lastDebugResult = null;
     });
 
     try {
-      final service = BookSourceService();
+      if (!LegadoEngineBridge.isAvailable) {
+        _appendLog('❌ Rust 引擎不可用，请先编译 legado_engine');
+        return;
+      }
       _appendLog('🔍 搜索关键词: "$_searchKeyword"');
       _appendLog('📡 书源: ${widget.source.bookSourceName}');
       _appendLog('');
 
-      // 获取原始响应
-      _appendLog(
-        '📡 请求URL: ${widget.source.ruleSearchUrl.replaceAll('{{key}}', _searchKeyword)}',
+      final result = await LegadoEngineBridge.debugSearch(
+        widget.source,
+        _searchKeyword,
       );
-      final results = await service.search(widget.source, _searchKeyword);
-
-      _appendLog('✅ 搜索完成');
-      _appendLog('📊 结果数量: ${results.length}');
-      _appendLog('');
-
-      if (results.isEmpty) {
-        _appendLog('⚠️ 无搜索结果');
-        _appendLog('  可能原因:');
-        _appendLog('  - 书源规则不匹配');
-        _appendLog('  - 搜索结果为空');
-        _appendLog('  - 网络请求失败');
-      } else {
-        for (int i = 0; i < results.length && i < 10; i++) {
-          final book = results[i];
-          _appendLog('── 结果 ${i + 1} ──');
-          _appendLog('  书名: ${book['name'] ?? '未知'}');
-          _appendLog('  作者: ${book['author'] ?? '未知'}');
-          _appendLog('  链接: ${book['url'] ?? '未知'}');
-          _appendLog('  封面: ${book['coverUrl'] ?? '无'}');
-          _appendLog('');
-        }
-        if (results.length > 10) {
-          _appendLog('  ... 还有 ${results.length - 10} 个结果');
-        }
-      }
+      setState(() {
+        _lastDebugResult = result;
+        _debugLog = formatDebugLog(result);
+        _rawResponse = result.responseBodyPreview.isNotEmpty
+            ? result.responseBodyPreview
+            : null;
+      });
     } catch (e) {
       _appendLog('❌ 搜索出错: $e');
-      _appendLog('');
-      _appendLog('错误类型: ${e.runtimeType}');
-      _appendLog('请检查书源规则是否正确');
     } finally {
       if (mounted) setState(() => _isDebugLoading = false);
     }
@@ -195,6 +180,25 @@ class _SourceEditorPageState extends State<SourceEditorPage>
 
   void _appendLog(String line) {
     setState(() => _debugLog += '$line\n');
+  }
+
+  Future<void> _runFullValidation() async {
+    setState(() => _isValidating = true);
+    try {
+      final provider = context.read<SourceProvider>();
+      final result = await provider.validateSource(
+        widget.source,
+        keyword: _searchKeyword.isNotEmpty ? _searchKeyword : null,
+      );
+      if (!mounted || result == null) return;
+      await SourceValidationSheet.show(
+        context,
+        sourceName: widget.source.bookSourceName,
+        result: result,
+      );
+    } finally {
+      if (mounted) setState(() => _isValidating = false);
+    }
   }
 
   @override
@@ -211,6 +215,17 @@ class _SourceEditorPageState extends State<SourceEditorPage>
           ],
         ),
         actions: [
+          IconButton(
+            icon: _isValidating
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.fact_check_outlined),
+            tooltip: '一键校验',
+            onPressed: _isValidating ? null : _runFullValidation,
+          ),
           if (_tabController.index == 0)
             TextButton.icon(
               onPressed: _isSaving ? null : _saveJson,
@@ -302,6 +317,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
             ],
           ),
         ),
+        SourceDebugPanel(result: _lastDebugResult),
         // Log output area
         Expanded(
           child: Container(
@@ -502,13 +518,13 @@ class _SourceEditorPageState extends State<SourceEditorPage>
                   style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                 ),
                 title: Text(
-                  _testChapters[i].title,
+                  _testChapters[i].name,
                   style: const TextStyle(fontSize: 13),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
-                  _testChapters[i].url,
+                  _testChapters[i].bookUrl,
                   style: TextStyle(fontSize: 10, color: Colors.grey[500]),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -593,29 +609,23 @@ class _SourceEditorPageState extends State<SourceEditorPage>
       _isDebugLoading = true;
       _testChapters = [];
       _debugLog = '';
+      _lastDebugResult = null;
     });
 
     try {
-      final service = BookSourceService();
-      final book = Book(
-        id: 'test_book',
-        name: '测试书籍',
-        sourceUrl: url,
-        bookSourceUrl: widget.source.bookSourceUrl,
-      );
-
+      if (!LegadoEngineBridge.isAvailable) {
+        _appendLog('❌ Rust 引擎不可用');
+        return;
+      }
       _appendLog('📖 获取章节列表...');
       _appendLog('URL: $url');
-      final chapters = await service.getChapters(book, source: widget.source);
 
-      setState(() => _testChapters = chapters);
-      _appendLog('✅ 成功: ${chapters.length} 章');
-      for (int i = 0; i < chapters.length && i < 5; i++) {
-        _appendLog('  ${i + 1}. ${chapters[i].title}');
-      }
-      if (chapters.length > 5) {
-        _appendLog('  ... 还有 ${chapters.length - 5} 章');
-      }
+      final result = await LegadoEngineBridge.debugToc(widget.source, url);
+      setState(() {
+        _lastDebugResult = result;
+        _testChapters = result.results;
+        _debugLog = formatDebugLog(result);
+      });
     } catch (e) {
       _appendLog('❌ 出错: $e');
     } finally {
@@ -631,45 +641,24 @@ class _SourceEditorPageState extends State<SourceEditorPage>
       _isDebugLoading = true;
       _debugLog = '';
       _rawResponse = null;
+      _lastDebugResult = null;
     });
 
     try {
-      // Use a direct Dio client for URL testing
+      if (!LegadoEngineBridge.isAvailable) {
+        _appendLog('❌ Rust 引擎不可用');
+        return;
+      }
       _appendLog('📡 请求: $url');
 
-      final dio = Dio(
-        BaseOptions(
-          connectTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 30),
-          headers: {
-            'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept-Encoding': 'gzip, deflate',
-          },
-        ),
-      );
-      // Note: SSL certificate bypass not available in this context
-
-      final response = await dio.get(
+      final body = await LegadoEngineBridge.httpFetch(
         url,
-        options: Options(responseType: ResponseType.bytes),
+        referer: widget.source.bookSourceUrl,
+        source: widget.source,
       );
 
-      List<int> bytes = response.data as List<int>? ?? [];
-      if (bytes.length >= 2 && bytes[0] == 0x1F && bytes[1] == 0x8B) {
-        bytes = gzip.decode(bytes);
-      }
-
-      // Try UTF-8 decode
-      String body;
-      try {
-        body = utf8.decode(bytes);
-      } catch (_) {
-        body = utf8.decode(bytes, allowMalformed: true);
-      }
-
-      _appendLog('✅ 状态码: ${response.statusCode}');
-      _appendLog('📊 大小: ${bytes.length} bytes');
+      _appendLog('✅ 完成');
+      _appendLog('📊 大小: ${body.length} chars');
       _appendLog(
         '🧪 内容预览: ${body.substring(0, body.length > 200 ? 200 : body.length)}',
       );

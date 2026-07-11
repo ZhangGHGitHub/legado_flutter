@@ -6,7 +6,7 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 初始化 Rust 书源引擎
 void initEngine() => LegadoEngine.instance.api.crateApiInitEngine();
@@ -60,6 +60,105 @@ Future<String> getContent({
   sourceJson: sourceJson,
   chapterUrl: chapterUrl,
 );
+
+/// 书源校验（搜索 / 发现 / 目录 / 正文）
+Future<SourceValidation> validateSource({
+  required String sourceJson,
+  required String keyword,
+}) => LegadoEngine.instance.api.crateApiValidateSource(
+  sourceJson: sourceJson,
+  keyword: keyword,
+);
+
+/// 分步调试搜索
+Future<DebugResult> debugSearch({
+  required String sourceJson,
+  required String keyword,
+}) => LegadoEngine.instance.api.crateApiDebugSearch(
+  sourceJson: sourceJson,
+  keyword: keyword,
+);
+
+/// 分步调试目录
+Future<DebugResult> debugToc({
+  required String sourceJson,
+  required String bookUrl,
+}) => LegadoEngine.instance.api.crateApiDebugToc(
+  sourceJson: sourceJson,
+  bookUrl: bookUrl,
+);
+
+/// 启动 Web API 服务
+Future<WebApiStatus> startWebApi({required int port, required String token}) =>
+    LegadoEngine.instance.api.crateApiStartWebApi(port: port, token: token);
+
+/// 停止 Web API 服务
+Future<void> stopWebApi() => LegadoEngine.instance.api.crateApiStopWebApi();
+
+/// Web API 运行状态
+WebApiStatus webApiStatus() => LegadoEngine.instance.api.crateApiWebApiStatus();
+
+/// TXT 分章
+List<LocalChapterItem> parseTxtChapters({required String content}) =>
+    LegadoEngine.instance.api.crateApiParseTxtChapters(content: content);
+
+/// EPUB 解析
+LocalBookInfo parseEpub({required List<int> data}) =>
+    LegadoEngine.instance.api.crateApiParseEpub(data: data);
+
+/// 记录阅读（按书 + 日期累加）
+void recordReading({
+  required String bookId,
+  required String bookName,
+  required int chars,
+  required int durationSeconds,
+}) => LegadoEngine.instance.api.crateApiRecordReading(
+  bookId: bookId,
+  bookName: bookName,
+  chars: chars,
+  durationSeconds: durationSeconds,
+);
+
+/// 阅读统计（range: week / month / year）
+ReadingStats getReadingStats({required String range}) =>
+    LegadoEngine.instance.api.crateApiGetReadingStats(range: range);
+
+/// 导出阅读记录（csv / json）
+String exportReadingRecords({required String format}) =>
+    LegadoEngine.instance.api.crateApiExportReadingRecords(format: format);
+
+/// 单本书阅读统计（阅读小票）
+BookReadingStats getBookReadingStats({required String bookId}) =>
+    LegadoEngine.instance.api.crateApiGetBookReadingStats(bookId: bookId);
+
+/// 保存想法笔记
+void upsertNote({
+  required String id,
+  required String bookId,
+  required String chapterTitle,
+  required String selectedText,
+  required String noteContent,
+  required int position,
+}) => LegadoEngine.instance.api.crateApiUpsertNote(
+  id: id,
+  bookId: bookId,
+  chapterTitle: chapterTitle,
+  selectedText: selectedText,
+  noteContent: noteContent,
+  position: position,
+);
+
+/// 删除想法笔记
+void deleteNote({required String id}) =>
+    LegadoEngine.instance.api.crateApiDeleteNote(id: id);
+
+/// 列出想法笔记（book_id 为空则全部）
+List<NoteDto> listNotes({required String bookId}) =>
+    LegadoEngine.instance.api.crateApiListNotes(bookId: bookId);
+
+/// 导出 Obsidian 风格 Markdown
+String exportNotesMarkdown({required String bookId}) =>
+    LegadoEngine.instance.api.crateApiExportNotesMarkdown(bookId: bookId);
 
 /// HTTP 请求并返回解码后的文本（调试用）
 Future<String> httpFetch({
@@ -124,6 +223,42 @@ class BookInfoItem {
           tocUrl == other.tocUrl;
 }
 
+/// 单本书阅读统计
+class BookReadingStats {
+  final int durationSeconds;
+  final int readChars;
+  final String? startDate;
+  final String? lastDate;
+  final int readingDays;
+
+  const BookReadingStats({
+    required this.durationSeconds,
+    required this.readChars,
+    this.startDate,
+    this.lastDate,
+    required this.readingDays,
+  });
+
+  @override
+  int get hashCode =>
+      durationSeconds.hashCode ^
+      readChars.hashCode ^
+      startDate.hashCode ^
+      lastDate.hashCode ^
+      readingDays.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BookReadingStats &&
+          runtimeType == other.runtimeType &&
+          durationSeconds == other.durationSeconds &&
+          readChars == other.readChars &&
+          startDate == other.startDate &&
+          lastDate == other.lastDate &&
+          readingDays == other.readingDays;
+}
+
 /// 目录章节条目
 class ChapterItem {
   final String title;
@@ -141,6 +276,276 @@ class ChapterItem {
           runtimeType == other.runtimeType &&
           title == other.title &&
           url == other.url;
+}
+
+/// 单日阅读统计
+class DailyReadingStat {
+  final String date;
+  final int chars;
+  final int durationSeconds;
+
+  const DailyReadingStat({
+    required this.date,
+    required this.chars,
+    required this.durationSeconds,
+  });
+
+  @override
+  int get hashCode => date.hashCode ^ chars.hashCode ^ durationSeconds.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DailyReadingStat &&
+          runtimeType == other.runtimeType &&
+          date == other.date &&
+          chars == other.chars &&
+          durationSeconds == other.durationSeconds;
+}
+
+/// 调试结果条目（搜索书 / 目录章）
+class DebugItem {
+  final String name;
+  final String author;
+  final String coverUrl;
+  final String bookUrl;
+  final String kind;
+  final String note;
+
+  const DebugItem({
+    required this.name,
+    required this.author,
+    required this.coverUrl,
+    required this.bookUrl,
+    required this.kind,
+    required this.note,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      author.hashCode ^
+      coverUrl.hashCode ^
+      bookUrl.hashCode ^
+      kind.hashCode ^
+      note.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DebugItem &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          author == other.author &&
+          coverUrl == other.coverUrl &&
+          bookUrl == other.bookUrl &&
+          kind == other.kind &&
+          note == other.note;
+}
+
+/// 书源调试结果
+class DebugResult {
+  final String requestUrl;
+  final String requestMethod;
+  final String responseStatus;
+  final String responseCharset;
+  final int responseSize;
+  final String responseBodyPreview;
+  final List<RuleDebugStep> ruleSteps;
+  final List<DebugItem> results;
+
+  const DebugResult({
+    required this.requestUrl,
+    required this.requestMethod,
+    required this.responseStatus,
+    required this.responseCharset,
+    required this.responseSize,
+    required this.responseBodyPreview,
+    required this.ruleSteps,
+    required this.results,
+  });
+
+  @override
+  int get hashCode =>
+      requestUrl.hashCode ^
+      requestMethod.hashCode ^
+      responseStatus.hashCode ^
+      responseCharset.hashCode ^
+      responseSize.hashCode ^
+      responseBodyPreview.hashCode ^
+      ruleSteps.hashCode ^
+      results.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DebugResult &&
+          runtimeType == other.runtimeType &&
+          requestUrl == other.requestUrl &&
+          requestMethod == other.requestMethod &&
+          responseStatus == other.responseStatus &&
+          responseCharset == other.responseCharset &&
+          responseSize == other.responseSize &&
+          responseBodyPreview == other.responseBodyPreview &&
+          ruleSteps == other.ruleSteps &&
+          results == other.results;
+}
+
+/// EPUB 解析结果
+class LocalBookInfo {
+  final String title;
+  final String author;
+  final List<LocalChapterItem> chapters;
+
+  const LocalBookInfo({
+    required this.title,
+    required this.author,
+    required this.chapters,
+  });
+
+  @override
+  int get hashCode => title.hashCode ^ author.hashCode ^ chapters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LocalBookInfo &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          author == other.author &&
+          chapters == other.chapters;
+}
+
+/// 本地书籍章节（含正文）
+class LocalChapterItem {
+  final String title;
+  final String content;
+
+  const LocalChapterItem({required this.title, required this.content});
+
+  @override
+  int get hashCode => title.hashCode ^ content.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LocalChapterItem &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          content == other.content;
+}
+
+/// 想法笔记
+class NoteDto {
+  final String id;
+  final String bookId;
+  final String chapterTitle;
+  final String selectedText;
+  final String noteContent;
+  final int position;
+  final String createdAt;
+
+  const NoteDto({
+    required this.id,
+    required this.bookId,
+    required this.chapterTitle,
+    required this.selectedText,
+    required this.noteContent,
+    required this.position,
+    required this.createdAt,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      bookId.hashCode ^
+      chapterTitle.hashCode ^
+      selectedText.hashCode ^
+      noteContent.hashCode ^
+      position.hashCode ^
+      createdAt.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NoteDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          bookId == other.bookId &&
+          chapterTitle == other.chapterTitle &&
+          selectedText == other.selectedText &&
+          noteContent == other.noteContent &&
+          position == other.position &&
+          createdAt == other.createdAt;
+}
+
+/// 阅读统计汇总
+class ReadingStats {
+  final int totalChars;
+  final int totalDurationSeconds;
+  final int todayChars;
+  final int todayDurationSeconds;
+  final int weekChars;
+  final List<DailyReadingStat> daily;
+
+  const ReadingStats({
+    required this.totalChars,
+    required this.totalDurationSeconds,
+    required this.todayChars,
+    required this.todayDurationSeconds,
+    required this.weekChars,
+    required this.daily,
+  });
+
+  @override
+  int get hashCode =>
+      totalChars.hashCode ^
+      totalDurationSeconds.hashCode ^
+      todayChars.hashCode ^
+      todayDurationSeconds.hashCode ^
+      weekChars.hashCode ^
+      daily.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ReadingStats &&
+          runtimeType == other.runtimeType &&
+          totalChars == other.totalChars &&
+          totalDurationSeconds == other.totalDurationSeconds &&
+          todayChars == other.todayChars &&
+          todayDurationSeconds == other.todayDurationSeconds &&
+          weekChars == other.weekChars &&
+          daily == other.daily;
+}
+
+/// 规则调试步骤
+class RuleDebugStep {
+  final String step;
+  final String rule;
+  final String result;
+  final bool ok;
+
+  const RuleDebugStep({
+    required this.step,
+    required this.rule,
+    required this.result,
+    required this.ok,
+  });
+
+  @override
+  int get hashCode =>
+      step.hashCode ^ rule.hashCode ^ result.hashCode ^ ok.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RuleDebugStep &&
+          runtimeType == other.runtimeType &&
+          step == other.step &&
+          rule == other.rule &&
+          result == other.result &&
+          ok == other.ok;
 }
 
 /// 搜索结果条目
@@ -181,4 +586,73 @@ class SearchItem {
           bookUrl == other.bookUrl &&
           kind == other.kind &&
           note == other.note;
+}
+
+/// 书源校验结果
+class SourceValidation {
+  final bool searchOk;
+  final bool discoveryOk;
+  final bool tocOk;
+  final bool contentOk;
+  final BigInt searchTimeMs;
+  final List<String> errors;
+
+  const SourceValidation({
+    required this.searchOk,
+    required this.discoveryOk,
+    required this.tocOk,
+    required this.contentOk,
+    required this.searchTimeMs,
+    required this.errors,
+  });
+
+  @override
+  int get hashCode =>
+      searchOk.hashCode ^
+      discoveryOk.hashCode ^
+      tocOk.hashCode ^
+      contentOk.hashCode ^
+      searchTimeMs.hashCode ^
+      errors.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SourceValidation &&
+          runtimeType == other.runtimeType &&
+          searchOk == other.searchOk &&
+          discoveryOk == other.discoveryOk &&
+          tocOk == other.tocOk &&
+          contentOk == other.contentOk &&
+          searchTimeMs == other.searchTimeMs &&
+          errors == other.errors;
+}
+
+/// Web API 运行状态
+class WebApiStatus {
+  final bool running;
+  final int port;
+  final String token;
+  final String baseUrl;
+
+  const WebApiStatus({
+    required this.running,
+    required this.port,
+    required this.token,
+    required this.baseUrl,
+  });
+
+  @override
+  int get hashCode =>
+      running.hashCode ^ port.hashCode ^ token.hashCode ^ baseUrl.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebApiStatus &&
+          runtimeType == other.runtimeType &&
+          running == other.running &&
+          port == other.port &&
+          token == other.token &&
+          baseUrl == other.baseUrl;
 }

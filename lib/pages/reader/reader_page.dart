@@ -5,10 +5,13 @@ import '../../models/book.dart';
 import '../../models/chapter.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
+import '../../services/reading_record_service.dart';
 import '../book/toc_sheet.dart';
 import '../reader/ai_chat_page.dart';
 import 'reader_settings.dart';
 import '../../widgets/bookplate_overlay.dart';
+import '../../widgets/note_editor_sheet.dart';
+import '../../widgets/reader_selectable_text.dart';
 
 /// 阅读器页面
 class ReaderPage extends StatefulWidget {
@@ -38,10 +41,14 @@ class _ReaderPageState extends State<ReaderPage> {
   late ScrollController _scrollController;
   PageController? _pageController;
   BookProvider? _bookProvider; // 缓存引用，避免 dispose 时 context.read 崩溃
+  DateTime? _sessionStart;
+  int _sessionChars = 0;
+  int _lastCountedChapterIndex = -1;
 
   @override
   void initState() {
     super.initState();
+    _sessionStart = DateTime.now();
     // 从 SharedPreferences 加载设置（后续实现持久化）
     _settings = const ReaderSettings();
     _scrollController = ScrollController();
@@ -63,9 +70,51 @@ class _ReaderPageState extends State<ReaderPage> {
   @override
   void dispose() {
     _saveProgress(); // 离开时保存进度（使用缓存的 _bookProvider）
+    _recordReadingSession();
     _scrollController.dispose();
     _pageController?.dispose();
     super.dispose();
+  }
+
+  void _countChapterChars(String content) {
+    if (content.startsWith('⚠️') || content.contains('未找到匹配的书源')) {
+      return;
+    }
+    if (_currentIndex == _lastCountedChapterIndex) return;
+    _sessionChars += content.length;
+    _lastCountedChapterIndex = _currentIndex;
+  }
+
+  void _recordReadingSession() {
+    if (_sessionStart == null || _sessionChars <= 0) return;
+    final duration = DateTime.now().difference(_sessionStart!).inSeconds;
+    if (duration <= 0) return;
+    ReadingRecordService.recordReading(
+      bookId: widget.book.id,
+      bookName: widget.book.name,
+      chars: _sessionChars,
+      durationSeconds: duration,
+    );
+  }
+
+  Future<void> _openNoteEditor(String selectedText) async {
+    if (selectedText.trim().isEmpty) return;
+    final chapter = widget.allChapters[_currentIndex];
+    await showNoteEditorSheet(
+      context,
+      book: widget.book,
+      chapterTitle: chapter.title,
+      selectedText: selectedText.trim(),
+      position: _currentIndex,
+    );
+  }
+
+  TextStyle _readerTextStyle(Color color) {
+    return TextStyle(
+      fontSize: _settings.fontSize,
+      height: _settings.lineHeight,
+      color: color,
+    );
   }
 
   Future<void> _loadContent() async {
@@ -99,6 +148,7 @@ class _ReaderPageState extends State<ReaderPage> {
             }
           });
         });
+        _countChapterChars(content);
         _syncPreload();
       }
     } catch (e) {
@@ -389,7 +439,13 @@ class _ReaderPageState extends State<ReaderPage> {
               ),
             ),
             if (!_isLoading && _content != '加载中...')
-              BookplateOverlay(textColor: theme.text, isHeader: true),
+              BookplateOverlay(
+                book: widget.book,
+                currentChapterIndex: _currentIndex,
+                totalChapters: widget.allChapters.length,
+                textColor: theme.text,
+                isHeader: true,
+              ),
             const Divider(height: 8),
             Expanded(
               child: _isLoading && _content == '加载中...'
@@ -410,13 +466,10 @@ class _ReaderPageState extends State<ReaderPage> {
                     )
                   : _pages.isEmpty
                   ? Center(
-                      child: SelectableText(
-                        _content,
-                        style: TextStyle(
-                          fontSize: _settings.fontSize,
-                          height: _settings.lineHeight,
-                          color: theme.text,
-                        ),
+                      child: ReaderSelectableText(
+                        text: _content,
+                        style: _readerTextStyle(theme.text),
+                        onWriteNote: _openNoteEditor,
                       ),
                     )
                   : Column(
@@ -440,13 +493,10 @@ class _ReaderPageState extends State<ReaderPage> {
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 20,
                                       ),
-                                      child: SelectableText(
-                                        _pages[index],
-                                        style: TextStyle(
-                                          fontSize: _settings.fontSize,
-                                          height: _settings.lineHeight,
-                                          color: theme.text,
-                                        ),
+                                      child: ReaderSelectableText(
+                                        text: _pages[index],
+                                        style: _readerTextStyle(theme.text),
+                                        onWriteNote: _openNoteEditor,
                                       ),
                                     ),
                                   );
@@ -481,7 +531,13 @@ class _ReaderPageState extends State<ReaderPage> {
                     ),
             ),
             if (!_isLoading && _content != '加载中...')
-              BookplateOverlay(textColor: theme.text, isHeader: false),
+              BookplateOverlay(
+                book: widget.book,
+                currentChapterIndex: _currentIndex,
+                totalChapters: widget.allChapters.length,
+                textColor: theme.text,
+                isHeader: false,
+              ),
             // 底部进度
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -633,17 +689,26 @@ class _ReaderPageState extends State<ReaderPage> {
                             ),
                           ),
                         ),
-                        BookplateOverlay(textColor: theme.text, isHeader: true),
-                        SelectableText(
-                          _content,
-                          style: TextStyle(
-                            fontSize: _settings.fontSize,
-                            height: _settings.lineHeight,
-                            color: theme.text,
-                          ),
+                        BookplateOverlay(
+                          book: widget.book,
+                          currentChapterIndex: _currentIndex,
+                          totalChapters: widget.allChapters.length,
+                          textColor: theme.text,
+                          isHeader: true,
+                        ),
+                        ReaderSelectableText(
+                          text: _content,
+                          style: _readerTextStyle(theme.text),
+                          onWriteNote: _openNoteEditor,
                         ),
                         const SizedBox(height: 16),
-                        BookplateOverlay(textColor: theme.text, isHeader: false),
+                        BookplateOverlay(
+                          book: widget.book,
+                          currentChapterIndex: _currentIndex,
+                          totalChapters: widget.allChapters.length,
+                          textColor: theme.text,
+                          isHeader: false,
+                        ),
                         const SizedBox(height: 32),
                         // 底部翻页按钮
                         Center(

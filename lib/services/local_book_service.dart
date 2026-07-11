@@ -4,11 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:charset_converter/charset_converter.dart';
+import '../bridge/legado_engine_bridge.dart';
 import '../models/book.dart';
 import '../models/chapter.dart';
 import '../database/database_helper.dart';
 
-/// 本地书籍导入服务 - 支持 TXT/EPUB
+/// 本地书籍导入服务 - 支持 TXT/EPUB（Rust 分章/解析）
 class LocalBookService {
   final DatabaseHelper _db = DatabaseHelper();
 
@@ -40,89 +41,146 @@ class LocalBookService {
     }
   }
 
-  /// 导入 TXT 文件
-  Future<Book> _importTxt(String filePath, String fileName) async {
-    // 1. 读取文件内容（自动检测编码）
+  Future<String> _readTextFile(String filePath) async {
     final bytes = await File(filePath).readAsBytes();
-    String text;
     try {
-      // 先试 UTF-8
-      text = utf8.decode(bytes);
-      // 检查是否有乱码
+      var text = utf8.decode(bytes);
       if (text.contains('\uFFFD')) {
-        // 有乱码，尝试 GBK
         text = await CharsetConverter.decode('GBK', bytes);
       }
+      return text;
     } catch (_) {
-      // UTF-8 失败，尝试 GBK
       try {
-        text = await CharsetConverter.decode('GBK', bytes);
+        return await CharsetConverter.decode('GBK', bytes);
       } catch (_) {
-        // 最终兜底
-        text = utf8.decode(bytes, allowMalformed: true);
+        return utf8.decode(bytes, allowMalformed: true);
       }
     }
+  }
 
-    // 2. 提取书名（从文件名或内容开头）
+  Future<Book> _importTxt(String filePath, String fileName) async {
+    final text = await _readTextFile(filePath);
     final bookName = p.withoutExtension(fileName);
-
-    // 3. 按章节分割
-    final chapters = _splitChapters(text);
     final bookId = 'local_${DateTime.now().millisecondsSinceEpoch}';
 
-    // 4. 创建书籍
+    final parsed = _parseTxtChapters(text);
     final book = Book(
       id: bookId,
       name: bookName,
       author: '本地导入',
       type: 'local',
+      sourceUrl: filePath,
     );
 
-    // 5. 保存到数据库
     await _db.insertBook(book);
-
-    if (chapters.isNotEmpty) {
-      await _db.insertChapters(chapters);
-    } else {
-      // 没有章节标记，整本书作为一章
-      await _db.insertChapters([
-        Chapter(
-          id: '${bookId}_ch_0',
-          bookId: bookId,
-          title: bookName,
-          index: 0,
-          url: '',
-          isDownloaded: true,
-          content: text,
-        ),
-      ]);
-    }
+    await _saveChapters(bookId, parsed, fallbackTitle: bookName, fallbackContent: text);
 
     return book;
   }
 
-  /// 导入 EPUB 文件（简易版 - 提取文本内容）
   Future<Book> _importEpub(String filePath, String fileName) async {
-    // EPUB 是 ZIP 压缩包，简易处理：直接读文件名
-    final bookName = p.withoutExtension(fileName);
+    final bytes = await File(filePath).readAsBytes();
     final bookId = 'local_${DateTime.now().millisecondsSinceEpoch}';
 
+    if (LegadoEngineBridge.isAvailable) {
+      try {
+        final info = LegadoEngineBridge.parseEpub(bytes);
+        final book = Book(
+          id: bookId,
+          name: info.title.isNotEmpty ? info.title : p.withoutExtension(fileName),
+          author: info.author,
+          type: 'local',
+          sourceUrl: filePath,
+        );
+        await _db.insertBook(book);
+        final chapters = info.chapters
+            .asMap()
+            .entries
+            .map(
+              (e) => Chapter(
+                id: '${bookId}_ch_${e.key}',
+                bookId: bookId,
+                title: e.value.title,
+                index: e.key,
+                url: '',
+                isDownloaded: true,
+                content: e.value.content,
+              ),
+            )
+            .toList();
+        if (chapters.isNotEmpty) {
+          await _db.insertChapters(chapters);
+        }
+        return book;
+      } catch (e) {
+        debugPrint('EPUB Rust 解析失败，回退占位: $e');
+      }
+    }
+
+    final bookName = p.withoutExtension(fileName);
     final book = Book(
       id: bookId,
       name: bookName,
-      author: '本地EPUB',
+      author: '本地 EPUB',
       type: 'local',
+      sourceUrl: filePath,
     );
-
     await _db.insertBook(book);
     return book;
   }
 
-  /// 分割章节 - 支持常见章节标题格式
-  List<Chapter> _splitChapters(String text) {
-    final chapters = <Chapter>[];
+  List<({String title, String content})> _parseTxtChapters(String text) {
+    if (LegadoEngineBridge.isAvailable) {
+      try {
+        return LegadoEngineBridge.parseTxtChapters(text);
+      } catch (e) {
+        debugPrint('TXT Rust 分章失败，回退 Dart: $e');
+      }
+    }
+    return _splitChaptersDart(text);
+  }
 
-    // 常见的章节标题正则
+  Future<void> _saveChapters(
+    String bookId,
+    List<({String title, String content})> parsed, {
+    required String fallbackTitle,
+    required String fallbackContent,
+  }) async {
+    if (parsed.isNotEmpty) {
+      final chapters = parsed
+          .asMap()
+          .entries
+          .map(
+            (e) => Chapter(
+              id: '${bookId}_ch_${e.key}',
+              bookId: bookId,
+              title: e.value.title,
+              index: e.key,
+              url: '',
+              isDownloaded: true,
+              content: e.value.content,
+            ),
+          )
+          .toList();
+      await _db.insertChapters(chapters);
+      return;
+    }
+
+    await _db.insertChapters([
+      Chapter(
+        id: '${bookId}_ch_0',
+        bookId: bookId,
+        title: fallbackTitle,
+        index: 0,
+        url: '',
+        isDownloaded: true,
+        content: fallbackContent,
+      ),
+    ]);
+  }
+
+  /// Dart 回退分章
+  List<({String title, String content})> _splitChaptersDart(String text) {
     final patterns = [
       RegExp(r'第[一二三四五六七八九十百千零0-9]+章\s*[^\n]*'),
       RegExp(r'第[一二三四五六七八九十百千零0-9]+节\s*[^\n]*'),
@@ -131,7 +189,6 @@ class LocalBookService {
       RegExp(r'VOL\.[0-9]+\s*[^\n]*', caseSensitive: false),
     ];
 
-    // 先用第一个匹配到的模式
     RegExp? usedPattern;
     for (final pattern in patterns) {
       if (pattern.hasMatch(text)) {
@@ -139,36 +196,20 @@ class LocalBookService {
         break;
       }
     }
-
-    if (usedPattern == null) return chapters;
+    if (usedPattern == null) return [];
 
     final matches = usedPattern.allMatches(text).toList();
-    if (matches.isEmpty) return chapters;
+    if (matches.isEmpty) return [];
 
-    // 生成章节
-    for (int i = 0; i < matches.length; i++) {
+    final out = <({String title, String content})>[];
+    for (var i = 0; i < matches.length; i++) {
       final title = matches[i].group(0)!.trim();
-
-      // 提取正文（从本章标题到下一章标题之间）
       final start = matches[i].end;
-      final end = (i + 1 < matches.length) ? matches[i + 1].start : text.length;
+      final end = i + 1 < matches.length ? matches[i + 1].start : text.length;
       final content = text.substring(start, end).trim();
-
-      chapters.add(
-        Chapter(
-          id: '${matches[i].start}',
-          bookId: '', // 稍后设置
-          title: title,
-          index: i,
-          url: '',
-          isDownloaded: true,
-          content: content,
-        ),
-      );
+      if (content.isEmpty) continue;
+      out.add((title: title, content: content));
     }
-
-    return chapters;
+    return out;
   }
-
-  /// 分割章节 - 支持常见章节标题格式
 }

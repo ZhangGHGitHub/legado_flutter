@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/database_helper.dart';
 import '../../providers/book_provider.dart';
+import '../../providers/rss_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/book_source_service.dart';
 import '../bookshelf/bookshelf_page.dart';
@@ -51,8 +52,10 @@ class _MainShellState extends State<MainShell> {
     final db = DatabaseHelper();
     final bookProvider = context.read<BookProvider>();
     final sourceProvider = context.read<SourceProvider>();
+    final rssProvider = context.read<RssProvider>();
 
     await bookProvider.loadBooks();
+    await rssProvider.loadSources();
 
     var sources = await db.getBookSources();
     if (sources.isEmpty) {

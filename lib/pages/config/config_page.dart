@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../services/bookshelf_prefs.dart';
+import '../../services/web_api_service.dart';
 import '../../theme/legado_tokens.dart';
-import '../../widgets/empty_state.dart';
+import 'backup_config_page.dart';
+import 'other_settings_card.dart';
 import 'theme_config_page.dart';
+import 'web_api_settings_card.dart';
 
 /// 配置中心 — 对齐 ConfigActivity（F2 骨架）
 class ConfigPage extends StatefulWidget {
@@ -60,15 +63,13 @@ class _ConfigPageState extends State<ConfigPage>
       body: TabBarView(
         controller: _tabController,
         children: [
-          const _ConfigPlaceholder(
-            icon: Icons.backup_outlined,
-            title: '备份与恢复',
-            subtitle: 'F3 将实现本地/WebDAV 备份书源、书架与设置',
-          ),
+          const BackupConfigPage(),
           const ThemeConfigPage(),
           ListView(
             padding: const EdgeInsets.all(LegadoTokens.spacingMd),
             children: [
+              const WebApiSettingsCard(),
+              const SizedBox(height: 12),
               Card(
                 child: SwitchListTile(
                   title: const Text('书架网格布局'),
@@ -84,32 +85,11 @@ class _ConfigPageState extends State<ConfigPage>
                 ),
               ),
               const SizedBox(height: 12),
-              const _ConfigPlaceholder(
-                icon: Icons.tune,
-                title: '更多偏好',
-                subtitle: '翻页模式、默认首页等设置将在后续版本提供',
-              ),
+              const OtherSettingsCard(),
             ],
           ),
         ],
       ),
     );
-  }
-}
-
-class _ConfigPlaceholder extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  const _ConfigPlaceholder({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return EmptyState(icon: icon, title: title, subtitle: subtitle);
   }
 }

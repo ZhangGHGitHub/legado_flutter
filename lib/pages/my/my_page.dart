@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../bridge/legado_engine_bridge.dart';
+import '../../services/web_api_prefs.dart';
+import '../../services/web_api_service.dart';
 import '../../services/webdav_prefs.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/legado_tokens.dart';
@@ -36,8 +38,11 @@ class _MyPageState extends State<MyPage> {
   }
 
   Future<void> _loadWebService() async {
-    final on = await WebDavPrefs.loadWebServiceOn();
-    if (mounted) setState(() => _webServiceOn = on);
+    final config = await WebApiPrefs.load();
+    final status = WebApiService.currentStatus();
+    if (mounted) {
+      setState(() => _webServiceOn = config.enabled && (status?.running ?? false));
+    }
   }
 
   Future<void> _showWebDavDialog() async {
@@ -182,6 +187,7 @@ class _MyPageState extends State<MyPage> {
       LegadoThemeMode.light => '浅色模式',
       LegadoThemeMode.dark => '深色模式',
     };
+    final presetLabel = context.watch<ThemeModeController>().presetLabel;
 
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
@@ -244,16 +250,17 @@ class _MyPageState extends State<MyPage> {
                   icon: Icons.wifi,
                   label: _webServiceOn ? '已开启' : 'Web服务',
                   onTap: () async {
-                    final next = !_webServiceOn;
-                    await WebDavPrefs.saveWebServiceOn(next);
-                    if (mounted) setState(() => _webServiceOn = next);
+                    final config = await WebApiPrefs.load();
+                    final next = !config.enabled;
+                    final status = await WebApiService.setEnabled(next);
+                    await _loadWebService();
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
                             next
-                                ? 'Web 服务 UI 占位：已开启（服务未实现）'
-                                : 'Web 服务已关闭',
+                                ? 'Web API 已启动 ${status?.baseUrl ?? ''}'
+                                : 'Web API 已停止',
                           ),
                         ),
                       );
@@ -335,7 +342,7 @@ class _MyPageState extends State<MyPage> {
                 LegadoListTile(
                   icon: Icons.color_lens_outlined,
                   title: '主题设置',
-                  subtitle: '阅读与应用主题',
+                  subtitle: '配色：$presetLabel',
                   onTap: () => _openConfig(1),
                 ),
                 const LegadoListDivider(),

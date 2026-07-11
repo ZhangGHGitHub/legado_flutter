@@ -10,6 +10,7 @@ import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
 import 'package:legado_flutter/pages/main/main_shell.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/replace_provider.dart';
+import 'package:legado_flutter/providers/rss_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
 import 'package:legado_flutter/theme/app_theme.dart';
 
@@ -45,6 +46,7 @@ void main() {
           ChangeNotifierProvider.value(value: themeController),
           ChangeNotifierProvider(create: (_) => BookProvider()),
           ChangeNotifierProvider(create: (_) => SourceProvider()),
+          ChangeNotifierProvider(create: (_) => RssProvider()),
           ChangeNotifierProvider(create: (_) => ReplaceProvider()),
         ],
         child: const MaterialApp(home: MainShell()),
