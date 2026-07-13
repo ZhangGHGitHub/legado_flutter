@@ -16,6 +16,9 @@ import 'theme/app_theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 注意：不要在此调用 setSemanticsTreeEnabled(false) / 整站 ExcludeSemantics。
+  // 整站关闭语义曾与阅读器正文空白并存；AXTree 压制改到阅读器页内（见 reader_page）。
+
   await EngineConfig.load();
   await LegadoEngineBridge.tryInit();
   if (LegadoEngineBridge.isAvailable) {

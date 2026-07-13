@@ -90,4 +90,19 @@ class BookHelp {
     final file = await _chapterFile(bookId, chapterId);
     return file.exists();
   }
+
+  /// 删除单章文件缓存（用于阅读器「刷新」）
+  static Future<void> deleteChapterContent(
+    String bookId,
+    String chapterId,
+  ) async {
+    try {
+      final file = await _chapterFile(bookId, chapterId);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      debugPrint('BookHelp 删除章节缓存失败: $e');
+    }
+  }
 }

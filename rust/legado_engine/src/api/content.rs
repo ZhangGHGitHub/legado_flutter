@@ -75,7 +75,10 @@ pub async fn get_content(source_json: &str, chapter_url: &str) -> Result<String,
 
     let content = parts.join("\n\n").trim().to_string();
     if content.is_empty() {
-        Ok("（此章节暂无内容）".to_string())
+        // 勿把解析失败静默成「成功」占位——上层会误缓存、阅读页也无法区分真失败
+        Err(format!(
+            "正文解析为空（请检查章节 URL 与 ruleContent）: {chapter_url}"
+        ))
     } else {
         Ok(content)
     }

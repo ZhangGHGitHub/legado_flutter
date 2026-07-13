@@ -78,10 +78,7 @@ class DatabaseHelper {
     await insertBookSource(source);
   }
 
-  String _sourceJson(BookSource source) {
-    if (source.rawSourceJson.isNotEmpty) return source.rawSourceJson;
-    return jsonEncode(source.toJson());
-  }
+  String _sourceJson(BookSource source) => source.toEngineJson();
 
   List<BookSource> _parseSources(List<String> rows) {
     return rows.map((s) {

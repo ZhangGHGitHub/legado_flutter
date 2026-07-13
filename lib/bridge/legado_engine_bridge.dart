@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -38,10 +37,7 @@ class LegadoEngineBridge {
     }
   }
 
-  static String _sourceJson(BookSource source) =>
-      source.rawSourceJson.isNotEmpty
-          ? source.rawSourceJson
-          : jsonEncode(source.toJson());
+  static String _sourceJson(BookSource source) => source.toEngineJson();
 
   static Future<List<Map<String, String>>> search(
     BookSource source,

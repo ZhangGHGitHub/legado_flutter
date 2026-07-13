@@ -126,10 +126,11 @@ impl BookSource {
             rule_content: nested("ruleContent", "content", "ruleContent"),
             rule_content_next_url: nested("ruleContent", "nextContentUrl", "rulePageNext"),
             rule_content_replace_regex,
-            concurrent_rate: map
-                .get("concurrentRate")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
+            concurrent_rate: map.get("concurrentRate").and_then(|v| match v {
+                Value::String(s) if !s.is_empty() => Some(s.clone()),
+                Value::Number(n) => Some(n.to_string()),
+                _ => None,
+            }),
             js_lib: str_field(map, "jsLib"),
             raw_json: json_str.to_string(),
             rule_search_obj,
@@ -226,17 +227,78 @@ fn has_json_rule(rule: &Value) -> bool {
     }
 }
 
-/// 书源自定义请求头
+/// 书源自定义请求头（兼容 Legado：`header` 为 object 或 JSON 字符串）
 pub fn custom_headers(json_str: &str) -> HashMap<String, String> {
     let mut headers = HashMap::new();
-    if let Ok(obj) = serde_json::from_str::<Value>(json_str) {
-        if let Some(header) = obj.get("header").and_then(|h| h.as_object()) {
-            for (k, v) in header {
-                if let Some(s) = v.as_str() {
-                    headers.insert(k.clone(), s.to_string());
-                }
+    let Ok(obj) = serde_json::from_str::<Value>(json_str) else {
+        return headers;
+    };
+    let Some(header_val) = obj.get("header") else {
+        return headers;
+    };
+    let header_obj = match header_val {
+        Value::Object(map) => Some(map.clone()),
+        Value::String(s) => serde_json::from_str::<Value>(s)
+            .ok()
+            .and_then(|v| v.as_object().cloned()),
+        _ => None,
+    };
+    if let Some(header) = header_obj {
+        for (k, v) in header {
+            let s = match v {
+                Value::String(s) => s,
+                other => other.to_string(),
+            };
+            if !s.is_empty() {
+                headers.insert(k, s);
             }
         }
     }
     headers
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn custom_headers_parses_json_string() {
+        let src = r#"{
+            "bookSourceUrl":"https://novel.cooks.tw",
+            "header":"{\"User-Agent\":\"UA-TEST\",\"Referer\":\"https://novel.cooks.tw/\"}"
+        }"#;
+        let h = custom_headers(src);
+        assert_eq!(h.get("User-Agent").map(String::as_str), Some("UA-TEST"));
+        assert_eq!(
+            h.get("Referer").map(String::as_str),
+            Some("https://novel.cooks.tw/")
+        );
+    }
+
+    #[test]
+    fn custom_headers_parses_object() {
+        let src = r#"{"header":{"Accept-Language":"zh-CN"}}"#;
+        let h = custom_headers(src);
+        assert_eq!(h.get("Accept-Language").map(String::as_str), Some("zh-CN"));
+    }
+
+    #[test]
+    fn from_json_accepts_flat_rule_content_string() {
+        let src = r#"{
+            "bookSourceUrl":"https://novel.cooks.tw",
+            "ruleContent":"$.data.content\n<js>Clean(result)</js>",
+            "jsLib":"function Clean(r){return r}"
+        }"#;
+        let bs = BookSource::from_json(src).unwrap();
+        assert!(bs.is_json_api());
+        assert_eq!(
+            bs.rule_content,
+            "$.data.content\n<js>Clean(result)</js>"
+        );
+        // 扁平字符串仍要能识别为 JSON 规则
+        assert!(matches!(
+            bs.rule_content_obj,
+            Some(Value::String(ref s)) if s.starts_with("$.data.content")
+        ));
+    }
 }

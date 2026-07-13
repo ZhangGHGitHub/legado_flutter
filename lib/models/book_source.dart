@@ -159,7 +159,7 @@ class BookSource {
   /// 获取 ruleSearch 的 bookUrl（搜索结果中书本链接的提取规则）
   String get ruleSearchBookUrl => _rawExtract('ruleSearch', 'bookUrl');
 
-  /// 获取书源自定义请求头（header 字段）
+  /// 获取书源自定义请求头（header 字段；兼容 object / JSON 字符串）
   Map<String, String> get customHeaders {
     if (rawSourceJson.isEmpty) return {};
     try {
@@ -167,6 +167,12 @@ class BookSource {
       final header = obj['header'];
       if (header is Map) {
         return header.map((k, v) => MapEntry(k.toString(), v.toString()));
+      }
+      if (header is String && header.trim().isNotEmpty) {
+        final parsed = jsonDecode(header);
+        if (parsed is Map) {
+          return parsed.map((k, v) => MapEntry(k.toString(), v.toString()));
+        }
       }
     } catch (_) {}
     return {};
@@ -225,11 +231,8 @@ class BookSource {
       return null;
     }
 
-    // 保留完整原始 JSON
-    String rawJson = '';
-    try {
-      rawJson = const JsonEncoder().convert(json);
-    } catch (_) {}
+    // 保留完整 Legado 原始 JSON（优先嵌套规则；避免 toJson↔fromJson 扁平化毁掉 ruleContent）
+    final rawJson = _resolveRawSourceJson(json);
 
     return BookSource(
       bookSourceUrl: safeString(json['bookSourceUrl']) ?? '',
@@ -278,39 +281,107 @@ class BookSource {
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    'bookSourceUrl': bookSourceUrl,
-    'bookSourceName': bookSourceName,
-    'bookSourceType': bookSourceType,
-    'bookSourceGroup': bookSourceGroup,
-    'enabled': enabled,
-    'ruleSearchUrl': ruleSearchUrl,
-    'ruleSearchList': ruleSearchList,
-    'ruleSearchName': ruleSearchName,
-    'ruleSearchAuthor': ruleSearchAuthor,
-    'ruleSearchCoverUrl': ruleSearchCoverUrl,
-    'ruleSearchKind': ruleSearchKind,
-    'ruleSearchNote': ruleSearchNote,
-    'ruleBookUrlPattern': ruleBookUrlPattern,
-    'ruleBookName': ruleBookName,
-    'ruleBookAuthor': ruleBookAuthor,
-    'ruleBookCoverUrl': ruleBookCoverUrl,
-    'ruleBookKind': ruleBookKind,
-    'ruleBookNote': ruleBookNote,
-    'ruleBookLastChapter': ruleBookLastChapter,
-    'ruleChapterList': ruleChapterList,
-    'ruleChapterName': ruleChapterName,
-    'ruleChapterUrl': ruleChapterUrl,
-    'ruleChapterUrlIsFull': ruleChapterUrlIsFull,
-    'ruleContentUrl': ruleContentUrl,
-    'ruleContent': ruleContent,
-    'ruleContentRemove': ruleContentRemove,
-    'rulePageUrl': rulePageUrl,
-    'rulePageNext': rulePageNext,
-    'bookSourceComment': bookSourceComment,
-    'rawSourceJson': rawSourceJson,
-  };
+  /// 引擎 / DB 优先用完整 Legado JSON；无 raw 时才退回扁平字段
+  Map<String, dynamic> toJson() {
+    if (rawSourceJson.isNotEmpty) {
+      try {
+        final obj = jsonDecode(rawSourceJson);
+        if (obj is Map<String, dynamic>) {
+          final out = Map<String, dynamic>.from(obj);
+          out['enabled'] = enabled;
+          if (bookSourceGroup.isNotEmpty) {
+            out['bookSourceGroup'] = bookSourceGroup;
+          }
+          return out;
+        }
+        if (obj is Map) {
+          final out = <String, dynamic>{
+            for (final e in obj.entries) e.key.toString(): e.value,
+          };
+          out['enabled'] = enabled;
+          if (bookSourceGroup.isNotEmpty) {
+            out['bookSourceGroup'] = bookSourceGroup;
+          }
+          return out;
+        }
+      } catch (_) {}
+    }
+    return {
+      'bookSourceUrl': bookSourceUrl,
+      'bookSourceName': bookSourceName,
+      'bookSourceType': bookSourceType,
+      'bookSourceGroup': bookSourceGroup,
+      'enabled': enabled,
+      'ruleSearchUrl': ruleSearchUrl,
+      'ruleSearchList': ruleSearchList,
+      'ruleSearchName': ruleSearchName,
+      'ruleSearchAuthor': ruleSearchAuthor,
+      'ruleSearchCoverUrl': ruleSearchCoverUrl,
+      'ruleSearchKind': ruleSearchKind,
+      'ruleSearchNote': ruleSearchNote,
+      'ruleBookUrlPattern': ruleBookUrlPattern,
+      'ruleBookName': ruleBookName,
+      'ruleBookAuthor': ruleBookAuthor,
+      'ruleBookCoverUrl': ruleBookCoverUrl,
+      'ruleBookKind': ruleBookKind,
+      'ruleBookNote': ruleBookNote,
+      'ruleBookLastChapter': ruleBookLastChapter,
+      'ruleChapterList': ruleChapterList,
+      'ruleChapterName': ruleChapterName,
+      'ruleChapterUrl': ruleChapterUrl,
+      'ruleChapterUrlIsFull': ruleChapterUrlIsFull,
+      'ruleContentUrl': ruleContentUrl,
+      'ruleContent': ruleContent,
+      'ruleContentRemove': ruleContentRemove,
+      'rulePageUrl': rulePageUrl,
+      'rulePageNext': rulePageNext,
+      'bookSourceComment': bookSourceComment,
+    };
+  }
+
+  /// 供 Rust 桥接：始终尽量传完整 Legado JSON
+  String toEngineJson() {
+    if (rawSourceJson.isNotEmpty) return rawSourceJson;
+    return jsonEncode(toJson());
+  }
 
   @override
   String toString() => 'BookSource($bookSourceName)';
+}
+
+bool _hasNestedLegadoRules(Map<String, dynamic> json) {
+  for (final key in ['ruleContent', 'ruleToc', 'ruleSearch', 'ruleBookInfo', 'ruleExplore']) {
+    if (json[key] is Map) return true;
+  }
+  return false;
+}
+
+String _resolveRawSourceJson(Map<String, dynamic> json) {
+  // 1) 顶层已是完整嵌套书源
+  if (_hasNestedLegadoRules(json)) {
+    final copy = Map<String, dynamic>.from(json)..remove('rawSourceJson');
+    try {
+      return const JsonEncoder().convert(copy);
+    } catch (_) {}
+  }
+  // 2) 扁平包装里嵌了原来的完整 raw
+  final embedded = json['rawSourceJson'];
+  if (embedded is String && embedded.isNotEmpty) {
+    try {
+      final parsed = jsonDecode(embedded);
+      if (parsed is Map) {
+        final map = Map<String, dynamic>.from(parsed);
+        if (_hasNestedLegadoRules(map) || map.containsKey('bookSourceUrl')) {
+          return embedded;
+        }
+      }
+    } catch (_) {}
+  }
+  // 3) 退回整表编码（可能已扁平）
+  try {
+    final copy = Map<String, dynamic>.from(json)..remove('rawSourceJson');
+    return const JsonEncoder().convert(copy);
+  } catch (_) {
+    return '';
+  }
 }

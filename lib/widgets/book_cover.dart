@@ -21,42 +21,71 @@ class BookCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final h = height ?? width * 1.33;
-    final theme = Theme.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final theme = Theme.of(context);
+        // width: infinity（网格 Expanded）时勿用 width*1.33，否则 h=Infinity 触发布局断言
+        final w = width.isFinite
+            ? width
+            : (constraints.maxWidth.isFinite && constraints.maxWidth > 0
+                  ? constraints.maxWidth
+                  : LegadoTokens.bookCoverWidthList);
+        final h = (height != null && height!.isFinite)
+            ? height!
+            : (constraints.maxHeight.isFinite &&
+                      constraints.maxHeight > 0 &&
+                      constraints.maxHeight < double.infinity
+                  ? constraints.maxHeight
+                  : w * 1.33);
+        final iconSize = (w.isFinite ? w : LegadoTokens.bookCoverWidthList) * 0.35;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: SizedBox(
-        width: width,
-        height: h,
-        child: coverUrl.isNotEmpty
-            ? Image.network(
-                coverUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _placeholder(theme),
-                loadingBuilder: (_, child, progress) {
-                  if (progress == null) return child;
-                  return _placeholder(theme);
-                },
-              )
-            : _placeholder(theme),
-      ),
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: SizedBox(
+            width: w.isFinite ? w : null,
+            height: h.isFinite ? h : null,
+            child: coverUrl.isNotEmpty
+                ? Image.network(
+                    coverUrl,
+                    fit: BoxFit.cover,
+                    width: w.isFinite ? w : null,
+                    height: h.isFinite ? h : null,
+                    errorBuilder: (_, _, _) =>
+                        _placeholder(theme, iconSize),
+                    loadingBuilder: (_, child, progress) {
+                      if (progress == null) return child;
+                      return _placeholder(theme, iconSize);
+                    },
+                  )
+                : _placeholder(theme, iconSize),
+          ),
+        );
+      },
     );
   }
 
-  Widget _placeholder(ThemeData theme) {
+  Widget _placeholder(ThemeData theme, double iconSize) {
     return Container(
       color: theme.colorScheme.primaryContainer,
+      alignment: Alignment.center,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.menu_book, size: width * 0.35, color: theme.colorScheme.primary),
+          Icon(
+            Icons.menu_book,
+            size: iconSize.isFinite ? iconSize : 24,
+            color: theme.colorScheme.primary,
+          ),
           if (author != null && author!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
                 author!.length > 4 ? author!.substring(0, 4) : author!,
-                style: TextStyle(fontSize: 10, color: theme.colorScheme.primary),
+                style: TextStyle(
+                  fontSize: 10,
+                  color: theme.colorScheme.primary,
+                ),
               ),
             ),
         ],

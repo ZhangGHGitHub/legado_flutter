@@ -62,6 +62,22 @@ class ReadBook extends ChangeNotifier {
     return chapters[durChapterIndex];
   }
 
+  /// Rust 空解析占位（恰好 9 字）——勿当成功正文缓存 / 勿当可阅读段落
+  static bool isEmptyContentPlaceholder(String s) {
+    final t = s.trim();
+    return t.isEmpty ||
+        t == '（此章节暂无内容）' ||
+        t == '（阅读引擎未初始化）';
+  }
+
+  /// 失败 / 空结果：一律不写文件/DB 缓存
+  static bool shouldSkipCache(String s) {
+    final t = s.trim();
+    return isEmptyContentPlaceholder(t) ||
+        t.startsWith('（加载失败') ||
+        t.startsWith('⚠️');
+  }
+
   /// 加载章节正文（文件缓存 → DB → 网络 → 净化 → 写缓存）
   Future<String> loadChapterContent({
     required Chapter chapter,
@@ -78,19 +94,29 @@ class ReadBook extends ChangeNotifier {
     final bid = bookId ?? book?.id ?? chapter.bookId;
     final memKey = chapter.id.hashCode;
     if (_memoryCache.containsKey(memKey)) {
-      return _memoryCache[memKey]!;
+      final hit = _memoryCache[memKey]!;
+      // 坏缓存（空章/失败占位）一律丢弃并重新拉取
+      if (!shouldSkipCache(hit)) return hit;
+      _memoryCache.remove(memKey);
     }
 
     isLoadingContent = true;
     notifyListeners();
 
     try {
-      // 1. 内存/文件缓存
+      // 1. 文件缓存（跳过空章/失败占位，并清掉坏文件）
       final fileCached = await BookHelp.getCachedContent(bid, chapter.id);
       if (fileCached != null && fileCached.isNotEmpty) {
-        final processed = proc.getContent(fileCached);
-        _memoryCache[memKey] = processed;
-        return processed;
+        if (shouldSkipCache(fileCached)) {
+          await BookHelp.deleteChapterContent(bid, chapter.id);
+        } else {
+          final processed = proc.getContent(fileCached);
+          if (!shouldSkipCache(processed)) {
+            _memoryCache[memKey] = processed;
+            return processed;
+          }
+          await BookHelp.deleteChapterContent(bid, chapter.id);
+        }
       }
 
       // 2. DB 缓存
@@ -100,32 +126,40 @@ class ReadBook extends ChangeNotifier {
         if (hit != null &&
             hit.isDownloaded &&
             hit.content != null &&
-            hit.content!.isNotEmpty) {
+            hit.content!.isNotEmpty &&
+            !shouldSkipCache(hit.content!)) {
           final processed = proc.getContent(hit.content!);
-          _memoryCache[memKey] = processed;
-          if (saveCache) {
-            await BookHelp.saveContent(bid, chapter.id, processed);
+          if (!shouldSkipCache(processed)) {
+            _memoryCache[memKey] = processed;
+            if (saveCache) {
+              await BookHelp.saveContent(bid, chapter.id, processed);
+            }
+            return processed;
           }
+        }
+      }
+
+      // 3. 网络拉取（失败转为可展示文案，绝不写缓存；预加载也不会变 unhandled）
+      try {
+        final raw = await svc.getChapterContent(chapter.url, source: source);
+        final processed = proc.getContent(raw);
+        if (shouldSkipCache(processed)) {
+          // 占位 / 失败文案：不进内存、不写库（旧引擎 Ok 占位兼容）
           return processed;
         }
-      }
+        _memoryCache[memKey] = processed;
 
-      // 3. 网络拉取
-      final raw = await svc.getChapterContent(chapter.url, source: source);
-      final processed = proc.getContent(raw);
-      _memoryCache[memKey] = processed;
-
-      if (saveCache &&
-          processed.isNotEmpty &&
-          !processed.startsWith('（加载失败') &&
-          !processed.startsWith('⚠️')) {
-        await BookHelp.saveContent(bid, chapter.id, processed);
-        if (_db != null) {
-          await _db!.saveChapterContent(chapter.id, processed);
+        if (saveCache) {
+          await BookHelp.saveContent(bid, chapter.id, processed);
+          if (_db != null) {
+            await _db!.saveChapterContent(chapter.id, processed);
+          }
         }
-      }
 
-      return processed;
+        return processed;
+      } catch (e) {
+        return '（加载失败: $e）';
+      }
     } finally {
       isLoadingContent = false;
       notifyListeners();
@@ -162,6 +196,15 @@ class ReadBook extends ChangeNotifier {
         bookId: book?.id,
         saveCache: true,
       ).whenComplete(() => _preloading.remove(idx));
+    }
+  }
+
+  /// 使某章缓存失效（内存 + 文件），下次加载将重新拉取
+  Future<void> invalidateChapterCache(String chapterId, {String? bookId}) async {
+    _memoryCache.remove(chapterId.hashCode);
+    final bid = bookId ?? book?.id;
+    if (bid != null && bid.isNotEmpty) {
+      await BookHelp.deleteChapterContent(bid, chapterId);
     }
   }
 

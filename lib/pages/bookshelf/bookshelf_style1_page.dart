@@ -7,6 +7,7 @@ import '../../providers/source_provider.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/read_badge.dart';
 import '../book/book_info_page.dart';
+import '../config/feature_placeholder_page.dart';
 import '../search/search_page.dart';
 
 class BookshelfStyle1Page extends StatefulWidget {
@@ -26,6 +27,8 @@ class BookshelfStyle1Page extends StatefulWidget {
 class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
   String _selectedGroup = '__all__';
   bool _showGrouped = false;
+  /// UI-7: 置顶书 ID（本地 prefs，不改引擎表结构）
+  Set<String> _pinnedIds = {};
 
   @override
   void initState() {
@@ -36,18 +39,39 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
-    setState(() => _showGrouped = prefs.getBool('shelf_show_grouped') ?? false);
+    setState(() {
+      _showGrouped = prefs.getBool('shelf_show_grouped') ?? false;
+      _pinnedIds = (prefs.getStringList('shelf_pinned_ids') ?? []).toSet();
+    });
   }
 
   Future<void> _saveGrouped(bool v) async {
     (await SharedPreferences.getInstance()).setBool('shelf_show_grouped', v);
   }
 
+  Future<void> _savePinned() async {
+    (await SharedPreferences.getInstance()).setStringList(
+      'shelf_pinned_ids',
+      _pinnedIds.toList(),
+    );
+  }
+
   List<Book> _processBooks(List<Book> books) {
     var result = books;
-    if (_selectedGroup != '__all__')
+    if (_selectedGroup != '__all__') {
       result = result.where((b) => b.group == _selectedGroup).toList();
-    return result;
+    }
+    // 置顶优先
+    final pinned = <Book>[];
+    final rest = <Book>[];
+    for (final b in result) {
+      if (_pinnedIds.contains(b.id)) {
+        pinned.add(b);
+      } else {
+        rest.add(b);
+      }
+    }
+    return [...pinned, ...rest];
   }
 
   Set<String> _getAllGroups(List<Book> books) =>
@@ -194,8 +218,9 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                           itemCount: books.length,
                           itemBuilder: (_, i) => _BookItem(
                             book: books[i],
+                            isPinned: _pinnedIds.contains(books[i].id),
                             onTap: () => _openBook(books[i]),
-                            onLongPress: () => _confirmRemove(books[i]),
+                            onLongPress: () => _showBookActions(books[i]),
                           ),
                         ),
                 ),
@@ -288,8 +313,9 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                 ...groups[g]!.map(
                   (b) => _BookItem(
                     book: b,
+                    isPinned: _pinnedIds.contains(b.id),
                     onTap: () => _openBook(b),
-                    onLongPress: () => _confirmRemove(b),
+                    onLongPress: () => _showBookActions(b),
                   ),
                 ),
               ],
@@ -303,6 +329,155 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     context,
     MaterialPageRoute(builder: (_) => BookInfoPage(book: book)),
   );
+
+  Future<void> _togglePin(Book book) async {
+    setState(() {
+      if (_pinnedIds.contains(book.id)) {
+        _pinnedIds.remove(book.id);
+      } else {
+        _pinnedIds.add(book.id);
+      }
+    });
+    await _savePinned();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _pinnedIds.contains(book.id) ? '已置顶「${book.name}」' : '已取消置顶',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _moveBookGroup(Book book) async {
+    final groups = _getAllGroups(context.read<BookProvider>().books).toList()
+      ..sort();
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '移动「${book.name}」到分组',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            ListTile(
+              dense: true,
+              title: const Text('未分组'),
+              selected: book.group.isEmpty,
+              onTap: () => Navigator.pop(ctx, ''),
+            ),
+            ...groups.map(
+              (g) => ListTile(
+                dense: true,
+                title: Text(g),
+                selected: book.group == g,
+                onTap: () => Navigator.pop(ctx, g),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    await context.read<BookProvider>().updateBookGroup(book.id, chosen);
+  }
+
+  void _showBookActions(Book book) {
+    final pinned = _pinnedIds.contains(book.id);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(
+                book.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                book.author,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: Icon(pinned ? Icons.push_pin : Icons.push_pin_outlined),
+              title: Text(pinned ? '取消置顶' : '置顶'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _togglePin(book);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.drive_file_move_outlined),
+              title: const Text('移动分组'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _moveBookGroup(book);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('详情'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _openBook(book);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.tune),
+              title: const Text('整理'),
+              subtitle: const Text('尚未实现 · activity_arrange_book'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const FeaturePlaceholderPage(
+                      title: '书架整理',
+                      subtitle: '拖拽排序与批量整理对齐 UI-10，本入口先占位',
+                      icon: Icons.tune,
+                    ),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text('移除', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _confirmRemove(book);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
 
   void _confirmRemove(Book book) {
     showDialog(
@@ -333,10 +508,12 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
 
 class _BookItem extends StatelessWidget {
   final Book book;
+  final bool isPinned;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   const _BookItem({
     required this.book,
+    this.isPinned = false,
     required this.onTap,
     required this.onLongPress,
   });
@@ -372,14 +549,28 @@ class _BookItem extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Book name
-                    Text(
-                      book.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      children: [
+                        if (isPinned) ...[
+                          Icon(
+                            Icons.push_pin,
+                            size: 14,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        Expanded(
+                          child: Text(
+                            book.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     // Author

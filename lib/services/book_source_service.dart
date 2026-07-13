@@ -56,9 +56,14 @@ class BookSourceService {
     required BookSource source,
   }) async {
     _requireRust();
-    final content = await LegadoEngineBridge.getContent(source, url);
-    debugPrint('  ✓ Rust 正文: ${content.length} 字符');
-    return content;
+    try {
+      final content = await LegadoEngineBridge.getContent(source, url);
+      debugPrint('  ✓ Rust 正文: ${content.length} 字符');
+      return content;
+    } catch (e) {
+      debugPrint('  ✗ Rust 正文失败: $e');
+      rethrow;
+    }
   }
 
   /// 发现页
