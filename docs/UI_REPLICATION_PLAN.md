@@ -98,7 +98,7 @@
 - [x] 信息区开关（页码/时间/电量）
 - [x] 字号/字距/行距/段距（芯片顺序对齐 `dialog_read_book_style`）
 - [x] 翻页动画五档（覆盖/滑动/仿真/滚动/无）；仿真为透视近似（非真实书页卷曲）、主题色自定义仍偏预设
-- [ ] 主题 zip 导入（取消共用布局 → 长按主题）
+- [x] 主题 zip 导入（取消共用布局 → 长按主题）— UI-2：共用布局开关 + 长按主题打开 `BgTextConfigPanel`；本地/网络 zip（`readConfig.json`）；导出 zip；槽位色覆盖持久化；背景图可显示；自定义字体 FontLoader / 每主题独立排版仍开放
 
 **设置面板**（阅读设置子页）
 
@@ -144,7 +144,7 @@
 | # | Jingshiro XML | 对应页面 | Flutter 状态 | 差距 |
 |---|---------------|---------|:---:|------|
 | 1 | `activity_main.xml` | 主框架 (BottomNav + ViewPager) | ✅ `main_shell.dart` | 需核对 Tab 文案/图标/行为 |
-| 2 | `activity_book_read.xml` | 阅读器 | ✅ `reader_page.dart` | UI-1/UI-2：更多设置+系统 TTS+电量+沉浸栏+字重/缩进/简繁字级+翻页五档+屏幕超时分档+全文搜索+模拟追读；HTTP TTS/真仿真卷曲/主题 zip 仍开放 |
+| 2 | `activity_book_read.xml` | 阅读器 | ✅ `reader_page.dart` | UI-1/UI-2：更多设置+系统 TTS+电量+沉浸栏+字重/缩进/简繁字级+翻页五档+屏幕超时分档+全文搜索+模拟追读+主题 zip；HTTP TTS/真仿真卷曲/词级简繁/内嵌字体加载仍开放 |
 | 3 | `activity_book_info.xml` | 书籍详情 | ✅ `book_info_page.dart` | 需核对布局：封面+信息+按钮+目录 |
 | 4 | `activity_book_search.xml` | 搜索 | ✅ `search_page.dart` | **需核对是否按书源分组（ExpansionTile）** |
 | 5 | `activity_book_source.xml` | 书源管理 | ✅ `sources_page.dart` | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
@@ -393,10 +393,13 @@
 - [x] **全文搜索**（`activity_search_content`）— 结果页 + 阅读内上/下结果；当前章与缓存章
 - [x] **模拟追读**（`dialog_simulated_reading`）— 开关/日期/起始章/日更；目录与后章裁剪
 
+- [x] **主题 zip**（`dialog_read_bg_text` 长按入口）— 共用布局 + 长按主题 → 导入/导出 zip + 文字/背景/强调色；`ReadStyleZipService` + 槽位覆盖 prefs
+
 仍开放 / 缺口（勿误报完成）：
 
 - 简繁：**词级**词典（OpenCC / quick-transfer）未接入，仅字级表
-- 仿真翻页为透视近似，**非** legado 真·书页卷曲网格；主题 zip；HTTP TTS
+- 仿真翻页为透视近似，**非** legado 真·书页卷曲网格；HTTP TTS
+- 主题 zip：自定义字体文件已落盘但阅读器未 `FontLoader`；关闭共用布局后排版仍全局（未做每主题独立字号行距）；内置 assets 背景图库未做
 - 文字底部对齐为分页贴底，未做 legado 行距重分配式撑满
 - 全文搜索：未做全书联网扫章 / 净化开关 / 正则搜索菜单项（`menu_enable_replace` / `menu_enable_regex`）
 - 模拟追读：配置未并入 Book 实体/WebDAV 同步；仅本地 SharedPreferences
@@ -578,7 +581,7 @@
 
 ```
 Task UI-1:  阅读器底栏 + 顶栏自动隐藏 + 更多菜单  ✅ 基本完成（2026-07-14）
-Task UI-2:  阅读器设置补全（字体/TTS/自动阅读/点击行为/翻页键）  🟡 超时分档+翻页五档+全文搜索+模拟追读；HTTP TTS/真仿真/主题 zip/词级简繁仍开放
+Task UI-2:  阅读器设置补全（字体/TTS/自动阅读/点击行为/翻页键）  🟡 超时分档+翻页五档+全文搜索+模拟追读+主题 zip；HTTP TTS/真仿真/词级简繁/FontLoader 仍开放
 Task UI-3:  搜索页按书源分组 + 精准搜索 + 搜索范围  ✅ 基本完成（2026-07-14）
 Task UI-4:  书源管理分组展示 + 批量操作 + 绿红灰点验证  ✅ 基本完成（2026-07-14）
 Task UI-5:  目录页正序/倒序 + 已缓存图标 + 当前章高亮  ✅ 基本完成（2026-07-14）
@@ -647,7 +650,7 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 | 发现 | 85% | 接近完成 |
 | 书籍详情 | 92% | UI-6：换源主入口 + 简介展开 + 读完/N刷；换源页后端仍占位 |
 | 目录 | 92% | UI-5：正序倒序/缓存标/高亮/搜索/书签 Tab |
-| **阅读器** | **91%** | UI-1+UI-2：超时分档+翻页五档+沉浸+系统 TTS+全文搜索(缓存)+模拟追读；HTTP TTS/真仿真卷曲/主题 zip/词级简繁/全书联网搜仍开放 |
+| **阅读器** | **93%** | UI-1+UI-2：超时分档+翻页五档+沉浸+系统 TTS+全文搜索(缓存)+模拟追读+主题 zip；HTTP TTS/真仿真卷曲/词级简繁/全书联网搜仍开放 |
 | 书源管理 | 90% | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
 | RSS | 50% | Tab+源管理已有；**文章/阅读延后 S4** |
 | 新模块(有声/漫画/扫码等) | 5% | 全部缺失 |
@@ -655,4 +658,4 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 
 ---
 
-> 最后更新：2026-07-14 | 引擎 v0.5.6 | Focus: UI 复刻（S1：UI-2 全文搜索+模拟追读；HTTP TTS/真仿真卷曲网格/主题 zip/OpenCC/全书联网搜仍开放；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)
+> 最后更新：2026-07-15 | 引擎 v0.5.6 | Focus: UI 复刻（S1：UI-2 主题 zip 导入；HTTP TTS/真仿真卷曲网格/OpenCC/全书联网搜/模拟追读 Book 同步仍开放；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)

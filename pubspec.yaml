@@ -45,6 +45,7 @@ dependencies:
     path: packages/flutter_tts
   battery_plus: ^7.1.0
   wakelock_plus: ^1.5.2
+  archive: ^4.0.9
 
 dev_dependencies:
   flutter_test:

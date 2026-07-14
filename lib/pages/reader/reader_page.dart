@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -21,6 +22,7 @@ import '../book/change_source_page.dart';
 import '../book/toc_sheet.dart';
 import '../book/book_info_page.dart';
 import '../reader/ai_chat_page.dart';
+import '../../services/read_style_prefs.dart';
 import '../../services/simulated_reading_prefs.dart';
 import 'auto_read_panel.dart';
 import 'click_action_panel.dart';
@@ -135,6 +137,7 @@ class _ReaderPageState extends State<ReaderPage> {
     _applyScreenTimeout();
     _applySystemUi();
     unawaited(_loadSimulatedReading());
+    unawaited(_loadReadStylePrefs());
   }
 
   Future<void> _loadSimulatedReading() async {
@@ -144,6 +147,19 @@ class _ReaderPageState extends State<ReaderPage> {
     if (cfg.enabled && _currentIndex > _maxReadableIndex && _maxReadableIndex >= 0) {
       _goToChapter(_maxReadableIndex);
     }
+  }
+
+  Future<void> _loadReadStylePrefs() async {
+    final share = await ReadStylePrefs.loadShareLayout();
+    final overrides = await ReadStylePrefs.loadOverrides();
+    if (!mounted) return;
+    setState(() {
+      _settings = _settings.copyWith(
+        shareLayout: share,
+        themeOverrides: overrides,
+      );
+    });
+    _applySystemUi();
   }
 
   Future<void> _refreshBattery() async {
@@ -1653,7 +1669,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   ReaderTheme get _currentTheme =>
-      ReaderTheme.themes[_settings.themeName] ?? ReaderTheme.themes['paper']!;
+      _settings.resolveTheme();
 
   @override
   Widget build(BuildContext context) {
@@ -1883,13 +1899,29 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
+  Widget? _bgImageLayer(ReaderTheme theme) {
+    final path = theme.bgImagePath;
+    if (path == null || path.isEmpty) return null;
+    final file = File(path);
+    if (!file.existsSync()) return null;
+    return Positioned.fill(
+      child: Image.file(
+        file,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      ),
+    );
+  }
+
   /// 滑动翻页模式
   Widget _buildSlideMode(Chapter chapter, ReaderTheme theme) {
     final cutout = _settings.expandIntoCutout;
+    final bgImage = _bgImageLayer(theme);
     return Scaffold(
       backgroundColor: theme.background,
       body: Stack(
         children: [
+          ?bgImage,
           SafeArea(
             top: !cutout,
             bottom: !cutout,
@@ -2080,10 +2112,12 @@ class _ReaderPageState extends State<ReaderPage> {
   /// 滚动翻页模式
   Widget _buildScrollMode(Chapter chapter, ReaderTheme theme) {
     final cutout = _settings.expandIntoCutout;
+    final bgImage = _bgImageLayer(theme);
     return Scaffold(
       backgroundColor: theme.background,
       body: Stack(
         children: [
+          ?bgImage,
           SafeArea(
             top: !cutout,
             bottom: !cutout,

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../models/read_style_config.dart';
+import '../../services/read_style_prefs.dart';
+import 'bg_text_config_panel.dart';
+
 /// 点击区行为（上/中/下）
 enum ClickZoneAction {
   prevPage('上一页'),
@@ -161,6 +165,10 @@ class ReaderSettings {
   final bool textFullJustify;
   /// 文字底部对齐（对齐 textBottomJustify；分页时不足一页贴底）
   final bool textBottomJustify;
+  /// 日间/夜间共用排版（对齐 ReadBookConfig.shareLayout；默认开）
+  final bool shareLayout;
+  /// 主题槽位颜色/背景图覆盖（主题名 → 覆盖）
+  final Map<String, ReadStyleSlotOverride> themeOverrides;
 
   const ReaderSettings({
     this.fontSize = 18.0,
@@ -196,6 +204,8 @@ class ReaderSettings {
     this.expandIntoCutout = false,
     this.textFullJustify = true,
     this.textBottomJustify = true,
+    this.shareLayout = true,
+    this.themeOverrides = const {},
   });
 
   PageAnimMode get pageAnim => PageAnimMode.fromId(pageMode);
@@ -240,6 +250,8 @@ class ReaderSettings {
     bool? expandIntoCutout,
     bool? textFullJustify,
     bool? textBottomJustify,
+    bool? shareLayout,
+    Map<String, ReadStyleSlotOverride>? themeOverrides,
   }) {
     var timeout = screenTimeout ?? this.screenTimeout;
     if (keepScreenOn != null) {
@@ -288,6 +300,22 @@ class ReaderSettings {
       expandIntoCutout: expandIntoCutout ?? this.expandIntoCutout,
       textFullJustify: textFullJustify ?? this.textFullJustify,
       textBottomJustify: textBottomJustify ?? this.textBottomJustify,
+      shareLayout: shareLayout ?? this.shareLayout,
+      themeOverrides: themeOverrides ?? this.themeOverrides,
+    );
+  }
+
+  /// 解析当前主题（预设 + 槽位覆盖）
+  ReaderTheme resolveTheme() {
+    final base = ReaderTheme.themes[themeName] ?? ReaderTheme.themes['paper']!;
+    final o = themeOverrides[themeName];
+    if (o == null) return base;
+    return ReaderTheme(
+      background: o.background ?? base.background,
+      text: o.text ?? base.text,
+      appBar: base.appBar,
+      progress: o.accent ?? base.progress,
+      bgImagePath: o.bgImagePath,
     );
   }
 
@@ -320,12 +348,15 @@ class ReaderTheme {
   final Color text;
   final Color appBar;
   final Color progress;
+  /// 可选背景图路径（zip 导入 bgType=2）
+  final String? bgImagePath;
 
   const ReaderTheme({
     required this.background,
     required this.text,
     required this.appBar,
     required this.progress,
+    this.bgImagePath,
   });
 
   static const Map<String, ReaderTheme> themes = {
@@ -354,6 +385,13 @@ class ReaderTheme {
       progress: Colors.green,
     ),
   };
+
+  static const List<(String id, String label)> themeSlots = [
+    ('paper', '米黄'),
+    ('white', '白'),
+    ('dark', '暗黑'),
+    ('green', '护眼绿'),
+  ];
 }
 
 /// ═══════════════════════════════════════════════════
@@ -388,6 +426,14 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
     _s = widget.settings;
   }
 
+  @override
+  void didUpdateWidget(covariant ReaderSettingsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings != widget.settings) {
+      _s = widget.settings;
+    }
+  }
+
   void _update(ReaderSettings s) {
     setState(() => _s = s);
     widget.onChanged(s);
@@ -397,6 +443,67 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
     );
+  }
+
+  Color _slotColor(String themeId) {
+    final o = _s.themeOverrides[themeId];
+    if (o?.background != null) return o!.background!;
+    return ReaderTheme.themes[themeId]?.background ?? const Color(0xFFF5F0E8);
+  }
+
+  String _slotLabel(String themeId, String fallback) {
+    final name = _s.themeOverrides[themeId]?.name;
+    if (name != null && name.isNotEmpty) return name;
+    return fallback;
+  }
+
+  Future<void> _openBgTextConfig(String themeId, String label) async {
+    final base = ReaderTheme.themes[themeId] ?? ReaderTheme.themes['paper']!;
+    final result = await BgTextConfigPanel.show(
+      context,
+      themeName: themeId,
+      themeLabel: label,
+      baseTheme: base,
+      initialOverride: _s.themeOverrides[themeId],
+      settings: _s,
+    );
+    if (result == null || !mounted) return;
+
+    final nextOverrides = Map<String, ReadStyleSlotOverride>.from(
+      _s.themeOverrides,
+    );
+    if (result.cleared) {
+      nextOverrides.remove(themeId);
+      await ReadStylePrefs.clearOverride(themeId);
+    } else {
+      nextOverrides[themeId] = result.override;
+      await ReadStylePrefs.upsertOverride(themeId, result.override);
+    }
+
+    var next = _s.copyWith(
+      themeName: themeId,
+      themeOverrides: nextOverrides,
+    );
+    // 导入 zip 时应用排版；关闭共用布局时仅提示（排版仍全局，缺口见计划）
+    if (result.appliedTypography != null) {
+      if (_s.shareLayout) {
+        next = result.appliedTypography!.copyWith(
+          themeName: themeId,
+          themeOverrides: nextOverrides,
+          shareLayout: _s.shareLayout,
+        );
+      } else {
+        next = result.appliedTypography!.copyWith(
+          themeName: themeId,
+          themeOverrides: nextOverrides,
+          shareLayout: false,
+        );
+        if (mounted) {
+          _toast('已取消共用布局：排版仍全局应用（每主题独立排版待补）');
+        }
+      }
+    }
+    _update(next);
   }
 
   Future<void> _pickFontWeight() async {
@@ -733,41 +840,57 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
             ),
             const SizedBox(height: 12),
 
-            // ── 阅读主题 ──
+            // ── 阅读主题（对齐 ReadStyleDialog：共用布局 + 长按自定义/zip）──
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('阅读主题', style: TextStyle(fontSize: 13)),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text('阅读主题', style: TextStyle(fontSize: 13)),
+                      ),
+                      const Text('共用布局', style: TextStyle(fontSize: 12)),
+                      const SizedBox(width: 4),
+                      SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: Checkbox(
+                          value: _s.shareLayout,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                          onChanged: (v) async {
+                            final next = v ?? true;
+                            _update(_s.copyWith(shareLayout: next));
+                            await ReadStylePrefs.saveShareLayout(next);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '文字颜色和背景（长按自定义）',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _ThemeDot(
-                        color: const Color(0xFFF5F0E8),
-                        name: '米黄',
-                        selected: _s.themeName == 'paper',
-                        onTap: () => _update(_s.copyWith(themeName: 'paper')),
-                      ),
-                      _ThemeDot(
-                        color: Colors.white,
-                        name: '白',
-                        selected: _s.themeName == 'white',
-                        onTap: () => _update(_s.copyWith(themeName: 'white')),
-                      ),
-                      _ThemeDot(
-                        color: const Color(0xFF1E1E1E),
-                        name: '暗黑',
-                        selected: _s.themeName == 'dark',
-                        onTap: () => _update(_s.copyWith(themeName: 'dark')),
-                      ),
-                      _ThemeDot(
-                        color: const Color(0xFFC7EDCC),
-                        name: '护眼绿',
-                        selected: _s.themeName == 'green',
-                        onTap: () => _update(_s.copyWith(themeName: 'green')),
-                      ),
+                      for (final slot in ReaderTheme.themeSlots)
+                        _ThemeDot(
+                          color: _slotColor(slot.$1),
+                          name: _slotLabel(slot.$1, slot.$2),
+                          selected: _s.themeName == slot.$1,
+                          onTap: () =>
+                              _update(_s.copyWith(themeName: slot.$1)),
+                          onLongPress: () => _openBgTextConfig(slot.$1, slot.$2),
+                        ),
                     ],
                   ),
                 ],
@@ -1028,24 +1151,27 @@ class _ModeChip extends StatelessWidget {
   }
 }
 
-/// 主题色圆点选择器
+/// 主题色圆点选择器（短按切换；长按打开文字/背景/zip 导入）
 class _ThemeDot extends StatelessWidget {
   final Color color;
   final String name;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const _ThemeDot({
     required this.color,
     required this.name,
     required this.selected,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
