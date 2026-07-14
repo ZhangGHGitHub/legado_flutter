@@ -289,9 +289,7 @@ class BookSource {
         if (obj is Map<String, dynamic>) {
           final out = Map<String, dynamic>.from(obj);
           out['enabled'] = enabled;
-          if (bookSourceGroup.isNotEmpty) {
-            out['bookSourceGroup'] = bookSourceGroup;
-          }
+          out['bookSourceGroup'] = bookSourceGroup;
           return out;
         }
         if (obj is Map) {
@@ -299,9 +297,7 @@ class BookSource {
             for (final e in obj.entries) e.key.toString(): e.value,
           };
           out['enabled'] = enabled;
-          if (bookSourceGroup.isNotEmpty) {
-            out['bookSourceGroup'] = bookSourceGroup;
-          }
+          out['bookSourceGroup'] = bookSourceGroup;
           return out;
         }
       } catch (_) {}
@@ -339,10 +335,49 @@ class BookSource {
     };
   }
 
-  /// 供 Rust 桥接：始终尽量传完整 Legado JSON
-  String toEngineJson() {
-    if (rawSourceJson.isNotEmpty) return rawSourceJson;
-    return jsonEncode(toJson());
+  /// 供 Rust 桥接：完整 Legado JSON，并同步 enabled / 分组
+  String toEngineJson() => jsonEncode(toJson());
+
+  BookSource copyWith({
+    String? bookSourceUrl,
+    String? bookSourceName,
+    String? bookSourceType,
+    String? bookSourceGroup,
+    bool? enabled,
+    String? rawSourceJson,
+  }) {
+    return BookSource(
+      bookSourceUrl: bookSourceUrl ?? this.bookSourceUrl,
+      bookSourceName: bookSourceName ?? this.bookSourceName,
+      bookSourceType: bookSourceType ?? this.bookSourceType,
+      bookSourceGroup: bookSourceGroup ?? this.bookSourceGroup,
+      enabled: enabled ?? this.enabled,
+      ruleSearchUrl: ruleSearchUrl,
+      ruleSearchList: ruleSearchList,
+      ruleSearchName: ruleSearchName,
+      ruleSearchAuthor: ruleSearchAuthor,
+      ruleSearchCoverUrl: ruleSearchCoverUrl,
+      ruleSearchKind: ruleSearchKind,
+      ruleSearchNote: ruleSearchNote,
+      ruleBookUrlPattern: ruleBookUrlPattern,
+      ruleBookName: ruleBookName,
+      ruleBookAuthor: ruleBookAuthor,
+      ruleBookCoverUrl: ruleBookCoverUrl,
+      ruleBookKind: ruleBookKind,
+      ruleBookNote: ruleBookNote,
+      ruleBookLastChapter: ruleBookLastChapter,
+      ruleChapterList: ruleChapterList,
+      ruleChapterName: ruleChapterName,
+      ruleChapterUrl: ruleChapterUrl,
+      ruleChapterUrlIsFull: ruleChapterUrlIsFull,
+      ruleContentUrl: ruleContentUrl,
+      ruleContent: ruleContent,
+      ruleContentRemove: ruleContentRemove,
+      rulePageUrl: rulePageUrl,
+      rulePageNext: rulePageNext,
+      bookSourceComment: bookSourceComment,
+      rawSourceJson: rawSourceJson ?? this.rawSourceJson,
+    );
   }
 
   @override

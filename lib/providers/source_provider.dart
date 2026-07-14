@@ -190,6 +190,55 @@ class SourceProvider extends ChangeNotifier {
   /// 删除书源
   Future<void> deleteSource(String sourceUrl) async {
     await _db.deleteSource(sourceUrl);
+    _validationResults.remove(sourceUrl);
+    _sources = await _db.getBookSources();
+    notifyListeners();
+  }
+
+  /// 批量启用/禁用
+  Future<void> setSourcesEnabled(
+    Iterable<String> sourceUrls,
+    bool enabled,
+  ) async {
+    final urls = sourceUrls.toSet();
+    if (urls.isEmpty) return;
+    for (final url in urls) {
+      await _db.toggleSource(url, enabled);
+    }
+    _sources = await _db.getBookSources();
+    notifyListeners();
+  }
+
+  /// 批量删除
+  Future<void> deleteSources(Iterable<String> sourceUrls) async {
+    final urls = sourceUrls.toSet();
+    if (urls.isEmpty) return;
+    for (final url in urls) {
+      await _db.deleteSource(url);
+      _validationResults.remove(url);
+    }
+    _sources = await _db.getBookSources();
+    notifyListeners();
+  }
+
+  /// 批量设置分组
+  Future<void> setSourcesGroup(
+    Iterable<String> sourceUrls,
+    String group,
+  ) async {
+    final urls = sourceUrls.toSet();
+    if (urls.isEmpty) return;
+    for (final url in urls) {
+      BookSource? src;
+      for (final s in _sources) {
+        if (s.bookSourceUrl == url) {
+          src = s;
+          break;
+        }
+      }
+      if (src == null) continue;
+      await _db.updateBookSource(src.copyWith(bookSourceGroup: group));
+    }
     _sources = await _db.getBookSources();
     notifyListeners();
   }
@@ -366,14 +415,23 @@ class SourceProvider extends ChangeNotifier {
   /// 批量校验已启用书源
   Future<int> validateEnabledSources({void Function(int done, int total)? onProgress}) async {
     final enabled = _sources.where((s) => s.enabled).toList();
+    return validateSources(enabled, onProgress: onProgress);
+  }
+
+  /// 批量校验指定书源
+  Future<int> validateSources(
+    List<BookSource> sources, {
+    void Function(int done, int total)? onProgress,
+  }) async {
+    if (sources.isEmpty) return 0;
     var passed = 0;
-    for (var i = 0; i < enabled.length; i++) {
-      onProgress?.call(i, enabled.length);
-      final result = await validateSource(enabled[i]);
+    for (var i = 0; i < sources.length; i++) {
+      onProgress?.call(i, sources.length);
+      final result = await validateSource(sources[i]);
       if (result?.pipelineOk == true) passed++;
     }
-    onProgress?.call(enabled.length, enabled.length);
-    _statusMessage = '批量校验完成：$passed/${enabled.length} 可用';
+    onProgress?.call(sources.length, sources.length);
+    _statusMessage = '批量校验完成：$passed/${sources.length} 可用';
     notifyListeners();
     return passed;
   }

@@ -16,6 +16,7 @@ abstract final class LegadoTokens {
 
   static const Color sourceDotGreen = Color(0xFF4CAF50);
   static const Color sourceDotRed = Color(0xFFE53935);
+  static const Color sourceDotGray = Color(0xFF9E9E9E);
 
   static BorderRadius get cardRadius => BorderRadius.circular(radiusCard);
   static BorderRadius get coverRadius => BorderRadius.circular(radiusCover);

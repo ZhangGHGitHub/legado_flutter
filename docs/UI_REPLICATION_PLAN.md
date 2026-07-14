@@ -146,7 +146,7 @@
 | 2 | `activity_book_read.xml` | 阅读器 | ✅ `reader_page.dart` | UI-1/UI-2 可落地项已接；TTS/自动阅读/点击区/电量真值/仿真等仍开放 |
 | 3 | `activity_book_info.xml` | 书籍详情 | ✅ `book_info_page.dart` | 需核对布局：封面+信息+按钮+目录 |
 | 4 | `activity_book_search.xml` | 搜索 | ✅ `search_page.dart` | **需核对是否按书源分组（ExpansionTile）** |
-| 5 | `activity_book_source.xml` | 书源管理 | ✅ `sources_page.dart` | **缺绿/红点、分组标题、批量操作栏** |
+| 5 | `activity_book_source.xml` | 书源管理 | ✅ `sources_page.dart` | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
 | 6 | `activity_book_source_edit.xml` | 书源编辑 | ✅ `source_editor_page.dart` | 需核对字段完整度 |
 | 7 | `activity_chapter_list.xml` | 目录 | ✅ `toc_sheet.dart` | UI-5：正序/倒序、缓存图标、当前章高亮、搜索、书签 Tab |
 | 8 | `activity_explore_show.xml` | 发现结果列表 | ✅ `explore_list_page.dart` | 需核对 |
@@ -339,13 +339,13 @@
 
 | 对照项 | Jingshiro | Flutter 现状 | 差距 |
 |--------|-----------|-------------|------|
-| 绿/红点 | `source_status_dot` | ✅ `source_status_dot.dart` | 需核对判定逻辑 |
-| 分组标题 | 按 `bookSourceGroup` 分组 | ❓ 待确认 | |
-| 批量操作 | 多选→启用/禁用/分组/校验/删除 | ❓ 待确认 | |
+| 绿/红/灰点 | 校验通过/失败/未校验 | ✅ UI-4 `SourceStatusDot` | |
+| 分组标题 | 按 `bookSourceGroup` 分组 | ✅ `SectionHeader` 分组 | |
+| 批量操作 | 多选→启用/禁用/分组/校验/删除 | ✅ UI-4 底栏批量操作 | |
 | 导入方式 | JSON/URL/二维码/本地文件/剪贴板 | ✅ 已有大部分 | **缺二维码扫描** |
 | 校验书源 | `CheckSourceActivity` | ✅ `validate_source()` | |
-| 搜索书源 | 书源内搜索 | ❓ 待确认 | |
-| 排序 | 按名称/分组/启用状态 | ❓ 待确认 | |
+| 搜索书源 | 书源内搜索 | ✅ UI-4 名称/分组/URL | |
+| 排序 | 按名称/分组/启用状态 | ✅ UI-4 | |
 
 ---
 
@@ -397,12 +397,12 @@
 - [x] 底栏「共 N 本 · M 个书源」（搜索中实时更新）
 - [ ] 书源标签筛选（后续可加）
 
-#### Task UI-4: 书源管理对齐 (`sources_page.dart`)
+#### Task UI-4: 书源管理对齐 (`sources_page.dart`) — ✅ 基本完成（2026-07-14）
 
-- [ ] 按 `bookSourceGroup` 分组展示（`StickyHeader` 或 `ExpansionTile`）
-- [ ] 批量操作栏（多选模式）
-- [ ] 分组标题 + 绿/红/灰点验证
-- [ ] 书源搜索/排序
+- [x] 按 `bookSourceGroup` 分组展示（`SectionHeader` 分组列表）
+- [x] 批量操作栏（多选：启用/禁用/分组/校验/删除）
+- [x] 分组标题 + 绿/红/灰点验证（通过/失败/未校验）
+- [x] 书源搜索/排序（名称/分组/启用）
 
 #### Task UI-5: 目录页增强 (`toc_sheet.dart`) — ✅ 基本完成（2026-07-14）
 
@@ -560,7 +560,7 @@
 Task UI-1:  阅读器底栏 + 顶栏自动隐藏 + 更多菜单  ✅ 基本完成（2026-07-14）
 Task UI-2:  阅读器设置补全（字体/TTS/自动阅读/点击行为/翻页键）  🟡 可落地项完成；TTS/自动阅读/点击区本体仍开放
 Task UI-3:  搜索页按书源分组 + 精准搜索 + 搜索范围  ✅ 基本完成（2026-07-14）
-Task UI-4:  书源管理分组展示 + 批量操作 + 绿红点验证
+Task UI-4:  书源管理分组展示 + 批量操作 + 绿红灰点验证  ✅ 基本完成（2026-07-14）
 Task UI-5:  目录页正序/倒序 + 已缓存图标 + 当前章高亮  ✅ 基本完成（2026-07-14）
 Task UI-6:  书籍详情换源入口 + 简介展开 + 读完标签
 Task UI-7:  书架长按菜单完整化  ✅ 基本完成（2026-07-14）
@@ -628,11 +628,11 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 | 书籍详情 | 75% | 基础就位，缺换源入口明显/标签/简介展开 |
 | 目录 | 92% | UI-5：正序倒序/缓存标/高亮/搜索/书签 Tab |
 | **阅读器** | **72%** | UI-1+UI-2 可落地项完成；TTS/自动阅读/点击区本体、电量真值、正文搜索仍开放 |
-| 书源管理 | 70% | 缺分组标题/批量操作/搜索排序 |
+| 书源管理 | 90% | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
 | RSS | 50% | Tab+源管理已有；**文章/阅读延后 S4** |
 | 新模块(有声/漫画/扫码等) | 5% | 全部缺失 |
 | **综合** | **~60%** | |
 
 ---
 
-> 最后更新：2026-07-14 | 引擎 v0.5.6 | Focus: UI 复刻（S1：UI-1/UI-3/UI-5/UI-7；UI-2 部分；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)
+> 最后更新：2026-07-14 | 引擎 v0.5.6 | Focus: UI 复刻（S1：UI-1/UI-3/UI-4/UI-5/UI-7；UI-2 部分；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)
