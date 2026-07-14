@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'reader_settings.dart';
 
 /// 阅读器「更多设置」（UI-2）：
-/// 屏幕方向 / 常亮 / 状态栏·导航栏沉浸 / 刘海 / 亮度 / 蓝牙翻页器 / 自定义翻页键。
+/// 屏幕方向 / 超时分档 / 状态栏·导航栏沉浸 / 刘海 / 亮度 / 蓝牙翻页器 / 自定义翻页键。
 class MoreSettingsPanel extends StatefulWidget {
   final ReaderSettings settings;
   final ValueChanged<ReaderSettings> onChanged;
@@ -118,7 +118,7 @@ class _MoreSettingsPanelState extends State<MoreSettingsPanel> {
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
-                    '屏幕方向 · 沉浸栏 · 常亮 · 亮度 · 翻页键',
+                    '屏幕方向 · 超时 · 沉浸栏 · 亮度 · 翻页键',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ),
@@ -144,16 +144,32 @@ class _MoreSettingsPanelState extends State<MoreSettingsPanel> {
                     ],
                   ),
                 ),
-                SwitchListTile(
-                  dense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                  title: const Text('屏幕常亮', style: TextStyle(fontSize: 13)),
-                  subtitle: const Text(
-                    'wakelock_plus 保持唤醒（对齐 keep_light「常亮」）',
-                    style: TextStyle(fontSize: 11),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Text('屏幕超时', style: TextStyle(fontSize: 13)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      for (final m in ScreenTimeoutMode.values)
+                        ChoiceChip(
+                          label: Text(m.label, style: const TextStyle(fontSize: 12)),
+                          selected: _s.screenTimeout == m,
+                          onSelected: (_) =>
+                              _update(_s.copyWith(screenTimeout: m)),
+                        ),
+                    ],
                   ),
-                  value: _s.keepScreenOn,
-                  onChanged: (v) => _update(_s.copyWith(keepScreenOn: v)),
+                ),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: Text(
+                    '对齐 keepLight：默认跟随系统；1/5/10 分钟内保持亮屏；常亮始终唤醒',
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
                 ),
 
                 const Divider(),
@@ -203,6 +219,18 @@ class _MoreSettingsPanelState extends State<MoreSettingsPanel> {
                   value: _s.textFullJustify,
                   onChanged: (v) =>
                       _update(_s.copyWith(textFullJustify: v)),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  title: const Text('文字底部对齐', style: TextStyle(fontSize: 13)),
+                  subtitle: const Text(
+                    '分页模式下不足一页时正文贴底（对齐 textBottomJustify）',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  value: _s.textBottomJustify,
+                  onChanged: (v) =>
+                      _update(_s.copyWith(textBottomJustify: v)),
                 ),
 
                 const Divider(),
@@ -258,6 +286,18 @@ class _MoreSettingsPanelState extends State<MoreSettingsPanel> {
                   value: _s.volumeKeyTurnPage,
                   onChanged: (v) =>
                       _update(_s.copyWith(volumeKeyTurnPage: v)),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  title: const Text('朗读时音量键翻页', style: TextStyle(fontSize: 13)),
+                  subtitle: const Text(
+                    '关闭后朗读中音量键调音量',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  value: _s.volumeKeyPageOnPlay,
+                  onChanged: (v) =>
+                      _update(_s.copyWith(volumeKeyPageOnPlay: v)),
                 ),
                 ListTile(
                   dense: true,

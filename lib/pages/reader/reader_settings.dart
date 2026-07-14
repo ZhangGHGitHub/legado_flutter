@@ -63,12 +63,57 @@ enum ChineseConvertMode {
   }
 }
 
+/// 屏幕超时（对齐 legado keepLight + arrays：默认 / 1 / 5 / 10 分钟 / 常亮）
+/// 存值为秒；-1 = 常亮；0 = 系统默认。
+enum ScreenTimeoutMode {
+  system(0, '默认'),
+  oneMinute(60, '1分钟'),
+  fiveMinutes(300, '5分钟'),
+  tenMinutes(600, '10分钟'),
+  always(-1, '常亮');
+
+  const ScreenTimeoutMode(this.seconds, this.label);
+  final int seconds;
+  final String label;
+
+  static ScreenTimeoutMode fromSeconds(int seconds) {
+    for (final v in values) {
+      if (v.seconds == seconds) return v;
+    }
+    return ScreenTimeoutMode.system;
+  }
+}
+
+/// 翻页动画（对齐 PageAnim：覆盖 / 滑动 / 仿真 / 滚动 / 无）
+enum PageAnimMode {
+  cover('cover', '覆盖'),
+  slide('slide', '滑动'),
+  simulation('simulation', '仿真'),
+  scroll('scroll', '滚动'),
+  none('none', '无');
+
+  const PageAnimMode(this.id, this.label);
+  final String id;
+  final String label;
+
+  bool get isHorizontalPaged =>
+      this == cover || this == slide || this == simulation || this == none;
+
+  static PageAnimMode fromId(String id) {
+    for (final v in values) {
+      if (v.id == id) return v;
+    }
+    return PageAnimMode.slide;
+  }
+}
+
 /// 阅读器设置 — Phase F UI-2（对齐 dialog_read_bg_text / dialog_read_book_style）
 class ReaderSettings {
   final double fontSize;
   final double lineHeight;
   final String themeName; // 'paper' | 'white' | 'dark' | 'green'
-  final String pageMode; // 'slide' | 'scroll'（覆盖/仿真/无动画仍占位）
+  /// 翻页动画 id：cover | slide | simulation | scroll | none
+  final String pageMode;
   /// 空串 = 系统默认；其余为内置字体族名
   final String fontFamily;
   final double paddingHorizontal;
@@ -77,6 +122,8 @@ class ReaderSettings {
   final bool showBattery;
   final bool showPageInfo;
   final bool volumeKeyTurnPage;
+  /// 朗读时音量键仍翻页（对齐 volumeKeyPageOnPlay；默认开）
+  final bool volumeKeyPageOnPlay;
   /// 自动阅读翻页间隔（秒）
   final double autoReadIntervalSec;
   final ClickZoneAction clickTop;
@@ -87,8 +134,8 @@ class ReaderSettings {
   final bool brightnessFollowSystem;
   /// 手动亮度 0.15–1.0（越低遮罩越暗）
   final double brightness;
-  /// 屏幕常亮（legado keep_light「常亮」；wakelock_plus 接线）
-  final bool keepScreenOn;
+  /// 屏幕超时（legado keepLight：默认/1/5/10/常亮）
+  final ScreenTimeoutMode screenTimeout;
   /// 蓝牙翻页器常见键：PageUp/Down、媒体上一曲/下一曲
   final bool bluetoothPageKey;
   /// LogicalKeyboardKey.keyId 字符串；空=未设置
@@ -112,6 +159,8 @@ class ReaderSettings {
   final bool expandIntoCutout;
   /// 文字两端对齐
   final bool textFullJustify;
+  /// 文字底部对齐（对齐 textBottomJustify；分页时不足一页贴底）
+  final bool textBottomJustify;
 
   const ReaderSettings({
     this.fontSize = 18.0,
@@ -125,6 +174,7 @@ class ReaderSettings {
     this.showBattery = false,
     this.showPageInfo = true,
     this.volumeKeyTurnPage = false,
+    this.volumeKeyPageOnPlay = true,
     this.autoReadIntervalSec = 5.0,
     this.clickTop = ClickZoneAction.prevPage,
     this.clickMiddle = ClickZoneAction.toggleMenu,
@@ -132,7 +182,7 @@ class ReaderSettings {
     this.screenOrientation = ScreenOrientationMode.system,
     this.brightnessFollowSystem = true,
     this.brightness = 1.0,
-    this.keepScreenOn = false,
+    this.screenTimeout = ScreenTimeoutMode.system,
     this.bluetoothPageKey = false,
     this.customPrevPageKey,
     this.customNextPageKey,
@@ -145,7 +195,13 @@ class ReaderSettings {
     this.hideNavigationBar = false,
     this.expandIntoCutout = false,
     this.textFullJustify = true,
+    this.textBottomJustify = true,
   });
+
+  PageAnimMode get pageAnim => PageAnimMode.fromId(pageMode);
+
+  /// 兼容旧布尔：常亮档
+  bool get keepScreenOn => screenTimeout == ScreenTimeoutMode.always;
 
   ReaderSettings copyWith({
     double? fontSize,
@@ -159,6 +215,7 @@ class ReaderSettings {
     bool? showBattery,
     bool? showPageInfo,
     bool? volumeKeyTurnPage,
+    bool? volumeKeyPageOnPlay,
     double? autoReadIntervalSec,
     ClickZoneAction? clickTop,
     ClickZoneAction? clickMiddle,
@@ -166,6 +223,7 @@ class ReaderSettings {
     ScreenOrientationMode? screenOrientation,
     bool? brightnessFollowSystem,
     double? brightness,
+    ScreenTimeoutMode? screenTimeout,
     bool? keepScreenOn,
     bool? bluetoothPageKey,
     String? customPrevPageKey,
@@ -181,7 +239,16 @@ class ReaderSettings {
     bool? hideNavigationBar,
     bool? expandIntoCutout,
     bool? textFullJustify,
+    bool? textBottomJustify,
   }) {
+    var timeout = screenTimeout ?? this.screenTimeout;
+    if (keepScreenOn != null) {
+      timeout = keepScreenOn
+          ? ScreenTimeoutMode.always
+          : (timeout == ScreenTimeoutMode.always
+              ? ScreenTimeoutMode.system
+              : timeout);
+    }
     return ReaderSettings(
       fontSize: fontSize ?? this.fontSize,
       lineHeight: lineHeight ?? this.lineHeight,
@@ -194,6 +261,7 @@ class ReaderSettings {
       showBattery: showBattery ?? this.showBattery,
       showPageInfo: showPageInfo ?? this.showPageInfo,
       volumeKeyTurnPage: volumeKeyTurnPage ?? this.volumeKeyTurnPage,
+      volumeKeyPageOnPlay: volumeKeyPageOnPlay ?? this.volumeKeyPageOnPlay,
       autoReadIntervalSec: autoReadIntervalSec ?? this.autoReadIntervalSec,
       clickTop: clickTop ?? this.clickTop,
       clickMiddle: clickMiddle ?? this.clickMiddle,
@@ -202,7 +270,7 @@ class ReaderSettings {
       brightnessFollowSystem:
           brightnessFollowSystem ?? this.brightnessFollowSystem,
       brightness: brightness ?? this.brightness,
-      keepScreenOn: keepScreenOn ?? this.keepScreenOn,
+      screenTimeout: timeout,
       bluetoothPageKey: bluetoothPageKey ?? this.bluetoothPageKey,
       customPrevPageKey: clearCustomPrevPageKey
           ? null
@@ -219,6 +287,7 @@ class ReaderSettings {
       hideNavigationBar: hideNavigationBar ?? this.hideNavigationBar,
       expandIntoCutout: expandIntoCutout ?? this.expandIntoCutout,
       textFullJustify: textFullJustify ?? this.textFullJustify,
+      textBottomJustify: textBottomJustify ?? this.textBottomJustify,
     );
   }
 
@@ -632,7 +701,7 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
             ),
             const SizedBox(height: 8),
 
-            // ── 翻页动画（legado：覆盖/滑动/仿真/滚动/无；未落地项明确占位）──
+            // ── 翻页动画（legado PageAnim：覆盖/滑动/仿真/滚动/无）──
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
@@ -644,36 +713,19 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      _ModeChip(
-                        icon: Icons.auto_stories_outlined,
-                        label: '覆盖',
-                        selected: false,
-                        onTap: () => _toast('覆盖翻页尚未实现'),
-                      ),
-                      _ModeChip(
-                        icon: Icons.swipe,
-                        label: '滑动',
-                        selected: _s.pageMode == 'slide',
-                        onTap: () => _update(_s.copyWith(pageMode: 'slide')),
-                      ),
-                      _ModeChip(
-                        icon: Icons.menu_book_outlined,
-                        label: '仿真',
-                        selected: false,
-                        onTap: () => _toast('仿真翻页尚未实现'),
-                      ),
-                      _ModeChip(
-                        icon: Icons.unfold_more,
-                        label: '滚动',
-                        selected: _s.pageMode == 'scroll',
-                        onTap: () => _update(_s.copyWith(pageMode: 'scroll')),
-                      ),
-                      _ModeChip(
-                        icon: Icons.flash_off_outlined,
-                        label: '无',
-                        selected: false,
-                        onTap: () => _toast('无动画翻页尚未实现'),
-                      ),
+                      for (final m in PageAnimMode.values)
+                        _ModeChip(
+                          icon: switch (m) {
+                            PageAnimMode.cover => Icons.auto_stories_outlined,
+                            PageAnimMode.slide => Icons.swipe,
+                            PageAnimMode.simulation => Icons.menu_book_outlined,
+                            PageAnimMode.scroll => Icons.unfold_more,
+                            PageAnimMode.none => Icons.flash_off_outlined,
+                          },
+                          label: m.label,
+                          selected: _s.pageMode == m.id,
+                          onTap: () => _update(_s.copyWith(pageMode: m.id)),
+                        ),
                     ],
                   ),
                 ],
@@ -764,6 +816,18 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
               ),
               value: _s.volumeKeyTurnPage,
               onChanged: (v) => _update(_s.copyWith(volumeKeyTurnPage: v)),
+            ),
+            SwitchListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              dense: true,
+              title: const Text('朗读时音量键翻页', style: TextStyle(fontSize: 13)),
+              subtitle: const Text(
+                '关闭后朗读中音量键调音量（对齐 volumeKeyPageOnPlay）',
+                style: TextStyle(fontSize: 11),
+              ),
+              value: _s.volumeKeyPageOnPlay,
+              onChanged: (v) =>
+                  _update(_s.copyWith(volumeKeyPageOnPlay: v)),
             ),
 
             const Divider(),

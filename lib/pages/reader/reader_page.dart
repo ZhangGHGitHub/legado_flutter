@@ -15,6 +15,7 @@ import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/note_service.dart';
 import '../../services/reading_record_service.dart';
+import '../../services/tts_service.dart';
 import '../../utils/chinese_convert.dart';
 import '../book/change_source_page.dart';
 import '../book/toc_sheet.dart';
@@ -81,6 +82,11 @@ class _ReaderPageState extends State<ReaderPage> {
   int? _batteryLevel;
   Timer? _batteryTimer;
 
+  /// UI-2: 屏幕超时（legado screenOffTimerStart）
+  Timer? _screenOffTimer;
+
+  bool get _isHorizontalPaged => _settings.pageAnim.isHorizontalPaged;
+
   @override
   void initState() {
     super.initState();
@@ -99,7 +105,7 @@ class _ReaderPageState extends State<ReaderPage> {
       const Duration(minutes: 1),
       (_) => _refreshBattery(),
     );
-    _applyKeepScreenOn(_settings.keepScreenOn);
+    _applyScreenTimeout();
     _applySystemUi();
   }
 
@@ -139,6 +145,38 @@ class _ReaderPageState extends State<ReaderPage> {
       await WakelockPlus.toggle(enable: on);
     } catch (_) {
       // 桌面/部分环境可能无 wakelock 后端
+    }
+  }
+
+  /// 对齐 legado keepLight / screenOffTimerStart：
+  /// 0 跟随系统；正秒数内保持亮屏后释放；-1 常亮；自动阅读时强制常亮。
+  void _applyScreenTimeout({bool forceAlways = false}) {
+    _screenOffTimer?.cancel();
+    _screenOffTimer = null;
+    final always = forceAlways ||
+        _autoReadRunning ||
+        _settings.screenTimeout == ScreenTimeoutMode.always;
+    if (always) {
+      unawaited(_applyKeepScreenOn(true));
+      return;
+    }
+    final sec = _settings.screenTimeout.seconds;
+    if (sec <= 0) {
+      unawaited(_applyKeepScreenOn(false));
+      return;
+    }
+    unawaited(_applyKeepScreenOn(true));
+    _screenOffTimer = Timer(Duration(seconds: sec), () {
+      if (!mounted) return;
+      unawaited(_applyKeepScreenOn(false));
+    });
+  }
+
+  void _bumpScreenTimeout() {
+    if (_settings.screenTimeout.seconds > 0 ||
+        _settings.screenTimeout == ScreenTimeoutMode.always ||
+        _autoReadRunning) {
+      _applyScreenTimeout();
     }
   }
 
@@ -217,6 +255,7 @@ class _ReaderPageState extends State<ReaderPage> {
     _autoHideTimer?.cancel();
     _autoReadTimer?.cancel();
     _batteryTimer?.cancel();
+    _screenOffTimer?.cancel();
     SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
@@ -237,17 +276,19 @@ class _ReaderPageState extends State<ReaderPage> {
     _autoReadTimer?.cancel();
     _autoReadTimer = null;
     setState(() => _autoReadRunning = running);
+    // 自动阅读时 legado 强制常亮；停止后恢复 keepLight 分档
+    _applyScreenTimeout();
     if (!running) return;
     final interval = Duration(
       milliseconds: (_settings.autoReadIntervalSec * 1000).round(),
     );
     _autoReadTimer = Timer.periodic(interval, (_) {
       if (!mounted || !_autoReadRunning) return;
-      final atLastPage = _settings.pageMode == 'slide' &&
+      final atLastPage = _isHorizontalPaged &&
           _pages.isNotEmpty &&
           _pageIndex >= _pages.length - 1 &&
           _currentIndex >= widget.allChapters.length - 1;
-      final atLastChapterScroll = _settings.pageMode != 'slide' &&
+      final atLastChapterScroll = !_isHorizontalPaged &&
           _currentIndex >= widget.allChapters.length - 1;
       if (atLastPage || atLastChapterScroll) {
         _setAutoReadRunning(false);
@@ -487,7 +528,7 @@ class _ReaderPageState extends State<ReaderPage> {
               : content;
           _isLoading = false;
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && _settings.pageMode == 'slide') {
+            if (mounted && _isHorizontalPaged) {
               _splitIntoPages();
             }
           });
@@ -514,7 +555,7 @@ class _ReaderPageState extends State<ReaderPage> {
   /// 将正文按屏幕高度拆分为独立页面（仅 slide 模式）
   void _splitIntoPages() {
     if (_content.isEmpty || !mounted) return;
-    if (_settings.pageMode != 'slide') return;
+    if (!_isHorizontalPaged) return;
     // 空章占位不进 PageView，由 _buildBodyText 展示刷新引导
     if (ReadBook.isEmptyContentPlaceholder(_content)) {
       final dying = _pageController;
@@ -533,7 +574,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (renderBox == null || !renderBox.hasSize) {
       // 布局尚未就绪时再试一次（模式切换后常见）
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _settings.pageMode != 'slide') return;
+        if (!mounted || !_isHorizontalPaged) return;
         final box = context.findRenderObject() as RenderBox?;
         if (box != null && box.hasSize) _splitIntoPages();
       });
@@ -637,9 +678,6 @@ class _ReaderPageState extends State<ReaderPage> {
     if (newSettings.screenOrientation != _settings.screenOrientation) {
       _applyScreenOrientation(newSettings.screenOrientation);
     }
-    if (newSettings.keepScreenOn != _settings.keepScreenOn) {
-      _applyKeepScreenOn(newSettings.keepScreenOn);
-    }
     final immersionChanged =
         newSettings.hideStatusBar != _settings.hideStatusBar ||
             newSettings.hideNavigationBar != _settings.hideNavigationBar ||
@@ -650,7 +688,7 @@ class _ReaderPageState extends State<ReaderPage> {
     final oldMode = _settings.pageMode;
     final newMode = newSettings.pageMode;
     final modeChanged = oldMode != newMode;
-    final needRepaginate = newMode == 'slide' &&
+    final needRepaginate = PageAnimMode.fromId(newMode).isHorizontalPaged &&
         !_isLoading &&
         _content.isNotEmpty &&
         (modeChanged ||
@@ -665,7 +703,8 @@ class _ReaderPageState extends State<ReaderPage> {
             newSettings.paddingHorizontal != _settings.paddingHorizontal ||
             newSettings.paddingVertical != _settings.paddingVertical ||
             newSettings.expandIntoCutout != _settings.expandIntoCutout ||
-            newSettings.textFullJustify != _settings.textFullJustify);
+            newSettings.textFullJustify != _settings.textFullJustify ||
+            newSettings.textBottomJustify != _settings.textBottomJustify);
 
     if (modeChanged) {
       // Phase 1：摘掉 PageController 引用并清空分页，确保本帧不再挂 PageView
@@ -677,13 +716,14 @@ class _ReaderPageState extends State<ReaderPage> {
         _pageIndex = 0;
         _modeGeneration++;
       });
+      _applyScreenTimeout();
       if (immersionChanged) _applySystemUi();
 
       // Phase 2：上一帧视图已 detach，再 dispose；slide 再重建分页
       WidgetsBinding.instance.addPostFrameCallback((_) {
         dyingPage?.dispose();
         if (!mounted) return;
-        if (newMode == 'slide' && needRepaginate) {
+        if (PageAnimMode.fromId(newMode).isHorizontalPaged && needRepaginate) {
           _splitIntoPages();
         }
       });
@@ -691,10 +731,11 @@ class _ReaderPageState extends State<ReaderPage> {
     }
 
     setState(() => _settings = newSettings);
+    _applyScreenTimeout();
     if (immersionChanged) _applySystemUi();
     if (needRepaginate) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _settings.pageMode == 'slide') _splitIntoPages();
+        if (mounted && _isHorizontalPaged) _splitIntoPages();
       });
     }
   }
@@ -704,7 +745,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (bp == null) return;
     final progress = (_currentIndex + 1) / widget.allChapters.length;
     final currentChapter = widget.allChapters[_currentIndex].title;
-    final pageIdx = _settings.pageMode == 'slide' ? _pageIndex : 0;
+    final pageIdx = _isHorizontalPaged ? _pageIndex : 0;
     bp.updateProgress(
       widget.book.id,
       progress,
@@ -800,11 +841,11 @@ class _ReaderPageState extends State<ReaderPage> {
       return;
     }
     final chapter = widget.allChapters[_currentIndex];
-    final snippet = _settings.pageMode == 'slide' && _pages.isNotEmpty
+    final snippet = _isHorizontalPaged && _pages.isNotEmpty
         ? _pages[_pageIndex].trim()
         : _content.trim();
     final preview = snippet.length > 80 ? '${snippet.substring(0, 80)}…' : snippet;
-    final pageHint = _settings.pageMode == 'slide' && _pages.isNotEmpty
+    final pageHint = _isHorizontalPaged && _pages.isNotEmpty
         ? '第${_pageIndex + 1}/${_pages.length}页'
         : '滚动位置';
     NoteService.save(
@@ -822,7 +863,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _copyContent() async {
-    final text = _settings.pageMode == 'slide' && _pages.isNotEmpty
+    final text = _isHorizontalPaged && _pages.isNotEmpty
         ? _pages[_pageIndex]
         : _content;
     await Clipboard.setData(ClipboardData(text: text));
@@ -1043,7 +1084,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   String _pageInfoLabel() {
-    if (_settings.pageMode == 'slide' && _pages.isNotEmpty) {
+    if (_isHorizontalPaged && _pages.isNotEmpty) {
       return '${_pageIndex + 1}/${_pages.length}页';
     }
     return '${_currentIndex + 1}/${widget.allChapters.length}章';
@@ -1058,7 +1099,7 @@ class _ReaderPageState extends State<ReaderPage> {
 
   /// UI-1 底栏：前/后章 + 本章进度滑块 + 页码/时间信息
   Widget _buildBottomChrome(ReaderTheme theme) {
-    final hasPages = _settings.pageMode == 'slide' && _pages.length > 1;
+    final hasPages = _isHorizontalPaged && _pages.length > 1;
     final sliderMax = hasPages
         ? (_pages.length - 1).toDouble()
         : (widget.allChapters.length > 1
@@ -1345,6 +1386,72 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
+  Widget _buildPagedText(ReaderTheme theme, String text) {
+    final content = ReaderSelectableText(
+      text: text,
+      style: _readerTextStyle(theme.text),
+      textAlign: _readerTextAlign,
+      onWriteNote: _openNoteEditor,
+    );
+    final padded = Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: _settings.paddingHorizontal,
+        vertical: _settings.paddingVertical,
+      ),
+      child: content,
+    );
+    // textBottomJustify：不足一页时贴底（legado 同名开关）
+    if (_settings.textBottomJustify) {
+      return SizedBox.expand(
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: padded,
+        ),
+      );
+    }
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+      child: SingleChildScrollView(
+        primary: false,
+        child: padded,
+      ),
+    );
+  }
+
+  /// 覆盖：抵消 PageView 对下一页的位移，当前页滑走露出下层；仿真：透视旋转近似。
+  Widget _decoratePageAnim({
+    required PageAnimMode anim,
+    required double delta,
+    required Widget child,
+  }) {
+    final width = MediaQuery.sizeOf(context).width;
+    if (anim == PageAnimMode.cover) {
+      if (delta >= 0) {
+        // 下一页钉住：抵消 PageView 默认平移
+        return Transform.translate(
+          offset: Offset(-delta * width, 0),
+          child: child,
+        );
+      }
+      return child; // 当前页随 PageView 滑走
+    }
+    // simulation：当前页绕左缘透视翻起；下一页钉住
+    if (delta >= 0) {
+      return Transform.translate(
+        offset: Offset(-delta * width, 0),
+        child: child,
+      );
+    }
+    final t = (-delta).clamp(0.0, 1.0);
+    return Transform(
+      alignment: Alignment.centerLeft,
+      transform: Matrix4.identity()
+        ..setEntry(3, 2, 0.0012)
+        ..rotateY(-t * 1.15),
+      child: child,
+    );
+  }
+
   /// 正文内容：优先 PageView；否则可滚动全文。空章占位给出显式提示+刷新。
   Widget _buildBodyText(ReaderTheme theme, {required bool paged}) {
     if (_isEmptyBody && !_isLoading) {
@@ -1392,33 +1499,42 @@ class _ReaderPageState extends State<ReaderPage> {
     }
 
     if (paged && _pages.isNotEmpty && _pageController != null) {
+      final anim = _settings.pageAnim;
       return Stack(
         children: [
           PageView.builder(
             controller: _pageController,
+            physics: anim == PageAnimMode.none
+                ? const NeverScrollableScrollPhysics()
+                : const PageScrollPhysics(),
             itemCount: _pages.length,
             onPageChanged: (index) {
               setState(() => _pageIndex = index);
+              _bumpScreenTimeout();
             },
             itemBuilder: (context, index) {
-              return ScrollConfiguration(
-                behavior: ScrollConfiguration.of(
-                  context,
-                ).copyWith(scrollbars: false),
-                child: SingleChildScrollView(
-                  primary: false,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: _settings.paddingHorizontal,
-                    vertical: _settings.paddingVertical,
-                  ),
-                  child: ReaderSelectableText(
-                    text: _pages[index],
-                    style: _readerTextStyle(theme.text),
-                    textAlign: _readerTextAlign,
-                    onWriteNote: _openNoteEditor,
-                  ),
-                ),
-              );
+              final pageChild = _buildPagedText(theme, _pages[index]);
+              if (anim == PageAnimMode.cover ||
+                  anim == PageAnimMode.simulation) {
+                return AnimatedBuilder(
+                  animation: _pageController!,
+                  builder: (context, child) {
+                    var page = _pageIndex.toDouble();
+                    if (_pageController!.hasClients &&
+                        _pageController!.position.haveDimensions) {
+                      page = _pageController!.page ?? page;
+                    }
+                    final delta = index - page;
+                    return _decoratePageAnim(
+                      anim: anim,
+                      delta: delta,
+                      child: child!,
+                    );
+                  },
+                  child: pageChild,
+                );
+              }
+              return pageChild;
             },
           ),
           Positioned.fill(child: _buildClickZones()),
@@ -1531,15 +1647,34 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
+  Duration get _pageAnimDuration {
+    switch (_settings.pageAnim) {
+      case PageAnimMode.none:
+        return Duration.zero;
+      case PageAnimMode.cover:
+      case PageAnimMode.simulation:
+        return const Duration(milliseconds: 320);
+      case PageAnimMode.slide:
+        return const Duration(milliseconds: 200);
+      case PageAnimMode.scroll:
+        return const Duration(milliseconds: 200);
+    }
+  }
+
   void _prevPage() {
-    if (_settings.pageMode == 'slide' &&
+    _bumpScreenTimeout();
+    if (_isHorizontalPaged &&
         _pageController != null &&
         _pages.isNotEmpty) {
       if (_pageIndex > 0) {
-        _pageController!.previousPage(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-        );
+        if (_settings.pageAnim == PageAnimMode.none) {
+          _pageController!.jumpToPage(_pageIndex - 1);
+        } else {
+          _pageController!.previousPage(
+            duration: _pageAnimDuration,
+            curve: Curves.easeInOut,
+          );
+        }
       } else if (_currentIndex > 0) {
         _pendingTargetPage = -1;
         _goToChapter(_currentIndex - 1);
@@ -1550,14 +1685,19 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   void _nextPage() {
-    if (_settings.pageMode == 'slide' &&
+    _bumpScreenTimeout();
+    if (_isHorizontalPaged &&
         _pageController != null &&
         _pages.isNotEmpty) {
       if (_pageIndex < _pages.length - 1) {
-        _pageController!.nextPage(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-        );
+        if (_settings.pageAnim == PageAnimMode.none) {
+          _pageController!.jumpToPage(_pageIndex + 1);
+        } else {
+          _pageController!.nextPage(
+            duration: _pageAnimDuration,
+            curve: Curves.easeInOut,
+          );
+        }
       } else if (_currentIndex < widget.allChapters.length - 1) {
         _pendingTargetPage = 0;
         _goToChapter(_currentIndex + 1);
@@ -1599,6 +1739,10 @@ class _ReaderPageState extends State<ReaderPage> {
     }
 
     if (_settings.volumeKeyTurnPage) {
+      final ttsPlaying = TtsService.instance.state == TtsPlaybackState.playing;
+      if (ttsPlaying && !_settings.volumeKeyPageOnPlay) {
+        return KeyEventResult.ignored;
+      }
       if (key == LogicalKeyboardKey.audioVolumeUp) {
         _prevPage();
         return KeyEventResult.handled;
