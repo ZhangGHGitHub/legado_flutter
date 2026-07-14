@@ -149,7 +149,7 @@
 | 4 | `activity_book_search.xml` | 搜索 | ✅ `search_page.dart` | **需核对是否按书源分组（ExpansionTile）** |
 | 5 | `activity_book_source.xml` | 书源管理 | ✅ `sources_page.dart` | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
 | 6 | `activity_book_source_edit.xml` | 书源编辑 | ✅ `source_editor_page.dart` | 需核对字段完整度 |
-| 7 | `activity_chapter_list.xml` | 目录 | ✅ `toc_sheet.dart` | UI-5：正序/倒序、缓存图标、当前章高亮、搜索、书签 Tab |
+| 7 | `activity_chapter_list.xml` | 目录 | ✅ `toc_sheet.dart` | UI-5：全页 AppBar（返回/目录·书签 Tab/搜索/⋮）+ 缓存字数/云标 + 底栏进度 |
 | 8 | `activity_explore_show.xml` | 发现结果列表 | ✅ `explore_list_page.dart` | 需核对 |
 | 9 | `activity_config.xml` | 设置中心 | ✅ `config_page.dart` | **缺完整子页：备份/主题/其它** |
 | 10 | `activity_about.xml` | 关于 | ✅ my_page 内嵌 | 需核对 |
@@ -298,7 +298,7 @@
 | 底栏 删除书籍 / 阅读 | ✅ | ✅ UI-6；非书架书左钮为「加入书架」 | |
 | 读完/N刷 | `readIteration` | ✅ 更多菜单「阅读状态」 | 主栏不再展示徽章 |
 | 章节目录 | 芯片「查看目录」→ TocSheet | ✅ UI-6；不再嵌入整表 | 缓存进度条移至更多菜单 |
-| 目录已缓存图标 / 正序倒序 / 当前章高亮 | TocSheet | ✅ UI-5 | |
+| 目录字数副标题 / 云标 / AppBar+底栏 | TocSheet 全页 | ✅ UI-5 | |
 
 ### 2.6 阅读器 (`ui/book/read/ReadBookActivity` ⚔ `reader_page.dart`)
 
@@ -314,7 +314,7 @@
 | **TTS 朗读** | `dialog_read_aloud.xml` | ✅ 系统 TTS | `flutter_tts` + 上/下句；HTTP TTS 仍占位 |
 | **自动阅读** | `dialog_auto_read.xml` 定时翻页 | ✅ UI-2 | 间隔 + Timer 翻页 |
 | **正文搜索** | `activity_search_content.xml` | 🟡 UI-2 | 菜单「全文搜索」+ 结果页 + 上/下个结果；仅当前章与文件缓存章 |
-| **目录浮层** | BottomSheet + 当前章高亮 | ✅ `toc_sheet.dart` | UI-5：正序倒序/缓存标/高亮/搜索/书签 Tab |
+| **目录页** | 全页目录（对齐截图 AppBar+列表+底栏） | ✅ `toc_sheet.dart` | UI-5：返回/Tab/搜索/⋮；缓存「N字」/未缓存云标；底栏进度+顶底跳转 |
 | **书签** | 点击书签按钮保存 | ✅ UI-1 阅读器内可加书签 | 书签页仍偏「想法」列表 |
 | **想法/批注** | 长按选文 → 写想法 | ⚠️ 有 `note_editor_sheet` | **需确认交互已连接** |
 | **书票 overlay** | 首尾显示评分+时长 | ❌ | **BookplateService 已有数据层** |
@@ -423,13 +423,14 @@
 - [x] 分组标题 + 绿/红/灰点验证（通过/失败/未校验）
 - [x] 书源搜索/排序（名称/分组/启用）
 
-#### Task UI-5: 目录页增强 (`toc_sheet.dart`) — ✅ 基本完成（2026-07-14）
+#### Task UI-5: 目录页增强 (`toc_sheet.dart`) — ✅ 对齐截图（2026-07-15）
 
-- [x] 正序/倒序切换（阅读目录浮层 + 书籍详情章节列表）
-- [x] 已缓存章节图标（`isDownloaded` ✓ / 未缓存空心圆）
-- [x] 当前章高亮背景（主色浅底 + 加粗，自动滚到当前章）
-- [x] 章节搜索
-- [x] 目录 / 书签 Tab（书签来自阅读器「书签」笔记）
+- [x] 全页路由（阅读器 / 书籍详情共用 `TocSheet.show`）
+- [x] AppBar：返回 | 「目录」「书签」Tab（主色下划线）| 搜索 | 溢出菜单（正序/倒序、定位当前）
+- [x] 已缓存：标题 + 副标题字数「N字」（文件缓存统计）；未缓存：标题 + 右侧云标
+- [x] 当前章高亮 + 打开时滚动定位
+- [x] 底栏：当前章进度文案「标题(n/total)」+ 顶/底跳转
+- [ ] 溢出菜单其余项（刷新目录/显示字数开关等）与 legado 逐项对齐
 
 #### Task UI-6: 书籍详情补全 (`book_info_page.dart`) — ✅ 对齐 Jingshiro 截图（2026-07-15）
 
@@ -588,7 +589,7 @@ Task UI-1:  阅读器底栏 + 顶栏自动隐藏 + 更多菜单  ✅ 基本完�
 Task UI-2:  阅读器设置补全（字体/TTS/自动阅读/点击行为/翻页键）  🟡 超时分档+翻页五档+全文搜索+模拟追读+主题 zip；HTTP TTS/真仿真/词级简繁/FontLoader 仍开放
 Task UI-3:  搜索页按书源分组 + 精准搜索 + 搜索范围  ✅ 基本完成（2026-07-14）
 Task UI-4:  书源管理分组展示 + 批量操作 + 绿红灰点验证  ✅ 基本完成（2026-07-14）
-Task UI-5:  目录页正序/倒序 + 已缓存图标 + 当前章高亮  ✅ 基本完成（2026-07-14）
+Task UI-5:  目录页对齐截图（AppBar/字数·云标/底栏）  ✅ 对齐截图（2026-07-15）
 Task UI-6:  书籍详情对齐 Jingshiro 截图（英雄区/元数据红芯片/底栏）  ✅（2026-07-15）
 Task UI-7:  书架长按菜单完整化  ✅ 基本完成（2026-07-14）
 Task UI-8:  我的页菜单补齐 + 快捷四格行为  ✅ 基本完成（2026-07-14）
@@ -653,7 +654,7 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 | 搜索 | 90% | UI-3：按书源分组 + 精准搜索 + Scope |
 | 发现 | 85% | 接近完成 |
 | 书籍详情 | 96% | UI-6：截图布局（模糊头图/红芯片/删除+阅读底栏）；换源页后端仍占位；图标字形可再抠 |
-| 目录 | 92% | UI-5：正序倒序/缓存标/高亮/搜索/书签 Tab |
+| 目录 | 95% | UI-5：全页 AppBar+字数/云标+底栏；溢出菜单次级项仍可再抠 |
 | **阅读器** | **93%** | UI-1+UI-2：超时分档+翻页五档+沉浸+系统 TTS+全文搜索(缓存)+模拟追读+主题 zip；HTTP TTS/真仿真卷曲/词级简繁/全书联网搜仍开放 |
 | 书源管理 | 90% | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
 | RSS | 50% | Tab+源管理已有；**文章/阅读延后 S4** |

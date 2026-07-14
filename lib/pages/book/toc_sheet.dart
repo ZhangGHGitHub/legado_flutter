@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../../help/book_help.dart';
 import '../../models/chapter.dart';
 import '../../services/note_service.dart';
 import '../../src/rust/api.dart' as rust_api;
 
-/// 章节目录 BottomSheet — 对齐 Legado ChapterList（正序/倒序、缓存标、当前章高亮、搜索、书签 Tab）
+/// 章节目录页 — 对齐 Legado `ChapterList` / `activity_chapter_list`
+/// （顶栏返回+目录/书签 Tab+搜索+菜单；缓存字数 / 未缓存云标；底栏进度+顶底跳转）
 class TocSheet extends StatefulWidget {
   final List<Chapter> chapters;
   final String? currentChapter;
   final String? currentChapterId;
   final String? bookId;
   final ValueChanged<Chapter> onChapterTap;
-  final ScrollController? scrollController;
 
   const TocSheet({
     super.key,
@@ -20,7 +21,6 @@ class TocSheet extends StatefulWidget {
     this.currentChapterId,
     this.bookId,
     required this.onChapterTap,
-    this.scrollController,
   });
 
   static Future<void> show(
@@ -31,24 +31,14 @@ class TocSheet extends StatefulWidget {
     String? bookId,
     required ValueChanged<Chapter> onChapterTap,
   }) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.7,
-        minChildSize: 0.4,
-        maxChildSize: 0.95,
-        builder: (ctx, scrollController) => TocSheet(
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => TocSheet(
           chapters: chapters,
           currentChapter: currentChapter,
           currentChapterId: currentChapterId,
           bookId: bookId,
           onChapterTap: onChapterTap,
-          scrollController: scrollController,
         ),
       ),
     );
@@ -60,12 +50,20 @@ class TocSheet extends StatefulWidget {
 
 class _TocSheetState extends State<TocSheet>
     with SingleTickerProviderStateMixin {
+  static const double _rowCached = 64;
+  static const double _rowPlain = 52;
+
   bool _reversed = false;
+  bool _searching = false;
   String _query = '';
   int _tabIndex = 0;
   late final TabController _tabController;
   late final TextEditingController _searchController;
+  late final ScrollController _chapterScroll;
+  late final ScrollController _bookmarkScroll;
   List<rust_api.NoteDto> _bookmarks = [];
+  Map<String, int> _wordCounts = {};
+  Set<String> _cachedIds = {};
   bool _didScrollToCurrent = false;
 
   @override
@@ -74,7 +72,10 @@ class _TocSheetState extends State<TocSheet>
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_onTabChanged);
     _searchController = TextEditingController();
+    _chapterScroll = ScrollController();
+    _bookmarkScroll = ScrollController();
     _loadBookmarks();
+    _loadCacheMeta();
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
   }
 
@@ -94,6 +95,8 @@ class _TocSheetState extends State<TocSheet>
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _searchController.dispose();
+    _chapterScroll.dispose();
+    _bookmarkScroll.dispose();
     super.dispose();
   }
 
@@ -108,6 +111,18 @@ class _TocSheetState extends State<TocSheet>
         .toList();
   }
 
+  Future<void> _loadCacheMeta() async {
+    final bookId = widget.bookId;
+    if (bookId == null || bookId.isEmpty) return;
+    final ids = await BookHelp.listCachedChapterIds(bookId);
+    final counts = await BookHelp.mapCachedWordCounts(bookId);
+    if (!mounted) return;
+    setState(() {
+      _cachedIds = ids;
+      _wordCounts = counts;
+    });
+  }
+
   bool _isCurrent(Chapter chapter) {
     if (widget.currentChapterId != null &&
         widget.currentChapterId!.isNotEmpty) {
@@ -117,6 +132,20 @@ class _TocSheetState extends State<TocSheet>
       return false;
     }
     return chapter.title == widget.currentChapter;
+  }
+
+  int? _wordCountOf(Chapter chapter) {
+    final fromCache = _wordCounts[BookHelp.sanitizeId(chapter.id)];
+    if (fromCache != null && fromCache > 0) return fromCache;
+    final content = chapter.content;
+    if (content != null && content.isNotEmpty) return content.length;
+    return null;
+  }
+
+  bool _hasCacheVisual(Chapter chapter) {
+    if (chapter.isDownloaded) return true;
+    final sid = BookHelp.sanitizeId(chapter.id);
+    return _cachedIds.contains(sid) || _wordCounts.containsKey(sid);
   }
 
   List<Chapter> get _filteredChapters {
@@ -130,20 +159,27 @@ class _TocSheetState extends State<TocSheet>
     return result;
   }
 
+  double _rowHeight(Chapter chapter) {
+    final words = _wordCountOf(chapter);
+    if (_hasCacheVisual(chapter) && words != null) return _rowCached;
+    return _rowPlain;
+  }
+
   void _scrollToCurrent() {
     if (_didScrollToCurrent || !mounted || _tabIndex != 0) return;
-    final sc = widget.scrollController;
-    if (sc == null || !sc.hasClients) return;
+    if (!_chapterScroll.hasClients) return;
     final chapters = _filteredChapters;
     final idx = chapters.indexWhere(_isCurrent);
     if (idx < 0) return;
     _didScrollToCurrent = true;
-    final offset = idx * 48.0;
-    sc.jumpTo(offset.clamp(0.0, sc.position.maxScrollExtent));
+    var offset = 0.0;
+    for (var i = 0; i < idx; i++) {
+      offset += _rowHeight(chapters[i]);
+    }
+    _chapterScroll.jumpTo(offset.clamp(0.0, _chapterScroll.position.maxScrollExtent));
   }
 
   int _displayNumber(Chapter chapter) {
-    // Chapter.index 多为 0-based；若与列表位置差太大，回退到列表序
     if (chapter.index >= 0 && chapter.index < widget.chapters.length * 2) {
       return chapter.index + 1;
     }
@@ -151,213 +187,327 @@ class _TocSheetState extends State<TocSheet>
     return (i >= 0 ? i : 0) + 1;
   }
 
+  Chapter? get _currentChapter {
+    for (final c in widget.chapters) {
+      if (_isCurrent(c)) return c;
+    }
+    return null;
+  }
+
+  String get _footerProgressText {
+    final cur = _currentChapter;
+    final total = widget.chapters.length;
+    if (cur == null) {
+      return total == 0 ? '暂无章节' : '(0/$total)';
+    }
+    final n = _displayNumber(cur);
+    return '${cur.title}($n/$total)';
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searching = !_searching;
+      if (!_searching) {
+        _searchController.clear();
+        _query = '';
+        _didScrollToCurrent = false;
+      }
+    });
+    if (!_searching) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
+    }
+  }
+
+  void _jumpChapterList(bool toTop) {
+    if (!_chapterScroll.hasClients) return;
+    _chapterScroll.jumpTo(
+      toTop ? 0 : _chapterScroll.position.maxScrollExtent,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
+    final appBarBg = theme.appBarTheme.backgroundColor ??
+        theme.colorScheme.surfaceContainerHigh;
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Container(
-            width: 36,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey[400],
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
+    return Scaffold(
+      backgroundColor: theme.colorScheme.surface,
+      appBar: AppBar(
+        backgroundColor: appBarBg,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 4, 0),
+        titleSpacing: 0,
+        title: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          labelColor: theme.colorScheme.onSurface,
+          unselectedLabelColor: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+          indicatorColor: accent,
+          indicatorSize: TabBarIndicatorSize.label,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 16),
+          tabs: const [
+            Tab(text: '目录'),
+            Tab(text: '书签'),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: _searching ? '关闭搜索' : '搜索',
+            icon: Icon(_searching ? Icons.close : Icons.search),
+            onPressed: _tabIndex == 0
+                ? _toggleSearch
+                : () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('请切换到目录 Tab 搜索')),
+                    );
+                  },
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (v) {
+              if (v == 'reverse') {
+                setState(() {
+                  _reversed = !_reversed;
+                  _didScrollToCurrent = false;
+                });
+                WidgetsBinding.instance
+                    .addPostFrameCallback((_) => _scrollToCurrent());
+              } else if (v == 'locate') {
+                _didScrollToCurrent = false;
+                _scrollToCurrent();
+              }
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'reverse',
+                child: Text(_reversed ? '正序' : '倒序'),
+              ),
+              const PopupMenuItem(
+                value: 'locate',
+                child: Text('定位当前章节'),
+              ),
+            ],
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_searching && _tabIndex == 0)
+            Material(
+              color: appBarBg,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: '搜索章节',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {
+                                _query = '';
+                                _didScrollToCurrent = false;
+                              });
+                            },
+                          ),
+                    filled: true,
+                    fillColor: theme.colorScheme.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  onChanged: (v) => setState(() {
+                    _query = v;
+                    _didScrollToCurrent = false;
+                  }),
+                ),
+              ),
+            ),
+          Expanded(
+            child: _tabIndex == 0
+                ? _buildChapterTab(accent)
+                : _buildBookmarkTab(accent),
+          ),
+          if (_tabIndex == 0) _buildFooter(theme, appBarBg),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooter(ThemeData theme, Color bg) {
+    final onSurface = theme.colorScheme.onSurface;
+    return Material(
+      color: bg,
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 48,
           child: Row(
             children: [
               Expanded(
-                child: TabBar(
-                  controller: _tabController,
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  tabs: [
-                    Tab(text: '目录(${widget.chapters.length})'),
-                    Tab(
-                      text: _bookmarks.isEmpty
-                          ? '书签'
-                          : '书签(${_bookmarks.length})',
+                child: InkWell(
+                  onTap: () {
+                    _didScrollToCurrent = false;
+                    _scrollToCurrent();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _footerProgressText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: onSurface.withValues(alpha: 0.85),
+                        ),
+                      ),
                     ),
-                  ],
+                  ),
                 ),
               ),
-              if (_tabIndex == 0)
-                TextButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _reversed = !_reversed;
-                      _didScrollToCurrent = false;
-                    });
-                    WidgetsBinding.instance
-                        .addPostFrameCallback((_) => _scrollToCurrent());
-                  },
-                  icon: Icon(
-                    _reversed ? Icons.arrow_upward : Icons.arrow_downward,
-                    size: 16,
-                  ),
-                  label: Text(
-                    _reversed ? '正序' : '倒序',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
               IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(context),
+                tooltip: '顶部',
+                icon: Icon(Icons.arrow_drop_up, color: onSurface),
+                onPressed: () => _jumpChapterList(true),
+              ),
+              IconButton(
+                tooltip: '底部',
+                icon: Icon(Icons.arrow_drop_down, color: onSurface),
+                onPressed: () => _jumpChapterList(false),
               ),
             ],
           ),
         ),
-        Expanded(
-          child: _tabIndex == 0
-              ? _buildChapterTab(accent)
-              : _buildBookmarkTab(accent),
-        ),
-      ],
+      ),
     );
   }
 
   Widget _buildChapterTab(Color accent) {
     final chapters = _filteredChapters;
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: '搜索章节',
-              prefixIcon: const Icon(Icons.search, size: 20),
-              suffixIcon: _query.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.clear, size: 18),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() {
-                          _query = '';
-                          _didScrollToCurrent = false;
-                        });
-                      },
-                    ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 8),
-            ),
-            onChanged: (v) => setState(() {
-              _query = v;
-              _didScrollToCurrent = false;
-            }),
-          ),
-        ),
-        Expanded(
-          child: chapters.isEmpty
-              ? ListView(
-                  controller: widget.scrollController,
-                  children: [
-                    SizedBox(
-                      height: 160,
-                      child: Center(
-                        child: Text(
-                          _query.isEmpty ? '暂无章节' : '未找到匹配章节',
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              : ListView.separated(
-                  controller: widget.scrollController,
-                  itemCount: chapters.length,
-                  separatorBuilder: (_, _) =>
-                      const Divider(height: 1, indent: 48),
-                  itemBuilder: (_, i) {
-                    final chapter = chapters[i];
-                    final isCurrent = _isCurrent(chapter);
-                    return ListTile(
-                      dense: true,
-                      selected: isCurrent,
-                      selectedTileColor: accent.withValues(alpha: 0.12),
-                      leading: Text(
-                        '${_displayNumber(chapter)}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isCurrent ? accent : Colors.grey[500],
-                          fontWeight:
-                              isCurrent ? FontWeight.w600 : FontWeight.normal,
-                        ),
-                      ),
-                      title: Text(
-                        chapter.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: isCurrent ? accent : null,
-                          fontWeight:
-                              isCurrent ? FontWeight.w600 : FontWeight.normal,
-                        ),
-                      ),
-                      trailing: chapter.isDownloaded
-                          ? Icon(
-                              Icons.check_circle,
-                              size: 16,
-                              color: Colors.green[400],
-                            )
-                          : Icon(
-                              Icons.circle_outlined,
-                              size: 16,
-                              color: Colors.grey[300],
-                            ),
-                      onTap: () {
-                        Navigator.pop(context);
-                        widget.onChapterTap(chapter);
-                      },
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
+    final theme = Theme.of(context);
+    final titleColor = theme.colorScheme.onSurface;
+    final subtitleColor = theme.colorScheme.onSurface.withValues(alpha: 0.55);
+    final dividerColor = theme.dividerColor.withValues(alpha: 0.35);
 
-  Widget _buildBookmarkTab(Color accent) {
-    if (_bookmarks.isEmpty) {
-      return ListView(
-        controller: widget.scrollController,
-        children: [
-          SizedBox(
-            height: 200,
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.bookmark_border, size: 40, color: Colors.grey[400]),
-                  const SizedBox(height: 12),
-                  Text('暂无书签', style: TextStyle(color: Colors.grey[600])),
-                  const SizedBox(height: 4),
-                  Text(
-                    '阅读中可在菜单添加书签',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+    if (chapters.isEmpty) {
+      return Center(
+        child: Text(
+          _query.isEmpty ? '暂无章节' : '未找到匹配章节',
+          style: TextStyle(color: theme.hintColor),
+        ),
       );
     }
 
     return ListView.separated(
-      controller: widget.scrollController,
+      controller: _chapterScroll,
+      itemCount: chapters.length,
+      separatorBuilder: (_, _) => Divider(height: 1, thickness: 0.5, color: dividerColor),
+      itemBuilder: (_, i) {
+        final chapter = chapters[i];
+        final isCurrent = _isCurrent(chapter);
+        final cached = _hasCacheVisual(chapter);
+        final words = _wordCountOf(chapter);
+        final showWordCount = cached && words != null;
+
+        return InkWell(
+          onTap: () {
+            Navigator.pop(context);
+            widget.onChapterTap(chapter);
+          },
+          child: Container(
+            constraints: BoxConstraints(
+              minHeight: showWordCount ? _rowCached : _rowPlain,
+            ),
+            color: isCurrent ? accent.withValues(alpha: 0.12) : null,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        chapter.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          height: 1.25,
+                          color: isCurrent ? accent : titleColor,
+                          fontWeight:
+                              isCurrent ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
+                      if (showWordCount) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '$words字',
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.2,
+                            color: subtitleColor,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (!cached)
+                  Icon(
+                    Icons.cloud_outlined,
+                    size: 20,
+                    color: subtitleColor,
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBookmarkTab(Color accent) {
+    final theme = Theme.of(context);
+    if (_bookmarks.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.bookmark_border, size: 40, color: theme.hintColor),
+            const SizedBox(height: 12),
+            Text('暂无书签', style: TextStyle(color: theme.hintColor)),
+            const SizedBox(height: 4),
+            Text(
+              '阅读中可在菜单添加书签',
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.hintColor.withValues(alpha: 0.8),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      controller: _bookmarkScroll,
       padding: const EdgeInsets.symmetric(vertical: 4),
       itemCount: _bookmarks.length,
       separatorBuilder: (_, _) => const Divider(height: 1, indent: 16),
@@ -384,7 +534,7 @@ class _TocSheetState extends State<TocSheet>
             bm.selectedText,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            style: TextStyle(fontSize: 12, color: theme.hintColor),
           ),
           onTap: chapter == null
               ? null

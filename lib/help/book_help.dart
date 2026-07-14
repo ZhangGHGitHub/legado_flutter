@@ -115,6 +115,32 @@ class BookHelp {
   /// 与 [_chapterFile] 相同的 id 规范化（供目录标记比对）
   static String sanitizeId(String id) => _sanitize(id);
 
+  /// 已缓存正文字数（sanitize(chapterId) → 字符数，对齐目录「2974字」）
+  static Future<Map<String, int>> mapCachedWordCounts(String bookId) async {
+    try {
+      final root = await _cacheRoot();
+      final bookDir = Directory(p.join(root.path, _sanitize(bookId)));
+      if (!await bookDir.exists()) return {};
+      final counts = <String, int>{};
+      await for (final entity in bookDir.list()) {
+        if (entity is! File) continue;
+        final name = p.basename(entity.path);
+        if (!name.endsWith('.txt')) continue;
+        try {
+          final text = await entity.readAsString();
+          if (text.isEmpty) continue;
+          counts[p.basenameWithoutExtension(name)] = text.length;
+        } catch (_) {
+          // 单文件失败跳过
+        }
+      }
+      return counts;
+    } catch (e) {
+      debugPrint('BookHelp 统计缓存字数失败: $e');
+      return {};
+    }
+  }
+
   /// 删除单章文件缓存（用于阅读器「刷新」）
   static Future<void> deleteChapterContent(
     String bookId,
