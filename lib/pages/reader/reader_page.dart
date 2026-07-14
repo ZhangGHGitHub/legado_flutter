@@ -35,7 +35,6 @@ import 'search_content_page.dart';
 import 'search_content_result.dart';
 import 'simulated_reading_dialog.dart';
 import 'tts_panel.dart';
-import '../../widgets/bookplate_overlay.dart';
 import '../../widgets/note_editor_sheet.dart';
 import '../../widgets/reader_selectable_text.dart';
 
@@ -1010,12 +1009,14 @@ class _ReaderPageState extends State<ReaderPage> {
         renderBox.size.width - hPad - edgePadL - edgePadR;
     // chrome 以 overlay 叠在正文上，分页按「无顶/底栏」可视高度估算
     final chapterTitleHeight = _settings.fontSize + 36.0;
+    // 页脚：分割线 + 章名/页码行（对齐 legado）
+    const pageFooterHeight = 32.0;
     final pageHeight =
         renderBox.size.height -
         edgePadT -
         edgePadB -
         chapterTitleHeight -
-        48 -
+        pageFooterHeight -
         _settings.paddingVertical * 2;
 
     final result = <String>[];
@@ -1607,6 +1608,55 @@ class _ReaderPageState extends State<ReaderPage> {
             ),
         ],
       ),
+    );
+  }
+
+  /// 全书阅读进度 0~1（含章内页占比）
+  double get _readingProgress {
+    final total = widget.allChapters.length;
+    if (total <= 0) return 0;
+    if (_isHorizontalPaged && _pages.isNotEmpty) {
+      return (_currentIndex + (_pageIndex + 1) / _pages.length) / total;
+    }
+    return (_currentIndex + 1) / total;
+  }
+
+  /// 页脚（对齐 legado）：章名 | 页码  全书进度%
+  Widget _buildPageFooter(Chapter chapter, ReaderTheme theme) {
+    final muted = theme.text.withValues(alpha: 0.45);
+    final style = TextStyle(fontSize: 11, color: muted);
+    final pageLabel = _isHorizontalPaged && _pages.isNotEmpty
+        ? '${_pageIndex + 1}/${_pages.length}'
+        : '1/1';
+    final pct = (_readingProgress * 100).toStringAsFixed(1);
+    final hPad = _settings.paddingHorizontal;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Divider(
+          height: 1,
+          thickness: 0.5,
+          color: theme.text.withValues(alpha: 0.12),
+        ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(hPad, 6, hPad, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  chapter.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: style,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('$pageLabel  $pct%', style: style),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -2282,13 +2332,7 @@ class _ReaderPageState extends State<ReaderPage> {
                       : _buildBodyText(theme, paged: true),
                 ),
                 if (!_isLoading && _content != '加载中...' && !_isEmptyBody)
-                  BookplateOverlay(
-                    book: widget.book,
-                    currentChapterIndex: _currentIndex,
-                    totalChapters: widget.allChapters.length,
-                    textColor: theme.text,
-                    isHeader: false,
-                  ),
+                  _buildPageFooter(chapter, theme),
               ],
             ),
           ),
@@ -2447,80 +2491,81 @@ class _ReaderPageState extends State<ReaderPage> {
             bottom: !cutout,
             left: !cutout,
             right: !cutout,
-            child: _isLoading
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(color: theme.text),
-                        const SizedBox(height: 16),
-                        Text(
-                          '加载中...',
-                          style: TextStyle(
-                            color: theme.text.withValues(alpha: 0.6),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : _isEmptyBody
-                ? _buildBodyText(theme, paged: false)
-                : Stack(
-                    children: [
-                      // 不用 AnimatedSwitcher：过渡时新旧 ScrollView 会同时挂上
-                      // 同一个 _scrollController，抛出 dual ScrollPosition 异常
-                      NotificationListener<ScrollNotification>(
-                        key: ValueKey('scroll_$_currentIndex'),
-                        onNotification: (notification) {
-                          if (notification is ScrollEndNotification) {
-                            final pixels =
-                                _scrollController.position.pixels;
-                            final maxExt =
-                                _scrollController.position.maxScrollExtent;
-                            if (pixels >= maxExt - 100) {
-                              if (_currentIndex <
-                                  widget.allChapters.length - 1) {
-                                _goToChapter(_currentIndex + 1);
-                              }
-                            }
-                          }
-                          return false;
-                        },
-                        child: SingleChildScrollView(
-                          controller: _scrollController,
-                          primary: false,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: _settings.paddingHorizontal,
-                            vertical: _settings.paddingVertical > 0
-                                ? _settings.paddingVertical + 8
-                                : 16,
-                          ),
+            child: Column(
+              children: [
+                Expanded(
+                  child: _isLoading
+                      ? Center(
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              _buildChapterHeader(chapter, theme),
-                              ReaderSelectableText(
-                                text: _displayContent,
-                                style: _readerTextStyle(theme.text),
-                                textAlign: _readerTextAlign,
-                                onWriteNote: _openNoteEditor,
-                              ),
+                              CircularProgressIndicator(color: theme.text),
                               const SizedBox(height: 16),
-                              BookplateOverlay(
-                                book: widget.book,
-                                currentChapterIndex: _currentIndex,
-                                totalChapters: widget.allChapters.length,
-                                textColor: theme.text,
-                                isHeader: false,
+                              Text(
+                                '加载中...',
+                                style: TextStyle(
+                                  color: theme.text.withValues(alpha: 0.6),
+                                ),
                               ),
-                              const SizedBox(height: 32),
                             ],
                           ),
+                        )
+                      : _isEmptyBody
+                      ? _buildBodyText(theme, paged: false)
+                      : Stack(
+                          children: [
+                            // 不用 AnimatedSwitcher：过渡时新旧 ScrollView 会同时挂上
+                            // 同一个 _scrollController，抛出 dual ScrollPosition 异常
+                            NotificationListener<ScrollNotification>(
+                              key: ValueKey('scroll_$_currentIndex'),
+                              onNotification: (notification) {
+                                if (notification is ScrollEndNotification) {
+                                  final pixels =
+                                      _scrollController.position.pixels;
+                                  final maxExt = _scrollController
+                                      .position.maxScrollExtent;
+                                  if (pixels >= maxExt - 100) {
+                                    if (_currentIndex <
+                                        widget.allChapters.length - 1) {
+                                      _goToChapter(_currentIndex + 1);
+                                    }
+                                  }
+                                }
+                                return false;
+                              },
+                              child: SingleChildScrollView(
+                                controller: _scrollController,
+                                primary: false,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: _settings.paddingHorizontal,
+                                  vertical: _settings.paddingVertical > 0
+                                      ? _settings.paddingVertical + 8
+                                      : 16,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    _buildChapterHeader(chapter, theme),
+                                    ReaderSelectableText(
+                                      text: _displayContent,
+                                      style: _readerTextStyle(theme.text),
+                                      textAlign: _readerTextAlign,
+                                      onWriteNote: _openNoteEditor,
+                                    ),
+                                    const SizedBox(height: 32),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            Positioned.fill(child: _buildClickZones()),
+                          ],
                         ),
-                      ),
-                      Positioned.fill(child: _buildClickZones()),
-                    ],
-                  ),
+                ),
+                if (!_isLoading && !_isEmptyBody)
+                  _buildPageFooter(chapter, theme),
+              ],
+            ),
           ),
           if (_autoReadRunning)
             Positioned(
