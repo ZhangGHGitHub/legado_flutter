@@ -1,5 +1,16 @@
 import 'package:flutter/material.dart';
 
+/// 点击区行为（上/中/下）
+enum ClickZoneAction {
+  prevPage('上一页'),
+  nextPage('下一页'),
+  toggleMenu('显示/隐藏菜单'),
+  none('无操作');
+
+  const ClickZoneAction(this.label);
+  final String label;
+}
+
 /// 阅读器设置 — Phase F UI-2（对齐 dialog_read_bg_text / dialog_read_book_style 可落地项）
 class ReaderSettings {
   final double fontSize;
@@ -14,6 +25,11 @@ class ReaderSettings {
   final bool showBattery;
   final bool showPageInfo;
   final bool volumeKeyTurnPage;
+  /// 自动阅读翻页间隔（秒）
+  final double autoReadIntervalSec;
+  final ClickZoneAction clickTop;
+  final ClickZoneAction clickMiddle;
+  final ClickZoneAction clickBottom;
 
   const ReaderSettings({
     this.fontSize = 18.0,
@@ -27,6 +43,10 @@ class ReaderSettings {
     this.showBattery = false,
     this.showPageInfo = true,
     this.volumeKeyTurnPage = false,
+    this.autoReadIntervalSec = 5.0,
+    this.clickTop = ClickZoneAction.prevPage,
+    this.clickMiddle = ClickZoneAction.toggleMenu,
+    this.clickBottom = ClickZoneAction.nextPage,
   });
 
   ReaderSettings copyWith({
@@ -41,6 +61,10 @@ class ReaderSettings {
     bool? showBattery,
     bool? showPageInfo,
     bool? volumeKeyTurnPage,
+    double? autoReadIntervalSec,
+    ClickZoneAction? clickTop,
+    ClickZoneAction? clickMiddle,
+    ClickZoneAction? clickBottom,
   }) {
     return ReaderSettings(
       fontSize: fontSize ?? this.fontSize,
@@ -54,6 +78,10 @@ class ReaderSettings {
       showBattery: showBattery ?? this.showBattery,
       showPageInfo: showPageInfo ?? this.showPageInfo,
       volumeKeyTurnPage: volumeKeyTurnPage ?? this.volumeKeyTurnPage,
+      autoReadIntervalSec: autoReadIntervalSec ?? this.autoReadIntervalSec,
+      clickTop: clickTop ?? this.clickTop,
+      clickMiddle: clickMiddle ?? this.clickMiddle,
+      clickBottom: clickBottom ?? this.clickBottom,
     );
   }
 
@@ -117,8 +145,18 @@ class ReaderTheme {
 class ReaderSettingsPanel extends StatefulWidget {
   final ReaderSettings settings;
   final ValueChanged<ReaderSettings> onChanged;
+  final VoidCallback? onOpenTts;
+  final VoidCallback? onOpenAutoRead;
+  final VoidCallback? onOpenClickZone;
 
-  const ReaderSettingsPanel({required this.settings, required this.onChanged});
+  const ReaderSettingsPanel({
+    super.key,
+    required this.settings,
+    required this.onChanged,
+    this.onOpenTts,
+    this.onOpenAutoRead,
+    this.onOpenClickZone,
+  });
 
   @override
   State<ReaderSettingsPanel> createState() => ReaderSettingsPanelState();
@@ -412,39 +450,51 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
 
             const Divider(),
 
-            // ── 明确占位入口（勿静默） ──
+            // ── UI-2：TTS / 自动阅读 / 点击区域 ──
             ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               dense: true,
               leading: const Icon(Icons.record_voice_over_outlined, size: 22),
               title: const Text('朗读 (TTS)', style: TextStyle(fontSize: 13)),
               subtitle: const Text(
-                '尚未实现 · dialog_read_aloud',
+                '语速/音调/引擎 · 平台引擎待接入',
                 style: TextStyle(fontSize: 11),
               ),
-              onTap: () => _toast('TTS 朗读尚未实现'),
+              trailing: const Icon(Icons.chevron_right, size: 20),
+              onTap: () {
+                Navigator.pop(context);
+                widget.onOpenTts?.call();
+              },
             ),
             ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               dense: true,
               leading: const Icon(Icons.auto_stories_outlined, size: 22),
               title: const Text('自动阅读', style: TextStyle(fontSize: 13)),
-              subtitle: const Text(
-                '尚未实现 · dialog_auto_read',
-                style: TextStyle(fontSize: 11),
+              subtitle: Text(
+                '间隔 ${_s.autoReadIntervalSec.toStringAsFixed(1)}s · 定时翻页',
+                style: const TextStyle(fontSize: 11),
               ),
-              onTap: () => _toast('自动阅读尚未实现'),
+              trailing: const Icon(Icons.chevron_right, size: 20),
+              onTap: () {
+                Navigator.pop(context);
+                widget.onOpenAutoRead?.call();
+              },
             ),
             ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               dense: true,
               leading: const Icon(Icons.touch_app_outlined, size: 22),
               title: const Text('点击区域', style: TextStyle(fontSize: 13)),
-              subtitle: const Text(
-                '尚未实现 · dialog_click_action_config',
-                style: TextStyle(fontSize: 11),
+              subtitle: Text(
+                '上=${_s.clickTop.label} · 中=${_s.clickMiddle.label} · 下=${_s.clickBottom.label}',
+                style: const TextStyle(fontSize: 11),
               ),
-              onTap: () => _toast('点击区域配置尚未实现'),
+              trailing: const Icon(Icons.chevron_right, size: 20),
+              onTap: () {
+                Navigator.pop(context);
+                widget.onOpenClickZone?.call();
+              },
             ),
             const SizedBox(height: 8),
           ],

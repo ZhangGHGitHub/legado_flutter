@@ -17,7 +17,10 @@ import '../book/change_source_page.dart';
 import '../book/toc_sheet.dart';
 import '../book/book_info_page.dart';
 import '../reader/ai_chat_page.dart';
+import 'auto_read_panel.dart';
+import 'click_action_panel.dart';
 import 'reader_settings.dart';
+import 'tts_panel.dart';
 import '../../widgets/bookplate_overlay.dart';
 import '../../widgets/note_editor_sheet.dart';
 import '../../widgets/reader_selectable_text.dart';
@@ -65,6 +68,10 @@ class _ReaderPageState extends State<ReaderPage> {
   /// UI-2: 音量键翻页焦点（桌面/模拟器可用；真机因系统接管可能无效）
   final FocusNode _focusNode = FocusNode();
 
+  /// UI-2: 自动阅读定时翻页
+  Timer? _autoReadTimer;
+  bool _autoReadRunning = false;
+
   @override
   void initState() {
     super.initState();
@@ -89,12 +96,133 @@ class _ReaderPageState extends State<ReaderPage> {
   @override
   void dispose() {
     _autoHideTimer?.cancel();
+    _autoReadTimer?.cancel();
     _saveProgress();
     _recordReadingSession();
     _scrollController.dispose();
     _pageController?.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _setAutoReadRunning(bool running) {
+    _autoReadTimer?.cancel();
+    _autoReadTimer = null;
+    setState(() => _autoReadRunning = running);
+    if (!running) return;
+    final interval = Duration(
+      milliseconds: (_settings.autoReadIntervalSec * 1000).round(),
+    );
+    _autoReadTimer = Timer.periodic(interval, (_) {
+      if (!mounted || !_autoReadRunning) return;
+      final atLastPage = _settings.pageMode == 'slide' &&
+          _pages.isNotEmpty &&
+          _pageIndex >= _pages.length - 1 &&
+          _currentIndex >= widget.allChapters.length - 1;
+      final atLastChapterScroll = _settings.pageMode != 'slide' &&
+          _currentIndex >= widget.allChapters.length - 1;
+      if (atLastPage || atLastChapterScroll) {
+        _setAutoReadRunning(false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已到全书末尾，自动阅读已停止')),
+        );
+        return;
+      }
+      _nextPage();
+    });
+  }
+
+  void _restartAutoReadIfNeeded() {
+    if (_autoReadRunning) _setAutoReadRunning(true);
+  }
+
+  void _runClickAction(ClickZoneAction action) {
+    switch (action) {
+      case ClickZoneAction.prevPage:
+        _prevPage();
+      case ClickZoneAction.nextPage:
+        _nextPage();
+      case ClickZoneAction.toggleMenu:
+        _toggleChrome();
+      case ClickZoneAction.none:
+        break;
+    }
+  }
+
+  /// 上/中/下点击热区（覆盖正文；选择文本仍由下层处理，translucent）
+  Widget _buildClickZones() {
+    return Column(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _runClickAction(_settings.clickTop),
+            behavior: HitTestBehavior.translucent,
+          ),
+        ),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _runClickAction(_settings.clickMiddle),
+            behavior: HitTestBehavior.translucent,
+          ),
+        ),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _runClickAction(_settings.clickBottom),
+            behavior: HitTestBehavior.translucent,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openTtsPanel() {
+    _autoHideTimer?.cancel();
+    final text = _pages.isNotEmpty
+        ? _pages[_pageIndex.clamp(0, _pages.length - 1)]
+        : _content;
+    TtsPanel.show(
+      context,
+      sampleText: text,
+      onPrevChapter: () {
+        if (_currentIndex > 0) _goToChapter(_currentIndex - 1);
+      },
+      onNextChapter: () {
+        if (_currentIndex < widget.allChapters.length - 1) {
+          _goToChapter(_currentIndex + 1);
+        }
+      },
+      onPrevPage: _prevPage,
+      onNextPage: _nextPage,
+    ).whenComplete(() {
+      if (mounted) _scheduleAutoHide();
+    });
+  }
+
+  void _openAutoReadPanel() {
+    _autoHideTimer?.cancel();
+    AutoReadPanel.show(
+      context,
+      settings: _settings,
+      isRunning: _autoReadRunning,
+      onChanged: (s) {
+        _onSettingsChanged(s);
+        _restartAutoReadIfNeeded();
+      },
+      onRunningChanged: _setAutoReadRunning,
+    ).whenComplete(() {
+      if (mounted) _scheduleAutoHide();
+    });
+  }
+
+  void _openClickZonePanel() {
+    _autoHideTimer?.cancel();
+    ClickActionPanel.show(
+      context,
+      settings: _settings,
+      onChanged: _onSettingsChanged,
+    ).whenComplete(() {
+      if (mounted) _scheduleAutoHide();
+    });
   }
 
   void _scheduleAutoHide() {
@@ -581,11 +709,11 @@ class _ReaderPageState extends State<ReaderPage> {
       case 'update_toc':
         _showNotImplemented('更新目录');
       case 'tts':
-        _showNotImplemented('朗读');
+        _openTtsPanel();
       case 'auto_read':
-        _showNotImplemented('自动阅读');
+        _openAutoReadPanel();
       case 'click_zone':
-        _showNotImplemented('点击区域设置');
+        _openClickZonePanel();
       case 'page_key':
         _showNotImplemented('自定义翻页键');
     }
@@ -962,6 +1090,9 @@ class _ReaderPageState extends State<ReaderPage> {
         final panel = ReaderSettingsPanel(
           settings: _settings,
           onChanged: _onSettingsChanged,
+          onOpenTts: _openTtsPanel,
+          onOpenAutoRead: _openAutoReadPanel,
+          onOpenClickZone: _openClickZonePanel,
         );
         // 设置面板是独立路由，须单独 ExcludeSemantics，否则仍会撞 AXTree
         final isDesktop = switch (defaultTargetPlatform) {
@@ -1089,55 +1220,27 @@ class _ReaderPageState extends State<ReaderPage> {
               );
             },
           ),
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: MediaQuery.of(context).size.width * 0.28,
-            child: GestureDetector(
-              onTap: _prevPage,
-              behavior: HitTestBehavior.translucent,
-            ),
-          ),
-          Positioned(
-            left: MediaQuery.of(context).size.width * 0.28,
-            right: MediaQuery.of(context).size.width * 0.28,
-            top: 0,
-            bottom: 0,
-            child: GestureDetector(
-              onTap: _toggleChrome,
-              behavior: HitTestBehavior.translucent,
-            ),
-          ),
-          Positioned(
-            right: 0,
-            top: 0,
-            bottom: 0,
-            width: MediaQuery.of(context).size.width * 0.28,
-            child: GestureDetector(
-              onTap: _nextPage,
-              behavior: HitTestBehavior.translucent,
-            ),
-          ),
+          Positioned.fill(child: _buildClickZones()),
         ],
       );
     }
 
-    return GestureDetector(
-      onTap: _toggleChrome,
-      behavior: HitTestBehavior.opaque,
-      child: SingleChildScrollView(
-        primary: false,
-        padding: EdgeInsets.symmetric(
-          horizontal: _settings.paddingHorizontal,
-          vertical: _settings.paddingVertical,
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          primary: false,
+          padding: EdgeInsets.symmetric(
+            horizontal: _settings.paddingHorizontal,
+            vertical: _settings.paddingVertical,
+          ),
+          child: ReaderSelectableText(
+            text: _content,
+            style: _readerTextStyle(theme.text),
+            onWriteNote: _openNoteEditor,
+          ),
         ),
-        child: ReaderSelectableText(
-          text: _content,
-          style: _readerTextStyle(theme.text),
-          onWriteNote: _openNoteEditor,
-        ),
-      ),
+        Positioned.fill(child: _buildClickZones()),
+      ],
     );
   }
 
@@ -1196,6 +1299,12 @@ class _ReaderPageState extends State<ReaderPage> {
               ],
             ),
           ),
+          if (_autoReadRunning)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 56,
+              right: 12,
+              child: _autoReadBadge(theme),
+            ),
           // 顶栏 overlay（始终挂树，避免 AXTree remount）
           Positioned(
             top: 0,
@@ -1293,68 +1402,75 @@ class _ReaderPageState extends State<ReaderPage> {
                   )
                 : _isEmptyBody
                 ? _buildBodyText(theme, paged: false)
-                : GestureDetector(
-                    onTap: _toggleChrome,
-                    behavior: HitTestBehavior.opaque,
-                    // 不用 AnimatedSwitcher：过渡时新旧 ScrollView 会同时挂上
-                    // 同一个 _scrollController，抛出 dual ScrollPosition 异常
-                    child: NotificationListener<ScrollNotification>(
-                      key: ValueKey('scroll_$_currentIndex'),
-                      onNotification: (notification) {
-                        if (notification is ScrollEndNotification) {
-                          final pixels =
-                              _scrollController.position.pixels;
-                          final maxExt =
-                              _scrollController.position.maxScrollExtent;
-                          if (pixels >= maxExt - 100) {
-                            if (_currentIndex <
-                                widget.allChapters.length - 1) {
-                              _goToChapter(_currentIndex + 1);
+                : Stack(
+                    children: [
+                      // 不用 AnimatedSwitcher：过渡时新旧 ScrollView 会同时挂上
+                      // 同一个 _scrollController，抛出 dual ScrollPosition 异常
+                      NotificationListener<ScrollNotification>(
+                        key: ValueKey('scroll_$_currentIndex'),
+                        onNotification: (notification) {
+                          if (notification is ScrollEndNotification) {
+                            final pixels =
+                                _scrollController.position.pixels;
+                            final maxExt =
+                                _scrollController.position.maxScrollExtent;
+                            if (pixels >= maxExt - 100) {
+                              if (_currentIndex <
+                                  widget.allChapters.length - 1) {
+                                _goToChapter(_currentIndex + 1);
+                              }
                             }
                           }
-                        }
-                        return false;
-                      },
-                      child: SingleChildScrollView(
-                        controller: _scrollController,
-                        primary: false,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: _settings.paddingHorizontal,
-                          vertical: _settings.paddingVertical > 0
-                              ? _settings.paddingVertical + 8
-                              : 16,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildChapterHeader(chapter, theme),
-                            BookplateOverlay(
-                              book: widget.book,
-                              currentChapterIndex: _currentIndex,
-                              totalChapters: widget.allChapters.length,
-                              textColor: theme.text,
-                              isHeader: true,
-                            ),
-                            ReaderSelectableText(
-                              text: _content,
-                              style: _readerTextStyle(theme.text),
-                              onWriteNote: _openNoteEditor,
-                            ),
-                            const SizedBox(height: 16),
-                            BookplateOverlay(
-                              book: widget.book,
-                              currentChapterIndex: _currentIndex,
-                              totalChapters: widget.allChapters.length,
-                              textColor: theme.text,
-                              isHeader: false,
-                            ),
-                            const SizedBox(height: 32),
-                          ],
+                          return false;
+                        },
+                        child: SingleChildScrollView(
+                          controller: _scrollController,
+                          primary: false,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: _settings.paddingHorizontal,
+                            vertical: _settings.paddingVertical > 0
+                                ? _settings.paddingVertical + 8
+                                : 16,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildChapterHeader(chapter, theme),
+                              BookplateOverlay(
+                                book: widget.book,
+                                currentChapterIndex: _currentIndex,
+                                totalChapters: widget.allChapters.length,
+                                textColor: theme.text,
+                                isHeader: true,
+                              ),
+                              ReaderSelectableText(
+                                text: _content,
+                                style: _readerTextStyle(theme.text),
+                                onWriteNote: _openNoteEditor,
+                              ),
+                              const SizedBox(height: 16),
+                              BookplateOverlay(
+                                book: widget.book,
+                                currentChapterIndex: _currentIndex,
+                                totalChapters: widget.allChapters.length,
+                                textColor: theme.text,
+                                isHeader: false,
+                              ),
+                              const SizedBox(height: 32),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
+                      Positioned.fill(child: _buildClickZones()),
+                    ],
                   ),
           ),
+          if (_autoReadRunning)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 56,
+              right: 12,
+              child: _autoReadBadge(theme),
+            ),
           Positioned(
             top: 0,
             left: 0,
@@ -1368,6 +1484,32 @@ class _ReaderPageState extends State<ReaderPage> {
             child: _chromeLayer(child: _buildBottomChrome(theme)),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _autoReadBadge(ReaderTheme theme) {
+    return Material(
+      color: theme.appBar.withValues(alpha: 0.92),
+      borderRadius: BorderRadius.circular(20),
+      elevation: 2,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => _setAutoReadRunning(false),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.speed, size: 16, color: theme.text),
+              const SizedBox(width: 4),
+              Text(
+                '自动 ${_settings.autoReadIntervalSec.toStringAsFixed(1)}s · 点停',
+                style: TextStyle(fontSize: 11, color: theme.text),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

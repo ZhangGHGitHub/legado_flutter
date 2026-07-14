@@ -86,8 +86,8 @@
 
 **朗读面板**（`dialog_read_aloud`）
 
-- [ ] 上/下章、上/下句、播放/停止（UI-2：设置内入口 + 明确占位 SnackBar）
-- [ ] 定时、语速滑块、TTS 引擎选择、后台播放
+- [x] 上/下章、上/下页、播放/停止（UI-2：面板 + `TtsService` stub；上/下句仍缺）
+- [x] 定时、语速滑块、TTS 引擎选择、后台播放（偏好可调；真发音待插件）
 
 **界面面板**（`dialog_read_bg_text` / `dialog_read_book_style`）
 
@@ -108,8 +108,8 @@
 - [ ] 朗读时音量键翻页
 - [ ] 自动换源、长按选择文本
 - [ ] 显示亮度调节控件
-- [ ] 点击区域设置、自定义翻页按键（UI-2：入口 + 明确占位）
-- [x] 自动阅读入口（明确占位，未实现定时翻页）
+- [x] 点击区域设置（上/中/下行为可配并接线）；自定义翻页按键仍占位
+- [x] 自动阅读（间隔可调 + 定时翻页 + 角标停止）
 
 **目录浮层**
 
@@ -143,7 +143,7 @@
 | # | Jingshiro XML | 对应页面 | Flutter 状态 | 差距 |
 |---|---------------|---------|:---:|------|
 | 1 | `activity_main.xml` | 主框架 (BottomNav + ViewPager) | ✅ `main_shell.dart` | 需核对 Tab 文案/图标/行为 |
-| 2 | `activity_book_read.xml` | 阅读器 | ✅ `reader_page.dart` | UI-1/UI-2 可落地项已接；TTS/自动阅读/点击区/电量真值/仿真等仍开放 |
+| 2 | `activity_book_read.xml` | 阅读器 | ✅ `reader_page.dart` | UI-1/UI-2 自动阅读/点击区已接，TTS stub；电量真值/仿真/真发音仍开放 |
 | 3 | `activity_book_info.xml` | 书籍详情 | ✅ `book_info_page.dart` | 需核对布局：封面+信息+按钮+目录 |
 | 4 | `activity_book_search.xml` | 搜索 | ✅ `search_page.dart` | **需核对是否按书源分组（ExpansionTile）** |
 | 5 | `activity_book_source.xml` | 书源管理 | ✅ `sources_page.dart` | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
@@ -309,8 +309,8 @@
 | **阅读主题** | 米黄/白/暗/绿 + 自定义 | ✅ | 需核对预设值 |
 | **底栏** | 章节进度条 + 页码 + 时间(可选) | ✅ UI-1/UI-2 | 电量开关已接，真值待插件 |
 | **设置面板** | 字号/行距/翻页/主题/字体/边距/TTS/更多 | ⚠️ UI-2 部分 | 字体骨架+边距+信息区+音量键；TTS/自动阅读/点击区为明确占位 |
-| **TTS 朗读** | `dialog_read_aloud.xml` | ⚠️ 入口占位 | 设置内 SnackBar，非静默 |
-| **自动阅读** | `dialog_auto_read.xml` 定时翻页 | ⚠️ 入口占位 | 同上 |
+| **TTS 朗读** | `dialog_read_aloud.xml` | ⚠️ UI+stub | 语速/音调/引擎面板；平台引擎待接 |
+| **自动阅读** | `dialog_auto_read.xml` 定时翻页 | ✅ UI-2 | 间隔 + Timer 翻页 |
 | **正文搜索** | `activity_search_content.xml` | ❌ | |
 | **目录浮层** | BottomSheet + 当前章高亮 | ✅ `toc_sheet.dart` | UI-5：正序倒序/缓存标/高亮/搜索/书签 Tab |
 | **书签** | 点击书签按钮保存 | ✅ UI-1 阅读器内可加书签 | 书签页仍偏「想法」列表 |
@@ -318,7 +318,7 @@
 | **书票 overlay** | 首尾显示评分+时长 | ❌ | **BookplateService 已有数据层** |
 | **换源** | 阅读器内换源 | ✅ `change_source_page.dart` | |
 | **模拟阅读** | `dialog_simulated_reading.xml` | ❌ | |
-| **点击行为配置** | `dialog_click_action_config.xml` | ⚠️ 入口占位 | UI-2 |
+| **点击行为配置** | `dialog_click_action_config.xml` | ✅ UI-2 | 上/中/下行为可配并接线 |
 | **翻页按键配置** | `dialog_page_key.xml` | ⚠️ 音量键开关 | 蓝牙翻页器仍缺 |
 | **AI 入口** | 侧滑/FAB → AiChat | ✅ `ai_chat_page.dart` | 需核对入口位置 |
 | **亮度** | 跟随系统/手动 | ❓ 待确认 | |
@@ -372,7 +372,7 @@
 - [x] 更多菜单可落地项（目录/设置/AI/换源/刷新/书签/拷贝/书籍信息）+ 其余明确占位
 - [x] 信息区电量开关（真值待 battery 插件）；离线缓存真实下载、替换净化等深度行为仍开放
 
-#### Task UI-2: 阅读器设置补全 (`reader_settings.dart`) — 🟡 可落地项完成（2026-07-14）
+#### Task UI-2: 阅读器设置补全 (`reader_settings.dart`) — 🟡 TTS stub + 自动阅读 + 点击区（2026-07-14）
 
 对齐 `dialog_read_bg_text.xml` + `dialog_read_book_style.xml`：
 
@@ -380,10 +380,10 @@
 - [x] **边距设置** — 左右/上下调节（非四角完全独立，够用）
 - [x] **信息区开关** — 页码/时间/电量
 - [x] **音量键翻页** — 设置开关 + Focus 接线
-- [x] **TTS / 自动阅读 / 点击区域** — 设置入口 + SnackBar 占位（勿静默）
-- [ ] **TTS 朗读设置**（`dialog_read_aloud.xml`）— 语速/音调/引擎（未实现）
-- [ ] **自动阅读**（`dialog_auto_read.xml`）— 定时翻页速度（未实现）
-- [ ] **点击行为配置**（`dialog_click_action_config.xml`）— 上/中/下区域行为（未实现）
+- [x] **TTS / 自动阅读 / 点击区域** — 设置与菜单入口接面板（勿静默）
+- [x] **TTS 朗读设置**（`dialog_read_aloud.xml`）— 面板语速/音调/引擎/定时/后台；`TtsService` stub（真发音待插件）
+- [x] **自动阅读**（`dialog_auto_read.xml`）— 间隔滑块 + 定时翻页
+- [x] **点击行为配置**（`dialog_click_action_config.xml`）— 上/中/下区域行为可配并接线
 - [ ] **更多设置入口** — 屏幕方向/亮度/蓝牙翻页器
 
 另：正文阻塞修复同轮收尾 — 空解析 `Err`、坏占位不缓存、`toEngineJson` 保嵌套规则、失败展示真实错误。
@@ -558,7 +558,7 @@
 
 ```
 Task UI-1:  阅读器底栏 + 顶栏自动隐藏 + 更多菜单  ✅ 基本完成（2026-07-14）
-Task UI-2:  阅读器设置补全（字体/TTS/自动阅读/点击行为/翻页键）  🟡 可落地项完成；TTS/自动阅读/点击区本体仍开放
+Task UI-2:  阅读器设置补全（字体/TTS/自动阅读/点击行为/翻页键）  🟡 TTS stub+自动阅读+点击区已接；真发音/更多设置/翻页键仍开放
 Task UI-3:  搜索页按书源分组 + 精准搜索 + 搜索范围  ✅ 基本完成（2026-07-14）
 Task UI-4:  书源管理分组展示 + 批量操作 + 绿红灰点验证  ✅ 基本完成（2026-07-14）
 Task UI-5:  目录页正序/倒序 + 已缓存图标 + 当前章高亮  ✅ 基本完成（2026-07-14）
@@ -627,7 +627,7 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 | 发现 | 85% | 接近完成 |
 | 书籍详情 | 92% | UI-6：换源主入口 + 简介展开 + 读完/N刷；换源页后端仍占位 |
 | 目录 | 92% | UI-5：正序倒序/缓存标/高亮/搜索/书签 Tab |
-| **阅读器** | **72%** | UI-1+UI-2 可落地项完成；TTS/自动阅读/点击区本体、电量真值、正文搜索仍开放 |
+| **阅读器** | **78%** | UI-1+UI-2：自动阅读/点击区已接，TTS 为 UI+stub；电量真值/正文搜索/真发音仍开放 |
 | 书源管理 | 90% | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
 | RSS | 50% | Tab+源管理已有；**文章/阅读延后 S4** |
 | 新模块(有声/漫画/扫码等) | 5% | 全部缺失 |
@@ -635,4 +635,4 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 
 ---
 
-> 最后更新：2026-07-14 | 引擎 v0.5.6 | Focus: UI 复刻（S1：UI-1/UI-3–UI-8 基本完成；UI-2 残余 TTS/自动阅读/点击区；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)
+> 最后更新：2026-07-14 | 引擎 v0.5.6 | Focus: UI 复刻（S1：UI-1/UI-3–UI-8；UI-2 TTS stub+自动阅读+点击区；更多设置/真发音仍开放；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)
