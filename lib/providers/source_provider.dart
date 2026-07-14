@@ -203,27 +203,49 @@ class SourceProvider extends ChangeNotifier {
 
   // ── 搜索 ──
 
-  /// 联合搜索所有已启用书源
-  Future<void> searchAll(String keyword) async {
+  /// 联合搜索已启用书源（可限定范围 / 作者筛选）
+  ///
+  /// [restrictSourceUrls] 非空时只搜这些书源；为空则全部已启用书源。
+  /// [author] 非空时对结果做作者包含过滤。
+  /// [preciseName] 为 true 时结果书名须包含 [keyword]。
+  Future<void> searchAll(
+    String keyword, {
+    String? author,
+    bool preciseName = false,
+    Set<String>? restrictSourceUrls,
+  }) async {
     if (keyword.isEmpty) return;
     _isLoading = true;
     _searchResults = {};
     _statusMessage = '正在搜索 "$keyword"...';
     notifyListeners();
 
-    final enabledSources = await _db.getEnabledSources();
+    var enabledSources = await _db.getEnabledSources();
+    if (restrictSourceUrls != null && restrictSourceUrls.isNotEmpty) {
+      enabledSources = enabledSources
+          .where((s) => restrictSourceUrls.contains(s.bookSourceUrl))
+          .toList();
+    }
     debugPrint('📡 搜索 "$keyword"，共 ${enabledSources.length} 个书源');
 
     if (enabledSources.isEmpty) {
       _isLoading = false;
-      _statusMessage = '没有启用的书源，请先导入书源';
+      _statusMessage = restrictSourceUrls != null && restrictSourceUrls.isNotEmpty
+          ? '所选范围内没有启用的书源'
+          : '没有启用的书源，请先导入书源';
       notifyListeners();
       return;
     }
 
-    // 并行搜索，单书源超时 20s，避免无效书源拖慢整体
     await Future.wait(
-      enabledSources.map((source) => _searchOneSource(source, keyword)),
+      enabledSources.map(
+        (source) => _searchOneSource(
+          source,
+          keyword,
+          author: author,
+          preciseName: preciseName,
+        ),
+      ),
     );
 
     _isLoading = false;
@@ -233,7 +255,12 @@ class SourceProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _searchOneSource(BookSource source, String keyword) async {
+  Future<void> _searchOneSource(
+    BookSource source,
+    String keyword, {
+    String? author,
+    bool preciseName = false,
+  }) async {
     try {
       debugPrint(
         '  ▶ 书源: ${source.bookSourceName} (${source.bookSourceUrl})',
@@ -249,10 +276,24 @@ class SourceProvider extends ChangeNotifier {
         debugPrint('  ⚠ ${source.bookSourceName}: 搜索返回 0 结果（书源规则或网络问题）');
       }
       if (results.isNotEmpty) {
-        _searchResults[source.bookSourceUrl] = _sourceService.resultsToBooks(
+        var books = _sourceService.resultsToBooks(
           results,
           source.bookSourceUrl,
         );
+        final a = author?.trim() ?? '';
+        if (a.isNotEmpty) {
+          books = books
+              .where((b) => b.author.toLowerCase().contains(a.toLowerCase()))
+              .toList();
+        }
+        if (preciseName) {
+          final k = keyword.toLowerCase();
+          books = books
+              .where((b) => b.name.toLowerCase().contains(k))
+              .toList();
+        }
+        if (books.isEmpty) return;
+        _searchResults[source.bookSourceUrl] = books;
         notifyListeners();
       }
     } catch (e, stack) {

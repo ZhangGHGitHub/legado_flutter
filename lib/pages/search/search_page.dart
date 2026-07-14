@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
 import '../../services/search_history.dart';
 import '../../widgets/book_list_tile.dart';
 import '../book/book_info_page.dart';
 
-/// 搜索页面 — 按书源分组 + 搜索历史
+/// 搜索范围模式
+enum _ScopeMode { all, groups, sources }
+
+/// 搜索页面 — 按书源分组 + 精准搜索 + 搜索范围
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
 
@@ -17,6 +21,11 @@ class _SearchPageState extends State<SearchPage> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
   List<String> _history = [];
+
+  /// 空 = 全部已启用；非空 = 限定书源 URL
+  Set<String> _scopeSourceUrls = {};
+  _ScopeMode _scopeMode = _ScopeMode.all;
+  Set<String> _selectedGroups = {};
 
   @override
   void initState() {
@@ -36,12 +45,57 @@ class _SearchPageState extends State<SearchPage> {
     super.dispose();
   }
 
-  void _search(String keyword) {
+  Set<String>? _resolvedScopeUrls(SourceProvider provider) {
+    if (_scopeMode == _ScopeMode.all || _scopeSourceUrls.isEmpty) {
+      if (_scopeMode == _ScopeMode.groups && _selectedGroups.isNotEmpty) {
+        return provider.sources
+            .where(
+              (s) =>
+                  s.enabled &&
+                  _selectedGroups.contains(
+                    s.bookSourceGroup.isEmpty ? '未分组' : s.bookSourceGroup,
+                  ),
+            )
+            .map((s) => s.bookSourceUrl)
+            .toSet();
+      }
+      if (_scopeMode == _ScopeMode.sources && _scopeSourceUrls.isNotEmpty) {
+        return _scopeSourceUrls;
+      }
+      return null;
+    }
+    return _scopeSourceUrls;
+  }
+
+  String _scopeSummary(SourceProvider provider) {
+    switch (_scopeMode) {
+      case _ScopeMode.all:
+        return '全部已启用书源';
+      case _ScopeMode.groups:
+        if (_selectedGroups.isEmpty) return '全部已启用书源';
+        return '分组: ${_selectedGroups.join('、')}';
+      case _ScopeMode.sources:
+        if (_scopeSourceUrls.isEmpty) return '全部已启用书源';
+        return '已选 ${_scopeSourceUrls.length} 个书源';
+    }
+  }
+
+  void _search(
+    String keyword, {
+    String? author,
+    bool preciseName = false,
+  }) {
     final q = keyword.trim();
     if (q.isEmpty) return;
     SearchHistory.add(q);
     _loadHistory();
-    context.read<SourceProvider>().searchAll(q);
+    final provider = context.read<SourceProvider>();
+    provider.searchAll(
+      q,
+      author: author,
+      preciseName: preciseName,
+      restrictSourceUrls: _resolvedScopeUrls(provider),
+    );
   }
 
   Widget _buildHistoryBar() {
@@ -51,7 +105,9 @@ class _SearchPageState extends State<SearchPage> {
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.3)),
+          bottom: BorderSide(
+            color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+          ),
         ),
       ),
       child: Column(
@@ -100,7 +156,6 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  /// 根据书源 URL 获取书源名称
   String _sourceName(SourceProvider provider, String sourceUrl) {
     for (final s in provider.sources) {
       if (s.bookSourceUrl == sourceUrl) {
@@ -110,7 +165,6 @@ class _SearchPageState extends State<SearchPage> {
     return Uri.tryParse(sourceUrl)?.host ?? sourceUrl;
   }
 
-  /// 精准搜索对话框
   void _showPreciseSearchDialog() {
     final keywordCtl = TextEditingController(text: _searchController.text);
     final authorCtl = TextEditingController();
@@ -125,7 +179,7 @@ class _SearchPageState extends State<SearchPage> {
               controller: keywordCtl,
               decoration: const InputDecoration(
                 labelText: '书名',
-                hintText: '输入书名',
+                hintText: '书名须包含关键词',
                 prefixIcon: Icon(Icons.book, size: 20),
                 border: OutlineInputBorder(),
               ),
@@ -135,7 +189,7 @@ class _SearchPageState extends State<SearchPage> {
               controller: authorCtl,
               decoration: const InputDecoration(
                 labelText: '作者（可选）',
-                hintText: '输入作者名筛选',
+                hintText: '按作者筛选结果',
                 prefixIcon: Icon(Icons.person, size: 20),
                 border: OutlineInputBorder(),
               ),
@@ -153,8 +207,8 @@ class _SearchPageState extends State<SearchPage> {
               final keyword = keywordCtl.text.trim();
               final author = authorCtl.text.trim();
               if (keyword.isEmpty) return;
-              // 传参搜索，后续可扩展 author 过滤
-              _search('$keyword ${author.isNotEmpty ? author : ''}'.trim());
+              _searchController.text = keyword;
+              _search(keyword, author: author, preciseName: true);
             },
             icon: const Icon(Icons.search, size: 18),
             label: const Text('搜索'),
@@ -162,6 +216,121 @@ class _SearchPageState extends State<SearchPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _showScopeDialog() async {
+    final provider = context.read<SourceProvider>();
+    final enabled = provider.sources.where((s) => s.enabled).toList();
+    final groups = <String>{
+      for (final s in enabled)
+        s.bookSourceGroup.isEmpty ? '未分组' : s.bookSourceGroup,
+    }.toList()
+      ..sort();
+
+    var mode = _scopeMode;
+    var selectedGroups = Set<String>.from(_selectedGroups);
+    var selectedUrls = Set<String>.from(_scopeSourceUrls);
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          return AlertDialog(
+            title: const Text('搜索范围'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    RadioListTile<_ScopeMode>(
+                      dense: true,
+                      title: const Text('全部已启用书源'),
+                      value: _ScopeMode.all,
+                      groupValue: mode,
+                      onChanged: (v) => setLocal(() => mode = v!),
+                    ),
+                    RadioListTile<_ScopeMode>(
+                      dense: true,
+                      title: const Text('按书源分组'),
+                      value: _ScopeMode.groups,
+                      groupValue: mode,
+                      onChanged: (v) => setLocal(() => mode = v!),
+                    ),
+                    RadioListTile<_ScopeMode>(
+                      dense: true,
+                      title: const Text('自选书源'),
+                      value: _ScopeMode.sources,
+                      groupValue: mode,
+                      onChanged: (v) => setLocal(() => mode = v!),
+                    ),
+                    if (mode == _ScopeMode.groups) ...[
+                      const Divider(),
+                      ...groups.map(
+                        (g) => CheckboxListTile(
+                          dense: true,
+                          title: Text(g),
+                          value: selectedGroups.contains(g),
+                          onChanged: (v) => setLocal(() {
+                            if (v == true) {
+                              selectedGroups.add(g);
+                            } else {
+                              selectedGroups.remove(g);
+                            }
+                          }),
+                        ),
+                      ),
+                    ],
+                    if (mode == _ScopeMode.sources) ...[
+                      const Divider(),
+                      ...enabled.map(
+                        (BookSource s) => CheckboxListTile(
+                          dense: true,
+                          title: Text(s.bookSourceName),
+                          subtitle: Text(
+                            s.bookSourceGroup.isEmpty
+                                ? '未分组'
+                                : s.bookSourceGroup,
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          value: selectedUrls.contains(s.bookSourceUrl),
+                          onChanged: (v) => setLocal(() {
+                            if (v == true) {
+                              selectedUrls.add(s.bookSourceUrl);
+                            } else {
+                              selectedUrls.remove(s.bookSourceUrl);
+                            }
+                          }),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('确定'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (ok == true && mounted) {
+      setState(() {
+        _scopeMode = mode;
+        _selectedGroups = selectedGroups;
+        _scopeSourceUrls = selectedUrls;
+      });
+    }
   }
 
   @override
@@ -193,20 +362,18 @@ class _SearchPageState extends State<SearchPage> {
                 case 'precise_search':
                   _showPreciseSearchDialog();
                   break;
-                case 'multi_group':
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('多分组/书源（待实现）')));
+                case 'scope':
+                  _showScopeDialog();
                   break;
                 case 'all_sources':
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('全部书源（待实现）')));
-                  break;
-                case 'source_tags':
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('书源标签（待实现）')));
+                  setState(() {
+                    _scopeMode = _ScopeMode.all;
+                    _scopeSourceUrls = {};
+                    _selectedGroups = {};
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('已切换为全部已启用书源')),
+                  );
                   break;
               }
             },
@@ -221,19 +388,10 @@ class _SearchPageState extends State<SearchPage> {
                 ),
               ),
               const PopupMenuItem(
-                value: 'sources',
+                value: 'scope',
                 child: ListTile(
-                  leading: Icon(Icons.rss_feed, size: 20),
-                  title: Text('书源管理', style: TextStyle(fontSize: 14)),
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'multi_group',
-                child: ListTile(
-                  leading: Icon(Icons.widgets, size: 20),
-                  title: Text('多分组/书源', style: TextStyle(fontSize: 14)),
+                  leading: Icon(Icons.filter_list, size: 20),
+                  title: Text('搜索范围', style: TextStyle(fontSize: 14)),
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -248,10 +406,10 @@ class _SearchPageState extends State<SearchPage> {
                 ),
               ),
               const PopupMenuItem(
-                value: 'source_tags',
+                value: 'sources',
                 child: ListTile(
-                  leading: Icon(Icons.label, size: 20),
-                  title: Text('书源标签', style: TextStyle(fontSize: 14)),
+                  leading: Icon(Icons.rss_feed, size: 20),
+                  title: Text('书源管理', style: TextStyle(fontSize: 14)),
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -263,150 +421,218 @@ class _SearchPageState extends State<SearchPage> {
       body: Column(
         children: [
           _buildHistoryBar(),
-          Expanded(
-            child: Consumer<SourceProvider>(
-        builder: (context, provider, _) {
-          if (provider.isLoading) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('正在搜索多个书源...'),
-                  SizedBox(height: 8),
-                  Text(
-                    '请耐心等待',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+          Consumer<SourceProvider>(
+            builder: (context, provider, _) {
+              return Material(
+                color: theme.colorScheme.surfaceContainerLow,
+                child: InkWell(
+                  onTap: _showScopeDialog,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.filter_list,
+                          size: 14,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            '范围：${_scopeSummary(provider)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right,
+                          size: 16,
+                          color: Colors.grey[500],
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-            );
-          }
-
-          if (provider.searchResults.isEmpty) {
-            if (provider.statusMessage.isNotEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
-                    const SizedBox(height: 16),
-                    Text(
-                      provider.statusMessage,
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                    const SizedBox(height: 8),
-                    Text('试试其他关键词', style: TextStyle(color: Colors.grey[500])),
-                    const SizedBox(height: 16),
-                    TextButton.icon(
-                      icon: const Icon(Icons.info_outline, size: 16),
-                      label: const Text('书源可能已失效，请导入社区书源'),
-                      onPressed: () => Navigator.pushNamed(context, '/sources'),
-                    ),
-                  ],
                 ),
               );
-            }
+            },
+          ),
+          Expanded(
+            child: Consumer<SourceProvider>(
+              builder: (context, provider, _) {
+                final hasResults = provider.searchResults.isNotEmpty;
 
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer.withValues(
-                        alpha: 0.3,
-                      ),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.search,
-                      size: 48,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text('输入关键词搜索', style: TextStyle(color: Colors.grey[600])),
-                  const SizedBox(height: 8),
-                  Text(
-                    '从所有已启用的书源中查找',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          // ── 按书源分组展示 ──
-          final groups = provider.searchResults.entries.toList()
-            ..sort((a, b) => _sourceName(provider, a.key).compareTo(_sourceName(provider, b.key)));
-
-          final totalCount = groups.fold<int>(0, (s, e) => s + e.value.length);
-          final sourceCount = groups.length;
-
-          return Column(
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerLow,
-                  border: Border(
-                    bottom: BorderSide(
-                      color: theme.dividerColor.withValues(alpha: 0.3),
-                    ),
-                  ),
-                ),
-                child: Text(
-                  '共 $totalCount 本书 · $sourceCount 个书源',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  itemCount: groups.length,
-                  itemBuilder: (context, index) {
-                    final entry = groups[index];
-                    final name = _sourceName(provider, entry.key);
-                    return ExpansionTile(
-                      initiallyExpanded: true,
-                      title: Text(
-                        '$name (${entry.value.length})',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                if (provider.isLoading && !hasResults) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('正在搜索多个书源...'),
+                        SizedBox(height: 8),
+                        Text(
+                          '请耐心等待',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
                         ),
+                      ],
+                    ),
+                  );
+                }
+
+                if (!hasResults) {
+                  if (provider.statusMessage.isNotEmpty &&
+                      !provider.isLoading) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.search_off,
+                            size: 64,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            provider.statusMessage,
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '试试其他关键词或调整搜索范围',
+                            style: TextStyle(color: Colors.grey[500]),
+                          ),
+                          const SizedBox(height: 16),
+                          TextButton.icon(
+                            icon: const Icon(Icons.info_outline, size: 16),
+                            label: const Text('书源可能已失效，请导入社区书源'),
+                            onPressed: () =>
+                                Navigator.pushNamed(context, '/sources'),
+                          ),
+                        ],
                       ),
-                      children: entry.value
-                          .map(
-                            (book) => BookListTile(
-                              book: book,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => BookInfoPage(book: book),
-                                ),
+                    );
+                  }
+
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primaryContainer
+                                .withValues(alpha: 0.3),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.search,
+                            size: 48,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          '输入关键词搜索',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '从选定的书源中查找',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final groups = provider.searchResults.entries.toList()
+                  ..sort(
+                    (a, b) => _sourceName(provider, a.key)
+                        .compareTo(_sourceName(provider, b.key)),
+                  );
+
+                final totalCount =
+                    groups.fold<int>(0, (s, e) => s + e.value.length);
+                final sourceCount = groups.length;
+
+                return Column(
+                  children: [
+                    if (provider.isLoading)
+                      const LinearProgressIndicator(minHeight: 2),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        itemCount: groups.length,
+                        itemBuilder: (context, index) {
+                          final entry = groups[index];
+                          final name = _sourceName(provider, entry.key);
+                          return ExpansionTile(
+                            initiallyExpanded: true,
+                            title: Text(
+                              '$name (${entry.value.length})',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          )
-                          .toList(),
-                    );
-                  },
-                ),
-              ),
-            ],
-          );
-        },
+                            children: entry.value
+                                .map(
+                                  (book) => BookListTile(
+                                    book: book,
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            BookInfoPage(book: book),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          );
+                        },
+                      ),
+                    ),
+                    // 底栏统计（对齐 Jingshiro）
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerLow,
+                        border: Border(
+                          top: BorderSide(
+                            color: theme.dividerColor.withValues(alpha: 0.3),
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        provider.isLoading
+                            ? '搜索中… 已找到 $totalCount 本 · $sourceCount 个书源'
+                            : '共 $totalCount 本 · $sourceCount 个书源',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],
