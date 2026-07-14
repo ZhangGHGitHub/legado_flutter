@@ -113,8 +113,8 @@
 
 **目录浮层**
 
-- [ ] 目录 / 书签 Tab 切换
-- [ ] 当前章节高亮、未缓存标识
+- [x] 目录 / 书签 Tab 切换
+- [x] 当前章节高亮、未缓存标识
 
 ### 语雀 vs Jingshiro 差异说明
 
@@ -148,7 +148,7 @@
 | 4 | `activity_book_search.xml` | 搜索 | ✅ `search_page.dart` | **需核对是否按书源分组（ExpansionTile）** |
 | 5 | `activity_book_source.xml` | 书源管理 | ✅ `sources_page.dart` | **缺绿/红点、分组标题、批量操作栏** |
 | 6 | `activity_book_source_edit.xml` | 书源编辑 | ✅ `source_editor_page.dart` | 需核对字段完整度 |
-| 7 | `activity_chapter_list.xml` | 目录 | ✅ `toc_sheet.dart` | **缺正序/倒序切换、已缓存图标、当前章高亮** |
+| 7 | `activity_chapter_list.xml` | 目录 | ✅ `toc_sheet.dart` | UI-5：正序/倒序、缓存图标、当前章高亮、搜索、书签 Tab |
 | 8 | `activity_explore_show.xml` | 发现结果列表 | ✅ `explore_list_page.dart` | 需核对 |
 | 9 | `activity_config.xml` | 设置中心 | ✅ `config_page.dart` | **缺完整子页：备份/主题/其它** |
 | 10 | `activity_about.xml` | 关于 | ✅ my_page 内嵌 | 需核对 |
@@ -294,9 +294,9 @@
 | 缓存进度 | 进度条 + x/y 已缓存 | ✅ | |
 | 读完/N刷 标签 | `readStatus` | ❌ | **需 Book 模型扩展** |
 | 章节目录 | 嵌入或跳转 | ✅ | |
-| 目录已缓存图标 | `isDownloaded` 图标 | ❌ | |
-| 目录正序/倒序 | `toggleOrder()` | ❌ | |
-| 当前章高亮 | `currentChapter` 高亮 | ❓ 待确认 | |
+| 目录已缓存图标 | `isDownloaded` 图标 | ✅ | UI-5：✓ / 未缓存空心圆 |
+| 目录正序/倒序 | `toggleOrder()` | ✅ | UI-5：详情页 + 阅读目录 |
+| 当前章高亮 | `currentChapter` 高亮 | ✅ | UI-5：主色背景+加粗 |
 
 ### 2.6 阅读器 (`ui/book/read/ReadBookActivity` ⚔ `reader_page.dart`)
 
@@ -312,7 +312,7 @@
 | **TTS 朗读** | `dialog_read_aloud.xml` | ⚠️ 入口占位 | 设置内 SnackBar，非静默 |
 | **自动阅读** | `dialog_auto_read.xml` 定时翻页 | ⚠️ 入口占位 | 同上 |
 | **正文搜索** | `activity_search_content.xml` | ❌ | |
-| **目录浮层** | BottomSheet + 当前章高亮 | ✅ `toc_sheet.dart` | 需核对 |
+| **目录浮层** | BottomSheet + 当前章高亮 | ✅ `toc_sheet.dart` | UI-5：正序倒序/缓存标/高亮/搜索/书签 Tab |
 | **书签** | 点击书签按钮保存 | ✅ UI-1 阅读器内可加书签 | 书签页仍偏「想法」列表 |
 | **想法/批注** | 长按选文 → 写想法 | ⚠️ 有 `note_editor_sheet` | **需确认交互已连接** |
 | **书票 overlay** | 首尾显示评分+时长 | ❌ | **BookplateService 已有数据层** |
@@ -404,12 +404,13 @@
 - [ ] 分组标题 + 绿/红/灰点验证
 - [ ] 书源搜索/排序
 
-#### Task UI-5: 目录页增强 (`toc_sheet.dart`)
+#### Task UI-5: 目录页增强 (`toc_sheet.dart`) — ✅ 基本完成（2026-07-14）
 
-- [ ] 正序/倒序切换
-- [ ] 已缓存章节图标（`isDownloaded` ✓）
-- [ ] 当前章高亮背景
-- [ ] 章节搜索（可选）
+- [x] 正序/倒序切换（阅读目录浮层 + 书籍详情章节列表）
+- [x] 已缓存章节图标（`isDownloaded` ✓ / 未缓存空心圆）
+- [x] 当前章高亮背景（主色浅底 + 加粗，自动滚到当前章）
+- [x] 章节搜索
+- [x] 目录 / 书签 Tab（书签来自阅读器「书签」笔记）
 
 #### Task UI-6: 书籍详情补全 (`book_info_page.dart`)
 
@@ -560,7 +561,7 @@ Task UI-1:  阅读器底栏 + 顶栏自动隐藏 + 更多菜单  ✅ 基本完�
 Task UI-2:  阅读器设置补全（字体/TTS/自动阅读/点击行为/翻页键）  🟡 可落地项完成；TTS/自动阅读/点击区本体仍开放
 Task UI-3:  搜索页按书源分组 + 精准搜索 + 搜索范围  ✅ 基本完成（2026-07-14）
 Task UI-4:  书源管理分组展示 + 批量操作 + 绿红点验证
-Task UI-5:  目录页正序/倒序 + 已缓存图标 + 当前章高亮
+Task UI-5:  目录页正序/倒序 + 已缓存图标 + 当前章高亮  ✅ 基本完成（2026-07-14）
 Task UI-6:  书籍详情换源入口 + 简介展开 + 读完标签
 Task UI-7:  书架长按菜单完整化  ✅ 基本完成（2026-07-14）
 Task UI-8:  我的页菜单补齐 + 快捷四格行为
@@ -622,10 +623,10 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 | 主框架 + 导航 | 85% | 四 Tab 就位，缺角标/默认首页/可配置隐藏 |
 | 书架 | 88% | UI-7 长按菜单（置顶/分组/详情/整理占位/移除）；整理拖拽仍开放 |
 | 我的页 | 75% | 14 项大部分就位，缺 4 项占位/长按行为 |
-| 搜索 | 70% | 功能就位，缺分组展示/精准搜索/Scope |
+| 搜索 | 90% | UI-3：按书源分组 + 精准搜索 + Scope |
 | 发现 | 85% | 接近完成 |
 | 书籍详情 | 75% | 基础就位，缺换源入口明显/标签/简介展开 |
-| 目录 | 60% | 基础就位，缺正序倒序/缓存图标/章搜索 |
+| 目录 | 92% | UI-5：正序倒序/缓存标/高亮/搜索/书签 Tab |
 | **阅读器** | **72%** | UI-1+UI-2 可落地项完成；TTS/自动阅读/点击区本体、电量真值、正文搜索仍开放 |
 | 书源管理 | 70% | 缺分组标题/批量操作/搜索排序 |
 | RSS | 50% | Tab+源管理已有；**文章/阅读延后 S4** |
@@ -634,4 +635,4 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 
 ---
 
-> 最后更新：2026-07-14 | 引擎 v0.5.6 | Focus: UI 复刻（S1：UI-1/UI-2 可落地 + UI-7 长按；正文阻塞收尾；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)
+> 最后更新：2026-07-14 | 引擎 v0.5.6 | Focus: UI 复刻（S1：UI-1/UI-3/UI-5/UI-7；UI-2 部分；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)

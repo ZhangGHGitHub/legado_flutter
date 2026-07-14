@@ -28,6 +28,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
   String _coverUrl = ''; // 可能从搜索获取的封面 URL
   final ScrollController _chapterScrollController = ScrollController();
   Timer? _snackBarHideTimer;
+  bool _chapterReversed = false;
 
   @override
   void initState() {
@@ -227,14 +228,15 @@ class _BookInfoPageState extends State<BookInfoPage> {
     final idx = provider.currentChapters.indexWhere(
       (c) => c.title == _book.currentChapter,
     );
-    if (idx >= 0 && _chapterScrollController.hasClients) {
-      final offset = idx * 56.0; // ListTile 高度估算
-      _chapterScrollController.animateTo(
-        offset.clamp(0, _chapterScrollController.position.maxScrollExtent),
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    }
+    if (idx < 0 || !_chapterScrollController.hasClients) return;
+    final visualIdx =
+        _chapterReversed ? provider.currentChapters.length - 1 - idx : idx;
+    final offset = visualIdx * 56.0; // ListTile 高度估算
+    _chapterScrollController.animateTo(
+      offset.clamp(0, _chapterScrollController.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
   }
 
   void _startReading(BookProvider provider) {
@@ -607,12 +609,28 @@ class _BookInfoPageState extends State<BookInfoPage> {
 
   Widget _buildChapterListHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.fromLTRB(8, 12, 16, 4),
       child: Row(
         children: [
+          const SizedBox(width: 8),
           const Icon(Icons.list_alt, size: 18),
           const SizedBox(width: 6),
           const Text('章节目录', style: TextStyle(fontWeight: FontWeight.w600)),
+          TextButton.icon(
+            onPressed: () => setState(() => _chapterReversed = !_chapterReversed),
+            icon: Icon(
+              _chapterReversed ? Icons.arrow_upward : Icons.arrow_downward,
+              size: 14,
+            ),
+            label: Text(
+              _chapterReversed ? '正序' : '倒序',
+              style: const TextStyle(fontSize: 12),
+            ),
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+          ),
           const Spacer(),
           Consumer<BookProvider>(
             builder: (context, provider, _) {
@@ -778,12 +796,17 @@ class _BookInfoPageState extends State<BookInfoPage> {
           );
         }
 
-        final chapters = provider.currentChapters;
-        if (chapters.isEmpty) {
+        final sourceChapters = provider.currentChapters;
+        if (sourceChapters.isEmpty) {
           return Center(
             child: Text('暂无章节', style: TextStyle(color: Colors.grey[500])),
           );
         }
+
+        final chapters = _chapterReversed
+            ? sourceChapters.reversed.toList()
+            : sourceChapters;
+        final accent = Theme.of(context).colorScheme.primary;
 
         return ListView.separated(
           controller: _chapterScrollController,
@@ -793,19 +816,28 @@ class _BookInfoPageState extends State<BookInfoPage> {
               const Divider(height: 1, indent: 16),
           itemBuilder: (context, index) {
             final chapter = chapters[index];
+            final origIndex = sourceChapters.indexWhere((c) => c.id == chapter.id);
             final isCurrent = chapter.title == _book.currentChapter;
             return ListTile(
               dense: true,
               selected: isCurrent,
-              selectedTileColor: Colors.blue.withValues(alpha: 0.08),
+              selectedTileColor: accent.withValues(alpha: 0.12),
               leading: Text(
-                '${index + 1}',
-                style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                '${(origIndex >= 0 ? origIndex : index) + 1}',
+                style: TextStyle(
+                  color: isCurrent ? accent : Colors.grey[500],
+                  fontSize: 13,
+                  fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
+                ),
               ),
               title: Text(
                 chapter.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: isCurrent ? accent : null,
+                  fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
+                ),
               ),
               trailing: chapter.isDownloaded
                   ? Icon(Icons.check_circle, size: 16, color: Colors.green[400])
@@ -821,7 +853,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
                     builder: (_) => ReaderPage(
                       book: _book,
                       chapter: chapter,
-                      allChapters: chapters,
+                      allChapters: sourceChapters,
                     ),
                   ),
                 );

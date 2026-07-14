@@ -456,10 +456,13 @@ class _ReaderPageState extends State<ReaderPage> {
         ? provider.currentChapters
         : widget.allChapters;
     if (!mounted) return;
+    final current = widget.allChapters[_currentIndex];
     await TocSheet.show(
       context,
       chapters: chapters,
-      currentChapter: widget.allChapters[_currentIndex].title,
+      currentChapter: current.title,
+      currentChapterId: current.id,
+      bookId: widget.book.id,
       onChapterTap: (chapter) {
         final idx = widget.allChapters.indexWhere((c) => c.id == chapter.id);
         if (idx >= 0) {
