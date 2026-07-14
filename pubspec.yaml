@@ -40,7 +40,9 @@ dependencies:
   rust_lib_legado_flutter:
     path: rust_builder
   dynamic_color: ^1.8.1
-  flutter_tts: ^4.2.5
+  # Path vendored without Windows plugin (avoids nuget.exe CMake requirement).
+  flutter_tts:
+    path: packages/flutter_tts
   battery_plus: ^7.1.0
   wakelock_plus: ^1.5.2
 

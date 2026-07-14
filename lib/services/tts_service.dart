@@ -1,11 +1,13 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 /// TTS 朗读服务（UI-2）。
 ///
-/// 系统引擎经 [FlutterTts] 发音；HTTP TTS 仍为占位。
+/// 系统引擎经 [FlutterTts] 发音（Android / iOS / macOS）；
+/// Windows / Linux 桌面无原生插件（避免 nuget），走 stub；HTTP TTS 仍为占位。
 enum TtsPlaybackState { idle, playing, paused }
 
 enum TtsCapability { stub, platform }
@@ -17,7 +19,7 @@ class TtsEngineOption {
 }
 
 class TtsService extends ChangeNotifier {
-  TtsService._();
+  TtsService._() : _flutterTts = _createEngine();
   static final TtsService instance = TtsService._();
 
   static const List<TtsEngineOption> engines = [
@@ -25,7 +27,14 @@ class TtsService extends ChangeNotifier {
     TtsEngineOption('http', 'HTTP TTS（待实现）'),
   ];
 
-  final FlutterTts _flutterTts = FlutterTts();
+  /// Windows / Linux 不创建引擎，避免依赖未注册的 Windows 插件。
+  static FlutterTts? _createEngine() {
+    if (kIsWeb) return null;
+    if (Platform.isWindows || Platform.isLinux) return null;
+    return FlutterTts();
+  }
+
+  final FlutterTts? _flutterTts;
   bool _engineReady = false;
   bool _platformAvailable = false;
 
@@ -68,29 +77,36 @@ class TtsService extends ChangeNotifier {
   Future<void> ensureInitialized() async {
     if (_engineReady) return;
     _engineReady = true;
+    final tts = _flutterTts;
+    if (tts == null) {
+      debugPrint('TTS: stub engine (no platform plugin on this desktop OS)');
+      _platformAvailable = false;
+      notifyListeners();
+      return;
+    }
     try {
-      _flutterTts.setStartHandler(() {
+      tts.setStartHandler(() {
         _state = TtsPlaybackState.playing;
         notifyListeners();
       });
-      _flutterTts.setCompletionHandler(() {
+      tts.setCompletionHandler(() {
         _onUtteranceDone();
       });
-      _flutterTts.setCancelHandler(() {
+      tts.setCancelHandler(() {
         if (_state != TtsPlaybackState.idle) {
           _state = TtsPlaybackState.idle;
           notifyListeners();
         }
       });
-      _flutterTts.setPauseHandler(() {
+      tts.setPauseHandler(() {
         _state = TtsPlaybackState.paused;
         notifyListeners();
       });
-      _flutterTts.setContinueHandler(() {
+      tts.setContinueHandler(() {
         _state = TtsPlaybackState.playing;
         notifyListeners();
       });
-      _flutterTts.setErrorHandler((msg) {
+      tts.setErrorHandler((msg) {
         debugPrint('TTS error: $msg');
         _state = TtsPlaybackState.idle;
         notifyListeners();
@@ -105,10 +121,12 @@ class TtsService extends ChangeNotifier {
   }
 
   Future<void> _applyVoiceParams() async {
+    final tts = _flutterTts;
+    if (tts == null) return;
     // flutter_tts：多数平台 rate ∈ [0,1]，1.0 为正常语速；用 0.5 映射本服务 1.0。
     final rate = (_speechRate * 0.5).clamp(0.0, 1.0);
-    await _flutterTts.setSpeechRate(rate);
-    await _flutterTts.setPitch(_pitch.clamp(0.5, 2.0));
+    await tts.setSpeechRate(rate);
+    await tts.setPitch(_pitch.clamp(0.5, 2.0));
   }
 
   void setSpeechRate(double v) {
@@ -178,8 +196,9 @@ class TtsService extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    if (!_platformAvailable) {
-      debugPrint('TTS platform unavailable');
+    final tts = _flutterTts;
+    if (!_platformAvailable || tts == null) {
+      debugPrint('TTS platform unavailable (stub)');
       _state = TtsPlaybackState.playing;
       notifyListeners();
       return false;
@@ -190,7 +209,7 @@ class TtsService extends ChangeNotifier {
       await _applyVoiceParams();
       _state = TtsPlaybackState.playing;
       notifyListeners();
-      await _flutterTts.speak(sentence);
+      await tts.speak(sentence);
       return true;
     } catch (e) {
       debugPrint('TTS speak failed: $e');
@@ -214,9 +233,10 @@ class TtsService extends ChangeNotifier {
 
   Future<void> pause() async {
     if (_state != TtsPlaybackState.playing) return;
-    if (_engineId == 'system' && _platformAvailable) {
+    final tts = _flutterTts;
+    if (_engineId == 'system' && _platformAvailable && tts != null) {
       try {
-        await _flutterTts.pause();
+        await tts.pause();
       } catch (_) {}
     }
     _state = TtsPlaybackState.paused;
@@ -225,7 +245,7 @@ class TtsService extends ChangeNotifier {
 
   Future<void> resume() async {
     if (_state != TtsPlaybackState.paused) return;
-    if (_engineId == 'system' && _platformAvailable) {
+    if (_engineId == 'system' && _platformAvailable && _flutterTts != null) {
       // 部分平台无真正 resume，重说当前句。
       await _speakFromCurrent();
       return;
@@ -235,9 +255,10 @@ class TtsService extends ChangeNotifier {
   }
 
   Future<void> stop() async {
-    if (_engineId == 'system' && _platformAvailable) {
+    final tts = _flutterTts;
+    if (_engineId == 'system' && _platformAvailable && tts != null) {
       try {
-        await _flutterTts.stop();
+        await tts.stop();
       } catch (_) {}
     }
     if (_state != TtsPlaybackState.idle) {

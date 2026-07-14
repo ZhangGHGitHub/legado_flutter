@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/tts_service.dart';
 
 /// TTS 朗读面板（对齐 dialog_read_aloud）。
-/// 系统引擎经 [TtsService]/[FlutterTts] 朗读当前页；支持上/下句。
+/// 系统引擎经 [TtsService] 朗读当前页；支持上/下句（桌面 Windows 为 stub）。
 class TtsPanel extends StatefulWidget {
   final String sampleText;
   final VoidCallback onPrevChapter;
