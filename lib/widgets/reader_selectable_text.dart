@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 class ReaderSelectableText extends StatelessWidget {
   final String text;
   final TextStyle style;
+  final TextAlign textAlign;
   final void Function(String selectedText) onWriteNote;
 
   const ReaderSelectableText({
     super.key,
     required this.text,
     required this.style,
+    this.textAlign = TextAlign.start,
     required this.onWriteNote,
   });
 
@@ -28,6 +30,7 @@ class ReaderSelectableText extends StatelessWidget {
     return SelectableText(
       text,
       style: style,
+      textAlign: textAlign,
       contextMenuBuilder: (ctx, editableTextState) {
         final selected = _selectedText(editableTextState);
         final items = <ContextMenuButtonItem>[

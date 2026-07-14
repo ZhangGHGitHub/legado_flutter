@@ -91,19 +91,19 @@
 
 **界面面板**（`dialog_read_bg_text` / `dialog_read_book_style`）
 
-- [ ] 字重（中/粗/细）、缩进、简繁
+- [x] 字重（中/粗/细）、缩进、简繁（字级表；词级 OpenCC/quick-transfer 词典仍缺）
 - [x] 字体（内置系统/衬线/等宽骨架；自定义导入占位）
 - [x] 边距（左右/上下调节）
 - [x] 信息区开关（页码/时间/电量）
-- [x] 字号/行距（段距/字距仍缺）
-- [ ] 翻页动画、文字颜色/背景（主题预设已有）
+- [x] 字号/字距/行距/段距（芯片顺序对齐 `dialog_read_book_style`）
+- [ ] 翻页动画（滑动/滚动已落地；覆盖/仿真/无仍为明确占位）、主题色自定义仍偏预设
 - [ ] 主题 zip 导入（取消共用布局 → 长按主题）
 
 **设置面板**（阅读设置子页）
 
-- [x] 屏幕方向（跟随/竖/横）；屏幕超时/常亮偏好已存（桌面由系统控）
-- [ ] 隐藏状态栏/导航栏、扩展到刘海
-- [ ] 文字两端对齐、文字底部对齐
+- [x] 屏幕方向（跟随/竖/横）；屏幕常亮已接 `wakelock_plus`（屏幕超时 1/5/10 分档仍缺）
+- [x] 隐藏状态栏/导航栏、扩展到刘海（SystemChrome + SafeArea；菜单唤起时短暂显栏）
+- [x] 文字两端对齐；文字底部对齐仍缺
 - [x] 音量键翻页开关；蓝牙翻页器（PageUp/Down·媒体键）
 - [ ] 朗读时音量键翻页
 - [ ] 自动换源、长按选择文本
@@ -143,7 +143,7 @@
 | # | Jingshiro XML | 对应页面 | Flutter 状态 | 差距 |
 |---|---------------|---------|:---:|------|
 | 1 | `activity_main.xml` | 主框架 (BottomNav + ViewPager) | ✅ `main_shell.dart` | 需核对 Tab 文案/图标/行为 |
-| 2 | `activity_book_read.xml` | 阅读器 | ✅ `reader_page.dart` | UI-1/UI-2：更多设置+系统 TTS+电量真值；HTTP TTS/仿真/状态栏沉浸仍开放 |
+| 2 | `activity_book_read.xml` | 阅读器 | ✅ `reader_page.dart` | UI-1/UI-2：更多设置+系统 TTS+电量+沉浸栏+字重/缩进/简繁字级；HTTP TTS/覆盖仿真动画/主题 zip 仍开放 |
 | 3 | `activity_book_info.xml` | 书籍详情 | ✅ `book_info_page.dart` | 需核对布局：封面+信息+按钮+目录 |
 | 4 | `activity_book_search.xml` | 搜索 | ✅ `search_page.dart` | **需核对是否按书源分组（ExpansionTile）** |
 | 5 | `activity_book_source.xml` | 书源管理 | ✅ `sources_page.dart` | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
@@ -372,7 +372,7 @@
 - [x] 更多菜单可落地项（目录/设置/AI/换源/刷新/书签/拷贝/书籍信息）+ 其余明确占位
 - [x] 信息区电量开关（真值待 battery 插件）；离线缓存真实下载、替换净化等深度行为仍开放
 
-#### Task UI-2: 阅读器设置补全 (`reader_settings.dart`) — 🟡 更多设置 + 系统 TTS（2026-07-14）
+#### Task UI-2: 阅读器设置补全 (`reader_settings.dart`) — 🟡 排版+沉浸+常亮（2026-07-14）
 
 对齐 `dialog_read_bg_text.xml` + `dialog_read_book_style.xml`：
 
@@ -385,8 +385,14 @@
 - [x] **自动阅读**（`dialog_auto_read.xml`）— 间隔滑块 + 定时翻页
 - [x] **点击行为配置**（`dialog_click_action_config.xml`）— 上/中/下区域行为可配并接线
 - [x] **更多设置入口** — 屏幕方向/亮度遮罩/蓝牙翻页器/自定义翻页键
+- [x] **屏幕常亮** — `wakelock_plus` 接线 `keepScreenOn`（缺口：legado 屏幕超时 默认/1/5/10/常亮 分档）
+- [x] **状态栏/导航栏沉浸 + 扩展到刘海** — SystemChrome + SafeArea；菜单显时短暂恢复系统栏
+- [x] **排版** — 中/粗/细、缩进 0–4、字距/段距、简繁字级表、两端对齐；芯片顺序对齐 `dialog_read_book_style`
 
-仍开放：字重·缩进·简繁、段距/字距、翻页动画细调、主题 zip、状态栏/刘海沉浸、HTTP TTS、朗读时音量键、wakelock 真常亮、正文搜索/模拟阅读。
+仍开放 / 缺口（勿误报完成）：
+
+- 简繁：**词级**词典（OpenCC / quick-transfer）未接入，仅字级表
+- 翻页动画：覆盖 / 仿真 / 无仍占位 SnackBar；主题 zip；HTTP TTS；朗读时音量键；正文搜索 / 模拟阅读；文字底部对齐；屏幕超时分档
 
 另：正文阻塞修复同轮收尾 — 空解析 `Err`、坏占位不缓存、`toEngineJson` 保嵌套规则、失败展示真实错误。
 
@@ -560,7 +566,7 @@
 
 ```
 Task UI-1:  阅读器底栏 + 顶栏自动隐藏 + 更多菜单  ✅ 基本完成（2026-07-14）
-Task UI-2:  阅读器设置补全（字体/TTS/自动阅读/点击行为/翻页键）  🟡 更多设置+系统 TTS+电量真值；HTTP TTS/沉浸栏/字重等仍开放
+Task UI-2:  阅读器设置补全（字体/TTS/自动阅读/点击行为/翻页键）  🟡 排版+沉浸+wakelock；HTTP TTS/覆盖仿真/主题 zip/词级简繁仍开放
 Task UI-3:  搜索页按书源分组 + 精准搜索 + 搜索范围  ✅ 基本完成（2026-07-14）
 Task UI-4:  书源管理分组展示 + 批量操作 + 绿红灰点验证  ✅ 基本完成（2026-07-14）
 Task UI-5:  目录页正序/倒序 + 已缓存图标 + 当前章高亮  ✅ 基本完成（2026-07-14）
@@ -629,7 +635,7 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 | 发现 | 85% | 接近完成 |
 | 书籍详情 | 92% | UI-6：换源主入口 + 简介展开 + 读完/N刷；换源页后端仍占位 |
 | 目录 | 92% | UI-5：正序倒序/缓存标/高亮/搜索/书签 Tab |
-| **阅读器** | **82%** | UI-1+UI-2：更多设置+系统 TTS+电量真值；HTTP TTS/正文搜索/沉浸栏仍开放 |
+| **阅读器** | **86%** | UI-1+UI-2：排版+沉浸+wakelock+系统 TTS；HTTP TTS/覆盖仿真/主题 zip/词级简繁/正文搜索仍开放 |
 | 书源管理 | 90% | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
 | RSS | 50% | Tab+源管理已有；**文章/阅读延后 S4** |
 | 新模块(有声/漫画/扫码等) | 5% | 全部缺失 |
@@ -637,4 +643,4 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 
 ---
 
-> 最后更新：2026-07-14 | 引擎 v0.5.6 | Focus: UI 复刻（S1：UI-1/UI-3–UI-8；UI-2 更多设置+系统 TTS+电量；HTTP TTS/沉浸栏等仍开放；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)
+> 最后更新：2026-07-14 | 引擎 v0.5.6 | Focus: UI 复刻（S1：UI-1/UI-3–UI-8；UI-2 排版+沉浸+wakelock；HTTP TTS/仿真/主题 zip 等仍开放；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)

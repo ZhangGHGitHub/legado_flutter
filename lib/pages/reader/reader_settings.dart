@@ -21,12 +21,54 @@ enum ScreenOrientationMode {
   final String label;
 }
 
-/// 阅读器设置 — Phase F UI-2（对齐 dialog_read_bg_text / dialog_read_book_style 可落地项）
+/// 字重（对齐 legado textBold：0 正常 / 1 粗体 / 2 细体 · 「中/粗/细」）
+enum ReaderFontWeight {
+  normal(0, '正常'),
+  bold(1, '粗体'),
+  light(2, '细体');
+
+  const ReaderFontWeight(this.code, this.label);
+  final int code;
+  final String label;
+
+  FontWeight get flutterWeight => switch (this) {
+        ReaderFontWeight.normal => FontWeight.w400,
+        ReaderFontWeight.bold => FontWeight.w700,
+        ReaderFontWeight.light => FontWeight.w300,
+      };
+
+  static ReaderFontWeight fromCode(int code) {
+    for (final v in values) {
+      if (v.code == code) return v;
+    }
+    return ReaderFontWeight.normal;
+  }
+}
+
+/// 简繁（对齐 chineseConverterType：0 关 / 1 繁→简 / 2 简→繁）
+enum ChineseConvertMode {
+  off(0, '关闭'),
+  traditionalToSimplified(1, '繁体转简体'),
+  simplifiedToTraditional(2, '简体转繁体');
+
+  const ChineseConvertMode(this.code, this.label);
+  final int code;
+  final String label;
+
+  static ChineseConvertMode fromCode(int code) {
+    for (final v in values) {
+      if (v.code == code) return v;
+    }
+    return ChineseConvertMode.off;
+  }
+}
+
+/// 阅读器设置 — Phase F UI-2（对齐 dialog_read_bg_text / dialog_read_book_style）
 class ReaderSettings {
   final double fontSize;
   final double lineHeight;
   final String themeName; // 'paper' | 'white' | 'dark' | 'green'
-  final String pageMode; // 'slide' | 'scroll'
+  final String pageMode; // 'slide' | 'scroll'（覆盖/仿真/无动画仍占位）
   /// 空串 = 系统默认；其余为内置字体族名
   final String fontFamily;
   final double paddingHorizontal;
@@ -45,12 +87,31 @@ class ReaderSettings {
   final bool brightnessFollowSystem;
   /// 手动亮度 0.15–1.0（越低遮罩越暗）
   final double brightness;
+  /// 屏幕常亮（legado keep_light「常亮」；wakelock_plus 接线）
   final bool keepScreenOn;
   /// 蓝牙翻页器常见键：PageUp/Down、媒体上一曲/下一曲
   final bool bluetoothPageKey;
   /// LogicalKeyboardKey.keyId 字符串；空=未设置
   final String? customPrevPageKey;
   final String? customNextPageKey;
+  /// 字重
+  final ReaderFontWeight fontWeight;
+  /// 首行缩进字符数 0–4（全角空格，对齐 indent_*）
+  final int paragraphIndent;
+  /// 字距（Flutter letterSpacing）
+  final double letterSpacing;
+  /// 段距倍率（段落后额外空行系数，对齐 paragraphSpacing）
+  final double paragraphSpacing;
+  /// 简繁
+  final ChineseConvertMode chineseConvert;
+  /// 隐藏状态栏（阅读沉浸）
+  final bool hideStatusBar;
+  /// 隐藏导航栏
+  final bool hideNavigationBar;
+  /// 扩展到刘海（正文贴边，对齐 readBodyToLh）
+  final bool expandIntoCutout;
+  /// 文字两端对齐
+  final bool textFullJustify;
 
   const ReaderSettings({
     this.fontSize = 18.0,
@@ -75,6 +136,15 @@ class ReaderSettings {
     this.bluetoothPageKey = false,
     this.customPrevPageKey,
     this.customNextPageKey,
+    this.fontWeight = ReaderFontWeight.normal,
+    this.paragraphIndent = 2,
+    this.letterSpacing = 0.0,
+    this.paragraphSpacing = 0.2,
+    this.chineseConvert = ChineseConvertMode.off,
+    this.hideStatusBar = true,
+    this.hideNavigationBar = false,
+    this.expandIntoCutout = false,
+    this.textFullJustify = true,
   });
 
   ReaderSettings copyWith({
@@ -102,6 +172,15 @@ class ReaderSettings {
     String? customNextPageKey,
     bool clearCustomPrevPageKey = false,
     bool clearCustomNextPageKey = false,
+    ReaderFontWeight? fontWeight,
+    int? paragraphIndent,
+    double? letterSpacing,
+    double? paragraphSpacing,
+    ChineseConvertMode? chineseConvert,
+    bool? hideStatusBar,
+    bool? hideNavigationBar,
+    bool? expandIntoCutout,
+    bool? textFullJustify,
   }) {
     return ReaderSettings(
       fontSize: fontSize ?? this.fontSize,
@@ -131,6 +210,15 @@ class ReaderSettings {
       customNextPageKey: clearCustomNextPageKey
           ? null
           : (customNextPageKey ?? this.customNextPageKey),
+      fontWeight: fontWeight ?? this.fontWeight,
+      paragraphIndent: paragraphIndent ?? this.paragraphIndent,
+      letterSpacing: letterSpacing ?? this.letterSpacing,
+      paragraphSpacing: paragraphSpacing ?? this.paragraphSpacing,
+      chineseConvert: chineseConvert ?? this.chineseConvert,
+      hideStatusBar: hideStatusBar ?? this.hideStatusBar,
+      hideNavigationBar: hideNavigationBar ?? this.hideNavigationBar,
+      expandIntoCutout: expandIntoCutout ?? this.expandIntoCutout,
+      textFullJustify: textFullJustify ?? this.textFullJustify,
     );
   }
 
@@ -146,6 +234,15 @@ class ReaderSettings {
         return fontFamily;
     }
   }
+
+  String get indentLabel {
+    const labels = ['无缩进', '一字符缩进', '二字符缩进', '三字符缩进', '四字符缩进'];
+    final i = paragraphIndent.clamp(0, 4);
+    return labels[i];
+  }
+
+  /// 段首缩进串（全角空格）
+  String get paragraphIndentText => '　' * paragraphIndent.clamp(0, 4);
 }
 
 /// 阅读主题预设
@@ -230,6 +327,111 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+    );
+  }
+
+  Future<void> _pickFontWeight() async {
+    final picked = await showDialog<ReaderFontWeight>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('文章字重切换'),
+        children: [
+          for (final w in ReaderFontWeight.values)
+            ListTile(
+              title: Text(w.label),
+              trailing: _s.fontWeight == w
+                  ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary)
+                  : null,
+              onTap: () => Navigator.pop(ctx, w),
+            ),
+        ],
+      ),
+    );
+    if (picked != null) _update(_s.copyWith(fontWeight: picked));
+  }
+
+  Future<void> _pickIndent() async {
+    const labels = ['无缩进', '一字符缩进', '二字符缩进', '三字符缩进', '四字符缩进'];
+    final picked = await showDialog<int>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('缩进'),
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            ListTile(
+              title: Text(labels[i]),
+              trailing: _s.paragraphIndent == i
+                  ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary)
+                  : null,
+              onTap: () => Navigator.pop(ctx, i),
+            ),
+        ],
+      ),
+    );
+    if (picked != null) _update(_s.copyWith(paragraphIndent: picked));
+  }
+
+  Future<void> _pickChineseConvert() async {
+    final picked = await showDialog<ChineseConvertMode>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('中文简繁体转换'),
+        children: [
+          for (final m in ChineseConvertMode.values)
+            ListTile(
+              title: Text(m.label),
+              trailing: _s.chineseConvert == m
+                  ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary)
+                  : null,
+              onTap: () => Navigator.pop(ctx, m),
+            ),
+        ],
+      ),
+    );
+    if (picked != null) _update(_s.copyWith(chineseConvert: picked));
+  }
+
+  Widget _fontWeightChipLabel(ReaderFontWeight w) {
+    final accent = Theme.of(context).colorScheme.primary;
+    TextSpan span(String ch, bool on) => TextSpan(
+          text: ch,
+          style: TextStyle(
+            fontSize: 13,
+            color: on ? accent : null,
+            fontWeight: on ? FontWeight.w700 : FontWeight.w400,
+          ),
+        );
+    return Text.rich(
+      TextSpan(
+        children: [
+          span('中', w == ReaderFontWeight.normal),
+          const TextSpan(text: '/'),
+          span('粗', w == ReaderFontWeight.bold),
+          const TextSpan(text: '/'),
+          span('细', w == ReaderFontWeight.light),
+        ],
+      ),
+    );
+  }
+
+  Widget _chineseChipLabel(ChineseConvertMode m) {
+    final accent = Theme.of(context).colorScheme.primary;
+    TextSpan span(String ch, bool on) => TextSpan(
+          text: ch,
+          style: TextStyle(
+            fontSize: 13,
+            color: on ? accent : null,
+            fontWeight: on ? FontWeight.w700 : FontWeight.w400,
+          ),
+        );
+    return Text.rich(
+      TextSpan(
+        children: [
+          span('简', m == ChineseConvertMode.traditionalToSimplified),
+          const TextSpan(text: '/'),
+          span('繁', m == ChineseConvertMode.simplifiedToTraditional),
+        ],
+      ),
     );
   }
 
@@ -323,19 +525,48 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
             ),
             const Divider(),
 
-            // ── 字体 ──
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              leading: const Icon(Icons.font_download_outlined, size: 22),
-              title: const Text('字体', style: TextStyle(fontSize: 13)),
-              subtitle: Text(_s.fontLabel, style: const TextStyle(fontSize: 12)),
-              trailing: const Icon(Icons.chevron_right, size: 20),
-              onTap: _pickFont,
+            // ── 对齐 dialog_read_book_style 顶栏芯片：中/粗/细 · 字体 · 缩进 · 简/繁 ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _StyleChip(
+                    onTap: _pickFontWeight,
+                    child: _fontWeightChipLabel(_s.fontWeight),
+                  ),
+                  _StyleChip(
+                    label: '字体',
+                    selected: _s.fontFamily.isNotEmpty,
+                    onTap: _pickFont,
+                  ),
+                  _StyleChip(
+                    label: '缩进',
+                    selected: _s.paragraphIndent > 0,
+                    onTap: _pickIndent,
+                  ),
+                  _StyleChip(
+                    onTap: _pickChineseConvert,
+                    child: _chineseChipLabel(_s.chineseConvert),
+                  ),
+                  _StyleChip(
+                    label: '边距',
+                    selected: true,
+                    onTap: () => _toast('见下方左右/上下边距滑块'),
+                  ),
+                  _StyleChip(
+                    label: '信息',
+                    selected: _s.showPageInfo || _s.showTime || _s.showBattery,
+                    onTap: () => _toast('见下方「信息区」开关'),
+                  ),
+                ],
+              ),
             ),
 
-            // ── 字体大小 ──
+            // ── 字号 / 字距 / 行距 / 段距（legado 顺序）──
             _sliderBlock(
-              label: '字体大小',
+              label: '字号',
               leading: const Icon(Icons.text_fields, size: 20),
               value: _s.fontSize,
               min: 12,
@@ -344,9 +575,16 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
               valueText: '${_s.fontSize.toInt()}',
               onChanged: (v) => _update(_s.copyWith(fontSize: v)),
             ),
-            const SizedBox(height: 4),
-
-            // ── 行距 ──
+            _sliderBlock(
+              label: '字距',
+              leading: const Text('字', style: TextStyle(fontSize: 12)),
+              value: _s.letterSpacing,
+              min: -0.5,
+              max: 0.5,
+              divisions: 20,
+              valueText: _s.letterSpacing.toStringAsFixed(2),
+              onChanged: (v) => _update(_s.copyWith(letterSpacing: v)),
+            ),
             _sliderBlock(
               label: '行距',
               leading: const Text('A', style: TextStyle(fontSize: 12)),
@@ -356,6 +594,16 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
               divisions: 13,
               valueText: _s.lineHeight.toStringAsFixed(1),
               onChanged: (v) => _update(_s.copyWith(lineHeight: v)),
+            ),
+            _sliderBlock(
+              label: '段距',
+              leading: const Icon(Icons.format_line_spacing, size: 18),
+              value: _s.paragraphSpacing,
+              min: 0,
+              max: 2.0,
+              divisions: 20,
+              valueText: _s.paragraphSpacing.toStringAsFixed(1),
+              onChanged: (v) => _update(_s.copyWith(paragraphSpacing: v)),
             ),
             const SizedBox(height: 4),
 
@@ -384,28 +632,47 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
             ),
             const SizedBox(height: 8),
 
-            // ── 翻页模式 ──
+            // ── 翻页动画（legado：覆盖/滑动/仿真/滚动/无；未落地项明确占位）──
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('翻页模式', style: TextStyle(fontSize: 13)),
+                  const Text('翻页动画', style: TextStyle(fontSize: 13)),
                   const SizedBox(height: 8),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       _ModeChip(
+                        icon: Icons.auto_stories_outlined,
+                        label: '覆盖',
+                        selected: false,
+                        onTap: () => _toast('覆盖翻页尚未实现'),
+                      ),
+                      _ModeChip(
                         icon: Icons.swipe,
-                        label: '左右翻页',
+                        label: '滑动',
                         selected: _s.pageMode == 'slide',
                         onTap: () => _update(_s.copyWith(pageMode: 'slide')),
                       ),
-                      const SizedBox(width: 12),
+                      _ModeChip(
+                        icon: Icons.menu_book_outlined,
+                        label: '仿真',
+                        selected: false,
+                        onTap: () => _toast('仿真翻页尚未实现'),
+                      ),
                       _ModeChip(
                         icon: Icons.unfold_more,
-                        label: '下滑翻页',
+                        label: '滚动',
                         selected: _s.pageMode == 'scroll',
                         onTap: () => _update(_s.copyWith(pageMode: 'scroll')),
+                      ),
+                      _ModeChip(
+                        icon: Icons.flash_off_outlined,
+                        label: '无',
+                        selected: false,
+                        onTap: () => _toast('无动画翻页尚未实现'),
                       ),
                     ],
                   ),
@@ -605,6 +872,53 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 对齐 dialog_read_book_style StrokeTextView 芯片
+class _StyleChip extends StatelessWidget {
+  final String? label;
+  final Widget? child;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _StyleChip({
+    this.label,
+    this.child,
+    this.selected = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(4),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(4),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: selected ? primary : Colors.grey.shade400,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: child ??
+              Text(
+                label ?? '',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: selected ? primary : null,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+        ),
       ),
     );
   }

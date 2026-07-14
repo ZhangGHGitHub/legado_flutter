@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../model/read_book.dart';
 import '../../models/book.dart';
@@ -14,6 +15,7 @@ import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/note_service.dart';
 import '../../services/reading_record_service.dart';
+import '../../utils/chinese_convert.dart';
 import '../book/change_source_page.dart';
 import '../book/toc_sheet.dart';
 import '../book/book_info_page.dart';
@@ -97,6 +99,8 @@ class _ReaderPageState extends State<ReaderPage> {
       const Duration(minutes: 1),
       (_) => _refreshBattery(),
     );
+    _applyKeepScreenOn(_settings.keepScreenOn);
+    _applySystemUi();
   }
 
   Future<void> _refreshBattery() async {
@@ -130,6 +134,78 @@ class _ReaderPageState extends State<ReaderPage> {
     }
   }
 
+  Future<void> _applyKeepScreenOn(bool on) async {
+    try {
+      await WakelockPlus.toggle(enable: on);
+    } catch (_) {
+      // 桌面/部分环境可能无 wakelock 后端
+    }
+  }
+
+  /// 沉浸式系统栏（对齐 hideStatusBar / hideNavigationBar；菜单可见时短暂恢复）
+  void _applySystemUi() {
+    final hideStatus = _settings.hideStatusBar && !_chromeVisible;
+    final hideNav = _settings.hideNavigationBar && !_chromeVisible;
+    if (hideStatus && hideNav) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else if (hideStatus || hideNav) {
+      final overlays = <SystemUiOverlay>[
+        if (!hideStatus) SystemUiOverlay.top,
+        if (!hideNav) SystemUiOverlay.bottom,
+      ];
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: overlays,
+      );
+    } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
+    final darkTheme = _settings.themeName == 'dark';
+    SystemChrome.setSystemUIOverlayStyle(
+      SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
+        statusBarIconBrightness:
+            darkTheme ? Brightness.light : Brightness.dark,
+        systemNavigationBarIconBrightness:
+            darkTheme ? Brightness.light : Brightness.dark,
+      ),
+    );
+  }
+
+  /// 排版：简繁 → 段缩进 → 段距（空行）
+  String _prepareDisplayText(String raw) {
+    var text = ChineseConvert.apply(raw, _settings.chineseConvert.code);
+    if (_isEmptyBody ||
+        text.startsWith('⚠️') ||
+        text.contains('（加载失败') ||
+        text == '加载中...') {
+      return text;
+    }
+    final indent = _settings.paragraphIndentText;
+    final gapLines = (_settings.paragraphSpacing * 10).round().clamp(0, 20);
+    final gap = gapLines > 0 ? '\n' * gapLines : '';
+    final paragraphs = text.split('\n');
+    final out = StringBuffer();
+    for (var i = 0; i < paragraphs.length; i++) {
+      final p = paragraphs[i];
+      if (p.trim().isEmpty) {
+        out.writeln();
+        continue;
+      }
+      final body = p.replaceFirst(RegExp(r'^[\s　]+'), '');
+      out.write(indent);
+      out.write(body);
+      if (i < paragraphs.length - 1) {
+        out.write('\n');
+        if (gap.isNotEmpty) out.write(gap);
+      }
+    }
+    return out.toString();
+  }
+
+  String get _displayContent => _prepareDisplayText(_content);
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -147,6 +223,8 @@ class _ReaderPageState extends State<ReaderPage> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    unawaited(_applyKeepScreenOn(false));
     _saveProgress();
     _recordReadingSession();
     _scrollController.dispose();
@@ -292,12 +370,14 @@ class _ReaderPageState extends State<ReaderPage> {
     _autoHideTimer = Timer(_autoHideDelay, () {
       if (mounted && _chromeVisible) {
         setState(() => _chromeVisible = false);
+        _applySystemUi();
       }
     });
   }
 
   void _toggleChrome() {
     setState(() => _chromeVisible = !_chromeVisible);
+    _applySystemUi();
     if (_chromeVisible) {
       _scheduleAutoHide();
     } else {
@@ -308,6 +388,7 @@ class _ReaderPageState extends State<ReaderPage> {
   void _keepChromeAlive() {
     if (!_chromeVisible) {
       setState(() => _chromeVisible = true);
+      _applySystemUi();
     }
     _scheduleAutoHide();
   }
@@ -353,8 +434,13 @@ class _ReaderPageState extends State<ReaderPage> {
       height: _settings.lineHeight,
       color: color,
       fontFamily: _settings.fontFamily.isEmpty ? null : _settings.fontFamily,
+      fontWeight: _settings.fontWeight.flutterWeight,
+      letterSpacing: _settings.letterSpacing * _settings.fontSize,
     );
   }
+
+  TextAlign get _readerTextAlign =>
+      _settings.textFullJustify ? TextAlign.justify : TextAlign.start;
 
   bool get _isEmptyBody => ReadBook.isEmptyContentPlaceholder(_content);
 
@@ -454,18 +540,21 @@ class _ReaderPageState extends State<ReaderPage> {
       return;
     }
 
+    final pad = MediaQuery.of(context).padding;
+    final edgePadL = _settings.expandIntoCutout ? 0.0 : pad.left;
+    final edgePadR = _settings.expandIntoCutout ? 0.0 : pad.right;
+    final edgePadT = _settings.expandIntoCutout ? 0.0 : pad.top;
+    final edgePadB = _settings.expandIntoCutout ? 0.0 : pad.bottom;
+    final display = _displayContent;
     final hPad = _settings.paddingHorizontal * 2;
     final pageWidth =
-        renderBox.size.width -
-        hPad -
-        MediaQuery.of(context).padding.left -
-        MediaQuery.of(context).padding.right;
+        renderBox.size.width - hPad - edgePadL - edgePadR;
     // chrome 以 overlay 叠在正文上，分页按「无顶/底栏」可视高度估算
     final chapterTitleHeight = _settings.fontSize + 36.0;
     final pageHeight =
         renderBox.size.height -
-        MediaQuery.of(context).padding.top -
-        MediaQuery.of(context).padding.bottom -
+        edgePadT -
+        edgePadB -
         chapterTitleHeight -
         48 -
         _settings.paddingVertical * 2;
@@ -474,48 +563,51 @@ class _ReaderPageState extends State<ReaderPage> {
     var totalHeight = 0.0;
 
     if (pageWidth <= 0 || pageHeight <= 0) {
-      result.add(_content);
+      result.add(display);
     } else {
       final tp = TextPainter(
         text: TextSpan(
-          text: _content,
+          text: display,
           style: TextStyle(
             fontSize: _settings.fontSize,
             height: _settings.lineHeight,
             fontFamily:
                 _settings.fontFamily.isEmpty ? null : _settings.fontFamily,
+            fontWeight: _settings.fontWeight.flutterWeight,
+            letterSpacing: _settings.letterSpacing * _settings.fontSize,
             color: Colors.black,
           ),
         ),
         textDirection: TextDirection.ltr,
+        textAlign: _readerTextAlign,
       );
       tp.layout(maxWidth: pageWidth);
       totalHeight = tp.height;
 
       if (totalHeight <= pageHeight) {
-        result.add(_content);
+        result.add(display);
       } else {
         int startOffset = 0;
         int pageNum = 1;
-        while (startOffset < _content.length) {
+        while (startOffset < display.length) {
           final targetY = pageNum * pageHeight;
           if (targetY >= totalHeight) {
-            result.add(_content.substring(startOffset));
+            result.add(display.substring(startOffset));
             break;
           }
           final pos = tp.getPositionForOffset(Offset(0.0, targetY));
           if (pos.offset <= startOffset) {
-            result.add(_content.substring(startOffset));
+            result.add(display.substring(startOffset));
             break;
           }
-          result.add(_content.substring(startOffset, pos.offset));
+          result.add(display.substring(startOffset, pos.offset));
           startOffset = pos.offset;
           pageNum++;
         }
       }
     }
 
-    if (result.isEmpty) result.add(_content);
+    if (result.isEmpty) result.add(display);
 
     final targetPage = _pendingTargetPage ?? 0;
     final clampedPage = targetPage < 0
@@ -545,6 +637,13 @@ class _ReaderPageState extends State<ReaderPage> {
     if (newSettings.screenOrientation != _settings.screenOrientation) {
       _applyScreenOrientation(newSettings.screenOrientation);
     }
+    if (newSettings.keepScreenOn != _settings.keepScreenOn) {
+      _applyKeepScreenOn(newSettings.keepScreenOn);
+    }
+    final immersionChanged =
+        newSettings.hideStatusBar != _settings.hideStatusBar ||
+            newSettings.hideNavigationBar != _settings.hideNavigationBar ||
+            newSettings.themeName != _settings.themeName;
     if (newSettings.showBattery && _batteryLevel == null) {
       _refreshBattery();
     }
@@ -558,8 +657,15 @@ class _ReaderPageState extends State<ReaderPage> {
             newSettings.fontSize != _settings.fontSize ||
             newSettings.lineHeight != _settings.lineHeight ||
             newSettings.fontFamily != _settings.fontFamily ||
+            newSettings.fontWeight != _settings.fontWeight ||
+            newSettings.letterSpacing != _settings.letterSpacing ||
+            newSettings.paragraphSpacing != _settings.paragraphSpacing ||
+            newSettings.paragraphIndent != _settings.paragraphIndent ||
+            newSettings.chineseConvert != _settings.chineseConvert ||
             newSettings.paddingHorizontal != _settings.paddingHorizontal ||
-            newSettings.paddingVertical != _settings.paddingVertical);
+            newSettings.paddingVertical != _settings.paddingVertical ||
+            newSettings.expandIntoCutout != _settings.expandIntoCutout ||
+            newSettings.textFullJustify != _settings.textFullJustify);
 
     if (modeChanged) {
       // Phase 1：摘掉 PageController 引用并清空分页，确保本帧不再挂 PageView
@@ -571,6 +677,7 @@ class _ReaderPageState extends State<ReaderPage> {
         _pageIndex = 0;
         _modeGeneration++;
       });
+      if (immersionChanged) _applySystemUi();
 
       // Phase 2：上一帧视图已 detach，再 dispose；slide 再重建分页
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -584,6 +691,7 @@ class _ReaderPageState extends State<ReaderPage> {
     }
 
     setState(() => _settings = newSettings);
+    if (immersionChanged) _applySystemUi();
     if (needRepaginate) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _settings.pageMode == 'slide') _splitIntoPages();
@@ -1306,6 +1414,7 @@ class _ReaderPageState extends State<ReaderPage> {
                   child: ReaderSelectableText(
                     text: _pages[index],
                     style: _readerTextStyle(theme.text),
+                    textAlign: _readerTextAlign,
                     onWriteNote: _openNoteEditor,
                   ),
                 ),
@@ -1326,8 +1435,9 @@ class _ReaderPageState extends State<ReaderPage> {
             vertical: _settings.paddingVertical,
           ),
           child: ReaderSelectableText(
-            text: _content,
+            text: _displayContent,
             style: _readerTextStyle(theme.text),
+            textAlign: _readerTextAlign,
             onWriteNote: _openNoteEditor,
           ),
         ),
@@ -1338,11 +1448,16 @@ class _ReaderPageState extends State<ReaderPage> {
 
   /// 滑动翻页模式
   Widget _buildSlideMode(Chapter chapter, ReaderTheme theme) {
+    final cutout = _settings.expandIntoCutout;
     return Scaffold(
       backgroundColor: theme.background,
       body: Stack(
         children: [
           SafeArea(
+            top: !cutout,
+            bottom: !cutout,
+            left: !cutout,
+            right: !cutout,
             child: Column(
               children: [
                 if (_isLoading && _content != '加载中...')
@@ -1498,11 +1613,16 @@ class _ReaderPageState extends State<ReaderPage> {
 
   /// 滚动翻页模式
   Widget _buildScrollMode(Chapter chapter, ReaderTheme theme) {
+    final cutout = _settings.expandIntoCutout;
     return Scaffold(
       backgroundColor: theme.background,
       body: Stack(
         children: [
           SafeArea(
+            top: !cutout,
+            bottom: !cutout,
+            left: !cutout,
+            right: !cutout,
             child: _isLoading
                 ? Center(
                     child: Column(
@@ -1563,8 +1683,9 @@ class _ReaderPageState extends State<ReaderPage> {
                                 isHeader: true,
                               ),
                               ReaderSelectableText(
-                                text: _content,
+                                text: _displayContent,
                                 style: _readerTextStyle(theme.text),
+                                textAlign: _readerTextAlign,
                                 onWriteNote: _openNoteEditor,
                               ),
                               const SizedBox(height: 16),

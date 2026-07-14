@@ -3,7 +3,8 @@ import 'package:flutter/services.dart';
 
 import 'reader_settings.dart';
 
-/// 阅读器「更多设置」（UI-2）：屏幕方向 / 亮度 / 蓝牙翻页器 / 自定义翻页键。
+/// 阅读器「更多设置」（UI-2）：
+/// 屏幕方向 / 常亮 / 状态栏·导航栏沉浸 / 刘海 / 亮度 / 蓝牙翻页器 / 自定义翻页键。
 class MoreSettingsPanel extends StatefulWidget {
   final ReaderSettings settings;
   final ValueChanged<ReaderSettings> onChanged;
@@ -117,7 +118,7 @@ class _MoreSettingsPanelState extends State<MoreSettingsPanel> {
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
-                    '屏幕方向 · 阅读亮度 · 蓝牙/自定义翻页键',
+                    '屏幕方向 · 沉浸栏 · 常亮 · 亮度 · 翻页键',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ),
@@ -148,11 +149,60 @@ class _MoreSettingsPanelState extends State<MoreSettingsPanel> {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                   title: const Text('屏幕常亮', style: TextStyle(fontSize: 13)),
                   subtitle: const Text(
-                    '偏好已保存；桌面端通常由系统电源策略控制',
+                    'wakelock_plus 保持唤醒（对齐 keep_light「常亮」）',
                     style: TextStyle(fontSize: 11),
                   ),
                   value: _s.keepScreenOn,
                   onChanged: (v) => _update(_s.copyWith(keepScreenOn: v)),
+                ),
+
+                const Divider(),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 4, 16, 0),
+                  child: Text('状态栏 / 刘海', style: TextStyle(fontSize: 13)),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  title: const Text('隐藏状态栏', style: TextStyle(fontSize: 13)),
+                  subtitle: const Text(
+                    '阅读界面隐藏状态栏；菜单唤起时短暂显示',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  value: _s.hideStatusBar,
+                  onChanged: (v) => _update(_s.copyWith(hideStatusBar: v)),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  title: const Text('隐藏导航栏', style: TextStyle(fontSize: 13)),
+                  subtitle: const Text(
+                    '阅读界面隐藏虚拟导航键',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  value: _s.hideNavigationBar,
+                  onChanged: (v) =>
+                      _update(_s.copyWith(hideNavigationBar: v)),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  title: const Text('扩展到刘海', style: TextStyle(fontSize: 13)),
+                  subtitle: const Text(
+                    '正文贴边绘制（对齐 readBodyToLh）',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  value: _s.expandIntoCutout,
+                  onChanged: (v) =>
+                      _update(_s.copyWith(expandIntoCutout: v)),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  title: const Text('文字两端对齐', style: TextStyle(fontSize: 13)),
+                  value: _s.textFullJustify,
+                  onChanged: (v) =>
+                      _update(_s.copyWith(textFullJustify: v)),
                 ),
 
                 const Divider(),
