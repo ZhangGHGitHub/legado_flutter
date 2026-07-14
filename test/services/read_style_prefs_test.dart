@@ -17,6 +17,14 @@ void main() {
     expect(await ReadStylePrefs.loadShareLayout(), isFalse);
   });
 
+  test('themeName defaults paper and persists dark', () async {
+    expect(await ReadStylePrefs.loadThemeName(), 'paper');
+    await ReadStylePrefs.saveThemeName('dark');
+    expect(await ReadStylePrefs.loadThemeName(), 'dark');
+    await ReadStylePrefs.saveThemeName('not-a-theme');
+    expect(await ReadStylePrefs.loadThemeName(), 'dark');
+  });
+
   test('slot overrides roundtrip', () async {
     await ReadStylePrefs.upsertOverride(
       'paper',

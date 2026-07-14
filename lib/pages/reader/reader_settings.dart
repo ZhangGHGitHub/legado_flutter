@@ -484,6 +484,7 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
       themeName: themeId,
       themeOverrides: nextOverrides,
     );
+    await ReadStylePrefs.saveThemeName(themeId);
     // 导入 zip 时应用排版；关闭共用布局时仅提示（排版仍全局，缺口见计划）
     if (result.appliedTypography != null) {
       if (_s.shareLayout) {
@@ -887,8 +888,10 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
                           color: _slotColor(slot.$1),
                           name: _slotLabel(slot.$1, slot.$2),
                           selected: _s.themeName == slot.$1,
-                          onTap: () =>
-                              _update(_s.copyWith(themeName: slot.$1)),
+                          onTap: () async {
+                            _update(_s.copyWith(themeName: slot.$1));
+                            await ReadStylePrefs.saveThemeName(slot.$1);
+                          },
                           onLongPress: () => _openBgTextConfig(slot.$1, slot.$2),
                         ),
                     ],

@@ -8,6 +8,15 @@ import '../models/read_style_config.dart';
 abstract final class ReadStylePrefs {
   static const _kShareLayout = 'read_style_share_layout';
   static const _kOverrides = 'read_style_slot_overrides';
+  static const _kThemeName = 'read_style_theme_name';
+
+  /// 合法主题槽：paper / white / dark / green
+  static const Set<String> knownThemeNames = {
+    'paper',
+    'white',
+    'dark',
+    'green',
+  };
 
   static Future<bool> loadShareLayout() async {
     final prefs = await SharedPreferences.getInstance();
@@ -17,6 +26,20 @@ abstract final class ReadStylePrefs {
   static Future<void> saveShareLayout(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kShareLayout, value);
+  }
+
+  /// 当前阅读主题槽（含暗黑）；默认 paper
+  static Future<String> loadThemeName() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kThemeName);
+    if (raw == null || !knownThemeNames.contains(raw)) return 'paper';
+    return raw;
+  }
+
+  static Future<void> saveThemeName(String themeName) async {
+    if (!knownThemeNames.contains(themeName)) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kThemeName, themeName);
   }
 
   static Future<Map<String, ReadStyleSlotOverride>> loadOverrides() async {

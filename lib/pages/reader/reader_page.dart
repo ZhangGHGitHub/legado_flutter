@@ -152,11 +152,13 @@ class _ReaderPageState extends State<ReaderPage> {
   Future<void> _loadReadStylePrefs() async {
     final share = await ReadStylePrefs.loadShareLayout();
     final overrides = await ReadStylePrefs.loadOverrides();
+    final themeName = await ReadStylePrefs.loadThemeName();
     if (!mounted) return;
     setState(() {
       _settings = _settings.copyWith(
         shareLayout: share,
         themeOverrides: overrides,
+        themeName: themeName,
       );
     });
     _applySystemUi();
