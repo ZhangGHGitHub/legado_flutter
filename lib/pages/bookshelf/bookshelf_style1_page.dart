@@ -5,7 +5,6 @@ import '../../models/book.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../widgets/book_cover.dart';
-import '../../widgets/read_badge.dart';
 import '../book/book_info_page.dart';
 import '../config/feature_placeholder_page.dart';
 import '../search/search_page.dart';
@@ -149,139 +148,164 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('书架'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            tooltip: '联合搜索',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SearchPage()),
-            ),
-          ),
-          PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert),
-              onSelected: (a) {
-                if (a == 'add_local') _addLocalBook();
-                if (a == 'cache_all') _cacheAllBooks();
-                if (a == 'group_mgmt') _showGroupManagement();
-                if (a == 'grid_layout') widget.onSwitchToGrid?.call();
-              },
-              itemBuilder: (_) => [
-                const PopupMenuItem(
-                  value: 'add_local',
-                  child: _MenuRow(Icons.file_open, '添加本地'),
+    return Consumer<BookProvider>(
+      builder: (context, provider, _) {
+        return Scaffold(
+          appBar: AppBar(
+            titleSpacing: 4,
+            title: _buildGroupTabs(provider.books),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.search),
+                tooltip: '联合搜索',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SearchPage()),
                 ),
-                const PopupMenuItem(
-                  value: 'cache_all',
-                  child: _MenuRow(Icons.download, '缓存全部'),
-                ),
-                const PopupMenuItem(
-                  value: 'group_mgmt',
-                  child: _MenuRow(Icons.folder, '分组管理'),
-                ),
-                const PopupMenuItem(
-                  value: 'grid_layout',
-                  child: _MenuRow(Icons.grid_view, '网格布局'),
-                ),
-              ],
-            ),
-        ],
-      ),
-      body: Consumer<BookProvider>(
-        builder: (context, provider, _) {
-          if (provider.isLoading && provider.books.isEmpty)
-            return const Center(child: CircularProgressIndicator());
-          final books = _processBooks(provider.books);
-          if (provider.books.isEmpty) return _buildEmpty();
-          if (books.isEmpty)
-            return Center(
-              child: Text(
-                _selectedGroup != '__all__' ? '此分组没有书籍' : '没有书籍',
-                style: TextStyle(color: Colors.grey[600]),
               ),
-            );
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildGroupChips(provider.books),
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () => provider.loadBooks(),
-                  child: _showGrouped && _selectedGroup == '__all__'
-                      ? _buildGrouped(books)
-                      : ListView.builder(
-                          controller: widget.scrollController,
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          itemCount: books.length,
-                          itemBuilder: (_, i) => _BookItem(
-                            book: books[i],
-                            isPinned: _pinnedIds.contains(books[i].id),
-                            onTap: () => _openBook(books[i]),
-                            onLongPress: () => _showBookActions(books[i]),
-                          ),
-                        ),
-                ),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                onSelected: (a) {
+                  if (a == 'add_local') _addLocalBook();
+                  if (a == 'cache_all') _cacheAllBooks();
+                  if (a == 'group_mgmt') _showGroupManagement();
+                  if (a == 'grid_layout') widget.onSwitchToGrid?.call();
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'add_local',
+                    child: _MenuRow(Icons.file_open, '添加本地'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'cache_all',
+                    child: _MenuRow(Icons.download, '缓存全部'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'group_mgmt',
+                    child: _MenuRow(Icons.folder, '分组管理'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'grid_layout',
+                    child: _MenuRow(Icons.grid_view, '网格布局'),
+                  ),
+                ],
               ),
             ],
+          ),
+          body: _buildBody(provider),
+          floatingActionButton: FloatingActionButton.small(
+            onPressed: _addLocalBook,
+            child: const Icon(Icons.add),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBody(BookProvider provider) {
+    if (provider.isLoading && provider.books.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final books = _processBooks(provider.books);
+    if (provider.books.isEmpty) return _buildEmpty();
+    if (books.isEmpty) {
+      return Center(
+        child: Text(
+          _selectedGroup != '__all__' ? '此分组没有书籍' : '没有书籍',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: () => provider.loadBooks(),
+      child: _showGrouped && _selectedGroup == '__all__'
+          ? _buildGrouped(books)
+          : ListView.builder(
+              controller: widget.scrollController,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: books.length,
+              itemBuilder: (_, i) => _BookItem(
+                book: books[i],
+                isPinned: _pinnedIds.contains(books[i].id),
+                onTap: () => _openBook(books[i]),
+                onLongPress: () => _showBookActions(books[i]),
+              ),
+            ),
+    );
+  }
+
+  /// 顶栏分组 Tab — 对齐 Jingshiro：左「全部」+ 自定义分组，选中态主题色下划线
+  Widget _buildGroupTabs(List<Book> allBooks) {
+    final groups = _getAllGroups(allBooks).toList()..sort();
+    final entries = <(String id, String label)>[
+      ('__all__', '全部'),
+      ...groups.map((g) => (g, g)),
+    ];
+    final scheme = Theme.of(context).colorScheme;
+    final fg = scheme.onSurface;
+
+    return SizedBox(
+      height: kToolbarHeight,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.only(left: 8, right: 4),
+        itemCount: entries.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 4),
+        itemBuilder: (_, i) {
+          final (id, label) = entries[i];
+          final selected = _selectedGroup == id;
+          return InkWell(
+            onTap: () => setState(() => _selectedGroup = id),
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: selected ? scheme.primary : Colors.transparent,
+                    width: 2.5,
+                  ),
+                ),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  color: selected ? fg : fg.withValues(alpha: 0.72),
+                ),
+              ),
+            ),
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.small(
-        onPressed: _addLocalBook,
-        child: const Icon(Icons.add),
-      ),
     );
   }
 
-  Widget _buildGroupChips(List<Book> allBooks) {
-    final groups = _getAllGroups(allBooks).toList()..sort();
-    return SizedBox(
-      height: 44,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+  Widget _buildEmpty() {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilterChip(
-              label: const Text('全部'),
-              selected: _selectedGroup == '__all__',
-              onSelected: (_) => setState(() => _selectedGroup = '__all__'),
-            ),
+          Icon(Icons.menu_book_outlined, size: 64, color: scheme.outlineVariant),
+          const SizedBox(height: 16),
+          Text(
+            '书架空空如也',
+            style: TextStyle(fontSize: 16, color: scheme.onSurface),
           ),
-          ...groups.map(
-            (g) => Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: FilterChip(
-                label: Text(g),
-                selected: _selectedGroup == g,
-                onSelected: (_) => setState(() => _selectedGroup = g),
-              ),
-            ),
+          const SizedBox(height: 8),
+          Text(
+            '点击右下角 + 添加本地书籍',
+            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
           ),
         ],
       ),
     );
   }
-
-  Widget _buildEmpty() => Center(
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(Icons.menu_book_outlined, size: 64, color: Colors.grey[300]),
-        const SizedBox(height: 16),
-        const Text('书架空空如也', style: TextStyle(fontSize: 16)),
-        const SizedBox(height: 8),
-        Text(
-          '点击右下角 + 添加本地书籍',
-          style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-        ),
-      ],
-    ),
-  );
 
   Widget _buildGrouped(List<Book> books) {
     final groups = <String, List<Book>>{};
@@ -504,7 +528,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
   }
 }
 
-// ── Book list item (matches original Legado layout) ──
+// ── Book list item (对齐 Jingshiro 列表：封面 + 四行元数据 + 右侧未读角标) ──
 
 class _BookItem extends StatelessWidget {
   final Book book;
@@ -520,131 +544,168 @@ class _BookItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-      clipBehavior: Clip.antiAlias,
-      elevation: 0.5,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Cover 132x176 proportion scaled: ~72x96 on mobile
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: BookCover(
-                  coverUrl: book.coverUrl,
-                  author: book.author,
-                  width: 72,
-                  height: 96,
-                  radius: 4,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Book name
-                    Row(
-                      children: [
-                        if (isPinned) ...[
-                          Icon(
-                            Icons.push_pin,
-                            size: 14,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 4),
-                        ],
-                        Expanded(
-                          child: Text(
-                            book.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    // Author
-                    Row(
-                      children: [
+    final scheme = Theme.of(context).colorScheme;
+    final muted = scheme.onSurface.withValues(alpha: 0.55);
+    final mutedSoft = scheme.onSurface.withValues(alpha: 0.45);
+
+    return InkWell(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            BookCover(
+              coverUrl: book.coverUrl,
+              author: book.author,
+              width: 64,
+              height: 86,
+              radius: 4,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (isPinned) ...[
                         Icon(
-                          Icons.person_outline,
+                          Icons.push_pin,
                           size: 14,
-                          color: Colors.grey[500],
+                          color: scheme.primary,
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          book.author.isNotEmpty ? book.author : '未知作者',
+                      ],
+                      Expanded(
+                        child: Text(
+                          book.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[600],
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: scheme.onSurface,
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    ReadBadge.fromBook(book),
-                    const SizedBox(height: 4),
-                    // Current chapter
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.menu_book,
-                          size: 14,
-                          color: Colors.grey[500],
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            book.currentChapter ?? '尚未开始阅读',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey[500],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    // Latest chapter
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.bookmark_border,
-                          size: 14,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            book.lastChapter?.isNotEmpty == true
-                                ? book.lastChapter!
-                                : '暂无更新',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey[400],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  _metaLine(
+                    Icons.person_outline,
+                    book.author.isNotEmpty ? book.author : '未知作者',
+                    muted,
+                  ),
+                  const SizedBox(height: 4),
+                  _metaLine(
+                    Icons.access_time,
+                    book.currentChapter?.isNotEmpty == true
+                        ? book.currentChapter!
+                        : '尚未开始阅读',
+                    muted,
+                  ),
+                  const SizedBox(height: 4),
+                  _metaLine(
+                    Icons.explore_outlined,
+                    book.lastChapter?.isNotEmpty == true
+                        ? book.lastChapter!
+                        : '暂无更新',
+                    mutedSoft,
+                  ),
+                ],
               ),
-            ],
+            ),
+            const SizedBox(width: 8),
+            _UnreadBadge(book: book),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _metaLine(IconData icon, String text, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13, color: color),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 未读/更新角标 — 结构对齐 legado BadgeView；数量在无章节索引字段时尽力从章节名推算
+class _UnreadBadge extends StatelessWidget {
+  final Book book;
+  const _UnreadBadge({required this.book});
+
+  static final _numRe = RegExp(r'(\d{1,6})');
+
+  static int? _chapterNum(String? s) {
+    if (s == null || s.isEmpty) return null;
+    final m = _numRe.firstMatch(s);
+    return m != null ? int.tryParse(m.group(1)!) : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final last = book.lastChapter;
+    final current = book.currentChapter;
+    final lastNum = _chapterNum(last);
+    final curNum = _chapterNum(current);
+    final hasUpdate = last != null &&
+        last.isNotEmpty &&
+        last != current &&
+        current != null &&
+        current.isNotEmpty;
+
+    int? unread;
+    if (lastNum != null && curNum != null && lastNum > curNum) {
+      unread = lastNum - curNum;
+    } else if (hasUpdate) {
+      unread = null; // 有更新但无法解析章节号时仍显示强调角标
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    if (unread != null && unread <= 0 && !hasUpdate) {
+      return const SizedBox.shrink();
+    }
+
+    final scheme = Theme.of(context).colorScheme;
+    final highlight = hasUpdate;
+    final bg = highlight
+        ? scheme.primary
+        : scheme.onSurface.withValues(alpha: 0.28);
+    final fg = highlight ? scheme.onPrimary : scheme.onSurface;
+
+    final label = unread != null && unread > 0
+        ? (unread > 999 ? '999+' : '$unread')
+        : '更新';
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: fg,
           ),
         ),
       ),
