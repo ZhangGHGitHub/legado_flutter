@@ -237,15 +237,17 @@ class _TocSheetState extends State<TocSheet>
       appBar: AppBar(
         backgroundColor: appBarBg,
         elevation: 0,
+        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
         titleSpacing: 0,
+        // Compact TabBar + centerTitle：目录/书签居于返回键与右侧操作之间（对齐 Legado）
         title: TabBar(
           controller: _tabController,
           isScrollable: true,
-          tabAlignment: TabAlignment.start,
+          tabAlignment: TabAlignment.center,
           labelColor: theme.colorScheme.onSurface,
           unselectedLabelColor: theme.colorScheme.onSurface.withValues(alpha: 0.55),
           indicatorColor: accent,
