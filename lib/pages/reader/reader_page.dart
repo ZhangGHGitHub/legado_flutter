@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,6 +20,7 @@ import '../book/book_info_page.dart';
 import '../reader/ai_chat_page.dart';
 import 'auto_read_panel.dart';
 import 'click_action_panel.dart';
+import 'more_settings_panel.dart';
 import 'reader_settings.dart';
 import 'tts_panel.dart';
 import '../../widgets/bookplate_overlay.dart';
@@ -72,6 +74,11 @@ class _ReaderPageState extends State<ReaderPage> {
   Timer? _autoReadTimer;
   bool _autoReadRunning = false;
 
+  /// UI-2: 底栏电量真值
+  final Battery _battery = Battery();
+  int? _batteryLevel;
+  Timer? _batteryTimer;
+
   @override
   void initState() {
     super.initState();
@@ -85,6 +92,42 @@ class _ReaderPageState extends State<ReaderPage> {
     }
     _loadContent();
     _scheduleAutoHide();
+    _refreshBattery();
+    _batteryTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _refreshBattery(),
+    );
+  }
+
+  Future<void> _refreshBattery() async {
+    try {
+      final level = await _battery.batteryLevel;
+      if (mounted) setState(() => _batteryLevel = level);
+    } catch (_) {
+      // 桌面/模拟器可能无电池信息
+    }
+  }
+
+  void _applyScreenOrientation(ScreenOrientationMode mode) {
+    switch (mode) {
+      case ScreenOrientationMode.system:
+        SystemChrome.setPreferredOrientations(const [
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+      case ScreenOrientationMode.portrait:
+        SystemChrome.setPreferredOrientations(const [
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+        ]);
+      case ScreenOrientationMode.landscape:
+        SystemChrome.setPreferredOrientations(const [
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+    }
   }
 
   @override
@@ -97,6 +140,13 @@ class _ReaderPageState extends State<ReaderPage> {
   void dispose() {
     _autoHideTimer?.cancel();
     _autoReadTimer?.cancel();
+    _batteryTimer?.cancel();
+    SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     _saveProgress();
     _recordReadingSession();
     _scrollController.dispose();
@@ -209,6 +259,17 @@ class _ReaderPageState extends State<ReaderPage> {
         _restartAutoReadIfNeeded();
       },
       onRunningChanged: _setAutoReadRunning,
+    ).whenComplete(() {
+      if (mounted) _scheduleAutoHide();
+    });
+  }
+
+  void _openMoreSettingsPanel() {
+    _autoHideTimer?.cancel();
+    MoreSettingsPanel.show(
+      context,
+      settings: _settings,
+      onChanged: _onSettingsChanged,
     ).whenComplete(() {
       if (mounted) _scheduleAutoHide();
     });
@@ -481,6 +542,12 @@ class _ReaderPageState extends State<ReaderPage> {
 
   /// 设置面板变更：翻页模式切换时先卸树，再 post-frame dispose 控制器
   void _onSettingsChanged(ReaderSettings newSettings) {
+    if (newSettings.screenOrientation != _settings.screenOrientation) {
+      _applyScreenOrientation(newSettings.screenOrientation);
+    }
+    if (newSettings.showBattery && _batteryLevel == null) {
+      _refreshBattery();
+    }
     final oldMode = _settings.pageMode;
     final newMode = newSettings.pageMode;
     final modeChanged = oldMode != newMode;
@@ -715,7 +782,8 @@ class _ReaderPageState extends State<ReaderPage> {
       case 'click_zone':
         _openClickZonePanel();
       case 'page_key':
-        _showNotImplemented('自定义翻页键');
+      case 'more_settings':
+        _openMoreSettingsPanel();
     }
   }
 
@@ -754,6 +822,7 @@ class _ReaderPageState extends State<ReaderPage> {
       item('tts', Icons.record_voice_over_outlined, '朗读'),
       item('auto_read', Icons.speed, '自动阅读'),
       item('click_zone', Icons.grid_on, '点击区域设置'),
+      item('more_settings', Icons.tune, '更多设置'),
       item('page_key', Icons.keyboard, '自定义翻页键'),
     ];
   }
@@ -923,7 +992,10 @@ class _ReaderPageState extends State<ReaderPage> {
                       [
                         _bookProgressLabel(),
                         if (_settings.showTime) _formatClock(),
-                        if (_settings.showBattery) '电量--',
+                        if (_settings.showBattery)
+                          _batteryLevel != null
+                              ? '电量$_batteryLevel%'
+                              : '电量--',
                       ].join('  '),
                       style: TextStyle(
                         fontSize: 11,
@@ -1093,6 +1165,7 @@ class _ReaderPageState extends State<ReaderPage> {
           onOpenTts: _openTtsPanel,
           onOpenAutoRead: _openAutoReadPanel,
           onOpenClickZone: _openClickZonePanel,
+          onOpenMoreSettings: _openMoreSettingsPanel,
         );
         // 设置面板是独立路由，须单独 ExcludeSemantics，否则仍会撞 AXTree
         final isDesktop = switch (defaultTargetPlatform) {
@@ -1137,10 +1210,29 @@ class _ReaderPageState extends State<ReaderPage> {
     if (isDesktop) {
       page = ExcludeSemantics(child: page);
     }
+
+    // UI-2：手动阅读亮度（黑遮罩叠在正文之上，不影响系统亮度权限）
+    if (!_settings.brightnessFollowSystem) {
+      final dim = (1.0 - _settings.brightness.clamp(0.15, 1.0));
+      if (dim > 0.01) {
+        page = Stack(
+          fit: StackFit.expand,
+          children: [
+            page,
+            IgnorePointer(
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: dim * 0.85),
+              ),
+            ),
+          ],
+        );
+      }
+    }
+
     return Focus(
       focusNode: _focusNode,
       autofocus: true,
-      onKeyEvent: _onVolumeKey,
+      onKeyEvent: _onReaderKey,
       child: page,
     );
   }
@@ -1362,17 +1454,44 @@ class _ReaderPageState extends State<ReaderPage> {
     }
   }
 
-  KeyEventResult _onVolumeKey(FocusNode node, KeyEvent event) {
-    if (!_settings.volumeKeyTurnPage) return KeyEventResult.ignored;
+  KeyEventResult _onReaderKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.audioVolumeUp) {
+    final keyId = key.keyId.toString();
+
+    if (_settings.customPrevPageKey != null &&
+        keyId == _settings.customPrevPageKey) {
       _prevPage();
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.audioVolumeDown) {
+    if (_settings.customNextPageKey != null &&
+        keyId == _settings.customNextPageKey) {
       _nextPage();
       return KeyEventResult.handled;
+    }
+
+    if (_settings.bluetoothPageKey) {
+      if (key == LogicalKeyboardKey.pageUp ||
+          key == LogicalKeyboardKey.mediaTrackPrevious) {
+        _prevPage();
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.pageDown ||
+          key == LogicalKeyboardKey.mediaTrackNext) {
+        _nextPage();
+        return KeyEventResult.handled;
+      }
+    }
+
+    if (_settings.volumeKeyTurnPage) {
+      if (key == LogicalKeyboardKey.audioVolumeUp) {
+        _prevPage();
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.audioVolumeDown) {
+        _nextPage();
+        return KeyEventResult.handled;
+      }
     }
     return KeyEventResult.ignored;
   }

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/tts_service.dart';
 
 /// TTS 朗读面板（对齐 dialog_read_aloud）。
-/// 平台引擎未接入时：控件可操作，播放走 [TtsService] stub 并明确提示。
+/// 系统引擎经 [TtsService]/[FlutterTts] 朗读当前页；支持上/下句。
 class TtsPanel extends StatefulWidget {
   final String sampleText;
   final VoidCallback onPrevChapter;
@@ -55,6 +55,8 @@ class _TtsPanelState extends State<TtsPanel> {
   void initState() {
     super.initState();
     _tts.addListener(_onTts);
+    _tts.bindText(widget.sampleText);
+    _tts.ensureInitialized();
   }
 
   @override
@@ -68,17 +70,20 @@ class _TtsPanelState extends State<TtsPanel> {
   }
 
   Future<void> _togglePlay() async {
-    final wasIdle = _tts.state == TtsPlaybackState.idle;
     await _tts.togglePlay(widget.sampleText);
     if (!mounted) return;
-    if (wasIdle &&
-        _tts.capability == TtsCapability.stub &&
+    if (_tts.engineId == 'http' && _tts.state == TtsPlaybackState.playing) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('HTTP TTS 尚未实现，请改用系统 TTS'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } else if (_tts.capability == TtsCapability.stub &&
         _tts.state == TtsPlaybackState.playing) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'TTS 服务骨架已就绪，尚未接入系统语音引擎（需 flutter_tts 等插件）',
-          ),
+          content: Text('系统语音引擎不可用，请检查 TTS 权限或安装语音包'),
           duration: Duration(seconds: 3),
         ),
       );
@@ -89,6 +94,9 @@ class _TtsPanelState extends State<TtsPanel> {
   Widget build(BuildContext context) {
     final playing = _tts.state == TtsPlaybackState.playing;
     final paused = _tts.state == TtsPlaybackState.paused;
+    final sentenceHint = _tts.sentenceCount == 0
+        ? '无正文'
+        : '第 ${_tts.sentenceIndex + 1}/${_tts.sentenceCount} 句';
 
     return SafeArea(
       child: Padding(
@@ -116,14 +124,16 @@ class _TtsPanelState extends State<TtsPanel> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                _tts.capability == TtsCapability.stub
-                    ? '引擎未接入 · 当前为服务骨架（可调语速/音调/引擎）'
-                    : '正在使用 ${_tts.engineLabel}',
+                _tts.capability == TtsCapability.platform
+                    ? '正在使用 ${_tts.engineLabel} · $sentenceHint'
+                    : _tts.engineId == 'http'
+                        ? 'HTTP TTS 待实现 · $sentenceHint'
+                        : '引擎初始化中或不可用 · $sentenceHint',
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ),
             const SizedBox(height: 8),
-            // 运输控件：上章 / 上页 / 播放 / 下页 / 下章
+            // 运输控件：上章 / 上句 / 播放 / 下句 / 下章
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -133,9 +143,9 @@ class _TtsPanelState extends State<TtsPanel> {
                   icon: const Icon(Icons.skip_previous),
                 ),
                 IconButton(
-                  tooltip: '上一页',
-                  onPressed: widget.onPrevPage,
-                  icon: const Icon(Icons.fast_rewind),
+                  tooltip: '上一句',
+                  onPressed: () => _tts.previousSentence(),
+                  icon: const Icon(Icons.undo),
                 ),
                 FilledButton.tonal(
                   onPressed: _togglePlay,
@@ -145,9 +155,9 @@ class _TtsPanelState extends State<TtsPanel> {
                   ),
                 ),
                 IconButton(
-                  tooltip: '下一页',
-                  onPressed: widget.onNextPage,
-                  icon: const Icon(Icons.fast_forward),
+                  tooltip: '下一句',
+                  onPressed: () => _tts.nextSentence(),
+                  icon: const Icon(Icons.redo),
                 ),
                 IconButton(
                   tooltip: '下一章',
@@ -156,12 +166,27 @@ class _TtsPanelState extends State<TtsPanel> {
                 ),
               ],
             ),
-            if (playing || paused)
-              TextButton.icon(
-                onPressed: () => _tts.stop(),
-                icon: const Icon(Icons.stop, size: 18),
-                label: const Text('停止'),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton.icon(
+                  onPressed: widget.onPrevPage,
+                  icon: const Icon(Icons.fast_rewind, size: 18),
+                  label: const Text('上一页'),
+                ),
+                TextButton.icon(
+                  onPressed: widget.onNextPage,
+                  icon: const Icon(Icons.fast_forward, size: 18),
+                  label: const Text('下一页'),
+                ),
+                if (playing || paused)
+                  TextButton.icon(
+                    onPressed: () => _tts.stop(),
+                    icon: const Icon(Icons.stop, size: 18),
+                    label: const Text('停止'),
+                  ),
+              ],
+            ),
             const Divider(),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -247,7 +272,7 @@ class _TtsPanelState extends State<TtsPanel> {
               subtitle: Text(
                 _tts.timerMinutes == null
                     ? '未设置'
-                    : '${_tts.timerMinutes} 分钟后停止（待引擎）',
+                    : '${_tts.timerMinutes} 分钟后停止',
                 style: const TextStyle(fontSize: 11),
               ),
               trailing: DropdownButton<int?>(

@@ -40,6 +40,8 @@ dependencies:
   rust_lib_legado_flutter:
     path: rust_builder
   dynamic_color: ^1.8.1
+  flutter_tts: ^4.2.5
+  battery_plus: ^7.1.0
 
 dev_dependencies:
   flutter_test:

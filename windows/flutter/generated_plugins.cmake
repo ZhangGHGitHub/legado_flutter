@@ -3,8 +3,10 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  battery_plus
   charset_converter
   dynamic_color
+  flutter_tts
   share_plus
   url_launcher_windows
 )

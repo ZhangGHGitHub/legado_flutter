@@ -11,6 +11,16 @@ enum ClickZoneAction {
   final String label;
 }
 
+/// 阅读器屏幕方向（UI-2 更多设置）
+enum ScreenOrientationMode {
+  system('跟随系统'),
+  portrait('竖屏'),
+  landscape('横屏');
+
+  const ScreenOrientationMode(this.label);
+  final String label;
+}
+
 /// 阅读器设置 — Phase F UI-2（对齐 dialog_read_bg_text / dialog_read_book_style 可落地项）
 class ReaderSettings {
   final double fontSize;
@@ -30,6 +40,17 @@ class ReaderSettings {
   final ClickZoneAction clickTop;
   final ClickZoneAction clickMiddle;
   final ClickZoneAction clickBottom;
+  final ScreenOrientationMode screenOrientation;
+  /// true = 不叠加阅读亮度遮罩
+  final bool brightnessFollowSystem;
+  /// 手动亮度 0.15–1.0（越低遮罩越暗）
+  final double brightness;
+  final bool keepScreenOn;
+  /// 蓝牙翻页器常见键：PageUp/Down、媒体上一曲/下一曲
+  final bool bluetoothPageKey;
+  /// LogicalKeyboardKey.keyId 字符串；空=未设置
+  final String? customPrevPageKey;
+  final String? customNextPageKey;
 
   const ReaderSettings({
     this.fontSize = 18.0,
@@ -47,6 +68,13 @@ class ReaderSettings {
     this.clickTop = ClickZoneAction.prevPage,
     this.clickMiddle = ClickZoneAction.toggleMenu,
     this.clickBottom = ClickZoneAction.nextPage,
+    this.screenOrientation = ScreenOrientationMode.system,
+    this.brightnessFollowSystem = true,
+    this.brightness = 1.0,
+    this.keepScreenOn = false,
+    this.bluetoothPageKey = false,
+    this.customPrevPageKey,
+    this.customNextPageKey,
   });
 
   ReaderSettings copyWith({
@@ -65,6 +93,15 @@ class ReaderSettings {
     ClickZoneAction? clickTop,
     ClickZoneAction? clickMiddle,
     ClickZoneAction? clickBottom,
+    ScreenOrientationMode? screenOrientation,
+    bool? brightnessFollowSystem,
+    double? brightness,
+    bool? keepScreenOn,
+    bool? bluetoothPageKey,
+    String? customPrevPageKey,
+    String? customNextPageKey,
+    bool clearCustomPrevPageKey = false,
+    bool clearCustomNextPageKey = false,
   }) {
     return ReaderSettings(
       fontSize: fontSize ?? this.fontSize,
@@ -82,6 +119,18 @@ class ReaderSettings {
       clickTop: clickTop ?? this.clickTop,
       clickMiddle: clickMiddle ?? this.clickMiddle,
       clickBottom: clickBottom ?? this.clickBottom,
+      screenOrientation: screenOrientation ?? this.screenOrientation,
+      brightnessFollowSystem:
+          brightnessFollowSystem ?? this.brightnessFollowSystem,
+      brightness: brightness ?? this.brightness,
+      keepScreenOn: keepScreenOn ?? this.keepScreenOn,
+      bluetoothPageKey: bluetoothPageKey ?? this.bluetoothPageKey,
+      customPrevPageKey: clearCustomPrevPageKey
+          ? null
+          : (customPrevPageKey ?? this.customPrevPageKey),
+      customNextPageKey: clearCustomNextPageKey
+          ? null
+          : (customNextPageKey ?? this.customNextPageKey),
     );
   }
 
@@ -148,6 +197,7 @@ class ReaderSettingsPanel extends StatefulWidget {
   final VoidCallback? onOpenTts;
   final VoidCallback? onOpenAutoRead;
   final VoidCallback? onOpenClickZone;
+  final VoidCallback? onOpenMoreSettings;
 
   const ReaderSettingsPanel({
     super.key,
@@ -156,6 +206,7 @@ class ReaderSettingsPanel extends StatefulWidget {
     this.onOpenTts,
     this.onOpenAutoRead,
     this.onOpenClickZone,
+    this.onOpenMoreSettings,
   });
 
   @override
@@ -430,7 +481,7 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
               dense: true,
               title: const Text('显示电量', style: TextStyle(fontSize: 13)),
               subtitle: const Text(
-                '未接 battery 插件时显示占位',
+                '底栏显示系统电量（battery_plus）',
                 style: TextStyle(fontSize: 11),
               ),
               value: _s.showBattery,
@@ -441,7 +492,7 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
               dense: true,
               title: const Text('音量键翻页', style: TextStyle(fontSize: 13)),
               subtitle: const Text(
-                '部分桌面环境可能无效',
+                '部分桌面环境可能无效；更多键见「更多设置」',
                 style: TextStyle(fontSize: 11),
               ),
               value: _s.volumeKeyTurnPage,
@@ -450,14 +501,14 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
 
             const Divider(),
 
-            // ── UI-2：TTS / 自动阅读 / 点击区域 ──
+            // ── UI-2：TTS / 自动阅读 / 点击区域 / 更多 ──
             ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               dense: true,
               leading: const Icon(Icons.record_voice_over_outlined, size: 22),
               title: const Text('朗读 (TTS)', style: TextStyle(fontSize: 13)),
               subtitle: const Text(
-                '语速/音调/引擎 · 平台引擎待接入',
+                '语速/音调/引擎 · 系统 TTS 发音',
                 style: TextStyle(fontSize: 11),
               ),
               trailing: const Icon(Icons.chevron_right, size: 20),
@@ -494,6 +545,23 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
               onTap: () {
                 Navigator.pop(context);
                 widget.onOpenClickZone?.call();
+              },
+            ),
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              dense: true,
+              leading: const Icon(Icons.tune, size: 22),
+              title: const Text('更多设置', style: TextStyle(fontSize: 13)),
+              subtitle: Text(
+                '${_s.screenOrientation.label} · '
+                '${_s.brightnessFollowSystem ? '亮度跟随系统' : '亮度${(_s.brightness * 100).round()}%'}'
+                '${_s.bluetoothPageKey ? ' · 蓝牙翻页' : ''}',
+                style: const TextStyle(fontSize: 11),
+              ),
+              trailing: const Icon(Icons.chevron_right, size: 20),
+              onTap: () {
+                Navigator.pop(context);
+                widget.onOpenMoreSettings?.call();
               },
             ),
             const SizedBox(height: 8),
