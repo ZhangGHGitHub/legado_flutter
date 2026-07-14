@@ -91,6 +91,30 @@ class BookHelp {
     return file.exists();
   }
 
+  /// 列出某书已有正文文件缓存的章节 id（文件名已 sanitize）
+  static Future<Set<String>> listCachedChapterIds(String bookId) async {
+    try {
+      final root = await _cacheRoot();
+      final bookDir = Directory(p.join(root.path, _sanitize(bookId)));
+      if (!await bookDir.exists()) return {};
+      final ids = <String>{};
+      await for (final entity in bookDir.list()) {
+        if (entity is! File) continue;
+        final name = p.basename(entity.path);
+        if (!name.endsWith('.txt')) continue;
+        // 文件名为 sanitize(chapterId).txt；调用方应用同规则比对
+        ids.add(p.basenameWithoutExtension(name));
+      }
+      return ids;
+    } catch (e) {
+      debugPrint('BookHelp 列举缓存失败: $e');
+      return {};
+    }
+  }
+
+  /// 与 [_chapterFile] 相同的 id 规范化（供目录标记比对）
+  static String sanitizeId(String id) => _sanitize(id);
+
   /// 删除单章文件缓存（用于阅读器「刷新」）
   static Future<void> deleteChapterContent(
     String bookId,

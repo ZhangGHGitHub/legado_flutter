@@ -119,21 +119,16 @@ class ReadBook extends ChangeNotifier {
         }
       }
 
-      // 2. DB 缓存
-      if (_db != null) {
-        final localChapters = await _db!.getChapters(bid);
-        final hit = localChapters.where((c) => c.id == chapter.id).firstOrNull;
-        if (hit != null &&
-            hit.isDownloaded &&
-            hit.content != null &&
-            hit.content!.isNotEmpty &&
-            !shouldSkipCache(hit.content!)) {
-          final processed = proc.getContent(hit.content!);
+      // 2. DB 正文列（目录查询已不再带 content；正文以文件缓存为主）
+      // 若仅标志已下载但文件丢失，继续走网络拉取
+      if (chapter.isDownloaded) {
+        final again = await BookHelp.getCachedContent(bid, chapter.id);
+        if (again != null &&
+            again.isNotEmpty &&
+            !shouldSkipCache(again)) {
+          final processed = proc.getContent(again);
           if (!shouldSkipCache(processed)) {
             _memoryCache[memKey] = processed;
-            if (saveCache) {
-              await BookHelp.saveContent(bid, chapter.id, processed);
-            }
             return processed;
           }
         }
@@ -152,6 +147,18 @@ class ReadBook extends ChangeNotifier {
         if (saveCache) {
           await BookHelp.saveContent(bid, chapter.id, processed);
           if (_db != null) {
+            // upsert：UPDATE 在章节行尚未落库时为 0 行，需 insert 才能打上 isDownloaded
+            await _db!.insertChapters([
+              Chapter(
+                id: chapter.id,
+                bookId: bid,
+                title: chapter.title,
+                index: chapter.index,
+                url: chapter.url,
+                isDownloaded: true,
+                content: processed,
+              ),
+            ]);
             await _db!.saveChapterContent(chapter.id, processed);
           }
         }
@@ -216,13 +223,5 @@ class ReadBook extends ChangeNotifier {
     _memoryCache.clear();
     _preloading.clear();
     notifyListeners();
-  }
-}
-
-extension _FirstOrNull<E> on Iterable<E> {
-  E? get firstOrNull {
-    final it = iterator;
-    if (!it.moveNext()) return null;
-    return it.current;
   }
 }

@@ -341,12 +341,23 @@ impl EngineDb {
             .map_err(|e| DbError::Message(format!("chapters JSON 无效: {e}")))?;
         for ch in arr {
             let id = str_field(&ch, "id")?;
+            // TOC 刷新时常见 content=null / isDownloaded=0；勿覆盖已缓存正文
             self.conn.execute(
                 "INSERT INTO chapters (id, bookId, title, idx, url, isDownloaded, content)
                  VALUES (?1,?2,?3,?4,?5,?6,?7)
                  ON CONFLICT(id) DO UPDATE SET
-                   title=excluded.title, idx=excluded.idx, url=excluded.url,
-                   isDownloaded=excluded.isDownloaded, content=excluded.content",
+                   title=excluded.title,
+                   idx=excluded.idx,
+                   url=excluded.url,
+                   isDownloaded=CASE
+                     WHEN excluded.isDownloaded != 0 THEN 1
+                     ELSE chapters.isDownloaded
+                   END,
+                   content=CASE
+                     WHEN excluded.content IS NOT NULL AND excluded.content != ''
+                       THEN excluded.content
+                     ELSE chapters.content
+                   END",
                 params![
                     id,
                     str_field(&ch, "bookId")?,
@@ -362,8 +373,9 @@ impl EngineDb {
     }
 
     pub fn get_chapters_json(&self, book_id: &str) -> Result<Vec<String>, DbError> {
+        // 目录展示不带 content：对齐 Legado ChapterList 只查元数据，避免千章×正文撑爆/拖慢
         let mut stmt = self.conn.prepare(
-            "SELECT id, bookId, title, idx, url, isDownloaded, content
+            "SELECT id, bookId, title, idx, url, isDownloaded
              FROM chapters WHERE bookId=?1 ORDER BY idx ASC",
         )?;
         let rows = stmt.query_map(params![book_id], |row| {
@@ -374,12 +386,25 @@ impl EngineDb {
                 "index": row.get::<_, i64>(3)?,
                 "url": row.get::<_, String>(4)?,
                 "isDownloaded": row.get::<_, i64>(5)? == 1,
-                "content": row.get::<_, Option<String>>(6)?,
+                "content": null,
             })
             .to_string())
         })?;
         rows.map(|r| r.map_err(|e| DbError::Message(e.to_string())))
             .collect()
+    }
+
+    /// 单章正文（文件缓存未命中时的 DB 回落）
+    pub fn get_chapter_content(&self, chapter_id: &str) -> Result<Option<String>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT content FROM chapters WHERE id=?1 AND isDownloaded=1",
+        )?;
+        let mut rows = stmt.query(params![chapter_id])?;
+        if let Some(row) = rows.next()? {
+            Ok(row.get::<_, Option<String>>(0)?)
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn save_chapter_content(&self, chapter_id: &str, content: &str) -> Result<(), DbError> {

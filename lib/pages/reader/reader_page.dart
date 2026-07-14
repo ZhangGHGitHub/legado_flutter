@@ -217,6 +217,12 @@ class _ReaderPageState extends State<ReaderPage> {
             }
           });
         });
+        final ok = !ReadBook.isEmptyContentPlaceholder(content) &&
+            !content.contains('（加载失败') &&
+            !content.startsWith('⚠️');
+        if (ok) {
+          bookProvider.markChapterDownloaded(chapter.id);
+        }
         _countChapterChars(content);
         _syncPreload();
       }
@@ -442,14 +448,27 @@ class _ReaderPageState extends State<ReaderPage> {
     }
   }
 
-  void _showTocSheet() {
-    TocSheet.show(
+  Future<void> _showTocSheet() async {
+    final provider = context.read<BookProvider>();
+    // 对齐 Legado：目录秒开，不在此等待联网 / 扫盘
+    final chapters = provider.currentChapters.isNotEmpty &&
+            provider.currentChapters.first.bookId == widget.book.id
+        ? provider.currentChapters
+        : widget.allChapters;
+    if (!mounted) return;
+    await TocSheet.show(
       context,
-      chapters: widget.allChapters,
+      chapters: chapters,
       currentChapter: widget.allChapters[_currentIndex].title,
       onChapterTap: (chapter) {
-        final idx = widget.allChapters.indexOf(chapter);
-        if (idx >= 0) _goToChapter(idx);
+        final idx = widget.allChapters.indexWhere((c) => c.id == chapter.id);
+        if (idx >= 0) {
+          _goToChapter(idx);
+        } else {
+          final byUrl =
+              widget.allChapters.indexWhere((c) => c.url == chapter.url);
+          if (byUrl >= 0) _goToChapter(byUrl);
+        }
       },
     );
   }

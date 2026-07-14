@@ -22,6 +22,7 @@ class BookInfoPage extends StatefulWidget {
 }
 
 class _BookInfoPageState extends State<BookInfoPage> {
+  late Book _book;
   bool _isInShelf = false;
   String? _errorMessage;
   String _coverUrl = ''; // 可能从搜索获取的封面 URL
@@ -31,22 +32,35 @@ class _BookInfoPageState extends State<BookInfoPage> {
   @override
   void initState() {
     super.initState();
+    _book = widget.book;
     WidgetsBinding.instance.addPostFrameCallback((_) => _initPage());
   }
 
   Future<void> _initPage() async {
     final bookProvider = context.read<BookProvider>();
     final sourceProvider = context.read<SourceProvider>();
-    _coverUrl = widget.book.coverUrl;
-    final isInShelf = bookProvider.books.any((b) => b.name == widget.book.name);
-    if (mounted) setState(() => _isInShelf = isInShelf);
+    _coverUrl = _book.coverUrl;
+
+    // 书架书优先：按 sourceUrl/书名对齐到已落库 id，避免临时 id 导致目录永远冷加载
+    final shelf = bookProvider.findShelfBook(_book);
+    if (shelf != null) {
+      _book = shelf;
+      _isInShelf = true;
+    } else {
+      _isInShelf = false;
+    }
+    if (mounted) setState(() {});
 
     if (!mounted) return;
     setState(() => _errorMessage = null);
-    final source = sourceProvider.findSourceForBook(widget.book);
+    final source = sourceProvider.findSourceForBook(_book);
     if (source != null) {
-      await bookProvider.loadChapters(widget.book, source: source);
-      // 如果封面为空，尝试从书源搜索封面
+      final cached = bookProvider.currentChapters;
+      final sameBook =
+          cached.isNotEmpty && cached.first.bookId == _book.id;
+      if (!sameBook) {
+        await bookProvider.loadChapters(_book, source: source);
+      }
       if (_coverUrl.isEmpty && mounted) {
         await _fetchCoverFromSource(source);
       }
@@ -60,18 +74,18 @@ class _BookInfoPageState extends State<BookInfoPage> {
   Future<void> _fetchCoverFromSource(BookSource source) async {
     try {
       final service = BookSourceService();
-      final results = await service.search(source, widget.book.name);
+      final results = await service.search(source, _book.name);
       // 先尝试精确匹配书名，再尝试包含匹配
       String? foundCover;
       for (final r in results) {
         final name = r['name'] ?? '';
         final cover = r['coverUrl'] ?? '';
         if (cover.isEmpty) continue;
-        if (name == widget.book.name) {
+        if (name == _book.name) {
           foundCover = cover;
           break;
         }
-        if (foundCover == null && name.contains(widget.book.name)) {
+        if (foundCover == null && name.contains(_book.name)) {
           foundCover = cover;
         }
       }
@@ -80,7 +94,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
         // 如果已加入书架，更新数据库
         if (_isInShelf && foundCover.isNotEmpty) {
           final db = DatabaseHelper();
-          await db.updateBookCover(widget.book.id, foundCover);
+          await db.updateBookCover(_book.id, foundCover);
         }
       }
     } catch (_) {
@@ -89,13 +103,14 @@ class _BookInfoPageState extends State<BookInfoPage> {
   }
 
   /// 刷新章节列表（从阅读器返回时调用）
+  /// 默认只读本地/内存更新勾选，不强制联网（避免每次返回都卡很久）
   Future<void> _refreshChapters() async {
     final source = context.read<SourceProvider>().findSourceForBook(
-      widget.book,
+      _book,
     );
     if (source != null && mounted) {
       await context.read<BookProvider>().loadChapters(
-        widget.book,
+        _book,
         source: source,
       );
     }
@@ -108,19 +123,29 @@ class _BookInfoPageState extends State<BookInfoPage> {
 
   Future<void> _addToShelf() async {
     final provider = context.read<BookProvider>();
-    final book = widget.book.copyWith(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-    );
-    await provider.addBook(book);
+    // 绝不要换新 id：目录/正文缓存都按 bookId 索引（换 id = 永远冷加载）
+    final existing = provider.findShelfBook(_book);
+    if (existing != null) {
+      if (mounted) {
+        setState(() {
+          _book = existing;
+          _isInShelf = true;
+        });
+      }
+      return;
+    }
+    await provider.addBook(_book);
+    // 已拉过的目录立刻落到本书 id 下
+    await provider.persistCurrentTocFor(_book);
     if (mounted) {
       setState(() => _isInShelf = true);
       final messenger = ScaffoldMessenger.of(context);
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(
         SnackBar(
-          content: Text('《${widget.book.name}》已加入书架'),
+          content: Text('《${_book.name}》已加入书架'),
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 10), // 给 action 足够时间
+          duration: const Duration(seconds: 10),
           action: SnackBarAction(
             label: '去阅读',
             onPressed: () {
@@ -132,7 +157,6 @@ class _BookInfoPageState extends State<BookInfoPage> {
           ),
         ),
       );
-      // 手动 3 秒后强制关闭（解决 Windows 上 SnackBar 不自动消失的 bug）
       _snackBarHideTimer?.cancel();
       _snackBarHideTimer = Timer(const Duration(seconds: 3), () {
         if (mounted) {
@@ -145,14 +169,14 @@ class _BookInfoPageState extends State<BookInfoPage> {
   /// 从书架移除
   Future<void> _removeFromShelf() async {
     final provider = context.read<BookProvider>();
-    await provider.removeBook(widget.book.id);
+    await provider.removeBook(_book.id);
     if (mounted) {
       setState(() => _isInShelf = false);
       final messenger = ScaffoldMessenger.of(context);
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(
         SnackBar(
-          content: Text('已从书架移除《${widget.book.name}》'),
+          content: Text('已从书架移除《${_book.name}》'),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
@@ -169,7 +193,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
     }
 
     final source = context.read<SourceProvider>().findSourceForBook(
-      widget.book,
+      _book,
     );
     if (source == null) {
       if (mounted) {
@@ -194,14 +218,14 @@ class _BookInfoPageState extends State<BookInfoPage> {
       return;
     }
 
-    provider.downloadAllChapters(widget.book.id, toDownload, source);
+    provider.downloadAllChapters(_book.id, toDownload, source);
   }
 
   /// 章节列表加载后自动滚动到已读章节
   void _scrollToCurrentChapter(BookProvider provider) {
     if (!mounted || provider.currentChapters.isEmpty) return;
     final idx = provider.currentChapters.indexWhere(
-      (c) => c.title == widget.book.currentChapter,
+      (c) => c.title == _book.currentChapter,
     );
     if (idx >= 0 && _chapterScrollController.hasClients) {
       final offset = idx * 56.0; // ListTile 高度估算
@@ -217,8 +241,8 @@ class _BookInfoPageState extends State<BookInfoPage> {
     if (provider.currentChapters.isEmpty) return;
     // 从 provider 中获取最新的 Book 数据（含 currentPageIndex）
     final latestBook = provider.books.firstWhere(
-      (b) => b.id == widget.book.id,
-      orElse: () => widget.book,
+      (b) => b.id == _book.id,
+      orElse: () => _book,
     );
     // 根据保存的进度定位上次阅读的章节
     Chapter startChapter;
@@ -265,7 +289,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
           _buildBookHeader(theme),
           _buildActionButtons(),
           _buildSecondaryActions(),
-          if (widget.book.description.isNotEmpty) _buildDescription(theme),
+          if (_book.description.isNotEmpty) _buildDescription(theme),
           const Divider(height: 1),
           _buildChapterListHeader(),
           Expanded(child: _buildChapterList()),
@@ -287,9 +311,9 @@ class _BookInfoPageState extends State<BookInfoPage> {
             child: SizedBox(
               width: 90,
               height: 130,
-              child: widget.book.coverUrl.isNotEmpty
+              child: _book.coverUrl.isNotEmpty
                   ? Image.network(
-                      widget.book.coverUrl,
+                      _book.coverUrl,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) =>
                           _buildCoverPlaceholder(theme),
@@ -318,19 +342,19 @@ class _BookInfoPageState extends State<BookInfoPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.book.name,
+                  _book.name,
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 6),
-                if (widget.book.author.isNotEmpty)
+                if (_book.author.isNotEmpty)
                   Row(
                     children: [
                       Icon(Icons.person, size: 14, color: Colors.grey[500]),
                       const SizedBox(width: 4),
                       Text(
-                        widget.book.author,
+                        _book.author,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: Colors.grey[600],
                         ),
@@ -338,13 +362,13 @@ class _BookInfoPageState extends State<BookInfoPage> {
                     ],
                   ),
                 // 书源
-                if (widget.book.bookSourceUrl.isNotEmpty)
+                if (_book.bookSourceUrl.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
-                    child: _buildSourceChip(widget.book.bookSourceUrl),
+                    child: _buildSourceChip(_book.bookSourceUrl),
                   ),
                 const SizedBox(height: 8),
-                if (widget.book.currentChapter != null)
+                if (_book.currentChapter != null)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -355,7 +379,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      '读到: ${widget.book.currentChapter}',
+                      '读到: ${_book.currentChapter}',
                       style: TextStyle(
                         fontSize: 11,
                         color: theme.colorScheme.tertiary,
@@ -364,7 +388,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                if (widget.book.progress > 0)
+                if (_book.progress > 0)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Column(
@@ -373,13 +397,13 @@ class _BookInfoPageState extends State<BookInfoPage> {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(2),
                           child: LinearProgressIndicator(
-                            value: widget.book.progress,
+                            value: _book.progress,
                             minHeight: 4,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${(widget.book.progress * 100).toInt()}%',
+                          '${(_book.progress * 100).toInt()}%',
                           style: TextStyle(
                             fontSize: 11,
                             color: Colors.grey[500],
@@ -415,12 +439,12 @@ class _BookInfoPageState extends State<BookInfoPage> {
         children: [
           Icon(Icons.menu_book, size: 32, color: theme.colorScheme.primary),
           Text(
-            widget.book.author.isNotEmpty
-                ? widget.book.author.substring(
+            _book.author.isNotEmpty
+                ? _book.author.substring(
                     0,
-                    widget.book.author.length > 4
+                    _book.author.length > 4
                         ? 4
-                        : widget.book.author.length,
+                        : _book.author.length,
                   )
                 : '',
             style: TextStyle(fontSize: 10, color: theme.colorScheme.primary),
@@ -459,8 +483,8 @@ class _BookInfoPageState extends State<BookInfoPage> {
             child: FilledButton.tonalIcon(
               icon: const Icon(Icons.menu_book),
               label: Text(
-                widget.book.progress > 0 ||
-                        (widget.book.currentChapter?.isNotEmpty == true)
+                _book.progress > 0 ||
+                        (_book.currentChapter?.isNotEmpty == true)
                     ? '继续阅读'
                     : '开始阅读',
               ),
@@ -484,7 +508,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ChangeSourcePage(book: widget.book),
+                  builder: (_) => ChangeSourcePage(book: _book),
                 ),
               ),
             ),
@@ -497,7 +521,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ChangeCoverPage(book: widget.book),
+                  builder: (_) => ChangeCoverPage(book: _book),
                 ),
               ),
             ),
@@ -527,7 +551,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            widget.book.description,
+            _book.description,
             maxLines: 4,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -597,7 +621,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
 
               // 下载中 → 进度 + 取消
               if (provider.isDownloading &&
-                  provider.downloadBookId == widget.book.id) {
+                  provider.downloadBookId == _book.id) {
                 return GestureDetector(
                   onTap: () => provider.cancelDownload(),
                   child: Row(
@@ -739,9 +763,13 @@ class _BookInfoPageState extends State<BookInfoPage> {
                     setState(() => _errorMessage = null);
                     final src = context
                         .read<SourceProvider>()
-                        .findSourceForBook(widget.book);
+                        .findSourceForBook(_book);
                     if (src != null) {
-                      provider.loadChapters(widget.book, source: src);
+                      provider.loadChapters(
+                        _book,
+                        source: src,
+                        forceRefresh: true,
+                      );
                     }
                   },
                 ),
@@ -765,7 +793,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
               const Divider(height: 1, indent: 16),
           itemBuilder: (context, index) {
             final chapter = chapters[index];
-            final isCurrent = chapter.title == widget.book.currentChapter;
+            final isCurrent = chapter.title == _book.currentChapter;
             return ListTile(
               dense: true,
               selected: isCurrent,
@@ -791,7 +819,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
                   context,
                   MaterialPageRoute(
                     builder: (_) => ReaderPage(
-                      book: widget.book,
+                      book: _book,
                       chapter: chapter,
                       allChapters: chapters,
                     ),

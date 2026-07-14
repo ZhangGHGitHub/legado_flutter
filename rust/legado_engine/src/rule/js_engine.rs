@@ -269,4 +269,67 @@ lines.join('\n');
         assert!(out.len() > 100, "7565 脚本输出过短: {} chars", out.len());
         assert!(out.contains("测试正文"), "应含正文: {out}");
     }
+
+    /// 笔书网移动站：正文是文本节点与 `<br/>` 交错；若 html() 先拼全部 text 再拼子节点，
+    /// 整章会落在一行并被「本章未完.*继续阅读」过滤成空。
+    #[test]
+    fn run_jsoup_preserves_br_text_order_for_7565_filter() {
+        let script = r#"
+var html = String(result);
+var doc = Packages.org.jsoup.Jsoup.parse(html);
+var nr = doc.selectFirst('article#nr');
+var lines = [];
+if (nr) {
+    var rawHtml = String(nr.html());
+    rawHtml = rawHtml.replace(/<br\s*\/?>/gi, '\n');
+    var parts = rawHtml.split('\n');
+    for (var i = 0; i < parts.length; i++) {
+        var line = parts[i].replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\u00a0/g, ' ').trim();
+        if (line) {
+            if (/最新网址|m\.biqukun|本章未完.*继续阅读/.test(line)) continue;
+            lines.push(line);
+        }
+    }
+    if (lines.length > 0 && /^第\d+章/.test(lines[0])) {
+        lines.shift();
+    }
+}
+lines.join('\n');
+"#;
+        let html = r#"
+<html><body>
+<article id="nr">&nbsp;&nbsp;&nbsp;&nbsp;第5章 标题 (第1/3页)<br /><br />旁白：这是正文第一段足够长。<br />
+<br />
+&nbsp;&nbsp;&nbsp;&nbsp;这是正文第二段，继续补充内容避免过短。<br />
+<br />
+&nbsp;&nbsp;&nbsp;&nbsp;本章未完，请翻下一页继续阅读。</article>
+</body></html>
+"#;
+        let out = run_html_js(script, html, "", "").unwrap();
+        assert!(out.contains("正文第一段"), "应保留正文: {out}");
+        assert!(out.contains("正文第二段"), "应保留分段: {out}");
+        assert!(!out.contains("本章未完"), "应过滤未完提示: {out}");
+        assert!(!out.contains("第5章"), "应去掉章名行: {out}");
+    }
+
+    #[test]
+    fn run_jsoup_html_is_inner_with_ordered_br() {
+        let script = r#"
+var doc = Packages.org.jsoup.Jsoup.parse(String(result));
+var el = doc.selectFirst('article#nr');
+el ? el.html() : '';
+"#;
+        let html = r#"<article id="nr">甲<br />乙</article>"#;
+        let out = run_html_js(script, html, "", "").unwrap();
+        assert!(!out.contains("<article"), "html() 应为 inner: {out}");
+        assert!(
+            out.contains("甲") && out.contains("乙") && out.find("甲").unwrap() < out.find("乙").unwrap(),
+            "文本与 br 须保序: {out}"
+        );
+        assert!(
+            out.find("甲").unwrap() < out.to_lowercase().find("br").unwrap()
+                && out.to_lowercase().find("br").unwrap() < out.find("乙").unwrap(),
+            "顺序应为 甲 / br / 乙: {out}"
+        );
+    }
 }

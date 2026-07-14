@@ -38,8 +38,9 @@ _JsoupElement.prototype.attr = function(name) {
   if (!this._node || !this._node.attrs) return '';
   return this._node.attrs[name] || this._node.attrs[name.toLowerCase()] || '';
 };
+/** Jsoup Element.html() → inner HTML（不含自身标签） */
 _JsoupElement.prototype.html = function() {
-  return _nodeHtml(this._node);
+  return _nodeInnerHtml(this._node);
 };
 
 function _JsoupElements(arr) {
@@ -56,6 +57,10 @@ function _parseAttrs(str) {
     attrs[m[1]] = m[2] !== undefined ? m[2] : (m[3] !== undefined ? m[3] : (m[4] || ''));
   }
   return attrs;
+}
+
+function _textNode(text) {
+  return { tag: '#text', attrs: {}, children: [], text: text || '' };
 }
 
 function _parseHtml(html) {
@@ -78,10 +83,12 @@ function _parseHtml(html) {
     var sp = tagStr.indexOf(' ');
     var tagName = (sp > 0 ? tagStr.substring(0, sp) : tagStr).toLowerCase();
     var attrStr = sp > 0 ? tagStr.substring(sp + 1) : '';
+    // children 按文档顺序混排元素与文本；勿再单独累加 node.text
     var node = { tag: tagName, attrs: _parseAttrs(attrStr), children: [], text: '' };
-    if (selfClose || tagName === 'br' || tagName === 'img' || tagName === 'input') return node;
+    if (selfClose || tagName === 'br' || tagName === 'img' || tagName === 'input' || tagName === 'hr' || tagName === 'meta' || tagName === 'link') {
+      return node;
+    }
     while (i < html.length) {
-      skipWs();
       if (html.substring(i, i + 2 + tagName.length).toLowerCase() === '</' + tagName) {
         var closeEnd = html.indexOf('>', i);
         i = closeEnd >= 0 ? closeEnd + 1 : html.length;
@@ -91,14 +98,21 @@ function _parseHtml(html) {
         var child = parseElement();
         if (child) node.children.push(child);
         else {
-          var next = html.indexOf('<', i + 1);
-          if (next < 0) { node.text += html.substring(i); break; }
-          i++;
+          // 非本标签的闭合/坏标签：跳过该 '<'，避免死循环
+          var nextBad = html.indexOf('<', i + 1);
+          if (nextBad < 0) {
+            node.children.push(_textNode(html.substring(i)));
+            i = html.length;
+            break;
+          }
+          node.children.push(_textNode(html.substring(i, nextBad)));
+          i = nextBad;
         }
       } else {
         var next = html.indexOf('<', i);
         if (next < 0) next = html.length;
-        node.text += html.substring(i, next);
+        var text = html.substring(i, next);
+        if (text) node.children.push(_textNode(text));
         i = next;
       }
     }
@@ -107,14 +121,15 @@ function _parseHtml(html) {
   var children = [];
   while (i < html.length) {
     skipWs();
+    if (i >= html.length) break;
     if (html[i] === '<') {
       var el = parseElement();
       if (el) children.push(el);
       else i++;
     } else {
-      var next = html.indexOf('<', i);
-      if (next < 0) break;
-      i = next;
+      var nextRoot = html.indexOf('<', i);
+      if (nextRoot < 0) break;
+      i = nextRoot;
     }
   }
   return { tag: '#root', attrs: {}, children: children, text: '' };
@@ -122,30 +137,35 @@ function _parseHtml(html) {
 
 function _nodeText(node) {
   if (!node) return '';
-  var t = node.text || '';
+  if (node.tag === '#text') return node.text || '';
+  var t = '';
   for (var i = 0; i < (node.children || []).length; i++) {
     t += _nodeText(node.children[i]);
   }
   return t;
 }
 
-function _nodeHtml(node) {
+function _nodeInnerHtml(node) {
   if (!node) return '';
-  if (node.tag === '#root') {
-    var sb = '';
-    for (var i = 0; i < (node.children || []).length; i++) {
-      sb += _nodeHtml(node.children[i]);
-    }
-    return sb;
+  var sb = '';
+  for (var i = 0; i < (node.children || []).length; i++) {
+    sb += _nodeOuterHtml(node.children[i]);
   }
+  return sb;
+}
+
+function _nodeOuterHtml(node) {
+  if (!node) return '';
+  if (node.tag === '#text') return node.text || '';
+  if (node.tag === '#root') return _nodeInnerHtml(node);
   var attrs = node.attrs || {};
   var attrStr = '';
   for (var k in attrs) attrStr += ' ' + k + '="' + attrs[k] + '"';
-  var inner = node.text || '';
-  for (var j = 0; j < (node.children || []).length; j++) {
-    inner += _nodeHtml(node.children[j]);
+  var voidTags = { br: 1, img: 1, input: 1, hr: 1, meta: 1, link: 1 };
+  if (voidTags[node.tag]) {
+    return '<' + node.tag + attrStr + ' />';
   }
-  return '<' + node.tag + attrStr + '>' + inner + '</' + node.tag + '>';
+  return '<' + node.tag + attrStr + '>' + _nodeInnerHtml(node) + '</' + node.tag + '>';
 }
 
 function _parseAttrSelector(raw) {
@@ -198,7 +218,8 @@ function _attrValue(node, name) {
 }
 
 function _matchStep(node, step) {
-  if (!node || node.tag === '#root') {
+  if (!node || node.tag === '#text') return false;
+  if (node.tag === '#root') {
     return step.tag === '*';
   }
   if (step.tag !== '*' && node.tag !== step.tag) return false;
@@ -220,7 +241,7 @@ function _selectAll(node, sel) {
   var steps = _parseSelector(sel);
   if (!steps.length) return [];
   function walk(n, depth, acc) {
-    if (!n) return;
+    if (!n || n.tag === '#text') return;
     if (depth < steps.length) {
       var step = steps[depth];
       if (_matchStep(n, step)) {
@@ -232,14 +253,8 @@ function _selectAll(node, sel) {
           }
         }
       }
-      if (step.tag === '*' || n.tag === '#root') {
-        for (var j = 0; j < (n.children || []).length; j++) {
-          walk(n.children[j], depth, acc);
-        }
-      } else {
-        for (var k = 0; k < (n.children || []).length; k++) {
-          walk(n.children[k], depth, acc);
-        }
+      for (var k = 0; k < (n.children || []).length; k++) {
+        walk(n.children[k], depth, acc);
       }
     }
   }

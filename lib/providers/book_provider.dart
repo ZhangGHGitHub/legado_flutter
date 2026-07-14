@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
@@ -34,6 +36,11 @@ class BookProvider extends ChangeNotifier {
   String _downloadBookId = '';
   bool _cancelRequested = false;
 
+  /// 目录加载世代号：取消过期的后台刷新
+  int _tocLoadGen = 0;
+  bool _isRefreshingToc = false;
+  bool get isRefreshingToc => _isRefreshingToc;
+
   List<Book> get books => _books;
   List<Chapter> get currentChapters => _currentChapters;
   bool get isLoading => _isLoading;
@@ -45,6 +52,43 @@ class BookProvider extends ChangeNotifier {
       _downloadTotal > 0 ? _downloadCompleted / _downloadTotal : 0.0;
 
   ReadBook get readBook => ReadBook.instance;
+
+  /// 书架中匹配的书（优先 sourceUrl，其次 书名+作者）
+  Book? findShelfBook(Book book) {
+    for (final b in _books) {
+      if (book.sourceUrl.isNotEmpty &&
+          b.sourceUrl.isNotEmpty &&
+          b.sourceUrl == book.sourceUrl) {
+        return b;
+      }
+    }
+    for (final b in _books) {
+      if (b.name == book.name &&
+          (book.author.isEmpty || b.author == book.author)) {
+        return b;
+      }
+    }
+    return null;
+  }
+
+  /// 把当前内存目录落到 [bookId]（加入书架后防止 id 错位丢缓存）
+  Future<void> persistCurrentTocFor(Book book) async {
+    if (_currentChapters.isEmpty) return;
+    final list = _currentChapters.asMap().entries.map((e) {
+      final c = e.value;
+      return Chapter(
+        id: '${book.id}_ch_${e.key}',
+        bookId: book.id,
+        title: c.title,
+        index: e.key,
+        url: c.url,
+        isDownloaded: c.isDownloaded,
+      );
+    }).toList();
+    await _db.insertChapters(list);
+    _currentChapters = list;
+    notifyListeners();
+  }
 
   /// 加载书架
   Future<void> loadBooks() async {
@@ -208,40 +252,196 @@ class BookProvider extends ChangeNotifier {
 
   // ── 章节操作 ──
 
-  Future<void> loadChapters(Book book, {required BookSource source}) async {
+  /// 加载目录（对齐 Legado：本地数据库即目录 UI，联网更新不挡首屏）
+  ///
+  /// - 本地已有章节且 [forceRefresh]=false：立刻展示；默认不后台联网
+  /// - [backgroundRefresh]=true：本地展示后静默更新（书架下拉等可开）
+  /// - 本地为空或 [forceRefresh]=true：阻塞等待网络目录并落库
+  Future<void> loadChapters(
+    Book book, {
+    required BookSource source,
+    bool forceRefresh = false,
+    bool backgroundRefresh = false,
+  }) async {
+    // 内存命中：同一本书重复进详情/目录直接秒开（对齐 Legado 内存态）
+    if (!forceRefresh &&
+        _currentChapters.isNotEmpty &&
+        _currentChapters.first.bookId == book.id) {
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
+
+    final gen = ++_tocLoadGen;
+    final localChapters = await _db.getChapters(book.id);
+    final hasLocal = localChapters.isNotEmpty;
+
+    if (hasLocal && !forceRefresh) {
+      // 元数据即可展示；文件勾选异步补，不挡首屏
+      _currentChapters = _tocViewList(localChapters);
+      _isLoading = false;
+      notifyListeners();
+      ReadBook.instance.open(
+        currentBook: book,
+        source: source,
+        chapterList: _currentChapters,
+      );
+      unawaited(_enrichDownloadedFromFiles(book.id, gen));
+      if (backgroundRefresh) {
+        unawaited(_refreshTocFromNetwork(book, source, gen));
+      }
+      return;
+    }
+
     _isLoading = true;
-    _currentChapters = [];
+    if (!hasLocal) {
+      _currentChapters = [];
+    }
     notifyListeners();
     try {
-      _currentChapters = await _sourceService.getChapters(book, source: source);
-      final localChapters = await _db.getChapters(book.id);
-      final downloadedIds = localChapters
-          .where((c) => c.isDownloaded)
-          .map((c) => c.id)
-          .toSet();
-      _currentChapters = _currentChapters
-          .map(
-            (c) => Chapter(
-              id: c.id,
-              bookId: c.bookId,
-              title: c.title,
-              index: c.index,
-              url: c.url,
-              isDownloaded: downloadedIds.contains(c.id),
-              content: c.content,
-            ),
-          )
-          .toList();
+      await _refreshTocFromNetwork(book, source, gen);
+    } finally {
+      if (gen == _tocLoadGen) {
+        _isLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> _refreshTocFromNetwork(
+    Book book,
+    BookSource source,
+    int gen,
+  ) async {
+    _isRefreshingToc = true;
+    notifyListeners();
+    try {
+      final remote = await _sourceService.getChapters(book, source: source);
+      if (gen != _tocLoadGen) return;
+
+      final local = await _db.getChapters(book.id);
+      final merged = _mergeTocWithLocal(remote, local);
+      // 只落目录元数据 + isDownloaded，不把正文再次塞进 upsert JSON
+      await _db.insertChapters(
+        merged
+            .map(
+              (c) => Chapter(
+                id: c.id,
+                bookId: c.bookId,
+                title: c.title,
+                index: c.index,
+                url: c.url,
+                isDownloaded: c.isDownloaded,
+              ),
+            )
+            .toList(),
+      );
+      if (gen != _tocLoadGen) return;
+
+      final saved = await _db.getChapters(book.id);
+      _currentChapters = _tocViewList(saved.isNotEmpty ? saved : merged);
+      unawaited(_enrichDownloadedFromFiles(book.id, gen));
 
       ReadBook.instance.open(
         currentBook: book,
         source: source,
         chapterList: _currentChapters,
       );
-    } finally {
-      _isLoading = false;
       notifyListeners();
+    } catch (e, st) {
+      debugPrint('目录刷新失败: $e\n$st');
+      if (gen == _tocLoadGen && _currentChapters.isEmpty) {
+        rethrow;
+      }
+      // 已有本地目录时后台刷新失败不打断阅读
+    } finally {
+      if (gen == _tocLoadGen) {
+        _isRefreshingToc = false;
+        notifyListeners();
+      }
     }
+  }
+
+  /// 用章节 URL 合并本地下载状态，避免刷新目录清掉已缓存正文标记
+  List<Chapter> _mergeTocWithLocal(
+    List<Chapter> remote,
+    List<Chapter> local,
+  ) {
+    final byUrl = <String, Chapter>{
+      for (final c in local)
+        if (c.url.isNotEmpty) c.url: c,
+    };
+    final byId = <String, Chapter>{for (final c in local) c.id: c};
+
+    return remote.map((r) {
+      final old = (r.url.isNotEmpty ? byUrl[r.url] : null) ?? byId[r.id];
+      if (old == null) return r;
+      final downloaded = old.isDownloaded;
+      return Chapter(
+        id: r.id,
+        bookId: r.bookId,
+        title: r.title,
+        index: r.index,
+        url: r.url,
+        isDownloaded: downloaded,
+      );
+    }).toList();
+  }
+
+  /// 目录列表元数据（不含正文）
+  List<Chapter> _tocViewList(List<Chapter> chapters) {
+    return chapters
+        .map(
+          (c) => Chapter(
+            id: c.id,
+            bookId: c.bookId,
+            title: c.title,
+            index: c.index,
+            url: c.url,
+            isDownloaded: c.isDownloaded,
+          ),
+        )
+        .toList();
+  }
+
+  /// 异步用文件缓存补全勾选，不阻塞目录首屏
+  Future<void> _enrichDownloadedFromFiles(String bookId, int gen) async {
+    final fileCached = await BookHelp.listCachedChapterIds(bookId);
+    if (gen != _tocLoadGen || fileCached.isEmpty) return;
+    var changed = false;
+    final next = _currentChapters.map((c) {
+      if (c.isDownloaded) return c;
+      if (!fileCached.contains(BookHelp.sanitizeId(c.id))) return c;
+      changed = true;
+      return Chapter(
+        id: c.id,
+        bookId: c.bookId,
+        title: c.title,
+        index: c.index,
+        url: c.url,
+        isDownloaded: true,
+      );
+    }).toList();
+    if (!changed || gen != _tocLoadGen) return;
+    _currentChapters = next;
+    notifyListeners();
+  }
+
+  /// 标记章节已缓存（文件/正文拉取成功后更新目录勾选）
+  void markChapterDownloaded(String chapterId) {
+    final i = _currentChapters.indexWhere((c) => c.id == chapterId);
+    if (i < 0 || _currentChapters[i].isDownloaded) return;
+    final c = _currentChapters[i];
+    _currentChapters = List<Chapter>.from(_currentChapters);
+    _currentChapters[i] = Chapter(
+      id: c.id,
+      bookId: c.bookId,
+      title: c.title,
+      index: c.index,
+      url: c.url,
+      isDownloaded: true,
+    );
+    notifyListeners();
   }
 
   Future<String> loadChapterContent(
