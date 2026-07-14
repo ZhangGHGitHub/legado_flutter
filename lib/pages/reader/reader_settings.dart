@@ -103,7 +103,7 @@ enum PageAnimMode {
   }
 }
 
-/// 阅读器设置 — Phase F UI-2（对齐 dialog_read_bg_text / dialog_read_book_style）
+/// 阅读器「界面」面板 — Phase F UI-2（对齐 dialog_read_bg_text / dialog_read_book_style）
 class ReaderSettings {
   final double fontSize;
   final double lineHeight;
@@ -706,7 +706,7 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
               child: Row(
                 children: [
                   const Text(
-                    '阅读设置',
+                    '界面',
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                   ),
                   const Spacer(),
@@ -1025,7 +1025,7 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
               contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               dense: true,
               leading: const Icon(Icons.tune, size: 22),
-              title: const Text('更多设置', style: TextStyle(fontSize: 13)),
+              title: const Text('设置', style: TextStyle(fontSize: 13)),
               subtitle: Text(
                 '${_s.screenOrientation.label} · '
                 '${_s.brightnessFollowSystem ? '亮度跟随系统' : '亮度${(_s.brightness * 100).round()}%'}'

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -623,14 +624,35 @@ class _ReaderPageState extends State<ReaderPage> {
 
   /// 书源展示：优先书源名，其次书籍来源 URL
   String get _sourceSubtitle {
+    final name = _sourceDisplayName;
+    if (name.isNotEmpty) return name;
+    return _chapterUrlLabel;
+  }
+
+  /// 顶栏书源芯片文案（书源名；无名称时用 host）
+  String get _sourceDisplayName {
     final source = context.read<SourceProvider>().findSourceForBook(widget.book);
     if (source != null && source.bookSourceName.isNotEmpty) {
       return source.bookSourceName;
     }
-    if (widget.book.bookSourceUrl.isNotEmpty) return widget.book.bookSourceUrl;
-    if (widget.book.sourceUrl.isNotEmpty) return widget.book.sourceUrl;
-    return '';
+    final url = widget.book.bookSourceUrl.isNotEmpty
+        ? widget.book.bookSourceUrl
+        : widget.book.sourceUrl;
+    if (url.isEmpty) return '';
+    final host = Uri.tryParse(url)?.host;
+    return (host != null && host.isNotEmpty) ? host : url;
   }
+
+  /// 顶栏第三行：当前章源地址
+  String get _chapterUrlLabel {
+    final chUrl = widget.allChapters[_currentIndex].url;
+    if (chUrl.isNotEmpty) return chUrl;
+    if (widget.book.bookSourceUrl.isNotEmpty) return widget.book.bookSourceUrl;
+    return widget.book.sourceUrl;
+  }
+
+  /// 阅读菜单强调色（对齐 legado 橙）
+  static const Color _chromeAccent = Color(0xFFFF6D00);
 
   Future<void> _loadContent({bool forceRefresh = false}) async {
     setState(() => _isLoading = true);
@@ -1299,7 +1321,7 @@ class _ReaderPageState extends State<ReaderPage> {
       case 'toc':
         _showTocSheet();
       case 'settings':
-        _showSettingsPanel();
+        _showInterfacePanel();
       case 'ai':
         Navigator.push(
           context,
@@ -1369,7 +1391,7 @@ class _ReaderPageState extends State<ReaderPage> {
       item('bookmark', Icons.bookmark_add_outlined, '书签'),
       item('search_content', Icons.find_in_page_outlined, '全文搜索'),
       item('copy', Icons.copy_outlined, '拷贝内容'),
-      item('settings', Icons.settings, '阅读设置'),
+      item('settings', Icons.text_fields, '界面'),
       item('ai', Icons.smart_toy_outlined, 'AI 助手'),
       const PopupMenuDivider(),
       item('page_anim', Icons.animation, '翻页动画(本书)'),
@@ -1384,7 +1406,7 @@ class _ReaderPageState extends State<ReaderPage> {
       item('tts', Icons.record_voice_over_outlined, '朗读'),
       item('auto_read', Icons.speed, '自动阅读'),
       item('click_zone', Icons.grid_on, '点击区域设置'),
-      item('more_settings', Icons.tune, '更多设置'),
+      item('more_settings', Icons.settings, '设置'),
       item('page_key', Icons.keyboard, '自定义翻页键'),
     ];
   }
@@ -1404,47 +1426,146 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Widget _buildTopChrome(ReaderTheme theme) {
+    final chapter = widget.allChapters[_currentIndex];
+    final sourceName = _sourceDisplayName;
+    final chapterUrl = _chapterUrlLabel;
+    final iconBtnStyle = IconButton.styleFrom(
+      foregroundColor: theme.text,
+      visualDensity: VisualDensity.compact,
+      padding: const EdgeInsets.all(8),
+      minimumSize: const Size(40, 40),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+
     return Material(
       elevation: 4,
       color: theme.appBar.withValues(alpha: 0.95),
       child: SafeArea(
         bottom: false,
-        child: IconTheme(
-          data: IconThemeData(color: theme.text),
-          child: DefaultTextStyle(
-            style: TextStyle(color: theme.text, fontSize: 15),
-            child: SizedBox(
-              height: kToolbarHeight,
-              child: NavigationToolbar(
-                leading: IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () {
-                    _saveProgress();
-                    Navigator.pop(context);
-                  },
-                ),
-                middle: Text(
-                  widget.book.name,
-                  style: TextStyle(fontSize: 15, color: theme.text),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Row1: 返回 | 书名 | 换源 | 刷新 | 缓存 | ⋮
+              SizedBox(
+                height: 48,
+                child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.list_alt),
-                      onPressed: _showTocSheet,
+                      style: iconBtnStyle,
+                      icon: const Icon(Icons.arrow_back),
+                      tooltip: '返回',
+                      onPressed: () {
+                        _saveProgress();
+                        Navigator.pop(context);
+                      },
+                    ),
+                    Expanded(
+                      child: InkWell(
+                        onTap: _openBookInfo,
+                        child: Text(
+                          widget.book.name,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: theme.text,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      style: iconBtnStyle,
+                      icon: const Icon(Icons.swap_horiz),
+                      tooltip: '换源',
+                      onPressed: _openChangeSource,
+                    ),
+                    IconButton(
+                      style: iconBtnStyle,
+                      icon: const Icon(Icons.refresh),
+                      tooltip: '刷新',
+                      onPressed: () => unawaited(_refreshChapter()),
+                    ),
+                    IconButton(
+                      style: iconBtnStyle,
+                      icon: const Icon(Icons.download_outlined),
+                      tooltip: '离线缓存',
+                      onPressed: () => _showNotImplemented('离线缓存'),
                     ),
                     PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert),
+                      icon: Icon(Icons.more_vert, color: theme.text),
+                      tooltip: '更多',
                       onSelected: _onMenuSelected,
                       itemBuilder: (_) => _menuItems(),
                     ),
                   ],
                 ),
               ),
-            ),
+              // Row2: 章节名 | 书源芯片
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 12, 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        chapter.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, color: theme.text),
+                      ),
+                    ),
+                    if (sourceName.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Material(
+                        color: _chromeAccent,
+                        borderRadius: BorderRadius.circular(4),
+                        child: InkWell(
+                          onTap: _openChangeSource,
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 120),
+                              child: Text(
+                                sourceName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              // Row3: 章节 URL
+              if (chapterUrl.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+                  child: Text(
+                    chapterUrl,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.text.withValues(alpha: 0.45),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -1489,28 +1610,7 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  String _formatClock() {
-    final now = DateTime.now();
-    final h = now.hour.toString().padLeft(2, '0');
-    final m = now.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
-
-  String _pageInfoLabel() {
-    if (_isHorizontalPaged && _pages.isNotEmpty) {
-      return '${_pageIndex + 1}/${_pages.length}页';
-    }
-    return '${_currentIndex + 1}/${widget.allChapters.length}章';
-  }
-
-  String _bookProgressLabel() {
-    final pct = ((_currentIndex + 1) / widget.allChapters.length * 100)
-        .clamp(0, 100)
-        .toStringAsFixed(0);
-    return '$pct%';
-  }
-
-  /// UI-1 底栏：前/后章 + 本章进度滑块 + 页码/时间信息
+  /// UI-1 底栏（对齐 legado）：圆钮行 · 上下章+进度 · 目录/朗读/界面/设置
   Widget _buildBottomChrome(ReaderTheme theme) {
     final hasPages = _isHorizontalPaged && _pages.length > 1;
     final sliderMax = hasPages
@@ -1521,6 +1621,8 @@ class _ReaderPageState extends State<ReaderPage> {
     final double sliderValue = hasPages
         ? _pageIndex.toDouble().clamp(0.0, sliderMax).toDouble()
         : _currentIndex.toDouble().clamp(0.0, sliderMax).toDouble();
+    final canPrev = _currentIndex > 0;
+    final canNext = _currentIndex < _maxReadableIndex;
 
     return Material(
       elevation: 8,
@@ -1528,58 +1630,60 @@ class _ReaderPageState extends State<ReaderPage> {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 6, 4, 8),
+          padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 信息区：页码 · 全书进度 · 时间 · 电量（UI-2 开关）
+              // 圆钮：搜索 | 原网页 | 自动翻页 | 亮度
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.fromLTRB(20, 2, 20, 6),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    Expanded(
-                      child: Text(
-                        _settings.showPageInfo
-                            ? '${widget.allChapters[_currentIndex].title} · ${_pageInfoLabel()}'
-                            : widget.allChapters[_currentIndex].title,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: theme.text.withValues(alpha: 0.55),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    _chromeRoundButton(
+                      theme,
+                      Icons.search,
+                      '搜索',
+                      () => unawaited(_openContentSearch()),
                     ),
-                    Text(
-                      [
-                        _bookProgressLabel(),
-                        if (_settings.showTime) _formatClock(),
-                        if (_settings.showBattery)
-                          _batteryLevel != null
-                              ? '电量$_batteryLevel%'
-                              : '电量--',
-                      ].join('  '),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: theme.text.withValues(alpha: 0.55),
-                      ),
+                    _chromeRoundButton(
+                      theme,
+                      Icons.open_in_new,
+                      '原网页',
+                      () => unawaited(_openChapterInBrowser()),
+                    ),
+                    _chromeRoundButton(
+                      theme,
+                      Icons.autorenew,
+                      '自动翻页',
+                      _openAutoReadPanel,
+                    ),
+                    _chromeRoundButton(
+                      theme,
+                      Icons.wb_sunny_outlined,
+                      '亮度',
+                      _showBrightnessSheet,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 4),
+              // 上一章 | 进度滑块 | 下一章
               Row(
                 children: [
-                  IconButton(
-                    onPressed: _currentIndex > 0
+                  TextButton(
+                    onPressed: canPrev
                         ? () => _goToChapter(_currentIndex - 1)
                         : null,
-                    icon: Icon(
-                      Icons.skip_previous,
-                      color: theme.text.withValues(
-                        alpha: _currentIndex > 0 ? 0.85 : 0.3,
+                    style: TextButton.styleFrom(
+                      foregroundColor: theme.text,
+                      disabledForegroundColor: theme.text.withValues(
+                        alpha: 0.3,
                       ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      minimumSize: const Size(0, 36),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
+                    child: const Text('上一章', style: TextStyle(fontSize: 14)),
                   ),
                   Expanded(
                     child: SliderTheme(
@@ -1591,9 +1695,9 @@ class _ReaderPageState extends State<ReaderPage> {
                         overlayShape: const RoundSliderOverlayShape(
                           overlayRadius: 14,
                         ),
-                        activeTrackColor: theme.progress,
+                        activeTrackColor: _chromeAccent.withValues(alpha: 0.55),
                         inactiveTrackColor: theme.text.withValues(alpha: 0.12),
-                        thumbColor: theme.progress,
+                        thumbColor: _chromeAccent,
                       ),
                       child: Slider(
                         min: 0,
@@ -1623,54 +1727,52 @@ class _ReaderPageState extends State<ReaderPage> {
                       ),
                     ),
                   ),
-                  IconButton(
-                    onPressed: _currentIndex < _maxReadableIndex
+                  TextButton(
+                    onPressed: canNext
                         ? () => _goToChapter(_currentIndex + 1)
                         : null,
-                    icon: Icon(
-                      Icons.skip_next,
-                      color: theme.text.withValues(
-                        alpha: _currentIndex < _maxReadableIndex ? 0.85 : 0.3,
+                    style: TextButton.styleFrom(
+                      foregroundColor: theme.text,
+                      disabledForegroundColor: theme.text.withValues(
+                        alpha: 0.3,
                       ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      minimumSize: const Size(0, 36),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
+                    child: const Text('下一章', style: TextStyle(fontSize: 14)),
                   ),
                 ],
               ),
-              // 快捷入口行
+              // 底栏主入口：目录 | 朗读 | 界面 | 设置
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _chromeAction(
+                    _chromeNavItem(
                       theme,
-                      Icons.list_alt,
-                      '目录',
-                      _showTocSheet,
+                      icon: Icons.format_list_bulleted,
+                      label: '目录',
+                      onTap: _showTocSheet,
                     ),
-                    _chromeAction(
+                    _chromeNavItem(
                       theme,
-                      Icons.find_in_page_outlined,
-                      '全文搜索',
-                      () => unawaited(_openContentSearch()),
+                      icon: Icons.headphones,
+                      label: '朗读',
+                      onTap: _openTtsPanel,
                     ),
-                    _chromeAction(
+                    _chromeNavItem(
                       theme,
-                      Icons.swap_horiz,
-                      '换源',
-                      _openChangeSource,
+                      label: '界面',
+                      onTap: _showInterfacePanel,
+                      aaLabel: true,
                     ),
-                    _chromeAction(
+                    _chromeNavItem(
                       theme,
-                      Icons.bookmark_add_outlined,
-                      '书签',
-                      _addBookmark,
-                    ),
-                    _chromeAction(
-                      theme,
-                      Icons.settings,
-                      '设置',
-                      _showSettingsPanel,
+                      icon: Icons.settings,
+                      label: '设置',
+                      onTap: _openMoreSettingsPanel,
                     ),
                   ],
                 ),
@@ -1682,12 +1784,42 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  Widget _chromeAction(
+  Widget _chromeRoundButton(
     ReaderTheme theme,
     IconData icon,
-    String label,
+    String tooltip,
     VoidCallback onTap,
   ) {
+    final fill = theme.text.withValues(alpha: 0.12);
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: fill,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () {
+            _keepChromeAlive();
+            onTap();
+          },
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Icon(icon, size: 22, color: theme.text.withValues(alpha: 0.9)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _chromeNavItem(
+    ReaderTheme theme, {
+    IconData? icon,
+    required String label,
+    required VoidCallback onTap,
+    bool aaLabel = false,
+  }) {
+    final color = theme.text.withValues(alpha: 0.9);
     return InkWell(
       onTap: () {
         _keepChromeAlive();
@@ -1695,17 +1827,28 @@ class _ReaderPageState extends State<ReaderPage> {
       },
       borderRadius: BorderRadius.circular(8),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 20, color: theme.text.withValues(alpha: 0.8)),
+            if (aaLabel)
+              Text(
+                'Aa',
+                style: TextStyle(
+                  fontSize: 18,
+                  height: 1.1,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              )
+            else
+              Icon(icon, size: 22, color: color),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
-                fontSize: 10,
-                color: theme.text.withValues(alpha: 0.65),
+                fontSize: 11,
+                color: theme.text.withValues(alpha: 0.75),
               ),
             ),
           ],
@@ -1714,7 +1857,111 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  void _showSettingsPanel() {
+  Future<void> _openChapterInBrowser() async {
+    final raw = _chapterUrlLabel;
+    if (raw.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('当前章节无可用网址')),
+      );
+      return;
+    }
+    final uri = Uri.tryParse(raw);
+    if (uri == null || !(uri.hasScheme && (uri.isScheme('http') || uri.isScheme('https')))) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('章节地址不是有效的网页链接')),
+      );
+      return;
+    }
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('无法打开原网页')),
+      );
+    }
+  }
+
+  void _showBrightnessSheet() {
+    _autoHideTimer?.cancel();
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModal) {
+            final s = _settings;
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.wb_sunny_outlined),
+                        const SizedBox(width: 8),
+                        const Text(
+                          '亮度',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('跟随系统', style: TextStyle(fontSize: 14)),
+                      value: s.brightnessFollowSystem,
+                      onChanged: (v) {
+                        _onSettingsChanged(
+                          s.copyWith(brightnessFollowSystem: v),
+                        );
+                        setModal(() {});
+                      },
+                    ),
+                    if (!s.brightnessFollowSystem)
+                      Row(
+                        children: [
+                          const Icon(Icons.brightness_low, size: 20),
+                          Expanded(
+                            child: Slider(
+                              value: s.brightness.clamp(0.15, 1.0),
+                              min: 0.15,
+                              max: 1.0,
+                              activeColor: _chromeAccent,
+                              onChanged: (v) {
+                                _onSettingsChanged(s.copyWith(brightness: v));
+                                setModal(() {});
+                              },
+                            ),
+                          ),
+                          Text('${(s.brightness * 100).round()}%'),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      if (mounted) _scheduleAutoHide();
+    });
+  }
+
+  /// 「界面」排版面板（legado dialog_read_book_style）
+  void _showInterfacePanel() {
     _autoHideTimer?.cancel();
     showModalBottomSheet(
       context: context,
@@ -1731,7 +1978,7 @@ class _ReaderPageState extends State<ReaderPage> {
           onOpenClickZone: _openClickZonePanel,
           onOpenMoreSettings: _openMoreSettingsPanel,
         );
-        // 设置面板是独立路由，须单独 ExcludeSemantics，否则仍会撞 AXTree
+        // 独立路由须单独 ExcludeSemantics，否则仍会撞 AXTree
         final isDesktop = switch (defaultTargetPlatform) {
           TargetPlatform.windows ||
           TargetPlatform.linux ||

@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'reader_settings.dart';
 
-/// 阅读器「更多设置」（UI-2）：
+/// 阅读器「设置」面板（legado 底栏·设置 / UI-2）：
 /// 屏幕方向 / 超时分档 / 状态栏·导航栏沉浸 / 刘海 / 亮度 / 蓝牙翻页器 / 自定义翻页键。
 class MoreSettingsPanel extends StatefulWidget {
   final ReaderSettings settings;
@@ -101,7 +101,7 @@ class _MoreSettingsPanelState extends State<MoreSettingsPanel> {
                   child: Row(
                     children: [
                       const Text(
-                        '更多设置',
+                        '设置',
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w600,
