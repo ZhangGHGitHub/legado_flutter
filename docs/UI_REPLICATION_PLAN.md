@@ -161,7 +161,7 @@
 | 17 | `activity_rss_source.xml` | RSS 源管理 | ✅ `rss_source_manage_page.dart` | 需核对 |
 | 18 | `activity_rss_artivles.xml` | RSS 文章列表 | ❌ **缺失** | 需要新建 |
 | 19 | `activity_rss_read.xml` | RSS 阅读 | ❌ **缺失** | 需要新建 |
-| 20 | `activity_all_bookmark.xml` | 书签列表 | ⚠️ `bookmark_page.dart`（空壳） | **缺书签数据+跳转逻辑** |
+| 20 | `activity_all_bookmark.xml` | 书签列表 | ✅ `bookmark_page.dart` | UI-8：书签/想法 Tab；跳转阅读器仍开放 |
 | 21 | `activity_arrange_book.xml` | 书架整理 | ❌ **缺失** | 需要新建 |
 | 22 | `activity_cache_book.xml` | 缓存管理 | ✅ `cache_service.dart` 有数据 | **缺 UI 页面** |
 | 23 | `activity_source_debug.xml` | 书源调试 | ✅ `source_debug_panel.dart` | 需核对 |
@@ -170,7 +170,7 @@
 | 26 | `activity_welcome.xml` | 欢迎页 | ✅ 隐私协议 Dialog | 需核对 |
 | 27 | `activity_web_view.xml` | WebView | ⚠️ `webview_flutter` 已引入 | 需核对 |
 | 28 | `activity_code_edit.xml` | 代码编辑器 | ❌ **缺失**（低优） | |
-| 29 | `activity_file_manage.xml` | 文件管理 | ❌ **缺失**（低优） | |
+| 29 | `activity_file_manage.xml` | 文件管理 | ✅ `file_manage_page.dart` | UI-8：数据目录基础浏览 |
 | 30 | `activity_donate.xml` | 捐赠 | ❌ **缺失**（低优） | |
 | 31 | `activity_dict_rule.xml` | 字典规则 | ❌ **缺失**（低优） | |
 | 32 | `activity_manga.xml` | 漫画阅读 | ❌ **缺失** | **新功能模块** |
@@ -251,25 +251,25 @@
 
 | 对照项 | Jingshiro | Flutter 现状 | 差距 |
 |--------|-----------|-------------|------|
-| **快捷四格** | 备份恢复 / WebDAV / Web服务 / 阅读记录 | ✅ | 需核对图标+文案+圆角 12dp |
-| Web 服务状态 | 「已开启」/「未开启」+ IP:端口 | ✅ `web_api_settings_card.dart` | 需核对位置是否在四格 |
+| **快捷四格** | 备份恢复 / WebDAV / Web服务 / 阅读记录 | ✅ | UI-8：圆角/文案对齐 |
+| Web 服务状态 | 「已开启」/「未开启」+ IP:端口 | ✅ | 四格文案「已开启」；地址在长按菜单 |
 | **设置列表 14 项** | 见下 | Flutter 当前 | 差距 |
 | 1. 书源管理 | → BookSourceActivity | ✅ | |
-| 2. TXT 目录规则 | → TxtTocRuleActivity | ❌ **占位/缺失** | |
+| 2. TXT 目录规则 | → TxtTocRuleActivity | ⚠️ 占位页 | → UI-20 |
 | 3. 替换净化 | → ReplaceRuleActivity | ✅ | |
-| 4. 字典规则 | → DictRuleActivity | ❌ **占位/缺失** | |
+| 4. 字典规则 | → DictRuleActivity | ⚠️ 占位页 | → UI-21 |
 | 5. 主题模式 | Dialog (跟随系统/浅色/深色) | ✅ | |
 | 6. 备份与恢复 | → ConfigPage(backup) | ✅ | |
 | 7. 主题设置 | → ConfigPage(theme) | ✅ | |
 | 8. 其它设置 | → ConfigPage(other) | ✅ `other_settings_card.dart` | |
-| 9. 书签与想法 | → AllBookmarkActivity | ⚠️ 有空页 | **数据未连接** |
-| 10. 文件管理 | → FileManageActivity | ❌ **缺失** | |
+| 9. 书签与想法 | → AllBookmarkActivity | ✅ UI-8 Tab | 点击跳转阅读仍开放 |
+| 10. 文件管理 | → FileManageActivity | ✅ UI-8 基础浏览 | |
 | 11. 阅读 Skill | → ReadingSkillActivity | ⚠️ 有空页 | 需核对 |
 | 12. AI 助手 | → AiChatActivity | ✅ | 需核对入口 |
 | 13. 关于 | → AboutActivity | ✅ 内嵌 | |
 | 14. 退出 | `finish()` | ✅ | |
-| 长按备份恢复 | 本地备份（不在 WebDAV） | ❓ 待确认 | |
-| Web 服务长按 | 复制地址/浏览器打开 | ❓ 待确认 | |
+| 长按备份恢复 | 本地备份（不在 WebDAV） | ✅ UI-8 | |
+| Web 服务长按 | 复制地址/浏览器打开 | ✅ UI-8 | |
 
 ### 2.4 搜索页 (`ui/book/search/SearchActivity` ⚔ `search_page.dart`)
 
@@ -426,14 +426,14 @@
 - [x] "整理"入口（占位页 → UI-10）
 - [x] 移除（原长按确认保留为菜单项）
 
-#### Task UI-8: 「我的」页菜单补齐 (`my_page.dart`)
+#### Task UI-8: 「我的」页菜单补齐 (`my_page.dart`) — ✅ 基本完成（2026-07-14）
 
-- [ ] TXT 目录规则 → 占位页
-- [ ] 字典规则 → 占位页
-- [ ] 文件管理 → 基础文件浏览器
-- [ ] 书签与想法 → 实现数据连接（已有空页 `bookmark_page.dart`）
-- [ ] 快捷四格长按行为（备份→本地备份，Web服务→复制地址）
-- [ ] Web 服务状态实时刷新
+- [x] TXT 目录规则 → 占位页
+- [x] 字典规则 → 占位页
+- [x] 文件管理 → 基础文件浏览器（`file_manage_page.dart`：数据目录浏览/删除/分享）
+- [x] 书签与想法 → 数据连接 + 书签/想法分 Tab（`NoteService`；书签=`noteContent` 以「书签」开头）
+- [x] 快捷四格长按行为（备份→本地备份，Web服务→复制地址/浏览器打开）
+- [x] Web 服务状态刷新（启停后 + 从子页返回 + App resume）
 
 ---
 
@@ -564,7 +564,7 @@ Task UI-4:  书源管理分组展示 + 批量操作 + 绿红灰点验证  ✅ �
 Task UI-5:  目录页正序/倒序 + 已缓存图标 + 当前章高亮  ✅ 基本完成（2026-07-14）
 Task UI-6:  书籍详情换源入口 + 简介展开 + 读完标签  ✅ 基本完成（2026-07-14）
 Task UI-7:  书架长按菜单完整化  ✅ 基本完成（2026-07-14）
-Task UI-8:  我的页菜单补齐 + 快捷四格行为
+Task UI-8:  我的页菜单补齐 + 快捷四格行为  ✅ 基本完成（2026-07-14）
 ```
 
 ### S2 — 页面补全（2-3 周）：缺失页面 + 对话框
@@ -622,7 +622,7 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 |------|:---:|------|
 | 主框架 + 导航 | 85% | 四 Tab 就位，缺角标/默认首页/可配置隐藏 |
 | 书架 | 88% | UI-7 长按菜单（置顶/分组/详情/整理占位/移除）；整理拖拽仍开放 |
-| 我的页 | 75% | 14 项大部分就位，缺 4 项占位/长按行为 |
+| 我的页 | 92% | UI-8：快捷四格长按+Web 状态；文件管理基础浏览；书签/想法 Tab；TXT/字典仍为占位 |
 | 搜索 | 90% | UI-3：按书源分组 + 精准搜索 + Scope |
 | 发现 | 85% | 接近完成 |
 | 书籍详情 | 92% | UI-6：换源主入口 + 简介展开 + 读完/N刷；换源页后端仍占位 |
@@ -635,4 +635,4 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 
 ---
 
-> 最后更新：2026-07-14 | 引擎 v0.5.6 | Focus: UI 复刻（S1：UI-1/UI-3/UI-4/UI-5/UI-6/UI-7；UI-2 部分；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)
+> 最后更新：2026-07-14 | 引擎 v0.5.6 | Focus: UI 复刻（S1：UI-1/UI-3–UI-8 基本完成；UI-2 残余 TTS/自动阅读/点击区；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)

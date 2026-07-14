@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../bridge/legado_db_bridge.dart';
 import '../../bridge/legado_engine_bridge.dart';
+import '../../services/backup_service.dart';
 import '../../services/web_api_prefs.dart';
 import '../../services/web_api_service.dart';
 import '../../services/webdav_prefs.dart';
@@ -17,6 +20,7 @@ import '../config/feature_placeholder_page.dart';
 import '../reader/ai_chat_page.dart';
 import '../replace/replace_page.dart';
 import '../sources/sources_page.dart';
+import 'file_manage_page.dart';
 import 'read_record_page.dart';
 import 'reading_skill_page.dart';
 
@@ -28,21 +32,122 @@ class MyPage extends StatefulWidget {
   State<MyPage> createState() => _MyPageState();
 }
 
-class _MyPageState extends State<MyPage> {
+class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
   bool _webServiceOn = false;
+  String _webServiceUrl = '';
+  bool _localBackupBusy = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadWebService();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadWebService();
+    }
   }
 
   Future<void> _loadWebService() async {
     final config = await WebApiPrefs.load();
     final status = WebApiService.currentStatus();
-    if (mounted) {
-      setState(() => _webServiceOn = config.enabled && (status?.running ?? false));
+    final running = config.enabled && (status?.running ?? false);
+    if (!mounted) return;
+    setState(() {
+      _webServiceOn = running;
+      _webServiceUrl = running ? (status?.baseUrl ?? '') : '';
+    });
+  }
+
+  Future<void> _localBackup() async {
+    if (_localBackupBusy) return;
+    if (!LegadoEngineBridge.isAvailable || !LegadoDbBridge.isReady) {
+      _snack('Rust 引擎或数据库未就绪');
+      return;
     }
+    setState(() => _localBackupBusy = true);
+    try {
+      final file = await BackupService().backupToLocalFile();
+      if (!mounted) return;
+      _snack('本地备份完成：${file.uri.pathSegments.last}');
+    } catch (e) {
+      if (mounted) _snack('本地备份失败: $e');
+    } finally {
+      if (mounted) setState(() => _localBackupBusy = false);
+    }
+  }
+
+  Future<void> _webServiceLongPress() async {
+    await _loadWebService();
+    if (!_webServiceOn || _webServiceUrl.isEmpty) {
+      _snack('请先开启 Web 服务');
+      return;
+    }
+    final url = _webServiceUrl;
+    if (!mounted) return;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(url, style: Theme.of(ctx).textTheme.bodySmall),
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy_outlined),
+              title: const Text('复制地址'),
+              onTap: () => Navigator.pop(ctx, 'copy'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.open_in_browser),
+              title: const Text('浏览器打开'),
+              onTap: () => Navigator.pop(ctx, 'browser'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case 'copy':
+        await Clipboard.setData(ClipboardData(text: url));
+        if (mounted) _snack('已复制 $url');
+      case 'browser':
+        final uri = Uri.tryParse(url);
+        if (uri == null) {
+          _snack('地址无效');
+          return;
+        }
+        final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!ok && mounted) _snack('无法打开浏览器');
+    }
+  }
+
+  Future<void> _toggleWebService() async {
+    if (!LegadoEngineBridge.isAvailable || !LegadoDbBridge.isReady) {
+      _snack('Rust 引擎或数据库未就绪');
+      return;
+    }
+    final config = await WebApiPrefs.load();
+    final next = !config.enabled;
+    final status = await WebApiService.setEnabled(next);
+    await _loadWebService();
+    if (!mounted) return;
+    _snack(
+      next
+          ? 'Web API 已启动 ${status?.baseUrl ?? ''}'
+          : 'Web API 已停止',
+    );
   }
 
   Future<void> _showWebDavDialog() async {
@@ -127,15 +232,21 @@ class _MyPageState extends State<MyPage> {
     deviceCtl.dispose();
   }
 
-  void _openPage(Widget page) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  void _openConfig(int tab) {
-    Navigator.push(
+  Future<void> _openPage(Widget page) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    await _loadWebService();
+  }
+
+  Future<void> _openConfig(int tab) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => ConfigPage(initialTab: tab)),
     );
+    await _loadWebService();
   }
 
   Future<void> _showThemeModeDialog() async {
@@ -188,6 +299,7 @@ class _MyPageState extends State<MyPage> {
       LegadoThemeMode.dark => '深色模式',
     };
     final presetLabel = context.watch<ThemeModeController>().presetLabel;
+    final webLabel = _webServiceOn ? '已开启' : 'Web服务';
 
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
@@ -239,7 +351,8 @@ class _MyPageState extends State<MyPage> {
                   icon: Icons.backup_outlined,
                   label: '备份恢复',
                   onTap: () => _openConfig(0),
-                  onLongPress: () => _openConfig(0),
+                  // 对齐 MyFragment：短按云端备份页，长按一键本地备份
+                  onLongPress: _localBackupBusy ? null : _localBackup,
                 ),
                 QuickActionButton(
                   icon: Icons.cloud_outlined,
@@ -248,24 +361,10 @@ class _MyPageState extends State<MyPage> {
                 ),
                 QuickActionButton(
                   icon: Icons.wifi,
-                  label: _webServiceOn ? '已开启' : 'Web服务',
-                  onTap: () async {
-                    final config = await WebApiPrefs.load();
-                    final next = !config.enabled;
-                    final status = await WebApiService.setEnabled(next);
-                    await _loadWebService();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            next
-                                ? 'Web API 已启动 ${status?.baseUrl ?? ''}'
-                                : 'Web API 已停止',
-                          ),
-                        ),
-                      );
-                    }
-                  },
+                  label: webLabel,
+                  onTap: _toggleWebService,
+                  // 对齐 MyFragment：运行中长按 → 复制地址 / 浏览器打开
+                  onLongPress: _webServiceLongPress,
                 ),
                 QuickActionButton(
                   icon: Icons.history,
@@ -283,10 +382,7 @@ class _MyPageState extends State<MyPage> {
                   icon: Icons.rss_feed,
                   title: '书源管理',
                   subtitle: '新建、导入、编辑或管理书源',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SourcesPage()),
-                  ),
+                  onTap: () => _openPage(const SourcesPage()),
                 ),
                 const LegadoListDivider(),
                 LegadoListTile(
@@ -306,10 +402,7 @@ class _MyPageState extends State<MyPage> {
                   icon: Icons.cleaning_services_outlined,
                   title: '替换净化',
                   subtitle: '配置替换净化规则',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ReplacePage()),
-                  ),
+                  onTap: () => _openPage(const ReplacePage()),
                 ),
                 const LegadoListDivider(),
                 LegadoListTile(
@@ -363,14 +456,8 @@ class _MyPageState extends State<MyPage> {
                 LegadoListTile(
                   icon: Icons.folder_open,
                   title: '文件管理',
-                  subtitle: '管理本地书籍文件',
-                  onTap: () => _openPage(
-                    const FeaturePlaceholderPage(
-                      title: '文件管理',
-                      subtitle: '将支持浏览与管理本地导入书籍',
-                      icon: Icons.folder_open,
-                    ),
-                  ),
+                  subtitle: '浏览数据目录与本地备份',
+                  onTap: () => _openPage(const FileManagePage()),
                 ),
                 const LegadoListDivider(),
                 LegadoListTile(
