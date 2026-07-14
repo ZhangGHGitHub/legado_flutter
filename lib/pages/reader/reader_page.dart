@@ -2261,14 +2261,6 @@ class _ReaderPageState extends State<ReaderPage> {
                     minHeight: 2,
                   ),
                 _buildChapterHeader(chapter, theme),
-                if (!_isLoading && _content != '加载中...' && !_isEmptyBody)
-                  BookplateOverlay(
-                    book: widget.book,
-                    currentChapterIndex: _currentIndex,
-                    totalChapters: widget.allChapters.length,
-                    textColor: theme.text,
-                    isHeader: true,
-                  ),
                 const Divider(height: 8),
                 Expanded(
                   child: _isLoading && _content == '加载中...'
@@ -2507,13 +2499,6 @@ class _ReaderPageState extends State<ReaderPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               _buildChapterHeader(chapter, theme),
-                              BookplateOverlay(
-                                book: widget.book,
-                                currentChapterIndex: _currentIndex,
-                                totalChapters: widget.allChapters.length,
-                                textColor: theme.text,
-                                isHeader: true,
-                              ),
                               ReaderSelectableText(
                                 text: _displayContent,
                                 style: _readerTextStyle(theme.text),
