@@ -210,7 +210,7 @@
 | 19 | `dialog_source_picker.xml` | ⚠️ `source_chip.dart` | 可能已覆盖 |
 | 20 | `dialog_login.xml` | ❌ **缺失** | 书源登录表单 |
 | 21 | `dialog_auto_read.xml` | ❌ **缺失** | 自动阅读设置 |
-| 22 | `dialog_click_action_config.xml` | ❌ **缺失** | 点击行为配置 |
+| 22 | `dialog_click_action_config.xml` | ✅ `click_action_panel.dart` | 九宫格 + 全量动作选项；prefs 持久化 |
 | 23 | `dialog_simulated_reading.xml` | 🟡 `simulated_reading_dialog.dart` | 模拟追读：开关/开始日期/起始章节/日更章数；目录与翻章裁剪 |
 | 24 | `dialog_page_key.xml` | ❌ **缺失** | 翻页按键配置 |
 | 25 | `dialog_read_padding.xml` | ⚠️ 可能内嵌 | 阅读边距设置 |
@@ -319,7 +319,7 @@
 | **书票 overlay** | 首尾显示评分+时长 | ❌ | **BookplateService 已有数据层** |
 | **换源** | 阅读器内换源 | ✅ `change_source_page.dart` | |
 | **模拟追读** | `dialog_simulated_reading.xml` | 🟡 UI-2 | 对话框文案对齐；按日期解锁章数；配置存 SharedPreferences（未并入 Book JSON） |
-| **点击行为配置** | `dialog_click_action_config.xml` | ✅ UI-2 | 上/中/下行为可配并接线 |
+| **点击行为配置** | `dialog_click_action_config.xml` | ✅ UI-2 | 九宫格（对齐 AppConfig 默认）+ 选择操作列表；`ClickActionPrefs` 持久化 |
 | **翻页按键配置** | `dialog_page_key.xml` | ✅ UI-2 | 音量键 + 蓝牙键 + 自定义录制 |
 | **AI 入口** | 侧滑/FAB → AiChat | ✅ `ai_chat_page.dart` | 需核对入口位置 |
 | **亮度** | 跟随系统/手动 | ✅ UI-2 | 阅读遮罩亮度（非系统亮度 API） |
@@ -384,7 +384,7 @@
 - [x] **TTS / 自动阅读 / 点击区域** — 设置与菜单入口接面板（勿静默）
 - [x] **TTS 朗读设置**（`dialog_read_aloud.xml`）— `flutter_tts` 系统发音 + 上/下句；HTTP TTS 仍占位
 - [x] **自动阅读**（`dialog_auto_read.xml`）— 间隔滑块 + 定时翻页（期间强制常亮）
-- [x] **点击行为配置**（`dialog_click_action_config.xml`）— 上/中/下区域行为可配并接线
+- [x] **点击行为配置**（`dialog_click_action_config.xml`）— 九宫格热区 + 默认动作对齐 AppConfig；设置 UI 全屏九宫格；prefs 持久化
 - [x] **更多设置入口** — 屏幕方向/超时分档/亮度遮罩/蓝牙翻页器/自定义翻页键/文字底部对齐
 - [x] **屏幕超时** — 默认 / 1 / 5 / 10 分钟 / 常亮（`wakelock_plus` + 计时重置；对齐 keepLight）
 - [x] **状态栏/导航栏沉浸 + 扩展到刘海** — SystemChrome + SafeArea；菜单显时短暂恢复系统栏

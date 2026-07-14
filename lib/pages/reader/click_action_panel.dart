@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../services/click_action_prefs.dart';
 import 'reader_settings.dart';
 
-/// 点击区域配置（对齐 dialog_click_action_config：上/中/下）
+/// 点击区域配置（对齐 dialog_click_action_config：九宫格）
 class ClickActionPanel extends StatefulWidget {
   final ReaderSettings settings;
   final ValueChanged<ReaderSettings> onChanged;
@@ -18,13 +19,12 @@ class ClickActionPanel extends StatefulWidget {
     required ReaderSettings settings,
     required ValueChanged<ReaderSettings> onChanged,
   }) {
-    return showModalBottomSheet<void>(
+    return showGeneralDialog<void>(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => ClickActionPanel(
+      barrierDismissible: true,
+      barrierLabel: '关闭',
+      barrierColor: Colors.black54,
+      pageBuilder: (ctx, animation, secondaryAnimation) => ClickActionPanel(
         settings: settings,
         onChanged: onChanged,
       ),
@@ -44,148 +44,193 @@ class _ClickActionPanelState extends State<ClickActionPanel> {
     _s = widget.settings;
   }
 
-  void _update(ReaderSettings next) {
+  Future<void> _update(ReaderSettings next) async {
+    var layout = ClickZoneLayout(
+      tl: next.clickTL,
+      tc: next.clickTC,
+      tr: next.clickTR,
+      ml: next.clickML,
+      mc: next.clickMC,
+      mr: next.clickMR,
+      bl: next.clickBL,
+      bc: next.clickBC,
+      br: next.clickBR,
+    );
+    if (!layout.hasMenu) {
+      layout = layout.copyWith(mc: ClickZoneAction.menu);
+      next = next.copyWith(clickMC: ClickZoneAction.menu);
+    }
     setState(() => _s = next);
     widget.onChanged(next);
+    await ClickActionPrefs.save(layout);
+  }
+
+  Future<void> _pickZone({
+    required ClickZoneAction current,
+    required ReaderSettings Function(ClickZoneAction) apply,
+  }) async {
+    final chosen = await showModalBottomSheet<ClickZoneAction>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final maxH = MediaQuery.of(ctx).size.height * 0.7;
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxH),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '选择操作',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final a in ClickZoneAction.selectorOrder)
+                        ListTile(
+                          dense: true,
+                          title: Text(
+                            a.label,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          trailing: a == current
+                              ? const Icon(Icons.check, size: 18)
+                              : null,
+                          onTap: () => Navigator.pop(ctx, a),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (chosen != null) {
+      await _update(apply(chosen));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 12,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
-              child: Row(
-                children: [
-                  const Text(
-                    '点击区域',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                '上 / 中 / 下三区各自行为（对齐 dialog_click_action_config）',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ),
-            const SizedBox(height: 8),
-            _zonePreview(),
-            const Divider(),
-            _zoneRow(
-              label: '上区',
-              value: _s.clickTop,
-              onPick: (a) => _update(_s.copyWith(clickTop: a)),
-            ),
-            _zoneRow(
-              label: '中区',
-              value: _s.clickMiddle,
-              onPick: (a) => _update(_s.copyWith(clickMiddle: a)),
-            ),
-            _zoneRow(
-              label: '下区',
-              value: _s.clickBottom,
-              onPick: (a) => _update(_s.copyWith(clickBottom: a)),
-            ),
-            TextButton(
-              onPressed: () => _update(
-                _s.copyWith(
-                  clickTop: ClickZoneAction.prevPage,
-                  clickMiddle: ClickZoneAction.toggleMenu,
-                  clickBottom: ClickZoneAction.nextPage,
+    return Material(
+      color: Colors.transparent,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(3),
+          child: Column(
+            children: [
+              Container(
+                margin: const EdgeInsets.all(3),
+                padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        '点击区域设置',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
                 ),
               ),
-              child: const Text('恢复默认（上=上一页 · 中=菜单 · 下=下一页）'),
-            ),
-            const SizedBox(height: 4),
-          ],
+              Expanded(child: _grid()),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _zonePreview() {
-    Color band(ClickZoneAction a) {
-      switch (a) {
-        case ClickZoneAction.prevPage:
-          return Colors.blue.withValues(alpha: 0.15);
-        case ClickZoneAction.nextPage:
-          return Colors.green.withValues(alpha: 0.15);
-        case ClickZoneAction.toggleMenu:
-          return Colors.orange.withValues(alpha: 0.15);
-        case ClickZoneAction.none:
-          return Colors.grey.withValues(alpha: 0.08);
-      }
-    }
-
-    Widget cell(String title, ClickZoneAction a) {
+  Widget _grid() {
+    Widget cell(ClickZoneAction action, ReaderSettings Function(ClickZoneAction) apply) {
       return Expanded(
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: band(a),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.withValues(alpha: 0.25)),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            '$title · ${a.label}',
-            style: const TextStyle(fontSize: 13),
+        child: GestureDetector(
+          onTap: () => _pickZone(current: action, apply: apply),
+          child: Container(
+            margin: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              action.label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+            ),
           ),
         ),
       );
     }
 
-    return SizedBox(
-      height: 160,
-      child: Column(
-        children: [
-          cell('上', _s.clickTop),
-          cell('中', _s.clickMiddle),
-          cell('下', _s.clickBottom),
-        ],
-      ),
-    );
-  }
+    Widget row(
+      ClickZoneAction left,
+      ClickZoneAction center,
+      ClickZoneAction right,
+      ReaderSettings Function(ClickZoneAction) applyL,
+      ReaderSettings Function(ClickZoneAction) applyC,
+      ReaderSettings Function(ClickZoneAction) applyR,
+    ) {
+      return Expanded(
+        child: Row(
+          children: [
+            cell(left, applyL),
+            cell(center, applyC),
+            cell(right, applyR),
+          ],
+        ),
+      );
+    }
 
-  Widget _zoneRow({
-    required String label,
-    required ClickZoneAction value,
-    required ValueChanged<ClickZoneAction> onPick,
-  }) {
-    return ListTile(
-      dense: true,
-      title: Text(label, style: const TextStyle(fontSize: 13)),
-      trailing: DropdownButton<ClickZoneAction>(
-        value: value,
-        underline: const SizedBox.shrink(),
-        items: ClickZoneAction.values
-            .map(
-              (a) => DropdownMenuItem(
-                value: a,
-                child: Text(a.label, style: const TextStyle(fontSize: 13)),
-              ),
-            )
-            .toList(),
-        onChanged: (a) {
-          if (a != null) onPick(a);
-        },
-      ),
+    return Column(
+      children: [
+        row(
+          _s.clickTL,
+          _s.clickTC,
+          _s.clickTR,
+          (a) => _s.copyWith(clickTL: a),
+          (a) => _s.copyWith(clickTC: a),
+          (a) => _s.copyWith(clickTR: a),
+        ),
+        row(
+          _s.clickML,
+          _s.clickMC,
+          _s.clickMR,
+          (a) => _s.copyWith(clickML: a),
+          (a) => _s.copyWith(clickMC: a),
+          (a) => _s.copyWith(clickMR: a),
+        ),
+        row(
+          _s.clickBL,
+          _s.clickBC,
+          _s.clickBR,
+          (a) => _s.copyWith(clickBL: a),
+          (a) => _s.copyWith(clickBC: a),
+          (a) => _s.copyWith(clickBR: a),
+        ),
+      ],
     );
   }
 }

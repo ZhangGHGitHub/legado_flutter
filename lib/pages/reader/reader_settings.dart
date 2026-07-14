@@ -1,19 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../models/click_zone.dart';
 import '../../models/read_style_config.dart';
 import '../../services/read_style_prefs.dart';
 import 'bg_text_config_panel.dart';
 
-/// 点击区行为（上/中/下）
-enum ClickZoneAction {
-  prevPage('上一页'),
-  nextPage('下一页'),
-  toggleMenu('显示/隐藏菜单'),
-  none('无操作');
-
-  const ClickZoneAction(this.label);
-  final String label;
-}
+export '../../models/click_zone.dart' show ClickZoneAction, ClickZoneLayout;
 
 /// 阅读器屏幕方向（UI-2 更多设置）
 enum ScreenOrientationMode {
@@ -130,9 +122,16 @@ class ReaderSettings {
   final bool volumeKeyPageOnPlay;
   /// 自动阅读翻页间隔（秒）
   final double autoReadIntervalSec;
-  final ClickZoneAction clickTop;
-  final ClickZoneAction clickMiddle;
-  final ClickZoneAction clickBottom;
+  /// 九宫格点击区（对齐 clickActionTL…BR；默认见 ClickActionPrefs.defaults）
+  final ClickZoneAction clickTL;
+  final ClickZoneAction clickTC;
+  final ClickZoneAction clickTR;
+  final ClickZoneAction clickML;
+  final ClickZoneAction clickMC;
+  final ClickZoneAction clickMR;
+  final ClickZoneAction clickBL;
+  final ClickZoneAction clickBC;
+  final ClickZoneAction clickBR;
   final ScreenOrientationMode screenOrientation;
   /// true = 不叠加阅读亮度遮罩
   final bool brightnessFollowSystem;
@@ -184,9 +183,15 @@ class ReaderSettings {
     this.volumeKeyTurnPage = false,
     this.volumeKeyPageOnPlay = true,
     this.autoReadIntervalSec = 5.0,
-    this.clickTop = ClickZoneAction.prevPage,
-    this.clickMiddle = ClickZoneAction.toggleMenu,
-    this.clickBottom = ClickZoneAction.nextPage,
+    this.clickTL = ClickZoneAction.prevPage,
+    this.clickTC = ClickZoneAction.prevPage,
+    this.clickTR = ClickZoneAction.nextPage,
+    this.clickML = ClickZoneAction.prevPage,
+    this.clickMC = ClickZoneAction.menu,
+    this.clickMR = ClickZoneAction.nextPage,
+    this.clickBL = ClickZoneAction.prevPage,
+    this.clickBC = ClickZoneAction.nextPage,
+    this.clickBR = ClickZoneAction.nextPage,
     this.screenOrientation = ScreenOrientationMode.system,
     this.brightnessFollowSystem = true,
     this.brightness = 1.0,
@@ -227,9 +232,15 @@ class ReaderSettings {
     bool? volumeKeyTurnPage,
     bool? volumeKeyPageOnPlay,
     double? autoReadIntervalSec,
-    ClickZoneAction? clickTop,
-    ClickZoneAction? clickMiddle,
-    ClickZoneAction? clickBottom,
+    ClickZoneAction? clickTL,
+    ClickZoneAction? clickTC,
+    ClickZoneAction? clickTR,
+    ClickZoneAction? clickML,
+    ClickZoneAction? clickMC,
+    ClickZoneAction? clickMR,
+    ClickZoneAction? clickBL,
+    ClickZoneAction? clickBC,
+    ClickZoneAction? clickBR,
     ScreenOrientationMode? screenOrientation,
     bool? brightnessFollowSystem,
     double? brightness,
@@ -275,9 +286,15 @@ class ReaderSettings {
       volumeKeyTurnPage: volumeKeyTurnPage ?? this.volumeKeyTurnPage,
       volumeKeyPageOnPlay: volumeKeyPageOnPlay ?? this.volumeKeyPageOnPlay,
       autoReadIntervalSec: autoReadIntervalSec ?? this.autoReadIntervalSec,
-      clickTop: clickTop ?? this.clickTop,
-      clickMiddle: clickMiddle ?? this.clickMiddle,
-      clickBottom: clickBottom ?? this.clickBottom,
+      clickTL: clickTL ?? this.clickTL,
+      clickTC: clickTC ?? this.clickTC,
+      clickTR: clickTR ?? this.clickTR,
+      clickML: clickML ?? this.clickML,
+      clickMC: clickMC ?? this.clickMC,
+      clickMR: clickMR ?? this.clickMR,
+      clickBL: clickBL ?? this.clickBL,
+      clickBC: clickBC ?? this.clickBC,
+      clickBR: clickBR ?? this.clickBR,
       screenOrientation: screenOrientation ?? this.screenOrientation,
       brightnessFollowSystem:
           brightnessFollowSystem ?? this.brightnessFollowSystem,
@@ -995,7 +1012,7 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
               leading: const Icon(Icons.touch_app_outlined, size: 22),
               title: const Text('点击区域', style: TextStyle(fontSize: 13)),
               subtitle: Text(
-                '上=${_s.clickTop.label} · 中=${_s.clickMiddle.label} · 下=${_s.clickBottom.label}',
+                '九宫格 · 中=${_s.clickMC.label}',
                 style: const TextStyle(fontSize: 11),
               ),
               trailing: const Icon(Icons.chevron_right, size: 20),

@@ -22,6 +22,7 @@ import '../book/change_source_page.dart';
 import '../book/toc_sheet.dart';
 import '../book/book_info_page.dart';
 import '../reader/ai_chat_page.dart';
+import '../../services/click_action_prefs.dart';
 import '../../services/read_style_prefs.dart';
 import '../../services/simulated_reading_prefs.dart';
 import 'auto_read_panel.dart';
@@ -138,6 +139,25 @@ class _ReaderPageState extends State<ReaderPage> {
     _applySystemUi();
     unawaited(_loadSimulatedReading());
     unawaited(_loadReadStylePrefs());
+    unawaited(_loadClickActionPrefs());
+  }
+
+  Future<void> _loadClickActionPrefs() async {
+    final layout = await ClickActionPrefs.load();
+    if (!mounted) return;
+    setState(() {
+      _settings = _settings.copyWith(
+        clickTL: layout.tl,
+        clickTC: layout.tc,
+        clickTR: layout.tr,
+        clickML: layout.ml,
+        clickMC: layout.mc,
+        clickMR: layout.mr,
+        clickBL: layout.bl,
+        clickBC: layout.bc,
+        clickBR: layout.br,
+      );
+    });
   }
 
   Future<void> _loadSimulatedReading() async {
@@ -367,39 +387,71 @@ class _ReaderPageState extends State<ReaderPage> {
 
   void _runClickAction(ClickZoneAction action) {
     switch (action) {
-      case ClickZoneAction.prevPage:
-        _prevPage();
-      case ClickZoneAction.nextPage:
-        _nextPage();
-      case ClickZoneAction.toggleMenu:
-        _toggleChrome();
       case ClickZoneAction.none:
         break;
+      case ClickZoneAction.menu:
+        _toggleChrome();
+      case ClickZoneAction.nextPage:
+        _nextPage();
+      case ClickZoneAction.prevPage:
+        _prevPage();
+      case ClickZoneAction.nextChapter:
+        if (_currentIndex < widget.allChapters.length - 1) {
+          _goToChapter(_currentIndex + 1);
+        }
+      case ClickZoneAction.prevChapter:
+        if (_currentIndex > 0) _goToChapter(_currentIndex - 1);
+      case ClickZoneAction.aloudPrevParagraph:
+        unawaited(TtsService.instance.previousSentence());
+      case ClickZoneAction.aloudNextParagraph:
+        unawaited(TtsService.instance.nextSentence());
+      case ClickZoneAction.addBookmark:
+        unawaited(_addBookmark());
+      case ClickZoneAction.editContent:
+        _showNotImplemented('编辑内容');
+      case ClickZoneAction.replaceToggle:
+        _showNotImplemented('替换净化开关');
+      case ClickZoneAction.chapterList:
+        unawaited(_showTocSheet());
+      case ClickZoneAction.searchContent:
+        unawaited(_openContentSearch());
+      case ClickZoneAction.syncProgress:
+        _showNotImplemented('同步阅读进度');
+      case ClickZoneAction.aloudPauseResume:
+        unawaited(_toggleAloudPauseResume());
     }
   }
 
-  /// 上/中/下点击热区（覆盖正文；选择文本仍由下层处理，translucent）
+  Future<void> _toggleAloudPauseResume() async {
+    final tts = TtsService.instance;
+    final text = _pages.isNotEmpty
+        ? _pages[_pageIndex.clamp(0, _pages.length - 1)]
+        : _content;
+    await tts.togglePlay(text);
+  }
+
+  /// 九宫格点击热区（对齐 ReadView.setRect9x：宽高各约 1/3）
   Widget _buildClickZones() {
+    Widget cell(ClickZoneAction action) {
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => _runClickAction(action),
+          behavior: HitTestBehavior.translucent,
+        ),
+      );
+    }
+
+    Widget row(ClickZoneAction l, ClickZoneAction c, ClickZoneAction r) {
+      return Expanded(
+        child: Row(children: [cell(l), cell(c), cell(r)]),
+      );
+    }
+
     return Column(
       children: [
-        Expanded(
-          child: GestureDetector(
-            onTap: () => _runClickAction(_settings.clickTop),
-            behavior: HitTestBehavior.translucent,
-          ),
-        ),
-        Expanded(
-          child: GestureDetector(
-            onTap: () => _runClickAction(_settings.clickMiddle),
-            behavior: HitTestBehavior.translucent,
-          ),
-        ),
-        Expanded(
-          child: GestureDetector(
-            onTap: () => _runClickAction(_settings.clickBottom),
-            behavior: HitTestBehavior.translucent,
-          ),
-        ),
+        row(_settings.clickTL, _settings.clickTC, _settings.clickTR),
+        row(_settings.clickML, _settings.clickMC, _settings.clickMR),
+        row(_settings.clickBL, _settings.clickBC, _settings.clickBR),
       ],
     );
   }
