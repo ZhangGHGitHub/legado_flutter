@@ -27,6 +27,7 @@ import '../../services/read_style_prefs.dart';
 import '../../services/simulated_reading_prefs.dart';
 import 'auto_read_panel.dart';
 import 'click_action_panel.dart';
+import 'click_region_tip_overlay.dart';
 import 'more_settings_panel.dart';
 import 'reader_settings.dart';
 import 'search_content_page.dart';
@@ -103,6 +104,9 @@ class _ReaderPageState extends State<ReaderPage> {
     startDate: DateTime.now(),
   );
 
+  /// 首次进入阅读页：点击区域九宫格提示
+  bool _showClickRegionTip = false;
+
   bool get _isHorizontalPaged => _settings.pageAnim.isHorizontalPaged;
 
   int get _maxReadableIndex {
@@ -144,6 +148,7 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Future<void> _loadClickActionPrefs() async {
     final layout = await ClickActionPrefs.load();
+    final tipShown = await ClickActionPrefs.isTipShown();
     if (!mounted) return;
     setState(() {
       _settings = _settings.copyWith(
@@ -157,8 +162,27 @@ class _ReaderPageState extends State<ReaderPage> {
         clickBC: layout.bc,
         clickBR: layout.br,
       );
+      _showClickRegionTip = !tipShown;
     });
   }
+
+  Future<void> _dismissClickRegionTip() async {
+    if (!_showClickRegionTip) return;
+    setState(() => _showClickRegionTip = false);
+    await ClickActionPrefs.markTipShown();
+  }
+
+  ClickZoneLayout get _clickLayout => ClickZoneLayout(
+        tl: _settings.clickTL,
+        tc: _settings.clickTC,
+        tr: _settings.clickTR,
+        ml: _settings.clickML,
+        mc: _settings.clickMC,
+        mr: _settings.clickMR,
+        bl: _settings.clickBL,
+        bc: _settings.clickBC,
+        br: _settings.clickBR,
+      );
 
   Future<void> _loadSimulatedReading() async {
     final cfg = await SimulatedReadingPrefs.load(widget.book.id);
@@ -2050,6 +2074,13 @@ class _ReaderPageState extends State<ReaderPage> {
             child: _chromeLayer(child: _buildBottomChrome(theme)),
           ),
           if (_searchMenuVisible) _buildSearchMenuOverlay(theme),
+          if (_showClickRegionTip)
+            Positioned.fill(
+              child: ClickRegionTipOverlay(
+                layout: _clickLayout,
+                onDismiss: () => unawaited(_dismissClickRegionTip()),
+              ),
+            ),
         ],
       ),
     );
@@ -2278,6 +2309,13 @@ class _ReaderPageState extends State<ReaderPage> {
             child: _chromeLayer(child: _buildBottomChrome(theme)),
           ),
           if (_searchMenuVisible) _buildSearchMenuOverlay(theme),
+          if (_showClickRegionTip)
+            Positioned.fill(
+              child: ClickRegionTipOverlay(
+                layout: _clickLayout,
+                onDismiss: () => unawaited(_dismissClickRegionTip()),
+              ),
+            ),
         ],
       ),
     );

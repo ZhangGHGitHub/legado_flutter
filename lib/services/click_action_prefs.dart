@@ -13,6 +13,8 @@ abstract final class ClickActionPrefs {
   static const _kBL = 'clickActionBottomLeft';
   static const _kBC = 'clickActionBottomCenter';
   static const _kBR = 'clickActionBottomRight';
+  /// 首次阅读是否已展示点击区域提示
+  static const _kTipShown = 'clickRegionTipShown';
 
   /// 默认九宫格（对齐 AppConfig）：左/上多为上一页，右/下多为下一页，中心菜单
   static const ClickZoneLayout defaults = ClickZoneLayout(
@@ -73,5 +75,15 @@ abstract final class ClickActionPrefs {
     final raw = prefs.getInt(key);
     if (raw == null) return fallback;
     return ClickZoneAction.fromCode(raw);
+  }
+
+  static Future<bool> isTipShown() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kTipShown) ?? false;
+  }
+
+  static Future<void> markTipShown() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kTipShown, true);
   }
 }
