@@ -21,10 +21,14 @@ import '../book/change_source_page.dart';
 import '../book/toc_sheet.dart';
 import '../book/book_info_page.dart';
 import '../reader/ai_chat_page.dart';
+import '../../services/simulated_reading_prefs.dart';
 import 'auto_read_panel.dart';
 import 'click_action_panel.dart';
 import 'more_settings_panel.dart';
 import 'reader_settings.dart';
+import 'search_content_page.dart';
+import 'search_content_result.dart';
+import 'simulated_reading_dialog.dart';
 import 'tts_panel.dart';
 import '../../widgets/bookplate_overlay.dart';
 import '../../widgets/note_editor_sheet.dart';
@@ -85,7 +89,30 @@ class _ReaderPageState extends State<ReaderPage> {
   /// UI-2: 屏幕超时（legado screenOffTimerStart）
   Timer? _screenOffTimer;
 
+  /// UI-2: 全文搜索结果导航（对齐 searchMenu 上/下个结果）
+  List<SearchContentResult> _searchResults = [];
+  int _searchResultIndex = -1;
+  bool _searchMenuVisible = false;
+  int? _pendingSearchOccurrence; // 章内第 N 次命中
+
+  /// UI-2: 模拟追读
+  SimulatedReadingConfig _simRead = SimulatedReadingConfig(
+    startDate: DateTime.now(),
+  );
+
   bool get _isHorizontalPaged => _settings.pageAnim.isHorizontalPaged;
+
+  int get _maxReadableIndex {
+    if (!_simRead.enabled) return widget.allChapters.length - 1;
+    return _simRead.maxReadableIndex(widget.allChapters.length);
+  }
+
+  List<Chapter> get _readableChapters {
+    final maxIdx = _maxReadableIndex;
+    if (maxIdx < 0) return const [];
+    if (!_simRead.enabled) return widget.allChapters;
+    return widget.allChapters.take(maxIdx + 1).toList();
+  }
 
   @override
   void initState() {
@@ -107,6 +134,16 @@ class _ReaderPageState extends State<ReaderPage> {
     );
     _applyScreenTimeout();
     _applySystemUi();
+    unawaited(_loadSimulatedReading());
+  }
+
+  Future<void> _loadSimulatedReading() async {
+    final cfg = await SimulatedReadingPrefs.load(widget.book.id);
+    if (!mounted) return;
+    setState(() => _simRead = cfg);
+    if (cfg.enabled && _currentIndex > _maxReadableIndex && _maxReadableIndex >= 0) {
+      _goToChapter(_maxReadableIndex);
+    }
   }
 
   Future<void> _refreshBattery() async {
@@ -284,16 +321,21 @@ class _ReaderPageState extends State<ReaderPage> {
     );
     _autoReadTimer = Timer.periodic(interval, (_) {
       if (!mounted || !_autoReadRunning) return;
+      final lastIdx = _maxReadableIndex;
       final atLastPage = _isHorizontalPaged &&
           _pages.isNotEmpty &&
           _pageIndex >= _pages.length - 1 &&
-          _currentIndex >= widget.allChapters.length - 1;
-      final atLastChapterScroll = !_isHorizontalPaged &&
-          _currentIndex >= widget.allChapters.length - 1;
+          _currentIndex >= lastIdx;
+      final atLastChapterScroll =
+          !_isHorizontalPaged && _currentIndex >= lastIdx;
       if (atLastPage || atLastChapterScroll) {
         _setAutoReadRunning(false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已到全书末尾，自动阅读已停止')),
+          SnackBar(
+            content: Text(
+              _simRead.enabled ? '已到模拟追读上限，自动阅读已停止' : '已到全书末尾，自动阅读已停止',
+            ),
+          ),
         );
         return;
       }
@@ -541,6 +583,7 @@ class _ReaderPageState extends State<ReaderPage> {
         }
         _countChapterChars(content);
         _syncPreload();
+        _applyPendingSearchJump();
       }
     } catch (e) {
       if (mounted) {
@@ -550,6 +593,265 @@ class _ReaderPageState extends State<ReaderPage> {
         });
       }
     }
+  }
+
+  void _applyPendingSearchJump() {
+    final occ = _pendingSearchOccurrence;
+    if (occ == null) return;
+    _pendingSearchOccurrence = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_isHorizontalPaged) {
+        if (_pages.isEmpty) {
+          _splitIntoPages();
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _jumpToOccurrenceInChapter(occ);
+        });
+      } else {
+        _jumpToOccurrenceInChapter(occ);
+      }
+    });
+  }
+
+  int _nthQueryIndex(String text, String query, int n) {
+    if (query.isEmpty) return -1;
+    var from = 0;
+    for (var i = 0; i <= n; i++) {
+      final idx = text.indexOf(query, from);
+      if (idx < 0) return -1;
+      if (i == n) return idx;
+      from = idx + query.length;
+    }
+    return -1;
+  }
+
+  void _jumpToOccurrenceInChapter(int occurrence) {
+    if (_searchResults.isEmpty || _searchResultIndex < 0) return;
+    final q = _searchResults[_searchResultIndex].query;
+    final text = _displayContent;
+    final charIdx = _nthQueryIndex(text, q, occurrence);
+    if (charIdx < 0) return;
+    if (_isHorizontalPaged && _pages.isNotEmpty) {
+      var offset = 0;
+      for (var i = 0; i < _pages.length; i++) {
+        final end = offset + _pages[i].length;
+        if (charIdx < end || i == _pages.length - 1) {
+          if (_pageController != null && _pageController!.hasClients) {
+            _pageController!.jumpToPage(i);
+          }
+          setState(() => _pageIndex = i);
+          break;
+        }
+        // 分页按段落拼接，页间可能无额外分隔；用页面字数累加即可
+        offset = end;
+      }
+    } else if (_scrollController.hasClients && text.isNotEmpty) {
+      final max = _scrollController.position.maxScrollExtent;
+      final ratio = (charIdx / text.length).clamp(0.0, 1.0);
+      _scrollController.jumpTo(max * ratio);
+    }
+  }
+
+  Future<void> _openContentSearch({
+    List<SearchContentResult>? results,
+    int resultIndex = 0,
+  }) async {
+    _autoHideTimer?.cancel();
+    final nav = await SearchContentPage.open(
+      context,
+      bookId: widget.book.id,
+      bookName: widget.book.name,
+      chapters: _readableChapters.isNotEmpty
+          ? _readableChapters
+          : widget.allChapters,
+      durChapterIndex: _currentIndex,
+      currentChapterContent: _content,
+      initialQuery: results != null && results.isNotEmpty
+          ? results[resultIndex.clamp(0, results.length - 1)].query
+          : null,
+      initialResults: results,
+      initialResultIndex: resultIndex,
+    );
+    if (!mounted) return;
+    if (nav != null && nav.results.isNotEmpty) {
+      await _applySearchNavigation(nav);
+    }
+    _scheduleAutoHide();
+  }
+
+  Future<void> _applySearchNavigation(SearchContentNavigate nav) async {
+    setState(() {
+      _searchResults = nav.results;
+      _searchResultIndex = nav.index.clamp(0, nav.results.length - 1);
+      _searchMenuVisible = true;
+      _chromeVisible = false;
+    });
+    await _gotoSearchResult(_searchResultIndex);
+  }
+
+  Future<void> _gotoSearchResult(int index) async {
+    if (_searchResults.isEmpty) return;
+    final i = index.clamp(0, _searchResults.length - 1);
+    final r = _searchResults[i];
+    if (r.chapterIndex < 0 || r.chapterIndex >= widget.allChapters.length) {
+      return;
+    }
+    if (_simRead.enabled && r.chapterIndex > _maxReadableIndex) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('模拟追读未解锁该章节')),
+      );
+      return;
+    }
+    setState(() => _searchResultIndex = i);
+    _pendingSearchOccurrence = r.resultCountWithinChapter;
+    if (r.chapterIndex != _currentIndex) {
+      _goToChapter(r.chapterIndex);
+    } else {
+      _applyPendingSearchJump();
+    }
+  }
+
+  void _searchPrev() {
+    if (!_searchMenuVisible || _searchResults.isEmpty) return;
+    if (_searchResultIndex <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已是第一个结果')),
+      );
+      return;
+    }
+    unawaited(_gotoSearchResult(_searchResultIndex - 1));
+  }
+
+  void _searchNext() {
+    if (!_searchMenuVisible || _searchResults.isEmpty) return;
+    if (_searchResultIndex >= _searchResults.length - 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已是最后一个结果')),
+      );
+      return;
+    }
+    unawaited(_gotoSearchResult(_searchResultIndex + 1));
+  }
+
+  void _exitSearchMenu() {
+    setState(() {
+      _searchMenuVisible = false;
+      _searchResults = [];
+      _searchResultIndex = -1;
+      _pendingSearchOccurrence = null;
+    });
+  }
+
+  Future<void> _openSimulatedReading() async {
+    _autoHideTimer?.cancel();
+    final next = await SimulatedReadingDialog.show(
+      context,
+      initial: _simRead,
+      totalChapters: widget.allChapters.length,
+      durChapterIndex: _currentIndex,
+    );
+    if (!mounted) return;
+    if (next != null) {
+      await SimulatedReadingPrefs.save(widget.book.id, next);
+      if (!mounted) return;
+      setState(() => _simRead = next);
+      if (next.enabled &&
+          _currentIndex > _maxReadableIndex &&
+          _maxReadableIndex >= 0) {
+        _goToChapter(_maxReadableIndex);
+      }
+      final unlocked =
+          _simRead.simulatedTotalChapterNum(widget.allChapters.length);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            next.enabled ? '模拟追读已开启 · 今日可读 $unlocked 章' : '模拟追读已关闭',
+          ),
+        ),
+      );
+    }
+    if (mounted) _scheduleAutoHide();
+  }
+
+  Widget _buildSearchMenuOverlay(ReaderTheme theme) {
+    if (!_searchMenuVisible || _searchResults.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final idx = _searchResultIndex.clamp(0, _searchResults.length - 1);
+    final info = '${idx + 1}/${_searchResults.length}';
+    return Stack(
+      children: [
+        Positioned(
+          left: 12,
+          top: 0,
+          bottom: 0,
+          child: Center(
+            child: FloatingActionButton.small(
+              heroTag: 'search_prev',
+              tooltip: '上个结果',
+              backgroundColor: theme.appBar.withValues(alpha: 0.92),
+              onPressed: _searchPrev,
+              child: Icon(Icons.chevron_left, color: theme.text),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 12,
+          top: 0,
+          bottom: 0,
+          child: Center(
+            child: FloatingActionButton.small(
+              heroTag: 'search_next',
+              tooltip: '下个结果',
+              backgroundColor: theme.appBar.withValues(alpha: 0.92),
+              onPressed: _searchNext,
+              child: Icon(Icons.chevron_right, color: theme.text),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Material(
+            elevation: 8,
+            color: theme.appBar.withValues(alpha: 0.97),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    IconButton(
+                      tooltip: '结果列表',
+                      icon: Icon(Icons.list_alt, color: theme.text),
+                      onPressed: () => _openContentSearch(
+                        results: _searchResults,
+                        resultIndex: idx,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        '全文搜索 $info',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: theme.text, fontSize: 13),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '退出',
+                      icon: Icon(Icons.close, color: theme.text),
+                      onPressed: _exitSearchMenu,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   /// 将正文按屏幕高度拆分为独立页面（仅 slide 模式）
@@ -756,6 +1058,16 @@ class _ReaderPageState extends State<ReaderPage> {
 
   void _goToChapter(int index) {
     if (index < 0 || index >= widget.allChapters.length) return;
+    if (_simRead.enabled && index > _maxReadableIndex) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '模拟追读：今日最多读到第 ${_maxReadableIndex + 1} 章',
+          ),
+        ),
+      );
+      return;
+    }
     _saveProgress();
     if (_scrollController.hasClients) {
       _scrollController.jumpTo(0);
@@ -801,9 +1113,10 @@ class _ReaderPageState extends State<ReaderPage> {
         : widget.allChapters;
     if (!mounted) return;
     final current = widget.allChapters[_currentIndex];
+    final tocChapters = _simRead.enabled ? _readableChapters : chapters;
     await TocSheet.show(
       context,
-      chapters: chapters,
+      chapters: tocChapters,
       currentChapter: current.title,
       currentChapterId: current.id,
       bookId: widget.book.id,
@@ -928,6 +1241,10 @@ class _ReaderPageState extends State<ReaderPage> {
         _openTtsPanel();
       case 'auto_read':
         _openAutoReadPanel();
+      case 'search_content':
+        unawaited(_openContentSearch());
+      case 'simulated_reading':
+        unawaited(_openSimulatedReading());
       case 'click_zone':
         _openClickZonePanel();
       case 'page_key':
@@ -956,6 +1273,7 @@ class _ReaderPageState extends State<ReaderPage> {
       const PopupMenuDivider(),
       item('toc', Icons.list_alt, '目录'),
       item('bookmark', Icons.bookmark_add_outlined, '书签'),
+      item('search_content', Icons.find_in_page_outlined, '全文搜索'),
       item('copy', Icons.copy_outlined, '拷贝内容'),
       item('settings', Icons.settings, '阅读设置'),
       item('ai', Icons.smart_toy_outlined, 'AI 助手'),
@@ -966,6 +1284,7 @@ class _ReaderPageState extends State<ReaderPage> {
       item('replace', Icons.find_replace, '替换净化开关'),
       item('resegment', Icons.notes, '重新分段'),
       item('update_toc', Icons.toc, '更新目录'),
+      item('simulated_reading', Icons.calendar_today_outlined, '模拟追读'),
       item('book_info', Icons.info_outline, '书籍信息'),
       const PopupMenuDivider(),
       item('tts', Icons.record_voice_over_outlined, '朗读'),
@@ -1211,17 +1530,13 @@ class _ReaderPageState extends State<ReaderPage> {
                     ),
                   ),
                   IconButton(
-                    onPressed:
-                        _currentIndex < widget.allChapters.length - 1
+                    onPressed: _currentIndex < _maxReadableIndex
                         ? () => _goToChapter(_currentIndex + 1)
                         : null,
                     icon: Icon(
                       Icons.skip_next,
                       color: theme.text.withValues(
-                        alpha:
-                            _currentIndex < widget.allChapters.length - 1
-                            ? 0.85
-                            : 0.3,
+                        alpha: _currentIndex < _maxReadableIndex ? 0.85 : 0.3,
                       ),
                     ),
                   ),
@@ -1238,6 +1553,12 @@ class _ReaderPageState extends State<ReaderPage> {
                       Icons.list_alt,
                       '目录',
                       _showTocSheet,
+                    ),
+                    _chromeAction(
+                      theme,
+                      Icons.find_in_page_outlined,
+                      '全文搜索',
+                      () => unawaited(_openContentSearch()),
                     ),
                     _chromeAction(
                       theme,
@@ -1642,6 +1963,7 @@ class _ReaderPageState extends State<ReaderPage> {
             bottom: 0,
             child: _chromeLayer(child: _buildBottomChrome(theme)),
           ),
+          if (_searchMenuVisible) _buildSearchMenuOverlay(theme),
         ],
       ),
     );
@@ -1867,6 +2189,7 @@ class _ReaderPageState extends State<ReaderPage> {
             bottom: 0,
             child: _chromeLayer(child: _buildBottomChrome(theme)),
           ),
+          if (_searchMenuVisible) _buildSearchMenuOverlay(theme),
         ],
       ),
     );
