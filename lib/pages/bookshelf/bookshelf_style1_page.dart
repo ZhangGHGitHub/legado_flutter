@@ -592,10 +592,7 @@ class _BookItem extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    ReadBadge(
-                      progress: book.progress,
-                      currentChapter: book.currentChapter,
-                    ),
+                    ReadBadge.fromBook(book),
                     const SizedBox(height: 4),
                     // Current chapter
                     Row(

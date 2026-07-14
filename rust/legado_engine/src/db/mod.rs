@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use std::sync::Mutex;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i32 = 9;
+const SCHEMA_VERSION: i32 = 10;
 
 static DB: OnceCell<Mutex<EngineDb>> = OnceCell::new();
 
@@ -52,6 +52,7 @@ impl EngineDb {
                description TEXT DEFAULT '',
                bookSourceUrl TEXT DEFAULT '',
                bookGroup TEXT DEFAULT '',
+               readIteration INTEGER DEFAULT 0,
                updatedAt TEXT DEFAULT (datetime('now'))
              );
              CREATE TABLE IF NOT EXISTS book_sources (
@@ -135,6 +136,13 @@ impl EngineDb {
                  CREATE INDEX IF NOT EXISTS idx_notes_book_id ON notes(book_id);",
             )?;
         }
+        if current < 10 {
+            // 已有 v10 CREATE 的新库可能已含该列；重复添加忽略错误
+            let _ = conn.execute(
+                "ALTER TABLE books ADD COLUMN readIteration INTEGER DEFAULT 0",
+                [],
+            );
+        }
         if current < SCHEMA_VERSION {
             conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
         }
@@ -151,15 +159,17 @@ impl EngineDb {
         let id = str_field(&v, "id")?;
         self.conn.execute(
             "INSERT INTO books (id, name, author, coverUrl, type, progress, currentChapter,
-              lastChapter, currentPageIndex, isFavorite, sourceUrl, description, bookSourceUrl, bookGroup)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)
+              lastChapter, currentPageIndex, isFavorite, sourceUrl, description, bookSourceUrl,
+              bookGroup, readIteration)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
              ON CONFLICT(id) DO UPDATE SET
                name=excluded.name, author=excluded.author, coverUrl=excluded.coverUrl,
                type=excluded.type, progress=excluded.progress, currentChapter=excluded.currentChapter,
                lastChapter=excluded.lastChapter, currentPageIndex=excluded.currentPageIndex,
                isFavorite=excluded.isFavorite, sourceUrl=excluded.sourceUrl,
                description=excluded.description, bookSourceUrl=excluded.bookSourceUrl,
-               bookGroup=excluded.bookGroup, updatedAt=datetime('now')",
+               bookGroup=excluded.bookGroup, readIteration=excluded.readIteration,
+               updatedAt=datetime('now')",
             params![
                 id,
                 str_field(&v, "name").unwrap_or_else(|_| "未知".into()),
@@ -175,6 +185,7 @@ impl EngineDb {
                 str_field(&v, "description").unwrap_or_default(),
                 str_field(&v, "bookSourceUrl").unwrap_or_default(),
                 str_field(&v, "group").or_else(|_| str_field(&v, "bookGroup")).unwrap_or_default(),
+                i64_field(&v, "readIteration"),
             ],
         )?;
         Ok(())
@@ -183,7 +194,8 @@ impl EngineDb {
     pub fn get_books_json(&self) -> Result<Vec<String>, DbError> {
         let mut stmt = self.conn.prepare(
             "SELECT id, name, author, coverUrl, type, progress, currentChapter, lastChapter,
-                    currentPageIndex, isFavorite, sourceUrl, description, bookSourceUrl, bookGroup
+                    currentPageIndex, isFavorite, sourceUrl, description, bookSourceUrl, bookGroup,
+                    readIteration
              FROM books ORDER BY updatedAt DESC",
         )?;
         let rows = stmt.query_map([], |row| {
@@ -202,6 +214,7 @@ impl EngineDb {
                 "description": row.get::<_, String>(11)?,
                 "bookSourceUrl": row.get::<_, String>(12)?,
                 "group": row.get::<_, String>(13)?,
+                "readIteration": row.get::<_, Option<i64>>(14)?.unwrap_or(0),
             }))
         })?;
         rows.map(|r| {

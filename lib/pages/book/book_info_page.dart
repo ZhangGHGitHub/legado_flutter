@@ -8,6 +8,7 @@ import '../../database/database_helper.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/book_source_service.dart';
+import '../../widgets/read_badge.dart';
 import '../reader/reader_page.dart';
 import 'change_cover_page.dart';
 import 'change_source_page.dart';
@@ -29,6 +30,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
   final ScrollController _chapterScrollController = ScrollController();
   Timer? _snackBarHideTimer;
   bool _chapterReversed = false;
+  bool _introExpanded = false;
 
   @override
   void initState() {
@@ -239,6 +241,82 @@ class _BookInfoPageState extends State<BookInfoPage> {
     );
   }
 
+  Future<void> _openChangeSource() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ChangeSourcePage(book: _book)),
+    );
+    if (!mounted) return;
+    final shelf = context.read<BookProvider>().findShelfBook(_book);
+    if (shelf != null) {
+      setState(() {
+        _book = shelf;
+        _isInShelf = true;
+      });
+    }
+  }
+
+  Future<void> _setReadIteration(int iteration) async {
+    final next = _book.copyWith(readIteration: iteration);
+    setState(() => _book = next);
+    if (_isInShelf) {
+      await context.read<BookProvider>().updateReadIteration(next, iteration);
+    }
+  }
+
+  Future<void> _showReadStatusPicker() async {
+    final current = _book.readIteration;
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        final options = <(int, String)>[
+          (0, '清除标记'),
+          (1, '读完'),
+          (2, '2刷'),
+          (3, '2刷完'),
+          (4, '3刷'),
+          (5, '3刷完'),
+          (6, '4刷'),
+          (7, '4刷完'),
+        ];
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '阅读状态',
+                    style: Theme.of(ctx).textTheme.titleMedium,
+                  ),
+                ),
+              ),
+              ...options.map((o) {
+                final (value, label) = o;
+                return ListTile(
+                  title: Text(label),
+                  trailing: value == current
+                      ? Icon(
+                          Icons.check,
+                          color: Theme.of(ctx).colorScheme.primary,
+                        )
+                      : null,
+                  onTap: () => Navigator.pop(ctx, value),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked != null && mounted) {
+      await _setReadIteration(picked);
+    }
+  }
+
   void _startReading(BookProvider provider) {
     if (provider.currentChapters.isEmpty) return;
     // 从 provider 中获取最新的 Book 数据（含 currentPageIndex）
@@ -370,26 +448,45 @@ class _BookInfoPageState extends State<BookInfoPage> {
                     child: _buildSourceChip(_book.bookSourceUrl),
                   ),
                 const SizedBox(height: 8),
-                if (_book.currentChapter != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    ReadBadge.fromBook(
+                      _book,
+                      onTap: _showReadStatusPicker,
                     ),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.tertiaryContainer,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      '读到: ${_book.currentChapter}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: theme.colorScheme.tertiary,
+                    if (_book.readStatusLabel == null)
+                      ActionChip(
+                        visualDensity: VisualDensity.compact,
+                        label: const Text('标记读完', style: TextStyle(fontSize: 11)),
+                        avatar: const Icon(Icons.flag_outlined, size: 14),
+                        onPressed: _showReadStatusPicker,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
+                    if (_book.currentChapter != null)
+                      Container(
+                        constraints: const BoxConstraints(maxWidth: 180),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '读到: ${_book.currentChapter}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                ),
                 if (_book.progress > 0)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
@@ -457,40 +554,54 @@ class _BookInfoPageState extends State<BookInfoPage> {
   }
 
   Widget _buildActionButtons() {
+    // 对齐 Jingshiro：加入书架 / 阅读 / 换源 并排主入口
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
           Expanded(
             child: _isInShelf
-                ? FilledButton.tonalIcon(
-                    icon: const Icon(Icons.check, color: Colors.orange),
-                    label: Text(
-                      '移出书架',
-                      style: const TextStyle(color: Colors.orange),
-                    ),
+                ? FilledButton.tonal(
                     style: FilledButton.styleFrom(
                       backgroundColor: Colors.orange.withValues(alpha: 0.1),
+                      foregroundColor: Colors.orange,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
                     ),
                     onPressed: _removeFromShelf,
+                    child: const Text('移出', overflow: TextOverflow.ellipsis),
                   )
-                : FilledButton.tonalIcon(
-                    icon: const Icon(Icons.add),
-                    label: const Text('加入书架'),
+                : FilledButton.tonal(
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
                     onPressed: _addToShelf,
+                    child: const Text('书架', overflow: TextOverflow.ellipsis),
                   ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Expanded(
-            child: FilledButton.tonalIcon(
-              icon: const Icon(Icons.menu_book),
-              label: Text(
-                _book.progress > 0 ||
-                        (_book.currentChapter?.isNotEmpty == true)
-                    ? '继续阅读'
-                    : '开始阅读',
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
               onPressed: () => _startReading(context.read<BookProvider>()),
+              child: Text(
+                _book.progress > 0 ||
+                        (_book.currentChapter?.isNotEmpty == true)
+                    ? '继续'
+                    : '阅读',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: FilledButton.tonal(
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              onPressed: _openChangeSource,
+              child: const Text('换源', overflow: TextOverflow.ellipsis),
             ),
           ),
         ],
@@ -501,40 +612,26 @@ class _BookInfoPageState extends State<BookInfoPage> {
   Widget _buildSecondaryActions() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.swap_horiz, size: 18),
-              label: const Text('换源'),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ChangeSourcePage(book: _book),
-                ),
-              ),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          icon: const Icon(Icons.image_outlined, size: 18),
+          label: const Text('换封面'),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ChangeCoverPage(book: _book),
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.image_outlined, size: 18),
-              label: const Text('换封面'),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ChangeCoverPage(book: _book),
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  /// 简介区域
+  /// 简介区域（可展开/收起）
   Widget _buildDescription(ThemeData theme) {
+    final text = _book.description.trim();
+    final canExpand = text.length > 72 || '\n'.allMatches(text).length >= 2;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       color: theme.colorScheme.surfaceContainerLow,
@@ -549,17 +646,40 @@ class _BookInfoPageState extends State<BookInfoPage> {
                 '简介',
                 style: TextStyle(fontSize: 12, color: Colors.grey[500]),
               ),
+              const Spacer(),
+              if (canExpand)
+                TextButton(
+                  onPressed: () =>
+                      setState(() => _introExpanded = !_introExpanded),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    _introExpanded ? '收起' : '展开',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            _book.description,
-            maxLines: 4,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 13,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-              height: 1.5,
+          GestureDetector(
+            onTap: canExpand
+                ? () => setState(() => _introExpanded = !_introExpanded)
+                : null,
+            child: Text(
+              text,
+              maxLines: _introExpanded || !canExpand ? null : 3,
+              overflow: _introExpanded || !canExpand
+                  ? TextOverflow.visible
+                  : TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                height: 1.5,
+              ),
             ),
           ),
           const SizedBox(height: 8),

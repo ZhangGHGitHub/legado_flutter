@@ -14,6 +14,9 @@ class Book {
   final String description; // 书籍简介
   final String bookSourceUrl; // 搜索到此书的书源 URL（用于匹配书源规则）
   final String group; // 书架分组
+  /// 阅读轮次（对齐 Jingshiro `readIteration`）：
+  /// 0=未读完，1=读完，2=二刷，3=二刷完，依此类推。
+  final int readIteration;
 
   Book({
     required this.id,
@@ -30,7 +33,21 @@ class Book {
     this.description = '',
     this.bookSourceUrl = '',
     this.group = '',
+    this.readIteration = 0,
   });
+
+  /// 「读完」「N刷」「N刷完」标签文案；无标记时返回 null
+  String? get readStatusLabel => labelForReadIteration(readIteration);
+
+  /// 0=无，1=读完，2=二刷，3=二刷完…
+  static String? labelForReadIteration(int readIteration) {
+    if (readIteration <= 0) return null;
+    if (readIteration == 1) return '读完';
+    if (readIteration.isOdd) {
+      return '${(readIteration + 1) ~/ 2}刷完';
+    }
+    return '${readIteration ~/ 2 + 1}刷';
+  }
 
   /// 复制并修改部分字段
   Book copyWith({
@@ -48,6 +65,7 @@ class Book {
     String? description,
     String? bookSourceUrl,
     String? group,
+    int? readIteration,
   }) {
     return Book(
       id: id ?? this.id,
@@ -64,6 +82,7 @@ class Book {
       description: description ?? this.description,
       bookSourceUrl: bookSourceUrl ?? this.bookSourceUrl,
       group: group ?? this.group,
+      readIteration: readIteration ?? this.readIteration,
     );
   }
 
@@ -84,6 +103,7 @@ class Book {
       description: json['description'] as String? ?? '',
       bookSourceUrl: json['bookSourceUrl'] as String? ?? '',
       group: json['group'] as String? ?? '',
+      readIteration: (json['readIteration'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -104,6 +124,7 @@ class Book {
       'description': description,
       'bookSourceUrl': bookSourceUrl,
       'group': group,
+      'readIteration': readIteration,
     };
   }
 

@@ -224,10 +224,7 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                         ),
-                      ReadBadge(
-                        progress: book.progress,
-                        currentChapter: book.currentChapter,
-                      ),
+                      ReadBadge.fromBook(book),
                     ],
                   ),
                 );

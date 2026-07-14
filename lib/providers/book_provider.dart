@@ -135,6 +135,14 @@ class BookProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 更新读完/N刷轮次（upsert 整书字段）
+  Future<void> updateReadIteration(Book book, int readIteration) async {
+    final next = book.copyWith(readIteration: readIteration);
+    await _db.insertBook(next);
+    _books = await _db.getBooks();
+    notifyListeners();
+  }
+
   /// 从本地导入 TXT/EPUB
   Future<Book?> importLocalBook() async {
     _isLoading = true;
