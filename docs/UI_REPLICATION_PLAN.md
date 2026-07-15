@@ -504,11 +504,12 @@
 - [x] 清除选中/全部缓存；搜索；入口：我的 / 书架更多 / 阅读顶栏下载
 - [ ] 导出（txt/epub）仍开放
 
-#### Task UI-14: AI 配置 Dialog (`dialog_ai_config.xml` + `dialog_ai_memory.xml`)
+#### Task UI-14: AI 配置 Dialog (`dialog_ai_config.xml` + `dialog_ai_memory.xml`) — ✅ 基本完成（2026-07-15）
 
-- [ ] API URL + Key + Model 配置
-- [ ] 记忆管理
-- [ ] 预设 System Prompt
+- [x] API URL + Key + Model 配置（含获取模型列表 / 测试可用性）
+- [x] 记忆管理（列表 + 清除）
+- [x] 预设 System Prompt（人设）、工具开关、头像 URL
+- [ ] AI 对话聊天本体仍占位（配置已可保存）
 
 #### Task UI-15: Obsidian 导出配置 (`dialog_obsidian_export.xml`)
 

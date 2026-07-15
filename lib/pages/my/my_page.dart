@@ -14,6 +14,7 @@ import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_card.dart';
 import '../../widgets/legado_list_tile.dart';
 import '../../widgets/quick_action_button.dart';
+import '../ai/ai_config_dialog.dart';
 import '../book/bookmark_page.dart';
 import '../cache/cache_book_page.dart';
 import '../config/config_page.dart';
@@ -480,6 +481,15 @@ class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
                   title: 'AI 助手',
                   subtitle: '大模型智能辅助',
                   onTap: () => _openPage(const AiChatPage(isStandalone: true)),
+                ),
+                const LegadoListDivider(),
+                LegadoListTile(
+                  icon: Icons.tune_outlined,
+                  title: 'AI 配置',
+                  subtitle: 'API / 模型 / 人设 / 记忆',
+                  onTap: () async {
+                    await AiConfigDialog.show(context);
+                  },
                 ),
                 const LegadoListDivider(),
                 LegadoListTile(
