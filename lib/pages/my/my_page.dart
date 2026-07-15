@@ -15,6 +15,7 @@ import '../../widgets/legado_card.dart';
 import '../../widgets/legado_list_tile.dart';
 import '../../widgets/quick_action_button.dart';
 import '../book/bookmark_page.dart';
+import '../cache/cache_book_page.dart';
 import '../config/config_page.dart';
 import '../config/feature_placeholder_page.dart';
 import '../reader/ai_chat_page.dart';
@@ -396,6 +397,13 @@ class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
                       icon: Icons.article_outlined,
                     ),
                   ),
+                ),
+                const LegadoListDivider(),
+                LegadoListTile(
+                  icon: Icons.download_for_offline_outlined,
+                  title: '离线缓存',
+                  subtitle: '按书管理缓存并下载章节',
+                  onTap: () => _openPage(const CacheBookPage()),
                 ),
                 const LegadoListDivider(),
                 LegadoListTile(

@@ -22,7 +22,10 @@ import '../../utils/chinese_convert.dart';
 import '../book/change_source_page.dart';
 import '../book/toc_sheet.dart';
 import '../book/book_info_page.dart';
+import '../cache/download_choice_dialog.dart';
+import '../cache/download_helpers.dart';
 import '../reader/ai_chat_page.dart';
+import '../../help/book_help.dart';
 import '../../services/click_action_prefs.dart';
 import '../../services/read_style_prefs.dart';
 import '../../services/simulated_reading_prefs.dart';
@@ -1302,6 +1305,100 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
+  Future<void> _openOfflineCache() async {
+    final provider = context.read<BookProvider>();
+    if (provider.isDownloading) {
+      if (provider.downloadBookId == widget.book.id) {
+        provider.cancelDownload();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('已停止缓存')),
+          );
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('正在缓存其他书籍')),
+        );
+      }
+      return;
+    }
+
+    final source = context.read<SourceProvider>().findSourceForBook(widget.book);
+    if (source == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('未找到书源，无法缓存')),
+        );
+      }
+      return;
+    }
+
+    var chapters = List<Chapter>.from(widget.allChapters);
+    if (chapters.isEmpty) {
+      await provider.loadChapters(widget.book, source: source);
+      if (!mounted) return;
+      chapters = List<Chapter>.from(provider.currentChapters);
+    }
+    if (chapters.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('目录为空')),
+        );
+      }
+      return;
+    }
+
+    final cachedIds = await BookHelp.listCachedChapterIds(widget.book.id);
+    final cachedCount = chapters
+        .where(
+          (c) =>
+              c.isDownloaded ||
+              cachedIds.contains(BookHelp.sanitizeId(c.id)),
+        )
+        .length;
+
+    if (!mounted) return;
+    final choice = await DownloadChoiceDialog.show(
+      context,
+      currentChapterIndex: _currentIndex.clamp(0, chapters.length - 1),
+      totalChapters: chapters.length,
+      cachedCount: cachedCount,
+    );
+    if (choice == null || !mounted) return;
+
+    final toDownload = filterChaptersForDownload(
+      chapters,
+      choice,
+      startIndex: _currentIndex,
+      cachedIds: cachedIds,
+    );
+    if (toDownload.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('没有需要缓存的章节')),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('开始缓存 ${toDownload.length} 章…')),
+    );
+    await provider.downloadAllChapters(
+      widget.book.id,
+      toDownload,
+      source,
+      concurrency: choice.concurrency,
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '缓存完成 ${provider.downloadCompleted}/${toDownload.length}',
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _refreshChapter() async {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('正在刷新本章…'), duration: Duration(seconds: 1)),
@@ -1387,7 +1484,7 @@ class _ReaderPageState extends State<ReaderPage> {
       case 'book_info':
         _openBookInfo();
       case 'cache':
-        _showNotImplemented('离线缓存');
+        unawaited(_openOfflineCache());
       case 'page_anim':
         _showNotImplemented('翻页动画(本书)');
       case 'cloud_progress':
@@ -1541,7 +1638,7 @@ class _ReaderPageState extends State<ReaderPage> {
                       style: iconBtnStyle,
                       icon: const Icon(Icons.download_outlined),
                       tooltip: '离线缓存',
-                      onPressed: () => _showNotImplemented('离线缓存'),
+                      onPressed: () => unawaited(_openOfflineCache()),
                     ),
                     PopupMenuButton<String>(
                       icon: Icon(Icons.more_vert, color: theme.text),

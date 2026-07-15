@@ -141,6 +141,31 @@ class BookHelp {
     }
   }
 
+  /// 单书缓存体积（字节）与章节文件数
+  static Future<({int bytes, int chapterFiles})> bookCacheStats(
+    String bookId,
+  ) async {
+    try {
+      final root = await _cacheRoot();
+      final bookDir = Directory(p.join(root.path, _sanitize(bookId)));
+      if (!await bookDir.exists()) return (bytes: 0, chapterFiles: 0);
+      var bytes = 0;
+      var files = 0;
+      await for (final entity in bookDir.list()) {
+        if (entity is! File) continue;
+        if (!entity.path.endsWith('.txt')) continue;
+        try {
+          bytes += await entity.length();
+          files++;
+        } catch (_) {}
+      }
+      return (bytes: bytes, chapterFiles: files);
+    } catch (e) {
+      debugPrint('BookHelp 统计缓存体积失败: $e');
+      return (bytes: 0, chapterFiles: 0);
+    }
+  }
+
   /// 删除单章文件缓存（用于阅读器「刷新」）
   static Future<void> deleteChapterContent(
     String bookId,

@@ -7,9 +7,13 @@ import '../../models/book.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/bookshelf_prefs.dart';
+import '../../services/local_book_service.dart';
+import '../../theme/legado_tokens.dart';
 import '../../widgets/book_cover.dart';
+import '../../widgets/error_view.dart';
 import '../../widgets/legado_refresh_indicator.dart';
 import '../book/book_info_page.dart';
+import '../cache/cache_book_page.dart';
 import '../search/search_page.dart';
 import 'bookshelf_arrange_page.dart';
 
@@ -90,7 +94,9 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(LegadoTokens.radiusCard),
+        ),
       ),
       builder: (_) => _GroupSheet(
         books: books,
@@ -131,11 +137,26 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
   }
 
   void _addLocalBook() async {
-    final b = await context.read<BookProvider>().importLocalBook();
-    if (b != null && mounted)
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已导入: ${b.name}')));
+    try {
+      final b = await context.read<BookProvider>().importLocalBook();
+      if (b != null && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('已导入: ${b.name}')));
+      }
+    } on LocalBookImportException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导入失败: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   void _cacheAllBooks() async {
@@ -193,6 +214,12 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                 onSelected: (a) {
                   if (a == 'add_local') _addLocalBook();
                   if (a == 'cache_all') _cacheAllBooks();
+                  if (a == 'cache_mgr') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const CacheBookPage()),
+                    );
+                  }
                   if (a == 'group_mgmt') _showGroupManagement();
                   if (a == 'arrange') _openArrange();
                   if (a == 'grid_layout') widget.onSwitchToGrid?.call();
@@ -205,6 +232,10 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                   const PopupMenuItem(
                     value: 'cache_all',
                     child: _MenuRow(Icons.download, '缓存全部'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'cache_mgr',
+                    child: _MenuRow(Icons.download_for_offline, '离线缓存'),
                   ),
                   const PopupMenuItem(
                     value: 'group_mgmt',
@@ -235,6 +266,12 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
   Widget _buildBody(BookProvider provider) {
     if (provider.isLoading && provider.books.isEmpty) {
       return const Center(child: CircularProgressIndicator());
+    }
+    if (provider.loadError != null && provider.books.isEmpty) {
+      return ErrorView(
+        message: provider.loadError!,
+        onRetry: () => provider.loadBooks(),
+      );
     }
     final books = _processBooks(provider.books);
     if (provider.books.isEmpty) return _buildEmpty();
@@ -268,7 +305,9 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
             : ListView.builder(
                 controller: widget.scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  vertical: LegadoTokens.spacingSm,
+                ),
                 itemCount: books.length,
                 itemBuilder: (_, i) => _BookItem(
                   book: books[i],
@@ -296,15 +335,19 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
       height: kToolbarHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.only(left: 8, right: 4),
+        padding: const EdgeInsets.only(
+          left: LegadoTokens.spacingSm,
+          right: LegadoTokens.spacingXs,
+        ),
         itemCount: entries.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 4),
+        separatorBuilder: (_, _) =>
+            const SizedBox(width: LegadoTokens.spacingXs),
         itemBuilder: (_, i) {
           final (id, label) = entries[i];
           final selected = _selectedGroup == id;
           return InkWell(
             onTap: () => setState(() => _selectedGroup = id),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(LegadoTokens.radiusSmall),
             child: Container(
               alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -338,12 +381,12 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.menu_book_outlined, size: 64, color: scheme.outlineVariant),
-          const SizedBox(height: 16),
+          const SizedBox(height: LegadoTokens.spacingMd),
           Text(
             '书架空空如也',
             style: TextStyle(fontSize: 16, color: scheme.onSurface),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: LegadoTokens.spacingSm),
           Text(
             '点击右下角 + 添加本地书籍',
             style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
@@ -375,7 +418,12 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  padding: const EdgeInsets.fromLTRB(
+                    LegadoTokens.pageHorizontal,
+                    12,
+                    LegadoTokens.pageHorizontal,
+                    LegadoTokens.spacingXs,
+                  ),
                   child: Text(
                     g,
                     style: const TextStyle(fontWeight: FontWeight.w600),
@@ -427,14 +475,21 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     final chosen = await showModalBottomSheet<String>(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(LegadoTokens.radiusCard),
+        ),
       ),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              padding: const EdgeInsets.fromLTRB(
+                LegadoTokens.pageHorizontal,
+                14,
+                LegadoTokens.pageHorizontal,
+                LegadoTokens.spacingSm,
+              ),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -474,7 +529,9 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(LegadoTokens.radiusCard),
+        ),
       ),
       builder: (ctx) => SafeArea(
         child: Column(
@@ -592,18 +649,23 @@ class _BookItem extends StatelessWidget {
       onTap: onTap,
       onLongPress: onLongPress,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: const EdgeInsets.fromLTRB(
+          LegadoTokens.pageHorizontal,
+          LegadoDimens.pageVertical,
+          LegadoTokens.pageHorizontal,
+          LegadoDimens.pageVertical,
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             BookCover(
               coverUrl: book.coverUrl,
               author: book.author,
-              width: 64,
-              height: 86,
-              radius: 4,
+              width: LegadoTokens.coverListWidth,
+              height: LegadoTokens.coverListHeight,
+              radius: LegadoTokens.radiusSmall,
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: LegadoTokens.spacingMd),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -616,7 +678,7 @@ class _BookItem extends StatelessWidget {
                           size: 14,
                           color: scheme.primary,
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: LegadoTokens.spacingXs),
                       ],
                       Expanded(
                         child: Text(
@@ -638,7 +700,7 @@ class _BookItem extends StatelessWidget {
                     book.author.isNotEmpty ? book.author : '未知作者',
                     muted,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: LegadoTokens.spacingXs),
                   _metaLine(
                     Icons.access_time,
                     book.currentChapter?.isNotEmpty == true
@@ -646,7 +708,7 @@ class _BookItem extends StatelessWidget {
                         : '尚未开始阅读',
                     muted,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: LegadoTokens.spacingXs),
                   _metaLine(
                     Icons.explore_outlined,
                     book.lastChapter?.isNotEmpty == true
@@ -657,7 +719,7 @@ class _BookItem extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: LegadoTokens.spacingSm),
             isUpdating
                 ? const LegadoShelfUpdatingIndicator()
                 : _UnreadBadge(book: book),
@@ -671,7 +733,7 @@ class _BookItem extends StatelessWidget {
     return Row(
       children: [
         Icon(icon, size: 14, color: color),
-        const SizedBox(width: 4),
+        const SizedBox(width: LegadoTokens.spacingXs),
         Expanded(
           child: Text(
             text,
@@ -740,7 +802,7 @@ class _UnreadBadge extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(LegadoTokens.radiusSmall),
         ),
         child: Text(
           label,

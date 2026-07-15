@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/chapter.dart';
+import '../database/dao/book_dao.dart';
 import '../database/database_helper.dart';
 import '../help/book_help.dart';
 import '../help/content_processor.dart';
@@ -14,20 +15,22 @@ import '../services/local_book_service.dart';
 /// 书籍管理 Provider — 书架、阅读、章节、下载缓存
 class BookProvider extends ChangeNotifier {
   BookProvider() {
+    // ReadBook 仍直接依赖 DatabaseHelper（会话层缓存），与 BookDao 同为单例库
     ReadBook.instance.configure(
       sourceService: _sourceService,
-      db: _db,
+      db: DatabaseHelper(),
       processor: ContentProcessor.instance,
     );
   }
 
-  final DatabaseHelper _db = DatabaseHelper();
+  final BookDao _dao = BookDao();
   final BookSourceService _sourceService = BookSourceService();
   final LocalBookService _localService = LocalBookService();
 
   List<Book> _books = [];
   List<Chapter> _currentChapters = [];
   bool _isLoading = false;
+  String? _loadError;
 
   // 下载状态
   bool _isDownloading = false;
@@ -54,12 +57,19 @@ class BookProvider extends ChangeNotifier {
   List<Book> get books => _books;
   List<Chapter> get currentChapters => _currentChapters;
   bool get isLoading => _isLoading;
+  String? get loadError => _loadError;
   bool get isDownloading => _isDownloading;
   int get downloadTotal => _downloadTotal;
   int get downloadCompleted => _downloadCompleted;
   String get downloadBookId => _downloadBookId;
   double get downloadProgress =>
       _downloadTotal > 0 ? _downloadCompleted / _downloadTotal : 0.0;
+
+  /// 本地库中该书的章节数（缓存页展示用）
+  Future<int> getChapterCount(String bookId) async {
+    final list = await _dao.getChapters(bookId);
+    return list.length;
+  }
 
   ReadBook get readBook => ReadBook.instance;
 
@@ -95,15 +105,43 @@ class BookProvider extends ChangeNotifier {
         isDownloaded: c.isDownloaded,
       );
     }).toList();
-    await _db.insertChapters(list);
+    await _dao.insertChapters(list);
     _currentChapters = list;
     notifyListeners();
   }
 
   /// 加载书架
   Future<void> loadBooks() async {
-    _books = await _db.getBooks();
+    _isLoading = true;
+    _loadError = null;
     notifyListeners();
+    try {
+      _books = await _dao.getAll();
+      _loadError = null;
+    } catch (e) {
+      _loadError = '加载书架失败: $e';
+      debugPrint(_loadError);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// 从本地导入 TXT/EPUB
+  Future<Book?> importLocalBook() async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final book = await _localService.importFromFile();
+      if (book != null) {
+        _books = await _dao.getAll();
+        notifyListeners();
+      }
+      return book;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   /// 书架下拉刷新 — 对齐 legado `MainViewModel.upToc` + `BooksFragment` listener：
@@ -144,7 +182,7 @@ class BookProvider extends ChangeNotifier {
         notifyListeners();
         try {
           await _refreshBookTocOnShelf(book, source);
-          _books = await _db.getBooks();
+          _books = await _dao.getAll();
         } catch (e, st) {
           debugPrint('书架目录更新失败 ${book.name}: $e\n$st');
         } finally {
@@ -160,7 +198,7 @@ class BookProvider extends ChangeNotifier {
     );
     await Future.wait(workers);
     _shelfUpdateQueued = 0;
-    _books = await _db.getBooks();
+    _books = await _dao.getAll();
     notifyListeners();
   }
 
@@ -185,9 +223,9 @@ class BookProvider extends ChangeNotifier {
 
   Future<void> _refreshBookTocOnShelf(Book book, BookSource source) async {
     final remote = await _sourceService.getChapters(book, source: source);
-    final local = await _db.getChapters(book.id);
+    final local = await _dao.getChapters(book.id);
     final merged = _mergeTocWithLocal(remote, local);
-    await _db.insertChapters(
+    await _dao.insertChapters(
       merged
           .map(
             (c) => Chapter(
@@ -223,40 +261,40 @@ class BookProvider extends ChangeNotifier {
         updated = book.copyWith(lastChapter: merged.last.title);
       }
     }
-    await _db.insertBook(updated);
+    await _dao.insert(updated);
   }
 
   /// 添加书籍到书架
   Future<void> addBook(Book book) async {
-    await _db.insertBook(book);
-    _books = await _db.getBooks();
+    await _dao.insert(book);
+    _books = await _dao.getAll();
     notifyListeners();
   }
 
   /// 从书架移除
   Future<void> removeBook(String bookId) async {
-    await _db.deleteBook(bookId);
+    await _dao.delete(bookId);
     await BookHelp.clearBookCache(bookId);
-    _books = await _db.getBooks();
+    _books = await _dao.getAll();
     notifyListeners();
   }
 
   /// 批量从书架移除
   Future<void> removeBooks(Iterable<String> bookIds) async {
     for (final id in bookIds) {
-      await _db.deleteBook(id);
+      await _dao.delete(id);
       await BookHelp.clearBookCache(id);
     }
-    _books = await _db.getBooks();
+    _books = await _dao.getAll();
     notifyListeners();
   }
 
   /// 批量更新分组
   Future<void> updateBooksGroup(Iterable<String> bookIds, String group) async {
     for (final id in bookIds) {
-      await _db.updateBookGroup(id, group);
+      await _dao.updateGroup(id, group);
     }
-    _books = await _db.getBooks();
+    _books = await _dao.getAll();
     notifyListeners();
   }
 
@@ -267,28 +305,28 @@ class BookProvider extends ChangeNotifier {
     String? chapter, {
     int pageIndex = 0,
   }) async {
-    await _db.updateBookProgress(
+    await _dao.updateProgress(
       bookId,
       progress,
       chapter,
       pageIndex: pageIndex,
     );
-    _books = await _db.getBooks();
+    _books = await _dao.getAll();
     notifyListeners();
   }
 
   /// 更新书籍分组
   Future<void> updateBookGroup(String bookId, String group) async {
-    await _db.updateBookGroup(bookId, group);
-    _books = await _db.getBooks();
+    await _dao.updateGroup(bookId, group);
+    _books = await _dao.getAll();
     notifyListeners();
   }
 
   /// 更新读完/N刷轮次（upsert 整书字段）
   Future<void> updateReadIteration(Book book, int readIteration) async {
     final next = book.copyWith(readIteration: readIteration);
-    await _db.insertBook(next);
-    _books = await _db.getBooks();
+    await _dao.insert(next);
+    _books = await _dao.getAll();
     notifyListeners();
   }
 
@@ -315,27 +353,10 @@ class BookProvider extends ChangeNotifier {
       simReadStartChapter: startChapter < 0 ? 0 : startChapter,
       simReadDailyChapters: dailyChapters < 1 ? 3 : dailyChapters.clamp(1, 999),
     );
-    await _db.insertBook(next);
-    _books = await _db.getBooks();
+    await _dao.insert(next);
+    _books = await _dao.getAll();
     notifyListeners();
     return findBookById(book.id) ?? next;
-  }
-
-  /// 从本地导入 TXT/EPUB
-  Future<Book?> importLocalBook() async {
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final book = await _localService.importFromFile();
-      if (book != null) {
-        _books = await _db.getBooks();
-        notifyListeners();
-      }
-      return book;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
   }
 
   // ── 下载缓存 ──
@@ -352,15 +373,16 @@ class BookProvider extends ChangeNotifier {
       bookId: bookId,
       saveCache: true,
     );
-    await _db.saveChapterContent(chapter.id, content);
+    await _dao.saveChapterContent(chapter.id, content);
     return content;
   }
 
   Future<void> downloadAllChapters(
     String bookId,
     List<Chapter> chapters,
-    BookSource source,
-  ) async {
+    BookSource source, {
+    int concurrency = 1,
+  }) async {
     _isDownloading = true;
     _downloadBookId = bookId;
     _downloadTotal = chapters.length;
@@ -368,26 +390,31 @@ class BookProvider extends ChangeNotifier {
     _cancelRequested = false;
     notifyListeners();
 
-    await _db.insertChapters(chapters);
+    await _dao.insertChapters(chapters);
 
-    for (final chapter in chapters) {
-      if (_cancelRequested) break;
-
-      try {
-        await downloadChapter(chapter, source);
-        _downloadCompleted++;
-        notifyListeners();
-      } catch (e) {
-        debugPrint('  ✗ 下载失败: ${chapter.title} — $e');
+    final workers = concurrency.clamp(1, 8);
+    var next = 0;
+    Future<void> worker() async {
+      while (!_cancelRequested) {
+        final i = next++;
+        if (i >= chapters.length) break;
+        final chapter = chapters[i];
+        try {
+          await downloadChapter(chapter, source);
+        } catch (e) {
+          debugPrint('  ✗ 下载失败: ${chapter.title} — $e');
+        }
         _downloadCompleted++;
         notifyListeners();
       }
     }
 
+    await Future.wait(List.generate(workers, (_) => worker()));
+
     _isDownloading = false;
     _downloadBookId = '';
     if (_currentChapters.isNotEmpty) {
-      final localChapters = await _db.getChapters(bookId);
+      final localChapters = await _dao.getChapters(bookId);
       final downloadedIds = localChapters
           .where((c) => c.isDownloaded)
           .map((c) => c.id)
@@ -400,7 +427,7 @@ class BookProvider extends ChangeNotifier {
               title: c.title,
               index: c.index,
               url: c.url,
-              isDownloaded: downloadedIds.contains(c.id),
+              isDownloaded: downloadedIds.contains(c.id) || c.isDownloaded,
               content: c.content,
             ),
           )
@@ -459,7 +486,7 @@ class BookProvider extends ChangeNotifier {
     }
 
     final gen = ++_tocLoadGen;
-    final localChapters = await _db.getChapters(book.id);
+    final localChapters = await _dao.getChapters(book.id);
     final hasLocal = localChapters.isNotEmpty;
 
     if (hasLocal && !forceRefresh) {
@@ -505,10 +532,10 @@ class BookProvider extends ChangeNotifier {
       final remote = await _sourceService.getChapters(book, source: source);
       if (gen != _tocLoadGen) return;
 
-      final local = await _db.getChapters(book.id);
+      final local = await _dao.getChapters(book.id);
       final merged = _mergeTocWithLocal(remote, local);
       // 只落目录元数据 + isDownloaded，不把正文再次塞进 upsert JSON
-      await _db.insertChapters(
+      await _dao.insertChapters(
         merged
             .map(
               (c) => Chapter(
@@ -524,7 +551,7 @@ class BookProvider extends ChangeNotifier {
       );
       if (gen != _tocLoadGen) return;
 
-      final saved = await _db.getChapters(book.id);
+      final saved = await _dao.getChapters(book.id);
       _currentChapters = _tocViewList(saved.isNotEmpty ? saved : merged);
       unawaited(_enrichDownloadedFromFiles(book.id, gen));
 
@@ -658,6 +685,6 @@ class BookProvider extends ChangeNotifier {
   }
 
   Future<List<Chapter>> getLocalChapters(String bookId) async {
-    return await _db.getChapters(bookId);
+    return await _dao.getChapters(bookId);
   }
 }
