@@ -10,7 +10,7 @@ use crate::rule::js_engine;
 /// 获取目录
 pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterItem>, String> {
     let source = BookSource::from_json(source_json)?;
-    let _ = js_engine::reset_cache();
+    // 不清空 js_cache：详情 tocUrl 的 java.ajax 可能已写入 kelexs_key/iv
     if source.needs_dart_js_for_toc() {
         return Err("书源含 JS 规则，需 Dart 引擎".to_string());
     }
@@ -26,6 +26,7 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
     let mut current_url = fetch_url;
     let base_url = http::client::base_url(&current_url);
     let max_pages = 50;
+    let mut last_body = String::new();
 
     for _page in 0..max_pages {
         if current_url.is_empty() || visited_pages.contains(&current_url) {
@@ -42,6 +43,7 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
             &source.raw_json,
         )
         .await?;
+        last_body = body.clone();
 
         let batch = if let Ok(data) = serde_json::from_str::<serde_json::Value>(&body) {
             if source.is_json_api() {
@@ -118,6 +120,7 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
                     &source.raw_json,
                 )
                 .await?;
+                last_body = post_resp.clone();
                 let post_batch =
                     parse_html_toc_items(&post_resp, &source, &base_url, &post_url)?;
                 let mut added = 0;
@@ -165,7 +168,34 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
         current_url = resolved;
     }
 
+    if merged.is_empty() {
+        if let Some(msg) = upstream_toc_failure_message(&last_body) {
+            return Err(msg);
+        }
+    }
+
     Ok(merged)
+}
+
+/// 站点返回错误页 / 明文异常时，避免静默「目录 0 条」
+fn upstream_toc_failure_message(body: &str) -> Option<String> {
+    let t = body.trim();
+    if t.is_empty() {
+        return Some("目录页为空响应".to_string());
+    }
+    if t.contains("数据库")
+        || t.contains("SQLSTATE")
+        || t.contains("Too many connections")
+        || t.contains("连接失败")
+    {
+        let head: String = t.chars().take(160).collect();
+        return Some(format!("目录页站点异常: {head}"));
+    }
+    if t.len() < 120 && !t.contains('<') && !t.starts_with('{') && !t.starts_with('[') {
+        let head: String = t.chars().take(160).collect();
+        return Some(format!("目录页异常文本: {head}"));
+    }
+    None
 }
 
 /// 拆分 `https://host/path,{"method":"POST","body":"..."}`（Legado AnalyzeUrl）
@@ -206,12 +236,16 @@ async fn resolve_toc_fetch_url(source: &BookSource, book_url: &str) -> Result<St
 
     if js_engine::contains_js_block(toc_rule) {
         if let Some(script) = js_engine::extract_js_block(toc_rule) {
+            // tocUrl JS 会 java.ajax(book.bookUrl) 抽 AES 密钥，须用详情页而非目录页
+            let book_for_ajax = book_url
+                .replace("/chapter/", "/book/")
+                .replace("/read/", "/book/");
             if let Ok(out) = js_engine::run_with_result_opts(
                 &script,
                 "",
                 &source.js_lib,
                 book_url,
-                Some(book_url),
+                Some(&book_for_ajax),
             ) {
                 let out = out.trim().to_string();
                 if !out.is_empty() && out != "null" {
@@ -264,4 +298,25 @@ fn parse_html_toc_items(
             },
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn upstream_sql_error_detected() {
+        let msg = upstream_toc_failure_message(
+            "数据库连接失败:SQLSTATE[08004] [1040] Too many connections",
+        );
+        assert!(msg.unwrap().contains("站点异常"));
+    }
+
+    #[test]
+    fn normal_html_not_flagged_as_upstream_error() {
+        assert!(upstream_toc_failure_message(
+            r#"<html><body><ul class="chapList chapListBody"><li><a href="/r/1">一</a></li></ul></body></html>"#
+        )
+        .is_none());
+    }
 }

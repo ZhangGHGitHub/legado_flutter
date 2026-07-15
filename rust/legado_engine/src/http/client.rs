@@ -148,6 +148,33 @@ pub fn parse_url_config_with_page(raw_url: &str, keyword: &str, page: i32) -> Re
     }
 }
 
+/// 同步 HTTP GET（供 QuickJS `java.ajax`）。
+/// 在独立线程 + 独立 tokio Runtime 中执行，避免嵌套 `block_on` 死锁。
+pub fn fetch_url_blocking(url: &str, referer: Option<&str>) -> Result<String, String> {
+    let url = url.to_string();
+    let referer = referer.map(|s| s.to_string());
+    let joined = std::thread::spawn(move || {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| format!("创建 java.ajax runtime 失败: {e}"))?;
+        rt.block_on(async move {
+            fetch_text(
+                &url,
+                "GET",
+                None,
+                "UTF-8",
+                referer.as_deref(),
+                "",
+            )
+            .await
+        })
+    })
+    .join()
+    .map_err(|_| "java.ajax 线程异常".to_string())?;
+    joined
+}
+
 /// 发送 HTTP 请求并返回解码文本
 pub async fn fetch_text(
     url: &str,

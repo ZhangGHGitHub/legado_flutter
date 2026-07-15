@@ -1,26 +1,50 @@
 var legadoResult = null;
 var baseUrl = '';
 
+// 跨 QuickJS Runtime 的全局 cache（宿主 __legado_cache_*；无宿主时回退内存）
 var cache = {
   _mem: {},
   _ttl: {},
-  putMemory: function(k, v) { cache._mem[String(k)] = String(v); },
-  getFromMemory: function(k) { return cache._mem[String(k)] || ''; },
+  putMemory: function(k, v) {
+    if (typeof __legado_cache_put === 'function') {
+      __legado_cache_put(String(k), String(v), 0);
+      return;
+    }
+    cache._mem[String(k)] = String(v);
+  },
+  getFromMemory: function(k) {
+    if (typeof __legado_cache_get === 'function') {
+      return __legado_cache_get(String(k)) || '';
+    }
+    return cache._mem[String(k)] || '';
+  },
   deleteMemory: function(k) {
+    if (typeof __legado_cache_delete === 'function') {
+      __legado_cache_delete(String(k));
+      return;
+    }
     delete cache._mem[String(k)];
     delete cache._ttl[String(k)];
   },
   put: function(k, v, seconds) {
     var key = String(k);
+    var sec = seconds && seconds > 0 ? Number(seconds) : 0;
+    if (typeof __legado_cache_put === 'function') {
+      __legado_cache_put(key, String(v), sec);
+      return;
+    }
     cache._mem[key] = String(v);
-    if (seconds && seconds > 0) {
-      cache._ttl[key] = Date.now() + (seconds * 1000);
+    if (sec > 0) {
+      cache._ttl[key] = Date.now() + (sec * 1000);
     } else {
       delete cache._ttl[key];
     }
   },
   get: function(k) {
     var key = String(k);
+    if (typeof __legado_cache_get === 'function') {
+      return __legado_cache_get(key) || '';
+    }
     var exp = cache._ttl[key];
     if (exp && Date.now() > exp) {
       delete cache._mem[key];

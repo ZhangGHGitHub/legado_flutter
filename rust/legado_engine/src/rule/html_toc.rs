@@ -154,17 +154,47 @@ fn json_prop(v: &Value, key: &str) -> String {
     if key.is_empty() {
         return String::new();
     }
-    // 纯属性名，或兜底常见别名
-    let keys: Vec<&str> = if js_engine::is_plain_property_rule(key) {
+    // 纯属性名 + 常见别名（chaptername / chapterName 等）
+    let mut keys: Vec<&str> = if js_engine::is_plain_property_rule(key) {
         vec![key]
     } else {
-        vec![key, "chaptername", "chapterName", "name", "title"]
+        vec![key]
     };
+    for alias in [
+        "chaptername",
+        "chapterName",
+        "chapterurl",
+        "chapterUrl",
+        "name",
+        "title",
+        "url",
+        "href",
+    ] {
+        if !keys.iter().any(|k| k.eq_ignore_ascii_case(alias)) {
+            keys.push(alias);
+        }
+    }
     for k in keys {
         if let Some(s) = v.get(k).and_then(|x| x.as_str()) {
             let t = s.trim();
             if !t.is_empty() {
                 return t.to_string();
+            }
+        }
+        // 大小写不敏感再扫一遍 Object 键
+        if let Some(obj) = v.as_object() {
+            for (ok, ov) in obj {
+                if ok.eq_ignore_ascii_case(k) {
+                    if let Some(s) = ov.as_str() {
+                        let t = s.trim();
+                        if !t.is_empty() {
+                            return t.to_string();
+                        }
+                    }
+                    if let Some(n) = ov.as_i64() {
+                        return n.to_string();
+                    }
+                }
             }
         }
         if let Some(n) = v.get(k).and_then(|x| x.as_i64()) {
