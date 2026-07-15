@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../help/book_help.dart';
+import '../../help/content_processor.dart';
 import '../../models/chapter.dart';
+import '../../providers/replace_provider.dart';
+import '../../services/search_content_prefs.dart';
 import 'search_content_result.dart';
 
 /// 全文搜索（对齐 `activity_search_content.xml` + SearchContentActivity）
@@ -68,11 +72,13 @@ class _SearchContentPageState extends State<SearchContentPage> {
   bool _searching = false;
   bool _cancelled = false;
   int _resultCount = 0;
+  SearchContentPrefs _prefs = SearchContentPrefs();
 
   @override
   void initState() {
     super.initState();
     _queryCtrl = TextEditingController(text: widget.initialQuery ?? '');
+    _loadPrefs();
     if (widget.initialResults != null && widget.initialResults!.isNotEmpty) {
       _results.addAll(widget.initialResults!);
       _resultCount = _results.length;
@@ -88,6 +94,34 @@ class _SearchContentPageState extends State<SearchContentPage> {
         _startSearch(widget.initialQuery!.trim());
       });
     }
+  }
+
+  Future<void> _loadPrefs() async {
+    _prefs = await SearchContentPrefs.load();
+    if (mounted) setState(() {});
+    if (!mounted) return;
+    await context.read<ReplaceProvider>().loadRules();
+  }
+
+  Future<void> _toggleReplace(bool value) async {
+    setState(() => _prefs.enableReplace = value);
+    await _prefs.save();
+    if (_queryCtrl.text.trim().isNotEmpty) {
+      _startSearch(_queryCtrl.text.trim());
+    }
+  }
+
+  Future<void> _toggleRegex(bool value) async {
+    setState(() => _prefs.enableRegex = value);
+    await _prefs.save();
+    if (_queryCtrl.text.trim().isNotEmpty) {
+      _startSearch(_queryCtrl.text.trim());
+    }
+  }
+
+  String _prepareContent(String raw) {
+    if (!_prefs.enableReplace) return raw;
+    return ContentProcessor.instance.getContent(raw);
   }
 
   @override
@@ -124,11 +158,14 @@ class _SearchContentPageState extends State<SearchContentPage> {
       if (content == null || content.isEmpty) continue;
       if (content.startsWith('⚠️') || content.contains('（加载失败')) continue;
 
+      content = _prepareContent(content);
+
       final hits = _searchInChapter(
         content: content,
         query: query,
         chapterTitle: ch.title,
         chapterIndex: i,
+        useRegex: _prefs.enableRegex,
       );
       if (hits.isEmpty) continue;
       if (!mounted || _cancelled) break;
@@ -162,8 +199,36 @@ class _SearchContentPageState extends State<SearchContentPage> {
     required String query,
     required String chapterTitle,
     required int chapterIndex,
+    required bool useRegex,
   }) {
     final out = <SearchContentResult>[];
+    if (useRegex) {
+      RegExp? re;
+      try {
+        re = RegExp(query, multiLine: true);
+      } catch (_) {
+        return out;
+      }
+      var within = 0;
+      for (final m in re.allMatches(content)) {
+        final idx = m.start;
+        final len = m.end - m.start;
+        if (len <= 0) continue;
+        out.add(
+          SearchContentResult(
+            chapterTitle: chapterTitle,
+            query: m.group(0) ?? query,
+            resultText: _snippet(content, idx, len),
+            chapterIndex: chapterIndex,
+            queryIndexInChapter: idx,
+            resultCountWithinChapter: within,
+          ),
+        );
+        within++;
+      }
+      return out;
+    }
+
     var from = 0;
     var within = 0;
     while (true) {
@@ -273,6 +338,28 @@ class _SearchContentPageState extends State<SearchContentPage> {
             tooltip: '搜索',
             icon: const Icon(Icons.search),
             onPressed: () => _startSearch(_queryCtrl.text.trim()),
+          ),
+          PopupMenuButton<String>(
+            tooltip: '更多',
+            onSelected: (v) {
+              if (v == 'replace') {
+                _toggleReplace(!_prefs.enableReplace);
+              } else if (v == 'regex') {
+                _toggleRegex(!_prefs.enableRegex);
+              }
+            },
+            itemBuilder: (ctx) => [
+              CheckedPopupMenuItem<String>(
+                value: 'replace',
+                checked: _prefs.enableReplace,
+                child: const Text('净化'),
+              ),
+              CheckedPopupMenuItem<String>(
+                value: 'regex',
+                checked: _prefs.enableRegex,
+                child: const Text('正则'),
+              ),
+            ],
           ),
         ],
       ),

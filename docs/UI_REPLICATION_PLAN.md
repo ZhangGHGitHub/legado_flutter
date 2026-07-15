@@ -403,7 +403,7 @@
 - 仿真翻页为透视近似，**非** legado 真·书页卷曲网格；HTTP TTS
 - 主题 zip：自定义字体文件已落盘但阅读器未 `FontLoader`；关闭共用布局后排版仍全局（未做每主题独立字号行距）；内置 assets 背景图库未做
 - 文字底部对齐为分页贴底，未做 legado 行距重分配式撑满
-- 全文搜索：未做全书联网扫章 / 净化开关 / 正则搜索菜单项（`menu_enable_replace` / `menu_enable_regex`）
+- 全文搜索：未做全书联网扫章（净化/正则菜单已落地）
 - 模拟追读：配置未并入 Book 实体/WebDAV 同步；仅本地 SharedPreferences
 
 另：正文阻塞修复同轮收尾 — 空解析 `Err`、坏占位不缓存、`toEngineJson` 保嵌套规则、失败展示真实错误。
@@ -468,7 +468,8 @@
 - [x] 新页面：搜索框 + 结果列表 + 「搜索结果」底栏（顶/底滚动）
 - [x] 点击结果跳转 + 阅读内上/下个结果条（对齐 `view_search_menu`）
 - [x] 当前章始终可搜；其余章仅文件缓存（对齐 legado 网络书跳过未缓存）
-- [ ] 全书联网边下边搜；净化/正则菜单；结果内高亮滚动条快翻完善
+- [x] 净化/正则菜单（`menu_enable_replace` / `menu_enable_regex`）
+- [ ] 全书联网边下边搜；结果内高亮滚动条快翻完善
 
 #### Task UI-10: 书架整理 (`activity_arrange_book.xml`)
 
