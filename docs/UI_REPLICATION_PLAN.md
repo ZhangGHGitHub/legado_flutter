@@ -496,11 +496,12 @@
 - [ ] RSS 文章阅读页（WebView 或纯文本 / 外链，方案待定）
 - [ ] 收藏/已读标记
 
-#### Task UI-13: 缓存管理页面 (`activity_cache_book.xml`)
+#### Task UI-13: 缓存管理页面 (`activity_cache_book.xml`) — ✅ 基本完成（2026-07-15）
 
-- [ ] 书籍缓存列表
-- [ ] 按书籍展示缓存大小
-- [ ] 清除选中/全部缓存
+- [x] 书籍缓存列表（`CacheBookPage`，对齐 `CacheActivity`：书名/作者/已缓存 N/M + 体积）
+- [x] 按书籍展示缓存大小；播放/停止下载
+- [x] 清除选中/全部缓存；搜索；入口：我的 / 书架更多 / 阅读顶栏下载
+- [ ] 导出（txt/epub）仍开放
 
 #### Task UI-14: AI 配置 Dialog (`dialog_ai_config.xml` + `dialog_ai_memory.xml`)
 
@@ -514,11 +515,11 @@
 - [ ] 本地文件模式：文件夹路径
 - [ ] 导出范围选择（当前书/全部）
 
-#### Task UI-16: 下载选项 (`dialog_download_choice.xml`)
+#### Task UI-16: 下载选项 (`dialog_download_choice.xml`) — ✅ 基本完成（2026-07-15）
 
-- [ ] 下载范围：全部/未缓存/N章
-- [ ] 下载格式：纯文本/HTML
-- [ ] 并发数设置
+- [x] 下载范围：全部 / 未缓存 / 从当前到结尾 / 后 N 章
+- [x] 并发数设置（1–8，已接入 `downloadAllChapters`）
+- [~] 格式：当前仅纯文本缓存；HTML 导出未接入
 
 ---
 
