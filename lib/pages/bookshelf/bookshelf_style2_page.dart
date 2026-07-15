@@ -6,12 +6,14 @@ import 'package:provider/provider.dart';
 import '../../models/book.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
+import '../../services/bookshelf_prefs.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/legado_refresh_indicator.dart';
 import '../../widgets/read_badge.dart';
 import '../book/book_info_page.dart';
 import '../search/search_page.dart';
+import 'bookshelf_arrange_page.dart';
 
 /// 书架 style2 — 3 列网格 + 分组 Drawer
 class BookshelfStyle2Page extends StatefulWidget {
@@ -31,14 +33,44 @@ class BookshelfStyle2Page extends StatefulWidget {
 class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
   String _selectedGroup = '__all__';
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  List<String> _shelfOrder = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrder();
+  }
+
+  Future<void> _loadOrder() async {
+    final order = await BookshelfPrefs.loadBookOrder();
+    if (!mounted) return;
+    setState(() => _shelfOrder = order);
+  }
 
   List<Book> _processBooks(List<Book> books) {
-    if (_selectedGroup == '__all__') return books;
-    return books.where((b) => b.group == _selectedGroup).toList();
+    var result = BookshelfPrefs.applyBookOrder(books, _shelfOrder, (b) => b.id);
+    if (_selectedGroup == '__all__') return result;
+    return result.where((b) => b.group == _selectedGroup).toList();
   }
 
   Set<String> _getAllGroups(List<Book> books) =>
       books.map((b) => b.group).where((g) => g.isNotEmpty).toSet();
+
+  void _openArrange() async {
+    final group = _selectedGroup == '__all__' ? null : _selectedGroup;
+    final label = _selectedGroup == '__all__' ? '全部' : _selectedGroup;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BookshelfArrangePage(
+          groupFilter: group,
+          groupLabel: label,
+          gridLayout: true,
+        ),
+      ),
+    );
+    await _loadOrder();
+  }
 
   void _addLocalBook() async {
     final b = await context.read<BookProvider>().importLocalBook();
@@ -139,12 +171,17 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
           PopupMenuButton<String>(
             onSelected: (a) {
               if (a == 'add_local') _addLocalBook();
+              if (a == 'arrange') _openArrange();
               if (a == 'list_layout') widget.onSwitchToList?.call();
             },
             itemBuilder: (_) => [
               const PopupMenuItem(
                 value: 'add_local',
                 child: _MenuRow(Icons.file_open, '添加本地'),
+              ),
+              const PopupMenuItem(
+                value: 'arrange',
+                child: _MenuRow(Icons.tune, '书架管理'),
               ),
               const PopupMenuItem(
                 value: 'list_layout',

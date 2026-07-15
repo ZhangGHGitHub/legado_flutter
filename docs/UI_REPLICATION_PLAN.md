@@ -473,11 +473,13 @@
 - [x] 净化/正则菜单（`menu_enable_replace` / `menu_enable_regex`）
 - [ ] 全书联网边下边搜；结果内高亮滚动条快翻完善
 
-#### Task UI-10: 书架整理 (`activity_arrange_book.xml`)
+#### Task UI-10: 书架整理 (`activity_arrange_book.xml`) — ✅ 基本完成（2026-07-15）
 
-- [ ] 拖拽排序界面
-- [ ] 批量选择→移动到分组
-- [ ] 批量删除
+- [x] 拖拽排序界面（列表 ReorderableListView；网格长按调位）
+- [x] 批量选择→移动到分组
+- [x] 批量删除
+- [x] 列表/网格整理切换；自定义顺序 prefs 持久化
+- [ ] 换源批量/更新开关/区间滑选等待 legado 次级菜单项
 
 #### Task UI-11: 书源登录 (`activity_source_login.xml` + `dialog_login.xml`)
 

@@ -6,11 +6,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/book.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
+import '../../services/bookshelf_prefs.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/legado_refresh_indicator.dart';
 import '../book/book_info_page.dart';
-import '../config/feature_placeholder_page.dart';
 import '../search/search_page.dart';
+import 'bookshelf_arrange_page.dart';
 
 class BookshelfStyle1Page extends StatefulWidget {
   const BookshelfStyle1Page({
@@ -31,6 +32,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
   bool _showGrouped = false;
   /// UI-7: 置顶书 ID（本地 prefs，不改引擎表结构）
   Set<String> _pinnedIds = {};
+  List<String> _shelfOrder = [];
 
   @override
   void initState() {
@@ -45,6 +47,9 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
       _showGrouped = prefs.getBool('shelf_show_grouped') ?? false;
       _pinnedIds = (prefs.getStringList('shelf_pinned_ids') ?? []).toSet();
     });
+    final order = await BookshelfPrefs.loadBookOrder();
+    if (!mounted) return;
+    setState(() => _shelfOrder = order);
   }
 
   Future<void> _saveGrouped(bool v) async {
@@ -59,7 +64,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
   }
 
   List<Book> _processBooks(List<Book> books) {
-    var result = books;
+    var result = BookshelfPrefs.applyBookOrder(books, _shelfOrder, (b) => b.id);
     if (_selectedGroup != '__all__') {
       result = result.where((b) => b.group == _selectedGroup).toList();
     }
@@ -106,6 +111,23 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
             context.read<BookProvider>().updateBookGroup(id, ng),
       ),
     );
+  }
+
+  void _openArrange() async {
+    final group = _selectedGroup == '__all__' ? null : _selectedGroup;
+    final label = _selectedGroup == '__all__' ? '全部' : _selectedGroup;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BookshelfArrangePage(
+          groupFilter: group,
+          groupLabel: label,
+        ),
+      ),
+    );
+    final order = await BookshelfPrefs.loadBookOrder();
+    if (!mounted) return;
+    setState(() => _shelfOrder = order);
   }
 
   void _addLocalBook() async {
@@ -172,6 +194,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                   if (a == 'add_local') _addLocalBook();
                   if (a == 'cache_all') _cacheAllBooks();
                   if (a == 'group_mgmt') _showGroupManagement();
+                  if (a == 'arrange') _openArrange();
                   if (a == 'grid_layout') widget.onSwitchToGrid?.call();
                 },
                 itemBuilder: (_) => [
@@ -186,6 +209,10 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                   const PopupMenuItem(
                     value: 'group_mgmt',
                     child: _MenuRow(Icons.folder, '分组管理'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'arrange',
+                    child: _MenuRow(Icons.tune, '书架管理'),
                   ),
                   const PopupMenuItem(
                     value: 'grid_layout',
@@ -494,19 +521,9 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
             ListTile(
               leading: const Icon(Icons.tune),
               title: const Text('整理'),
-              subtitle: const Text('尚未实现 · activity_arrange_book'),
               onTap: () {
                 Navigator.pop(ctx);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const FeaturePlaceholderPage(
-                      title: '书架整理',
-                      subtitle: '拖拽排序与批量整理对齐 UI-10，本入口先占位',
-                      icon: Icons.tune,
-                    ),
-                  ),
-                );
+                _openArrange();
               },
             ),
             ListTile(
