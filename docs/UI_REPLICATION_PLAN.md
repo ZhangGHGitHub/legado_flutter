@@ -613,7 +613,7 @@ Task UI-10: 书架整理
 Task UI-11: 书源登录（动态表单 + JS）  🟡 表单+URL；JS/WebView 仍开放
 Task UI-13: 缓存管理页面  ✅ 基本完成（2026-07-15）
 Task UI-16: 下载选项 Dialog  ✅ 基本完成（HTML 导出延后）
-Task UI-14: AI 配置 Dialog
+Task UI-14: AI 配置 Dialog  ✅ 基本完成（2026-07-15）
 Task UI-15: Obsidian 导出配置
 Task UI-20: TXT 目录规则
 ```
