@@ -45,19 +45,12 @@ class DonatePage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(LegadoTokens.spacingMd),
         children: [
-          Text(
-            '以下为开源阅读原作者公开渠道（二维码 / 链接）。Flutter 复刻版本身不收取捐赠。',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: LegadoTokens.spacingMd),
           _DonateSection(
             title: '微信',
             children: [
               _DonateTile(
                 title: '关注公众号',
-                subtitle: '关注「开源阅读」以支持（可复制名称）',
+                subtitle: '公众号【开源阅读】',
                 onTap: () => _copy(
                   context,
                   wechatOfficialAccount,
@@ -78,7 +71,7 @@ class DonatePage extends StatelessWidget {
             children: [
               _DonateTile(
                 title: '支付宝红包搜索码',
-                subtitle: '$alipayRedEnvelopeCode 点击复制',
+                subtitle: '537954522 点击复制',
                 onTap: () => _copyAlipayCode(context),
               ),
               const Divider(height: 1),
@@ -100,7 +93,7 @@ class DonatePage extends StatelessWidget {
             title: 'QQ',
             children: [
               _DonateTile(
-                title: 'QQ收款二维码',
+                title: 'QQ 收款二维码',
                 subtitle: '点击打开',
                 onTap: () => _openUrl(context, qqCollectionQrUrl),
               ),

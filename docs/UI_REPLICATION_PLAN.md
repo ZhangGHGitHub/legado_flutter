@@ -150,7 +150,7 @@
 | 2 | `activity_book_read.xml` | 阅读器 | ✅ `reader_page.dart` | UI-1/UI-2：更多设置+系统 TTS+电量+沉浸栏+字重/缩进/简繁字级+翻页五档+屏幕超时分档+全文搜索+模拟追读+主题 zip；HTTP TTS/真仿真卷曲/词级简繁/内嵌字体加载仍开放 |
 | 3 | `activity_book_info.xml` | 书籍详情 | ✅ `book_info_page.dart` | 需核对布局：封面+信息+按钮+目录 |
 | 4 | `activity_book_search.xml` | 搜索 | ✅ `search_page.dart` | **需核对是否按书源分组（ExpansionTile）** |
-| 5 | `activity_book_source.xml` | 书源管理 | ✅ `sources_page.dart` | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
+| 5 | `activity_book_source.xml` | 书源管理 | ✅ `sources_page.dart` | UI-4：分组/绿红灰校验点/批量/搜索排序；UI-17 扫码入口已接 |
 | 6 | `activity_book_source_edit.xml` | 书源编辑 | ✅ `source_editor_page.dart` | 需核对字段完整度 |
 | 7 | `activity_chapter_list.xml` | 目录 | ✅ `toc_sheet.dart` | UI-5：全页 AppBar（返回/目录·书签 Tab/搜索/⋮）+ 缓存字数/云标 + 底栏进度 |
 | 8 | `activity_explore_show.xml` | 发现结果列表 | ✅ `explore_list_page.dart` | 需核对 |
@@ -171,15 +171,15 @@
 | 23 | `activity_source_debug.xml` | 书源调试 | ✅ `source_debug_panel.dart` | 需核对 |
 | 24 | `activity_source_login.xml` | 书源登录 | ❌ **缺失** | 需要新建（含动态表单） |
 | 25 | `activity_ai_chat.xml` | AI 聊天 | ✅ `ai_chat_page.dart` | **缺工具调用UI、配置入口** |
-| 26 | `activity_welcome.xml` | 欢迎页 | ✅ **基本完成** | UI-26 首次启动欢迎+隐私；回访不阻断 |
+| 26 | `activity_welcome.xml` | 欢迎页 | ✅ **1:1 闪屏** | UI-26：竖排品牌+icon_read_book+品读万千故事；500ms→主页；隐私在 MainShell Dialog |
 | 27 | `activity_web_view.xml` | WebView | ⚠️ `webview_flutter` 已引入 | 需核对 |
 | 28 | `activity_code_edit.xml` | 代码编辑器 | ❌ **缺失**（低优） | |
 | 29 | `activity_file_manage.xml` | 文件管理 | ✅ `file_manage_page.dart` | UI-8：数据目录基础浏览 |
-| 30 | `activity_donate.xml` | 捐赠 | ✅ **基本完成** | UI-25 捐赠页（微信/支付宝/QQ 渠道） |
+| 30 | `activity_donate.xml` | 捐赠 | 🟡 **1:1 返工** | UI-25：去掉 Flutter 免责声明；渠道文案对齐 values-zh |
 | 31 | `activity_dict_rule.xml` | 字典规则 | ✅ 基本完成（2026-07-15） | UI-21 |
-| 32 | `activity_manga.xml` | 漫画阅读 | ✅ **基本完成** | UI-23 漫画阅读器（引擎图片章后续） |
-| 33 | `activity_qrcode_capture.xml` | 扫码 | ❌ **缺失**（低优） | |
-| 34 | `activity_audio_play.xml` | 有声播放 | ✅ **基本完成** | UI-22 TTS 播放器（MP3 流后续） |
+| 32 | `activity_manga.xml` | 漫画阅读 | 🟡 **1:1 chrome 返工** | UI-23：MangaMenu+InfoBar+book_manga 菜单；真源引擎后续 |
+| 33 | `activity_qrcode_capture.xml` | 扫码 | ✅ **基本完成** | UI-17：TitleBar+图库；相机平台 live scan；桌面粘贴/选图回退 |
+| 34 | `activity_audio_play.xml` | 有声播放 | 🟡 **1:1 布局返工** | UI-22：260 封面+进度行+控件行；MP3/歌词后续 |
 | 35 | `activity_video_player.xml` | 视频播放 | ❌ **缺失**（低优） | |
 | 36 | `activity_search_content.xml` | 全文搜索 | 🟡 `search_content_page.dart` | 当前章+缓存章搜索；上/下结果；未缓存网络章跳过（对齐 legado） |
 | 37 | `activity_txt_toc_rule.xml` | TXT 目录规则 | ✅ 基本完成（2026-07-15） | UI-20 |
@@ -528,10 +528,12 @@
 
 ### 3.3 🟢 低优先级 — 锦上添花 & 新功能模块
 
-#### Task UI-17: 扫码导入 (`activity_qrcode_capture.xml`)
+#### Task UI-17: 扫码导入 (`activity_qrcode_capture.xml`) — ✅ 基本完成（2026-07-16）
 
-- [ ] `mobile_scanner` 或 `qr_code_scanner` 包
-- [ ] 扫描书源 JSON URL → 导入
+- [x] `mobile_scanner`（live）+ `zxing2`/`image`（图库解码）
+- [x] 扫描结果（URL / JSON）→ `SourceProvider.importSources` 导入
+- [x] 对齐 Jingshiro：TitleBar「扫描二维码」+ 菜单「图库」；书源菜单「二维码导入」
+- [x] Windows/Linux：相机不可用时图库 + 粘贴回退（有相机时不伪装 Android 主 UI）
 
 #### Task UI-18: 文件管理 (`activity_file_manage.xml`)
 
@@ -557,23 +559,24 @@
 - [x] SharedPreferences 持久化 + Jingshiro `dictRules.json` 种子
 - [ ] 拖拽排序 / 在线·扫码导入 / 完整 AnalyzeUrl+JS 查词（后续）
 
-#### Task UI-22: 有声播放器 (`activity_audio_play.xml`) — ✅ 基本完成（2026-07-16）
+#### Task UI-22: 有声播放器 (`activity_audio_play.xml`) — 🟡 1:1 布局返工（2026-07-16）
 
-- [x] TTS 播放控件（播放/暂停/快进/后退；句级进度条）
-- [x] 播放列表（章节目录底栏 sheet）
-- [x] 定时关闭（0–180 分钟 SliderPopup 对齐）
-- [x] 语速 / 播放模式（列表播放·单曲循环·随机·列表循环）
-- [x] 阅读器底栏「朗读」入口；长按仍打开朗读面板；面板可进全屏播放器
-- [ ] 真有声源 MP3 流播放 / 歌词 LyricViewX / HTTP TTS（后续）
+- [x] **chrome 返工**：对齐 `activity_audio_play.xml` — 模糊封面底 + `#90000000` 遮罩、TitleBar dark、260dp CircleImageView（2dp accent 描边）、`00:00` 进度行、46dp 控件行（timer/speed/prev/FAB/next/mode/chapter，weight 间隔）
+- [x] 定时/语速角标移至 TitleBar 下方左右（`tv_timer`/`tv_speed`）；去除 Flutter 自造引擎能力副标题
+- [x] Lyric 区：播放中有当前句时展示，否则按 XML `gone`（真 LyricViewX 后续）
+- [x] TTS 播放控件 / 章节目录 / 定时 / 语速 / 播放模式（既有能力保留）
+- [ ] 真有声源 MP3 流播放 / LyricViewX 歌词同步 / HTTP TTS（后续）
+- [ ] 定时/语速弹层仍为 BottomSheet，非整页 Android Dialog（后续可再贴近）
 
-#### Task UI-23: 漫画阅读器 (`activity_manga.xml`) — ✅ 基本完成（2026-07-16）
+#### Task UI-23: 漫画阅读器 (`activity_manga.xml`) — 🟡 1:1 chrome 返工（2026-07-16）
 
-- [x] 图片加载/预加载（正文 `<img>`/URL 解析 + `precacheImage`；空结果可重试 stub）
-- [x] 缩放/平移手势（`InteractiveViewer`；可禁用）
-- [x] 阅读方向（左→右/右→左/上→下）
-- [x] 滤镜（`dialog_manga_color_filter.xml`：亮度/RGBA）
-- [x] 墨水屏模式（`dialog_manga_epaper.xml`：阈值；灰度互斥）
-- [ ] 真漫画源整章多页引擎联调 / Footer 配置弹窗（后续）
+- [x] **chrome 返工**：对齐 `activity_manga.xml` 叠层（内容 / `ReaderInfoBarView` / `MangaMenu` / fl_loading）
+- [x] MangaMenu：`view_manga_menu.xml` TitleBar（书名 + 换源/刷新/目录 always + overflow）+ chapter/url/书源 addition + 底栏「上一章|SeekBar|下一章」；进出动画
+- [x] overflow 文案对齐 `menu/book_manga.xml` + `values-zh`（滤镜/墨水屏/页脚配置/水平滚动/禁用缩放·点击翻页等）
+- [x] InfoBar：20dp + 底边距 10 + 左右 pad 10；文案规则对齐 `upInfoBar`；右侧时钟；描边字
+- [x] 滤镜/墨水屏/页脚改为 AlertDialog（对齐 dialog XML，非圆角 BottomSheet）
+- [x] 图片加载/预加载 / 缩放 / 方向 / 滤镜 / 墨水屏（既有能力保留）
+- [ ] 真漫画源整章多页引擎联调；现仓 XML 已无 `ll_brightness`；自动滚动实现补全（后续）
 
 #### Task UI-24: 模拟追读 (`dialog_simulated_reading.xml`) — 🟡 Book/DB 已同步（2026-07-15）
 
@@ -584,18 +587,19 @@
 - [x] 写入 Book 实体字段 + SQLite schema v11（`simRead*`）；进备份 JSON；旧 SharedPreferences 迁移
 - [ ] WebDAV 远端合并策略 / 书架未读数联动（legado `durChapterIndex` 可见差）
 
-#### Task UI-25: 捐赠页 (`activity_donate.xml`) — ✅ 基本完成（2026-07-16）
+#### Task UI-25: 捐赠页 (`activity_donate.xml`) — 🟡 1:1 返工（2026-07-16）
 
-- [x] TitleBar「捐赠」+ 副标题「您的支持是我更新的动力」（对齐 `activity_donate.xml`）
-- [x] 微信 / 支付宝 / QQ 渠道列表（对齐经典 `donate.xml` Preference）
+- [x] TitleBar「捐赠」+ 副标题「您的支持是我更新的动力」（对齐 `activity_donate.xml` / `donate_summary`）
+- [x] **返工**：移除 Flutter 自造免责声明；渠道标题对齐 `values-zh`（关注公众号 / 微信赞赏码 / 支付宝红包* / QQ 收款二维码）
+- [x] 微信 / 支付宝 / QQ 渠道列表（经典 Preference；现仓 Jingshiro Fragment 已摘）
 - [x] 赞赏/收款二维码外链打开；红包搜索码复制；公众号名复制；入口：我的 → 捐赠
-- [ ] 店铺(ktt)/JS 拉链、应用内嵌二维码大图（后续；现仓 Jingshiro 已摘除 DonateFragment）
+- [ ] 店铺(ktt)/JS 拉链、应用内嵌二维码大图、加入 QQ 群/频道（后续）
 
-#### Task UI-26: 欢迎页 (`activity_welcome.xml`) — ✅ 基本完成（2026-07-16）
+#### Task UI-26: 欢迎页 (`activity_welcome.xml`) — ✅ 1:1（2026-07-16）
 
-- [x] 对齐 `activity_welcome.xml` 品牌区（竖排「阅读 / 享受美好时光」、书本图标、「品读万千故事」）
-- [x] 首次启动引导（功能简介）+ 跳过 / 同意并进入；SharedPreferences 只展示一次
-- [x] 隐私协议确认（欢迎页主路径；MainShell Dialog 兜底）
+- [x] 1:1 对齐 `activity_welcome.xml`（竖排「阅读 / 享受美好时光」+ `vw_title_line` + `icon_read_book` 120dp + 「品读万千故事」底栏）
+- [x] 对齐 `WelcomeActivity`：默认 500ms 自动进入主页（无功能简介/跳过/同意按钮）
+- [x] 隐私协议确认（MainShell Dialog，对齐主路径；欢迎页不承载）
 
 #### Task UI-27: 代码编辑器 (`activity_code_edit.xml`)
 
@@ -635,14 +639,14 @@ Task UI-21: 字典规则  ✅ 基本完成（2026-07-15）
 ### S3 — 功能模块（3-4 周）：新功能 + 低优先级
 
 ```
-Task UI-17: 扫码导入
+Task UI-17: 扫码导入  ✅ 基本完成（2026-07-16）
 Task UI-18: 文件管理
 Task UI-19: 规则订阅
-Task UI-22: 有声播放器 (TTS)  ✅ 基本完成（2026-07-16）
-Task UI-23: 漫画阅读器  ✅ 基本完成（2026-07-16）
+Task UI-22: 有声播放器 (TTS)  🟡 1:1 布局返工（2026-07-16）；MP3/LyricViewX 仍开放
+Task UI-23: 漫画阅读器  🟡 1:1 chrome 返工（2026-07-16）；真漫画源引擎仍开放
 Task UI-24: 模拟追读  🟡 对话框+章数解锁+Book/DB 同步；WebDAV/书架未读数仍开放
-Task UI-25: 捐赠页  ✅ 基本完成（2026-07-16）
-Task UI-26: 欢迎引导页  ✅ 基本完成（2026-07-16）
+Task UI-25: 捐赠页  🟡 1:1 返工（2026-07-16）；去掉 Flutter 免责声明；店铺/内嵌码仍开放
+Task UI-26: 欢迎引导页  ✅ 1:1 闪屏（2026-07-16）
 Task UI-27: 代码编辑器（低优）
 ```
 
@@ -679,9 +683,9 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 | 书籍详情 | 96% | UI-6：截图布局（模糊头图/红芯片/删除+阅读底栏）；换源页后端仍占位；图标字形可再抠 |
 | 目录 | 95% | UI-5：全页 AppBar+字数/云标+底栏；溢出菜单次级项仍可再抠 |
 | **阅读器** | **93%** | UI-1+UI-2：超时分档+翻页五档+沉浸+系统 TTS+全文搜索(缓存)+模拟追读+主题 zip；HTTP TTS/真仿真卷曲/词级简繁/全书联网搜仍开放 |
-| 书源管理 | 90% | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
+| 书源管理 | 95% | UI-4：分组/绿红灰校验点/批量/搜索排序；UI-17 扫码已接 |
 | RSS | 50% | Tab+源管理已有；**文章/阅读延后 S4** |
-| 新模块(有声/漫画/扫码等) | 32% | UI-22/23/25 有声+漫画+捐赠基本完成；扫码等仍缺 |
+| 新模块(有声/漫画/扫码等) | 40% | UI-17/22/23/25 扫码+有声+漫画+捐赠基本完成；规则订阅等仍缺 |
 | **综合** | **~60%** | |
 
 ---
