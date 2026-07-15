@@ -175,7 +175,7 @@
 | 27 | `activity_web_view.xml` | WebView | ⚠️ `webview_flutter` 已引入 | 需核对 |
 | 28 | `activity_code_edit.xml` | 代码编辑器 | ❌ **缺失**（低优） | |
 | 29 | `activity_file_manage.xml` | 文件管理 | ✅ `file_manage_page.dart` | UI-8：数据目录基础浏览 |
-| 30 | `activity_donate.xml` | 捐赠 | ❌ **缺失**（低优） | |
+| 30 | `activity_donate.xml` | 捐赠 | ✅ **基本完成** | UI-25 捐赠页（微信/支付宝/QQ 渠道） |
 | 31 | `activity_dict_rule.xml` | 字典规则 | ✅ 基本完成（2026-07-15） | UI-21 |
 | 32 | `activity_manga.xml` | 漫画阅读 | ✅ **基本完成** | UI-23 漫画阅读器（引擎图片章后续） |
 | 33 | `activity_qrcode_capture.xml` | 扫码 | ❌ **缺失**（低优） | |
@@ -584,9 +584,12 @@
 - [x] 写入 Book 实体字段 + SQLite schema v11（`simRead*`）；进备份 JSON；旧 SharedPreferences 迁移
 - [ ] WebDAV 远端合并策略 / 书架未读数联动（legado `durChapterIndex` 可见差）
 
-#### Task UI-25: 捐赠页 (`activity_donate.xml`)
+#### Task UI-25: 捐赠页 (`activity_donate.xml`) — ✅ 基本完成（2026-07-16）
 
-- [ ] 捐赠二维码/链接
+- [x] TitleBar「捐赠」+ 副标题「您的支持是我更新的动力」（对齐 `activity_donate.xml`）
+- [x] 微信 / 支付宝 / QQ 渠道列表（对齐经典 `donate.xml` Preference）
+- [x] 赞赏/收款二维码外链打开；红包搜索码复制；公众号名复制；入口：我的 → 捐赠
+- [ ] 店铺(ktt)/JS 拉链、应用内嵌二维码大图（后续；现仓 Jingshiro 已摘除 DonateFragment）
 
 #### Task UI-26: 欢迎页 (`activity_welcome.xml`)
 
@@ -637,7 +640,7 @@ Task UI-19: 规则订阅
 Task UI-22: 有声播放器 (TTS)  ✅ 基本完成（2026-07-16）
 Task UI-23: 漫画阅读器  ✅ 基本完成（2026-07-16）
 Task UI-24: 模拟追读  🟡 对话框+章数解锁+Book/DB 同步；WebDAV/书架未读数仍开放
-Task UI-25: 捐赠页
+Task UI-25: 捐赠页  ✅ 基本完成（2026-07-16）
 Task UI-26: 欢迎引导页
 Task UI-27: 代码编辑器（低优）
 ```
@@ -677,7 +680,7 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 | **阅读器** | **93%** | UI-1+UI-2：超时分档+翻页五档+沉浸+系统 TTS+全文搜索(缓存)+模拟追读+主题 zip；HTTP TTS/真仿真卷曲/词级简繁/全书联网搜仍开放 |
 | 书源管理 | 90% | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
 | RSS | 50% | Tab+源管理已有；**文章/阅读延后 S4** |
-| 新模块(有声/漫画/扫码等) | 28% | UI-22/23 有声+漫画基本完成；扫码等仍缺 |
+| 新模块(有声/漫画/扫码等) | 32% | UI-22/23/25 有声+漫画+捐赠基本完成；扫码等仍缺 |
 | **综合** | **~60%** | |
 
 ---

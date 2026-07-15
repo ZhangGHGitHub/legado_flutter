@@ -22,6 +22,7 @@ import '../obsidian/obsidian_export_dialog.dart';
 import '../reader/ai_chat_page.dart';
 import '../replace/replace_page.dart';
 import '../sources/sources_page.dart';
+import '../about/donate_page.dart';
 import '../dict/dict_rule_page.dart';
 import '../txt_toc/txt_toc_rule_page.dart';
 import 'file_manage_page.dart';
@@ -487,6 +488,13 @@ class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
                   title: '导出到 Obsidian',
                   subtitle: 'REST API 或本地仓库',
                   onTap: () => ObsidianExportDialog.show(context),
+                ),
+                const LegadoListDivider(),
+                LegadoListTile(
+                  icon: Icons.volunteer_activism_outlined,
+                  title: '捐赠',
+                  subtitle: '您的支持是我更新的动力',
+                  onTap: () => _openPage(const DonatePage()),
                 ),
                 const LegadoListDivider(),
                 LegadoListTile(

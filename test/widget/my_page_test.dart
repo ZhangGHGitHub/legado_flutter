@@ -8,7 +8,7 @@ import 'package:legado_flutter/theme/app_theme.dart';
 void main() {
   SharedPreferences.setMockInitialValues({});
 
-  testWidgets('MyPage shows all 14 settings list items', (
+  testWidgets('MyPage shows settings list items including donate', (
     WidgetTester tester,
   ) async {
     final themeController = ThemeModeController();
@@ -27,6 +27,7 @@ void main() {
       '文件管理',
       '阅读 Skill',
       'AI 助手',
+      '捐赠',
       '关于',
       '退出',
     ];
