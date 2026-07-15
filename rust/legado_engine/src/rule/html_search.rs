@@ -56,7 +56,7 @@ pub fn parse_html_search(html: &str, source: &BookSource) -> Result<Vec<HtmlSear
         } else {
             &source.rule_search_name
         };
-        let book_url = engine::extract_attr(&item, url_rule, "href");
+        let book_url = resolve_field_with_js(&item, url_rule, js_lib, base);
 
         let cover_url = if has_custom {
             engine::extract_attr(&item, &source.rule_search_cover_url, "src")
@@ -91,6 +91,33 @@ pub fn parse_html_search(html: &str, source: &BookSource) -> Result<Vec<HtmlSear
     Ok(results)
 }
 
+/// 对齐 Jingshiro：列表项字段可为整段 `<js>`（`result` = 该项 outerHTML）
+fn resolve_field_with_js(
+    item: &scraper::ElementRef<'_>,
+    rule: &str,
+    js_lib: &str,
+    base_url: &str,
+) -> String {
+    let rule = rule.trim();
+    if js_engine::contains_js_block(rule) {
+        if let Some(script) = js_engine::extract_js_block(rule) {
+            let outer = item.html();
+            if let Ok(out) = js_engine::run_with_result(&script, &outer, js_lib, base_url) {
+                let out = out.trim().to_string();
+                if !out.is_empty() && out != "null" && out != "undefined" {
+                    return out;
+                }
+            }
+        }
+        return String::new();
+    }
+    let mut url = engine::extract_attr(item, rule, "href");
+    if url.is_empty() {
+        url = engine::extract_text(item, rule);
+    }
+    url
+}
+
 pub fn preprocess_book_list_html(
     html: &str,
     book_list_rule: &str,
@@ -113,4 +140,31 @@ fn smart_text(element: &scraper::ElementRef<'_>, selector: &str) -> String {
         }
     }
     element.text().collect::<String>().trim().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn search_book_url_js_extracts_kelexs_link() {
+        let source_json = r##"{
+            "bookSourceUrl": "https://www.rrssk.com/",
+            "ruleSearch": {
+                "bookList": ".rankIBox.searchIBox li",
+                "name": ".txtb .name.font18 a@text",
+                "bookUrl": "<js>var html=result.toString();var match=html.match(/upclick\\('([^']+)'\\)/);var id='';if(match != null){id=match[1];}'https://www.kelexs.com/book/'+id+'.html'</js>"
+            }
+        }"##;
+        let html = r##"<html><body><ul class="rankIBox searchIBox">
+<li onclick="upclick('AIJGIFF')">
+  <div class="txtb"><div class="name font18"><a href="javascript:;">重生之我在仙界</a></div></div>
+</li>
+</ul></body></html>"##;
+        let source = BookSource::from_json(source_json).unwrap();
+        let rows = parse_html_search(html, &source).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].book_url, "https://www.kelexs.com/book/AIJGIFF.html");
+        assert!(rows[0].name.contains("重生"));
+    }
 }

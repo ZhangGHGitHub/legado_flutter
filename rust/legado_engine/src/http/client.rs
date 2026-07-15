@@ -325,26 +325,37 @@ async fn pass_ge_ua_challenge(url: &str, challenge_html: &str) -> Result<(), Str
     let params = super::ge_ua::parse_challenge(challenge_html)
         .ok_or_else(|| "命中 WAF 验证页，但无法解析 GE-UA 参数".to_string())?;
 
-    let cookie_val = {
+    let (cookie_str, sum) = {
         let jar = COOKIE_JAR.lock().map_err(|_| "Cookie 锁失败".to_string())?;
-        jar.get_cookie_value(url, &params.cpk)
-    }
-    .ok_or_else(|| {
-        format!(
-            "命中 WAF 验证页，缺少 Cookie {}，无法自动验证",
-            params.cpk
-        )
-    })?;
+        let cookie_val = jar.get_cookie_value(url, &params.cpk).ok_or_else(|| {
+            format!(
+                "命中 WAF 验证页，缺少 Cookie {}，无法自动验证",
+                params.cpk
+            )
+        })?;
+        let sum = super::ge_ua::compute_sum(&cookie_val, params.nonce);
+        let mut parts = vec![format!("{}={cookie_val}", params.cpk)];
+        // 其余 Cookie（如 PHPSESSID）一并带上，贴近浏览器
+        let all = jar.get_cookie(url);
+        for part in all.split(';') {
+            let part = part.trim();
+            if part.is_empty() {
+                continue;
+            }
+            if let Some((n, _)) = part.split_once('=') {
+                if n.trim() != params.cpk {
+                    parts.push(part.to_string());
+                }
+            }
+        }
+        (parts.join("; "), sum)
+    };
 
-    let sum = super::ge_ua::compute_sum(&cookie_val, params.nonce);
     let origin = super::ge_ua::origin_of(url);
     let post_body = format!("sum={sum}&nonce={}", params.nonce);
 
     let mut headers = default_headers();
-    headers.insert(
-        ACCEPT,
-        HeaderValue::from_static("*/*"),
-    );
+    headers.insert(ACCEPT, HeaderValue::from_static("*/*"));
     if let Ok(v) = HeaderValue::from_str(&origin) {
         headers.insert("Origin", v);
     }
@@ -354,7 +365,7 @@ async fn pass_ge_ua_challenge(url: &str, challenge_html: &str) -> Result<(), Str
     if let Ok(v) = HeaderValue::from_str(&params.step) {
         headers.insert("X-GE-UA-Step", v);
     }
-    if let Ok(v) = HeaderValue::from_str(&format!("{}={cookie_val}", params.cpk)) {
+    if let Ok(v) = HeaderValue::from_str(&cookie_str) {
         headers.insert("Cookie", v);
     }
 
@@ -397,6 +408,7 @@ async fn send_request(
     charset: &str,
     mut headers: HeaderMap,
 ) -> Result<reqwest::Response, String> {
+    super::ssrf::assert_public_http_url(url)?;
     if method == "POST" {
         let post_body = body.unwrap_or("");
         let encoded = charset::encode_form_body(post_body, charset);

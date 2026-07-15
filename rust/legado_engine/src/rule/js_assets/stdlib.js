@@ -126,6 +126,17 @@ var java = {
   createSymmetricCrypto: function(transformation, key, iv) {
     return new _SymmetricCrypto(transformation, key, iv);
   },
+  // Jingshiro JsExtensions.ajax：同步拉页面。无宿主回调时返回空串（调用方常 try/catch）。
+  ajax: function(url) {
+    if (typeof __legado_java_ajax === 'function') {
+      try {
+        return __legado_java_ajax(String(url == null ? '' : url)) || '';
+      } catch (e) {
+        return '';
+      }
+    }
+    return '';
+  },
   getWebViewUA: function() {
     return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
   },

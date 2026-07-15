@@ -174,13 +174,29 @@ pub fn run_with_result(
     js_lib: &str,
     base_url: &str,
 ) -> Result<String, String> {
+    run_with_result_opts(script, result, js_lib, base_url, None)
+}
+
+/// 同 [`run_with_result`]，可注入 `book.bookUrl`（对齐 Jingshiro AnalyzeRule + Book）
+pub fn run_with_result_opts(
+    script: &str,
+    result: &str,
+    js_lib: &str,
+    base_url: &str,
+    book_url: Option<&str>,
+) -> Result<String, String> {
     let rt = Runtime::new().map_err(|e| format!("JS Runtime 失败: {e}"))?;
     let ctx = Context::full(&rt).map_err(|e| format!("JS Context 失败: {e}"))?;
     ctx.with(|ctx| {
         init_context(&ctx, js_lib, base_url)?;
         let escaped = serde_json::to_string(result).unwrap_or_else(|_| "\"\"".to_string());
+        let book_url = book_url.unwrap_or(base_url);
+        let book_inject = format!(
+            "var book = {{ bookUrl: {}, name: '', author: '' }};\n",
+            json_escape(book_url)
+        );
         let code = format!(
-            "legadoResult = {escaped}; var result = typeof legadoResult === 'string' ? legadoResult : JSON.stringify(legadoResult);\n{script}"
+            "{book_inject}legadoResult = {escaped}; var result = typeof legadoResult === 'string' ? legadoResult : JSON.stringify(legadoResult);\n{script}"
         );
         let v: Value = ctx
             .eval(code.as_bytes())
@@ -188,6 +204,20 @@ pub fn run_with_result(
             .map_err(|e| format_caught_err("JS 执行失败", e))?;
         value_to_string(&ctx, v)
     })
+}
+
+/// 纯 property 规则名（如 `chaptername` / `chapterurl`），无 CSS/`@`
+pub fn is_plain_property_rule(rule: &str) -> bool {
+    let r = rule.trim();
+    !r.is_empty()
+        && !r.contains('@')
+        && !r.contains('<')
+        && !r.contains('.')
+        && !r.contains('#')
+        && !r.contains(' ')
+        && !r.contains(':')
+        && r.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 /// 对 HTML 执行 `<js>` 脚本并返回变换后的 HTML/文本

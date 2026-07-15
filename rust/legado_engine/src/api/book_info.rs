@@ -50,7 +50,7 @@ pub async fn get_book_info(source_json: &str, book_url: &str) -> Result<BookInfo
         }
     }
 
-    let info = rule::html_book_info::parse_html_book_info(&body, &source)?;
+    let info = rule::html_book_info::parse_html_book_info_at(&body, &source, book_url)?;
     let base = http::client::base_url(book_url);
     Ok(BookInfoItem {
         name: info.name,
@@ -61,8 +61,10 @@ pub async fn get_book_info(source_json: &str, book_url: &str) -> Result<BookInfo
         last_chapter: info.last_chapter,
         toc_url: if info.toc_url.is_empty() {
             book_url.to_string()
+        } else if info.toc_url.starts_with("http") {
+            info.toc_url
         } else {
-            http::client::resolve_url(&info.toc_url, &base)
+            http::client::resolve_url(&info.toc_url, book_url)
         },
     })
 }
