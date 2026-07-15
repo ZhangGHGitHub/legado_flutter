@@ -1,8 +1,10 @@
 # Phase F：UI 一比一复刻 Jingshiro/Legado — 差距分析与开发计划
 
 > **开发流程：** [DEVELOPMENT_PROCESS.md](./DEVELOPMENT_PROCESS.md) · **文档索引：** [README.md](./README.md)  
-> **对标项目：** [Jingshiro/legado](https://github.com/Jingshiro/legado)  
-> **参照源码：** `app/src/main/java/io/legado/app/ui/` + `app/src/main/res/layout/`  
+> **对标项目（官方 UI 目标）：** [Jingshiro/legado](https://github.com/Jingshiro/legado) — 所有 UI 须 1:1 对齐此 fork  
+> **说明：** 原 `gedoor/legado` 仓库已从 GitHub 下架；**Jingshiro/legado 为布局与源码参照的唯一权威来源**（继承链：gedoor → Luoyacheng → Jingshiro，见 [LEGADO_ARCH_REFERENCE.md](./LEGADO_ARCH_REFERENCE.md)）  
+> **参照源码路径：** `app/src/main/java/io/legado/app/ui/` + `app/src/main/res/layout/`  
+> **本地参照克隆（可选）：** `reference/Jingshiro-legado/`（已加入 `.gitignore`，供 Agent 离线读布局）  
 > **用户文档：** [Legado 语雀使用说明（必看）](https://www.yuque.com/legado/wiki)（最后更新 2025-07-29）  
 > **设计规格：** `docs/superpowers/specs/2026-07-11-phase-f-ui-design.md`  
 > **实施计划（旧）：** `docs/superpowers/plans/2026-07-11-phase-f-ui-implementation.md`  

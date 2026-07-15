@@ -1,6 +1,7 @@
 # Legado Flutter — 文档索引
 
-> 最后更新：2026-07-12
+> 最后更新：2026-07-15  
+> **UI 对标项目：** [Jingshiro/legado](https://github.com/Jingshiro/legado)（原 gedoor 仓库已下架，此 fork 为权威参照）
 
 ## 怎么用这些文档
 
@@ -34,8 +35,8 @@
   LEGADO_ARCH_REFERENCE.md  — 架构参考
 
 外部参考
-  语雀 Wiki                 — 用户向功能与交互
-  Jingshiro/legado 源码     — UI 布局 1:1 对标
+  Jingshiro/legado          — UI 布局 1:1 对标（权威；见 reference/Jingshiro-legado/ 或 GitHub）
+  语雀 Wiki                 — 用户向功能与交互（布局仍以 Jingshiro 源码为准）
 ```
 
 ## Phase 与文档对应

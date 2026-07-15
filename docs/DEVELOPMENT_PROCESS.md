@@ -1,7 +1,20 @@
 # Legado Flutter — 开发流程
 
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
-> 最后更新：2026-07-12
+> 最后更新：2026-07-15
+
+---
+
+## 官方 UI 对标目标
+
+| 项 | 值 |
+|----|-----|
+| **对标项目** | [Jingshiro/legado](https://github.com/Jingshiro/legado) |
+| **权威说明** | 原 `gedoor/legado` 已不在 GitHub；**Jingshiro fork 为 UI 布局与 Activity 源码的唯一参照** |
+| **布局源码** | `app/src/main/java/io/legado/app/ui/` |
+| **XML 布局** | `app/src/main/res/layout/` |
+| **本地克隆** | `reference/Jingshiro-legado/`（浅克隆，不入库；克隆失败则直接用 GitHub URL） |
+| **功能验收** | [语雀 Wiki](https://www.yuque.com/legado/wiki)（用户向交互；**布局仍以 Jingshiro 源码为准**） |
 
 ---
 
@@ -15,7 +28,7 @@
 | Phase 设计 | `superpowers/specs/`、`superpowers/plans/` |
 | 发布说明 | `RELEASE.md` |
 | 专题文档 | `JS_COMPAT.md`、`LEGADO_ARCH_REFERENCE.md` |
-| 外部参考 | [语雀 Wiki](https://www.yuque.com/legado/wiki)、Jingshiro 源码 |
+| 外部参考 | [Jingshiro/legado](https://github.com/Jingshiro/legado)（UI 权威）、[语雀 Wiki](https://www.yuque.com/legado/wiki) |
 | CI | `.github/workflows/apple-build.yml`（仅 macOS/iOS） |
 | 测试脚本 | `scripts/run_js_compat.ps1`、`flutter test`、`cargo test` |
 
@@ -208,7 +221,7 @@ Phase 不是「写了很多代码」，而是满足**退出标准**才能进下�
 
 ### UI 改动
 
-1. **布局**：Jingshiro `res/layout/` + `ui/` 源码
+1. **布局**：[Jingshiro/legado](https://github.com/Jingshiro/legado) 的 `app/src/main/res/layout/` + `app/src/main/java/io/legado/app/ui/`（或本地 `reference/Jingshiro-legado/` 同路径）
 2. **功能完整性**：[语雀 Wiki](https://www.yuque.com/legado/wiki) 对应章节（见 `UI_REPLICATION_PLAN.md` § 参考文档）
 3. **截图对比**：同一状态（书架/阅读器/设置）并排对比
 
