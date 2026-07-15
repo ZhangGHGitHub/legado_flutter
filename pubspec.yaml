@@ -59,3 +59,4 @@ flutter:
   assets:
     - assets/builtin_sources/7497.json
     - assets/builtin_sources/7565.json
+    - assets/welcome/icon_read_book.png

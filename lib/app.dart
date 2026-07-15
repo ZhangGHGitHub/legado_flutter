@@ -47,7 +47,8 @@ class LegadoApp extends StatelessWidget {
   }
 }
 
-/// 首次启动 → [WelcomePage]；回访用户 → [MainShell]。
+/// 冷启 → [WelcomePage] 闪屏（对齐 WelcomeActivity）→ [MainShell]。
+/// 隐私协议 Dialog 由 MainShell 首次弹出（对齐 Jingshiro 主路径）。
 class _StartupHome extends StatefulWidget {
   const _StartupHome();
 
@@ -56,32 +57,14 @@ class _StartupHome extends StatefulWidget {
 }
 
 class _StartupHomeState extends State<_StartupHome> {
-  bool? _showWelcome;
-
-  @override
-  void initState() {
-    super.initState();
-    _resolve();
-  }
-
-  Future<void> _resolve() async {
-    final show = await WelcomePage.shouldShow();
-    if (!mounted) return;
-    setState(() => _showWelcome = show);
-  }
+  bool _splashDone = false;
 
   @override
   Widget build(BuildContext context) {
-    final show = _showWelcome;
-    if (show == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-    if (show) {
+    if (!_splashDone) {
       return WelcomePage(
         onFinished: () {
-          if (mounted) setState(() => _showWelcome = false);
+          if (mounted) setState(() => _splashDone = true);
         },
       );
     }
