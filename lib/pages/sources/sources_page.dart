@@ -5,10 +5,13 @@ import 'package:provider/provider.dart';
 import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
 import '../../providers/book_provider.dart';
+import '../../services/local_book_service.dart';
+import '../../widgets/error_view.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/source_status_dot.dart';
 import '../../widgets/source_validation_sheet.dart';
 import 'source_editor_page.dart';
+import 'source_login_page.dart';
 import 'source_market_page.dart';
 
 enum _SourceSort { group, name, enabled }
@@ -219,6 +222,17 @@ class _SourcesPageState extends State<SourcesPage> {
       body: Consumer<SourceProvider>(
         builder: (context, provider, _) {
           final sources = provider.sources;
+
+          if (provider.isLoading && sources.isEmpty && provider.loadError == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (provider.loadError != null && sources.isEmpty) {
+            return ErrorView(
+              message: provider.loadError!,
+              onRetry: () => provider.loadSources(),
+            );
+          }
 
           if (sources.isEmpty) {
             return _buildEmptyState(context);
@@ -654,8 +668,27 @@ class _SourcesPageState extends State<SourcesPage> {
     );
   }
 
-  void _importLocalBook(BuildContext context) {
-    context.read<BookProvider>().importLocalBook();
+  Future<void> _importLocalBook(BuildContext context) async {
+    try {
+      final b = await context.read<BookProvider>().importLocalBook();
+      if (b != null && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('已导入: ${b.name}')),
+        );
+      }
+    } on LocalBookImportException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导入失败: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _validateAllEnabled(BuildContext context) async {
@@ -937,10 +970,28 @@ class _SourceTile extends StatelessWidget {
           ),
           trailing: selectionMode
               ? null
-              : Switch(
-                  value: source.enabled,
-                  onChanged: (v) =>
-                      provider.toggleSource(source.bookSourceUrl, v),
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (source.hasLoginConfig)
+                      IconButton(
+                        tooltip: '登录',
+                        icon: const Icon(Icons.login, size: 20),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SourceLoginPage(source: source),
+                            ),
+                          );
+                        },
+                      ),
+                    Switch(
+                      value: source.enabled,
+                      onChanged: (v) =>
+                          provider.toggleSource(source.bookSourceUrl, v),
+                    ),
+                  ],
                 ),
           onLongPress: selectionMode ? null : onEnterSelection,
           onTap: () {

@@ -481,12 +481,13 @@
 - [x] 列表/网格整理切换；自定义顺序 prefs 持久化
 - [ ] 换源批量/更新开关/区间滑选等待 legado 次级菜单项
 
-#### Task UI-11: 书源登录 (`activity_source_login.xml` + `dialog_login.xml`)
+#### Task UI-11: 书源登录 (`activity_source_login.xml` + `dialog_login.xml`) — 🟡 表单+URL（2026-07-15）
 
-- [ ] 根据书源 `loginUi` JSON 渲染动态表单
-- [ ] 表单类型：text/password/button/toggle/select/checkbox
-- [ ] JS 登录脚本执行
-- [ ] 登录状态展示
+- [x] 根据书源 `loginUi` JSON 渲染动态表单（text/password/button/toggle/select/checkbox）
+- [x] 登录信息 SharedPreferences 持久化；书源列表登录入口
+- [x] `loginUrl` 为 http(s) 时外链打开
+- [ ] `@js:` / `<js>` 动态 loginUi 与按钮 JS、引擎 `login()` 脚本执行
+- [ ] WebView 内嵌登录（当前外链）
 
 #### Task UI-12: RSS 文章列表 + 阅读 (`activity_rss_artivles.xml` + `activity_rss_read.xml`) — ⏸ 延后
 
@@ -519,7 +520,7 @@
 
 - [x] 下载范围：全部 / 未缓存 / 从当前到结尾 / 后 N 章
 - [x] 并发数设置（1–8，已接入 `downloadAllChapters`）
-- [~] 格式：当前仅纯文本缓存；HTML 导出未接入
+- [~] 格式：纯文本已支持；**HTML 导出延后**（用户确认后续再做）
 
 ---
 
@@ -608,11 +609,11 @@ Task UI-8:  我的页菜单补齐 + 快捷四格行为  ✅ 基本完成（2026-
 ```
 Task UI-9:  阅读器正文搜索  🟡 当前章+缓存+上/下结果
 Task UI-10: 书架整理
-Task UI-11: 书源登录（动态表单 + JS）
-Task UI-13: 缓存管理页面
+Task UI-11: 书源登录（动态表单 + JS）  🟡 表单+URL；JS/WebView 仍开放
+Task UI-13: 缓存管理页面  ✅ 基本完成（2026-07-15）
+Task UI-16: 下载选项 Dialog  ✅ 基本完成（HTML 导出延后）
 Task UI-14: AI 配置 Dialog
 Task UI-15: Obsidian 导出配置
-Task UI-16: 下载选项 Dialog
 Task UI-20: TXT 目录规则
 ```
 

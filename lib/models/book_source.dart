@@ -178,6 +178,45 @@ class BookSource {
     return {};
   }
 
+  /// 登录相关字段（自 rawSourceJson，对齐 legado BaseSource）
+  String get loginUrl {
+    if (rawSourceJson.isEmpty) return '';
+    try {
+      final obj = jsonDecode(rawSourceJson) as Map<String, dynamic>;
+      final v = obj['loginUrl'];
+      return v is String ? v : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  String get loginUi {
+    if (rawSourceJson.isEmpty) return '';
+    try {
+      final obj = jsonDecode(rawSourceJson) as Map<String, dynamic>;
+      final v = obj['loginUi'];
+      if (v is String) return v;
+      if (v is List) return jsonEncode(v);
+      return '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  String get loginCheckJs {
+    if (rawSourceJson.isEmpty) return '';
+    try {
+      final obj = jsonDecode(rawSourceJson) as Map<String, dynamic>;
+      final v = obj['loginCheckJs'];
+      return v is String ? v : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  bool get hasLoginConfig =>
+      loginUi.trim().isNotEmpty || loginUrl.trim().isNotEmpty;
+
   /// 获取书源的 jsLib（自定义 JavaScript 库，用于共享函数）
   String get jsLib {
     if (rawSourceJson.isEmpty) return '';
