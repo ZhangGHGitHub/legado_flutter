@@ -437,6 +437,13 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
         TtsPlayMode.listLoop => Icons.repeat,
       };
 
+  String _fmtClock(int units) {
+    final s = units.clamp(0, 359999);
+    final mm = (s ~/ 60).toString().padLeft(2, '0');
+    final ss = (s % 60).toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
+
   Widget _circleBtn({
     required IconData icon,
     required String tooltip,
@@ -451,7 +458,11 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
         child: SizedBox(
           width: size,
           height: size,
-          child: Icon(icon, color: _chromeFg.withValues(alpha: onPressed == null ? 0.35 : 1), size: 26),
+          child: Icon(
+            icon,
+            color: _chromeFg.withValues(alpha: onPressed == null ? 0.35 : 1),
+            size: 26,
+          ),
         ),
       ),
     );
@@ -463,6 +474,11 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
     final timerLeft = _tts.timerRemainingMinutes;
     final showSpeed = (_tts.speechRate - 1.0).abs() > 0.05;
     final progress = _seeking ? _seekValue : _progressValue.toDouble();
+    final maxProg = (_progressMax - 1).toDouble().clamp(0.0, double.infinity);
+    final lyricLine = _tts.currentSentence.trim();
+    final showLyric = lyricLine.isNotEmpty &&
+        (_tts.state == TtsPlaybackState.playing ||
+            _tts.state == TtsPlaybackState.paused);
 
     return Theme(
       data: ThemeData(
@@ -476,26 +492,32 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
           backgroundColor: Colors.transparent,
           foregroundColor: _chromeFg,
           elevation: 0,
+          scrolledUnderElevation: 0,
         ),
       ),
       child: Scaffold(
+        // 对齐 activity_audio_play.xml ConstraintLayout
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // 模糊封面底（对齐 iv_bg）
+            // iv_bg
             if (widget.book.coverUrl.isNotEmpty)
               ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                imageFilter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
                 child: Image.network(
                   widget.book.coverUrl,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => const ColoredBox(color: _chromeBg),
                 ),
-              ),
-            const ColoredBox(color: Color(0xCC121212)),
+              )
+            else
+              const ColoredBox(color: _chromeBg),
+            // vw_bg #90000000
+            const ColoredBox(color: Color(0x90000000)),
             SafeArea(
               child: Column(
                 children: [
+                  // TitleBar themeMode=dark
                   AppBar(
                     title: Text(
                       widget.book.name,
@@ -535,172 +557,197 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
                       ),
                     ],
                   ),
+                  // tv_timer / tv_speed — TitleBar 下方左右角标
+                  SizedBox(
+                    height: 36,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          if (timerLeft != null && timerLeft > 0)
+                            Container(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white24,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.timer,
+                                      size: 14, color: _chromeFg),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${timerLeft}m',
+                                    style: const TextStyle(
+                                      color: _chromeFg,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            const SizedBox.shrink(),
+                          const Spacer(),
+                          if (showSpeed)
+                            Container(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white24,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '${_tts.speechRate.toStringAsFixed(1)}X',
+                                style: const TextStyle(
+                                  color: _chromeFg,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // iv_cover 260 CircleImageView + accent 2dp border
                   Expanded(
-                    child: Column(
-                      children: [
-                        const Spacer(flex: 2),
-                        // 圆形封面 260dp
-                        Container(
+                    flex: showLyric ? 3 : 4,
+                    child: Center(
+                      child: Container(
+                        width: 260,
+                        height: 260,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: _accentBorder, width: 2),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: BookCover(
+                          coverUrl: widget.book.coverUrl,
+                          author: widget.book.author,
                           width: 260,
                           height: 260,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: _accentBorder, width: 2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.45),
-                                blurRadius: 18,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: BookCover(
-                            coverUrl: widget.book.coverUrl,
-                            author: widget.book.author,
-                            width: 260,
-                            height: 260,
-                            radius: 130,
-                          ),
+                          radius: 130,
                         ),
-                        const Spacer(),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                      ),
+                    ),
+                  ),
+                  // lyricViewX — 有当前句时显示，否则保留最小占位（XML 默 gone）
+                  if (showLyric)
+                    Expanded(
+                      flex: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Center(
                           child: Text(
-                            _subTitle,
+                            lyricLine,
                             textAlign: TextAlign.center,
-                            maxLines: 2,
+                            maxLines: 4,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: _chromeFg,
                               fontSize: 15,
-                              fontWeight: FontWeight.w500,
+                              height: 1.4,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 4),
+                      ),
+                    )
+                  else
+                    const SizedBox(height: 0),
+                  // tv_sub_title
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                    child: Text(
+                      _subTitle,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _chromeFg, fontSize: 14),
+                    ),
+                  ),
+                  // ll_player_progress: tv_dur_time | ThemeSeekBar 25dp | tv_all_time
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
                         Text(
-                          _tts.capability == TtsCapability.platform
-                              ? '${_tts.engineLabel} · 第 ${_tts.sentenceIndex + (_tts.sentenceCount == 0 ? 0 : 1)}/${_tts.sentenceCount} 句'
-                              : _tts.engineId == 'http'
-                                  ? 'HTTP TTS 待实现'
-                                  : 'TTS stub · 第 ${_tts.sentenceIndex + (_tts.sentenceCount == 0 ? 0 : 1)}/${_tts.sentenceCount} 句',
-                          style: TextStyle(
-                            color: _chromeFg.withValues(alpha: 0.65),
+                          _fmtClock(_progressValue),
+                          style: const TextStyle(
+                            color: _chromeFg,
                             fontSize: 12,
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 40,
-                                child: Text(
-                                  '${_tts.sentenceCount == 0 ? 0 : _progressValue + 1}',
-                                  style: TextStyle(
-                                    color: _chromeFg.withValues(alpha: 0.8),
-                                    fontSize: 11,
-                                  ),
+                        Expanded(
+                          child: SizedBox(
+                            height: 25,
+                            child: SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                trackHeight: 3,
+                                thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: 7,
                                 ),
-                              ),
-                              Expanded(
-                                child: SliderTheme(
-                                  data: SliderTheme.of(context).copyWith(
-                                    trackHeight: 3,
-                                    thumbShape: const RoundSliderThumbShape(
-                                      enabledThumbRadius: 7,
-                                    ),
-                                    overlayShape: const RoundSliderOverlayShape(
-                                      overlayRadius: 14,
-                                    ),
-                                    activeTrackColor: _accentBorder,
-                                    inactiveTrackColor: Colors.white24,
-                                    thumbColor: _chromeFg,
-                                  ),
-                                  child: Slider(
-                                    value: progress.clamp(
-                                      0,
-                                      (_progressMax - 1).toDouble(),
-                                    ),
-                                    min: 0,
-                                    max: (_progressMax - 1).toDouble(),
-                                    onChangeStart: (_) {
-                                      setState(() {
-                                        _seeking = true;
-                                        _seekValue = _progressValue.toDouble();
-                                      });
-                                    },
-                                    onChanged: (v) =>
-                                        setState(() => _seekValue = v),
-                                    onChangeEnd: (v) async {
-                                      setState(() => _seeking = false);
-                                      await _tts.seekSentence(v.round());
-                                    },
-                                  ),
+                                overlayShape: const RoundSliderOverlayShape(
+                                  overlayRadius: 14,
                                 ),
+                                activeTrackColor: _accentBorder,
+                                inactiveTrackColor: Colors.white24,
+                                thumbColor: _chromeFg,
                               ),
-                              SizedBox(
-                                width: 40,
-                                child: Text(
-                                  '$_progressMax',
-                                  textAlign: TextAlign.right,
-                                  style: TextStyle(
-                                    color: _chromeFg.withValues(alpha: 0.8),
-                                    fontSize: 11,
-                                  ),
-                                ),
+                              child: Slider(
+                                value: maxProg <= 0
+                                    ? 0
+                                    : progress.clamp(0, maxProg),
+                                min: 0,
+                                max: maxProg <= 0 ? 1 : maxProg,
+                                onChangeStart: (_) {
+                                  setState(() {
+                                    _seeking = true;
+                                    _seekValue = _progressValue.toDouble();
+                                  });
+                                },
+                                onChanged: maxProg <= 0
+                                    ? null
+                                    : (v) => setState(() => _seekValue = v),
+                                onChangeEnd: maxProg <= 0
+                                    ? null
+                                    : (v) async {
+                                        setState(() => _seeking = false);
+                                        await _tts.seekSentence(v.round());
+                                      },
                               ),
-                            ],
+                            ),
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 28),
-                          child: Row(
-                            children: [
-                              if (timerLeft != null && timerLeft > 0)
-                                Text(
-                                  '${timerLeft}m',
-                                  style: const TextStyle(
-                                    color: _chromeFg,
-                                    fontSize: 12,
-                                  ),
-                                )
-                              else
-                                const SizedBox(width: 28),
-                              const Spacer(),
-                              if (showSpeed)
-                                Text(
-                                  '${_tts.speechRate.toStringAsFixed(1)}X',
-                                  style: const TextStyle(
-                                    color: _chromeFg,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                            ],
+                        Text(
+                          _fmtClock(_progressMax > 0 ? _progressMax - 1 : 0),
+                          style: const TextStyle(
+                            color: _chromeFg,
+                            fontSize: 12,
                           ),
                         ),
-                        const SizedBox(height: 8),
                       ],
                     ),
                   ),
-                  // 底栏控件：定时 | 语速 | 上一章 | 播放 | 下一章 | 模式 | 目录
+                  // ll_play_menu: timer | speed | prev | FAB | next | mode | chapter
+                  // 间隔用 Expanded 权重占位，对齐 XML layout_weight=1
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 20),
+                    padding: const EdgeInsets.fromLTRB(6, 8, 6, 16),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         _circleBtn(
                           icon: Icons.timer_outlined,
                           tooltip: '定时',
                           onPressed: _showTimerSheet,
                         ),
+                        const Expanded(child: SizedBox.shrink()),
                         _circleBtn(
                           icon: Icons.speed,
                           tooltip: '语速',
                           onPressed: _showSpeedSheet,
                         ),
+                        const Expanded(child: SizedBox.shrink()),
                         _circleBtn(
                           icon: Icons.skip_previous,
                           tooltip: '上一个',
@@ -710,14 +757,18 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
                         Stack(
                           alignment: Alignment.center,
                           children: [
-                            FloatingActionButton(
-                              heroTag: 'audio_play_fab',
-                              backgroundColor: _chromeFg,
-                              foregroundColor: Colors.black,
-                              onPressed: _loading ? null : _togglePlay,
-                              child: Icon(
-                                playing ? Icons.pause : Icons.play_arrow,
-                                size: 32,
+                            Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: FloatingActionButton(
+                                heroTag: 'audio_play_fab',
+                                elevation: 2,
+                                backgroundColor: _chromeFg,
+                                foregroundColor: Colors.black,
+                                onPressed: _loading ? null : _togglePlay,
+                                child: Icon(
+                                  playing ? Icons.pause : Icons.play_arrow,
+                                  size: 32,
+                                ),
                               ),
                             ),
                             if (_loading)
@@ -738,6 +789,7 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
                               ? () => _nextChapterManual()
                               : null,
                         ),
+                        const Expanded(child: SizedBox.shrink()),
                         _circleBtn(
                           icon: _playModeIcon(_tts.playMode),
                           tooltip: _tts.playMode.label,
@@ -751,6 +803,7 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
                             );
                           },
                         ),
+                        const Expanded(child: SizedBox.shrink()),
                         _circleBtn(
                           icon: Icons.list,
                           tooltip: '目录',
