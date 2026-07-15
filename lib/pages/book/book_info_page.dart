@@ -20,6 +20,7 @@ import 'change_cover_page.dart';
 import 'change_source_page.dart';
 import 'toc_sheet.dart';
 import '../../services/manga_prefs.dart';
+import '../../utils/site_busy_guard.dart';
 
 /// Legado 主色红（换源芯片 / 阅读按钮），对齐 Jingshiro BookInfo
 const Color _kAccentRed = LegadoTokens.sourceDotRed;
@@ -69,14 +70,22 @@ class _BookInfoPageState extends State<BookInfoPage> {
       final sameBook =
           cached.isNotEmpty && cached.first.bookId == _book.id;
       if (!sameBook) {
-        await bookProvider.loadChapters(_book, source: source);
+        try {
+          await bookProvider.loadChapters(_book, source: source);
+        } catch (e) {
+          if (mounted) {
+            setState(() => _errorMessage = SiteBusyGuard.friendlyMessage(e));
+          }
+        }
       }
       if (_coverUrl.isEmpty && mounted) {
         await _fetchCoverFromSource(source);
       }
     }
     if (mounted && bookProvider.currentChapters.isEmpty) {
-      setState(() => _errorMessage = '未获取到章节列表\n请检查书源是否可用');
+      setState(
+        () => _errorMessage ??= '未获取到章节列表\n请检查书源是否可用',
+      );
     }
   }
 
@@ -108,12 +117,18 @@ class _BookInfoPageState extends State<BookInfoPage> {
 
   Future<void> _refreshChapters({bool force = false}) async {
     final source = context.read<SourceProvider>().findSourceForBook(_book);
-    if (source != null && mounted) {
+    if (source == null || !mounted) return;
+    try {
       await context.read<BookProvider>().loadChapters(
         _book,
         source: source,
         forceRefresh: force,
       );
+      if (mounted) setState(() => _errorMessage = null);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _errorMessage = SiteBusyGuard.friendlyMessage(e));
+      }
     }
   }
 
@@ -401,8 +416,23 @@ class _BookInfoPageState extends State<BookInfoPage> {
 
   Future<void> _openToc() async {
     final provider = context.read<BookProvider>();
+    // 详情页已在拉目录时复用同一 Future，勿再起并行刷新
     if (provider.currentChapters.isEmpty) {
-      await _refreshChapters();
+      if (provider.isLoading || provider.isRefreshingToc) {
+        // 等待进行中的合并请求结束
+        final source = context.read<SourceProvider>().findSourceForBook(_book);
+        if (source != null) {
+          try {
+            await provider.loadChapters(_book, source: source);
+          } catch (e) {
+            if (mounted) {
+              setState(() => _errorMessage = SiteBusyGuard.friendlyMessage(e));
+            }
+          }
+        }
+      } else {
+        await _refreshChapters();
+      }
     }
     if (!mounted) return;
     final chapters = provider.currentChapters;

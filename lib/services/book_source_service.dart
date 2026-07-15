@@ -10,6 +10,7 @@ import '../data/builtin_book_sources.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/chapter.dart';
+import '../utils/site_busy_guard.dart';
 
 /// 书源服务门面 — 全部书源操作走 Rust 引擎（Phase E-B：无 Dart 回退）
 class BookSourceService {
@@ -33,12 +34,23 @@ class BookSourceService {
     return results;
   }
 
-  /// 获取章节列表
+  /// 获取章节列表（同 bookUrl 并发请求会合并；源站 DB 繁忙自动退避重试）
   Future<List<Chapter>> getChapters(
     Book book, {
     required BookSource source,
   }) async {
     _requireRust();
+    final key =
+        '${source.bookSourceUrl}\u0000${book.sourceUrl}\u0000${book.id}';
+    return SiteBusyGuard.dedupeByKey(key, () {
+      return SiteBusyGuard.retryOnBusy(() => _fetchChaptersOnce(book, source));
+    });
+  }
+
+  Future<List<Chapter>> _fetchChaptersOnce(
+    Book book,
+    BookSource source,
+  ) async {
     // 先拉详情：ruleBookInfo.init 等 JS 会写入 cache（如番茄 articleid）
     final info = await getBookInfo(source, book.sourceUrl);
     final tocUrl = info['tocUrl'] ?? '';

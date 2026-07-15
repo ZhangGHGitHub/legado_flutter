@@ -1,9 +1,13 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use once_cell::sync::Lazy;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::time::sleep;
+
+/// Cap concurrent HTTP to one host (TOC+ajax+detail can otherwise stampede an overloaded DB).
+const DEFAULT_HOST_CONCURRENCY: usize = 2;
 
 #[derive(Clone)]
 struct RateConfig {
@@ -100,6 +104,9 @@ impl RateLimiter {
 static RATE_LIMITER: Lazy<Mutex<RateLimiter>> =
     Lazy::new(|| Mutex::new(RateLimiter::new()));
 
+static HOST_SEMAPHORES: Lazy<Mutex<HashMap<String, Arc<Semaphore>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
 pub fn configure(source_url: &str, config_str: &str) {
     RATE_LIMITER
         .lock()
@@ -119,9 +126,50 @@ pub async fn wait_if_needed(source_url: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn host_key(url: &str) -> String {
+    url::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h.to_ascii_lowercase()))
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn semaphore_for_host(host: &str) -> Arc<Semaphore> {
+    let mut map = HOST_SEMAPHORES.lock().unwrap();
+    map.entry(host.to_string())
+        .or_insert_with(|| Arc::new(Semaphore::new(DEFAULT_HOST_CONCURRENCY)))
+        .clone()
+}
+
+/// Acquire a per-host permit (max 2 in flight). Caller drops permit when done.
+pub async fn acquire_host_permit(url: &str) -> Result<OwnedSemaphorePermit, String> {
+    let host = host_key(url);
+    let sem = semaphore_for_host(&host);
+    sem.acquire_owned()
+        .await
+        .map_err(|_| format!("主机并发闸损坏: {host}"))
+}
+
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn host_permit_limits_concurrency() {
+        let a = acquire_host_permit("https://example.com/a").await.unwrap();
+        let b = acquire_host_permit("https://example.com/b").await.unwrap();
+        // Third would block; verify only 2 available by trying_acquire on same sem
+        let host = host_key("https://example.com/c");
+        let sem = semaphore_for_host(&host);
+        assert!(sem.try_acquire().is_err());
+        drop(a);
+        drop(b);
+        assert!(sem.try_acquire().is_ok());
+    }
 }

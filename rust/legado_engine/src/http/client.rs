@@ -436,6 +436,7 @@ async fn send_request(
     mut headers: HeaderMap,
 ) -> Result<reqwest::Response, String> {
     super::ssrf::assert_public_http_url(url)?;
+    let _permit = super::rate_limit::acquire_host_permit(url).await?;
     if method == "POST" {
         let post_body = body.unwrap_or("");
         let encoded = charset::encode_form_body(post_body, charset);

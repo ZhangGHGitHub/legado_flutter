@@ -11,6 +11,7 @@ import '../help/content_processor.dart';
 import '../model/read_book.dart';
 import '../services/book_source_service.dart';
 import '../services/local_book_service.dart';
+import '../utils/site_busy_guard.dart';
 
 /// 书籍管理 Provider — 书架、阅读、章节、下载缓存
 class BookProvider extends ChangeNotifier {
@@ -43,6 +44,9 @@ class BookProvider extends ChangeNotifier {
   int _tocLoadGen = 0;
   bool _isRefreshingToc = false;
   bool get isRefreshingToc => _isRefreshingToc;
+
+  /// 同书并发 loadChapters 合并到一个 Future，避免详情页 + 打开目录双刷
+  final Map<String, Future<void>> _inflightTocLoads = {};
 
   /// 书架下拉刷新：正在联网更新目录的书 ID（对齐 legado `onUpTocBooks`）
   final Set<String> _shelfUpdatingBookIds = {};
@@ -485,6 +489,34 @@ class BookProvider extends ChangeNotifier {
       return;
     }
 
+    // 强制刷新不与旧请求合并；非强制时与同书进行中的加载共用
+    if (!forceRefresh) {
+      final pending = _inflightTocLoads[book.id];
+      if (pending != null) return pending;
+    }
+
+    final future = _loadChaptersBody(
+      book,
+      source: source,
+      forceRefresh: forceRefresh,
+      backgroundRefresh: backgroundRefresh,
+    );
+    _inflightTocLoads[book.id] = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_inflightTocLoads[book.id], future)) {
+        _inflightTocLoads.remove(book.id);
+      }
+    }
+  }
+
+  Future<void> _loadChaptersBody(
+    Book book, {
+    required BookSource source,
+    bool forceRefresh = false,
+    bool backgroundRefresh = false,
+  }) async {
     final gen = ++_tocLoadGen;
     final localChapters = await _dao.getChapters(book.id);
     final hasLocal = localChapters.isNotEmpty;
@@ -562,9 +594,10 @@ class BookProvider extends ChangeNotifier {
       );
       notifyListeners();
     } catch (e, st) {
-      debugPrint('目录刷新失败: $e\n$st');
+      final friendly = SiteBusyGuard.friendlyMessage(e);
+      debugPrint('目录刷新失败: $friendly\n$st');
       if (gen == _tocLoadGen && _currentChapters.isEmpty) {
-        rethrow;
+        throw Exception(friendly);
       }
       // 已有本地目录时后台刷新失败不打断阅读
     } finally {
