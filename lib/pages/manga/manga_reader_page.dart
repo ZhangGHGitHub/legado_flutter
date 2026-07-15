@@ -12,9 +12,11 @@ import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/manga_prefs.dart';
 import '../../theme/legado_tokens.dart';
-import '../../widgets/error_view.dart';
+import '../book/change_source_page.dart';
+import '../book/toc_sheet.dart';
 
-/// 漫画阅读器 — 对齐 Jingshiro [ReadMangaActivity] + `activity_manga.xml`
+/// 漫画阅读器 — 1:1 对齐 Jingshiro [ReadMangaActivity] + `activity_manga.xml`
+/// + [MangaMenu]/`view_manga_menu.xml`) + [ReaderInfoBarView] + `menu/book_manga.xml`
 class MangaReaderPage extends StatefulWidget {
   final Book book;
   final List<Chapter> chapters;
@@ -52,11 +54,8 @@ class MangaReaderPage extends StatefulWidget {
   State<MangaReaderPage> createState() => _MangaReaderPageState();
 }
 
-class _MangaReaderPageState extends State<MangaReaderPage> {
-  static const _chromeBg = Color(0xEE1A1A1A);
-  static const _chromeFg = Colors.white;
-  static const _accent = Color(0xFFFF6D00);
-
+class _MangaReaderPageState extends State<MangaReaderPage>
+    with SingleTickerProviderStateMixin {
   late int _chapterIndex;
   List<String> _imageUrls = const [];
   int _pageIndex = 0;
@@ -65,9 +64,14 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
   bool _chromeVisible = false;
   bool _seeking = false;
   double _seekValue = 0;
+  bool _autoPageEnabled = false;
+  Timer? _autoPageTimer;
+  Timer? _clockTimer;
+  String _clockText = '';
 
   final _verticalController = ScrollController();
   PageController? _pageController;
+  late final AnimationController _menuAnim;
 
   @override
   void initState() {
@@ -76,6 +80,12 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
       0,
       math.max(0, widget.chapters.length - 1),
     );
+    _menuAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+    );
+    _tickClock();
+    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) => _tickClock());
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await MangaPrefs.ensureLoaded();
@@ -87,10 +97,24 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
 
   @override
   void dispose() {
+    _autoPageTimer?.cancel();
+    _clockTimer?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _menuAnim.dispose();
     _verticalController.dispose();
     _pageController?.dispose();
     super.dispose();
+  }
+
+  void _tickClock() {
+    final now = TimeOfDay.now();
+    final h = now.hour.toString().padLeft(2, '0');
+    final m = now.minute.toString().padLeft(2, '0');
+    if (!mounted) {
+      _clockText = '$h:$m';
+      return;
+    }
+    setState(() => _clockText = '$h:$m');
   }
 
   Chapter? get _chapter {
@@ -198,7 +222,25 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
   }
 
   void _toggleChrome() {
-    setState(() => _chromeVisible = !_chromeVisible);
+    if (_chromeVisible) {
+      _runMenuOut();
+    } else {
+      _runMenuIn();
+    }
+  }
+
+  void _runMenuIn() {
+    setState(() => _chromeVisible = true);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _menuAnim.forward(from: 0);
+  }
+
+  void _runMenuOut() {
+    _menuAnim.reverse().whenComplete(() {
+      if (!mounted) return;
+      setState(() => _chromeVisible = false);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    });
   }
 
   Future<void> _skipChapter(int delta) async {
@@ -213,9 +255,16 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
     final i = index.clamp(0, _imageUrls.length - 1);
     setState(() => _pageIndex = i);
     if (_isHorizontal && _pageController != null && _pageController!.hasClients) {
-      _pageController!.jumpToPage(i);
+      if (MangaPrefs.disablePageAnim) {
+        _pageController!.jumpToPage(i);
+      } else {
+        _pageController!.animateToPage(
+          i,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
     } else if (_verticalController.hasClients) {
-      // 粗略跳转：按页均分估计
       final maxScroll = _verticalController.position.maxScrollExtent;
       final target =
           _imageUrls.length <= 1 ? 0.0 : maxScroll * (i / (_imageUrls.length - 1));
@@ -225,7 +274,7 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
   }
 
   void _onTapZone(TapUpDetails details) {
-    if (_loading) return;
+    if (_loading || _chromeVisible) return;
     final w = MediaQuery.sizeOf(context).width;
     final x = details.localPosition.dx;
     final left = x < w * 0.28;
@@ -249,7 +298,6 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
         _goToPage(next);
       }
     } else {
-      // 纵向：左上章 / 右下章；中区菜单
       if (left) {
         unawaited(_skipChapter(-1));
       } else {
@@ -261,7 +309,6 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
   ColorFilter? _imageColorFilter() {
     if (MangaPrefs.enableEInk) {
       final t = MangaPrefs.eInkThreshold / 255.0;
-      // 灰度 + 对比近似阈值
       final c = 1.0 + (t - 0.5) * 2.0;
       final o = 128 * (1 - c);
       return ColorFilter.matrix(<double>[
@@ -312,6 +359,7 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
   }
 
   Widget _buildImage(String url, {required bool fillWidth}) {
+    final accent = Theme.of(context).colorScheme.primary;
     final img = Image.network(
       url,
       fit: fillWidth ? BoxFit.fitWidth : BoxFit.contain,
@@ -322,7 +370,8 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
           height: 220,
           child: Center(
             child: CircularProgressIndicator(
-              color: _accent,
+              color: accent,
+              strokeWidth: 3,
               value: progress.expectedTotalBytes != null
                   ? progress.cumulativeBytesLoaded /
                       progress.expectedTotalBytes!
@@ -348,7 +397,6 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
 
     final filtered = _wrapFilter(img);
     if (MangaPrefs.disableScale) return filtered;
-
     return InteractiveViewer(
       minScale: 1,
       maxScale: 4,
@@ -356,30 +404,21 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
     );
   }
 
-  Widget _buildBody() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: _accent));
-    }
-    if (_error != null) {
-      return ErrorView(
-        message: _error!,
-        onRetry: () => unawaited(_loadChapter()),
-        retryLabel: '重新加载',
-        icon: Icons.image_not_supported_outlined,
-      );
+  Widget _buildContent() {
+    if (_error != null && _imageUrls.isEmpty) {
+      return const SizedBox.shrink();
     }
     if (_imageUrls.isEmpty) {
-      return ErrorView(
-        message: '暂无图片',
-        onRetry: () => unawaited(_loadChapter()),
-        retryLabel: '重新加载',
-      );
+      return const SizedBox.shrink();
     }
 
     if (_isHorizontal) {
       return PageView.builder(
         controller: _pageController,
         reverse: _isRtl,
+        physics: MangaPrefs.disableHorizontalPageSnap
+            ? const ClampingScrollPhysics()
+            : const PageScrollPhysics(),
         itemCount: _imageUrls.length,
         onPageChanged: (i) {
           setState(() => _pageIndex = i);
@@ -399,12 +438,7 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
       itemBuilder: (_, i) {
         if (!MangaPrefs.hideTitle && i == 0) {
           return Padding(
-            padding: const EdgeInsets.fromLTRB(
-              LegadoTokens.spacingMd,
-              LegadoTokens.spacingSm,
-              LegadoTokens.spacingMd,
-              LegadoTokens.spacingSm,
-            ),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Text(
               _chapter?.title ?? '',
               textAlign: TextAlign.center,
@@ -418,50 +452,148 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
     );
   }
 
-  Widget _infoBar() {
-    if (_loading || _imageUrls.isEmpty) return const SizedBox.shrink();
+  /// 对齐 [ReaderInfoBarView]：高 20dp、底边距 10、左右 pad 10；左文案 + 右时钟
+  Widget _infoBar(ThemeData theme) {
+    final cfg = MangaPrefs.footer;
+    if (cfg.hideFooter || _loading || _imageUrls.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final buf = StringBuffer();
     final ch = _chapter;
-    final pageLabel =
-        '${_pageIndex + 1}/${_imageUrls.length}';
-    final chapLabel =
-        '${_chapterIndex + 1}/${widget.chapters.length}';
-    final pct = widget.chapters.isEmpty
-        ? 0.0
-        : (_chapterIndex + (_pageIndex + 1) / math.max(1, _imageUrls.length)) /
-            widget.chapters.length;
-    final pctLabel = '${(pct.clamp(0.0, 1.0) * 100).toStringAsFixed(1)}%';
+    if (!cfg.hideChapterName) {
+      buf.write('${ch?.title ?? ''} ');
+    }
+    if (!cfg.hidePageNumber) {
+      if (!cfg.hidePageNumberLabel) buf.write('页数');
+      buf.write('${_pageIndex + 1}/${_imageUrls.length} ');
+    }
+    if (!cfg.hideChapter) {
+      if (!cfg.hideChapterLabel) buf.write('章节');
+      buf.write('${_chapterIndex + 1}/${widget.chapters.length} ');
+    }
+    if (!cfg.hideProgressRatio) {
+      if (!cfg.hideProgressRatioLabel) buf.write('总进度');
+      final chapterSize = widget.chapters.length;
+      final imageCount = _imageUrls.length;
+      String percent;
+      if (chapterSize == 0 || (imageCount == 0 && _chapterIndex == 0)) {
+        percent = '0.0%';
+      } else if (imageCount == 0) {
+        percent =
+            '${((_chapterIndex + 1.0) / chapterSize * 100).toStringAsFixed(1)}%';
+      } else {
+        var p = _chapterIndex * 1.0 / chapterSize +
+            1.0 / chapterSize * (_pageIndex + 1) / imageCount;
+        percent = '${(p * 100).toStringAsFixed(1)}%';
+        if (percent == '100.0%' &&
+            (_chapterIndex + 1 != chapterSize ||
+                _pageIndex + 1 != imageCount)) {
+          percent = '99.9%';
+        }
+      }
+      buf.write(percent);
+    }
+    final label = buf.toString().trim();
+    final alignLeft = cfg.footerOrientation == 0;
+    final fg = theme.colorScheme.onSurface.withValues(alpha: 200 / 255);
+    final outline = theme.colorScheme.surface.withValues(alpha: 200 / 255);
+
     return Positioned(
-      left: LegadoTokens.spacingMd,
-      right: LegadoTokens.spacingMd,
-      bottom: LegadoTokens.spacingMd,
+      left: 0,
+      right: 0,
+      bottom: 10,
       child: IgnorePointer(
-        child: Text(
-          '${ch?.title ?? ''}  $pageLabel  $chapLabel  $pctLabel',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.75),
-            fontSize: 11,
-            shadows: const [
-              Shadow(blurRadius: 4, color: Colors.black87),
-            ],
+        child: SizedBox(
+          height: 20,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment:
+                        alignLeft ? Alignment.centerLeft : Alignment.center,
+                    child: _OutlinedText(
+                      label,
+                      fill: fg,
+                      stroke: outline,
+                      fontSize: 11,
+                      maxLines: 1,
+                    ),
+                  ),
+                ),
+                _OutlinedText(
+                  _clockText,
+                  fill: fg,
+                  stroke: outline,
+                  fontSize: 11,
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
+  /// 加载层 — 对齐 `activity_manga.xml` fl_loading
+  Widget _loadingOverlay(ThemeData theme) {
+    final show = _loading || (_error != null && _imageUrls.isEmpty);
+    if (!show) return const SizedBox.shrink();
+    return Positioned.fill(
+      child: ColoredBox(
+        color: theme.colorScheme.surface,
+        child: _error != null && !_loading
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: theme.colorScheme.onSurface),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () => unawaited(_loadChapter()),
+                    child: Text(
+                      '重新加载',
+                      style: TextStyle(
+                        color: theme.colorScheme.primary,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '加载中…',
+                    style: TextStyle(color: theme.colorScheme.onSurface),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
   Future<void> _showColorFilterDialog() async {
     var cfg = MangaPrefs.colorFilter;
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF2A2A2A),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(LegadoDimens.radiusXLarge),
-        ),
-      ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
@@ -469,64 +601,61 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('$title  $value',
-                      style: const TextStyle(color: _chromeFg, fontSize: 13)),
+                  Text('$title  $value'),
                   Slider(
                     value: value.toDouble(),
                     min: 0,
                     max: 255,
                     divisions: 255,
-                    activeColor: _accent,
                     onChanged: (v) => setLocal(() => onChanged(v.round())),
                   ),
                 ],
               );
             }
 
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            return AlertDialog(
+              contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '颜色滤镜',
+                    Text(
+                      '滤镜',
                       style: TextStyle(
-                        color: _chromeFg,
                         fontSize: 18,
-                        fontWeight: FontWeight.w600,
+                        color: Theme.of(ctx).colorScheme.primary,
                       ),
                     ),
-                    const SizedBox(height: LegadoTokens.spacingSm),
+                    const SizedBox(height: 8),
                     slider('亮度', cfg.brightness,
                         (v) => cfg = cfg.copyWith(brightness: v)),
                     slider('R', cfg.r, (v) => cfg = cfg.copyWith(r: v)),
                     slider('G', cfg.g, (v) => cfg = cfg.copyWith(g: v)),
                     slider('B', cfg.b, (v) => cfg = cfg.copyWith(b: v)),
                     slider('A', cfg.a, (v) => cfg = cfg.copyWith(a: v)),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: () {
-                            setLocal(() => cfg = const MangaColorFilterConfig());
-                          },
-                          child: const Text('重置'),
-                        ),
-                        const Spacer(),
-                        FilledButton(
-                          onPressed: () async {
-                            await MangaPrefs.setColorFilter(cfg);
-                            if (ctx.mounted) Navigator.pop(ctx);
-                            if (mounted) setState(() {});
-                          },
-                          child: const Text('确定'),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),
+              actions: [
+                TextButton(
+                  onPressed: () =>
+                      setLocal(() => cfg = const MangaColorFilterConfig()),
+                  child: const Text('重置'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await MangaPrefs.setColorFilter(cfg);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) setState(() {});
+                  },
+                  child: const Text('确认'),
+                ),
+              ],
             );
           },
         );
@@ -536,126 +665,50 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
 
   Future<void> _showEpaperDialog() async {
     var threshold = MangaPrefs.eInkThreshold;
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      backgroundColor: const Color(0xFF2A2A2A),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(LegadoDimens.radiusXLarge),
-        ),
-      ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      '墨水屏设置',
-                      style: TextStyle(
-                        color: _chromeFg,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
+            return AlertDialog(
+              contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '墨水屏设置',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Theme.of(ctx).colorScheme.primary,
                     ),
-                    const SizedBox(height: LegadoTokens.spacingSm),
-                    Text('阈值  $threshold',
-                        style: const TextStyle(color: _chromeFg)),
-                    Slider(
-                      value: threshold.toDouble(),
-                      min: 0,
-                      max: 255,
-                      divisions: 255,
-                      activeColor: _accent,
-                      onChanged: (v) => setLocal(() => threshold = v.round()),
-                    ),
-                    FilledButton(
-                      onPressed: () async {
-                        await MangaPrefs.setEInk(
-                          enabled: true,
-                          threshold: threshold,
-                        );
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        if (mounted) setState(() {});
-                      },
-                      child: const Text('确定'),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('阈值  $threshold'),
+                  Slider(
+                    value: threshold.toDouble(),
+                    min: 0,
+                    max: 255,
+                    divisions: 255,
+                    onChanged: (v) => setLocal(() => threshold = v.round()),
+                  ),
+                ],
               ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _showCatalog() async {
-    final chosen = await showModalBottomSheet<int>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF2A2A2A),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(LegadoDimens.radiusXLarge),
-        ),
-      ),
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.65,
-          minChildSize: 0.4,
-          maxChildSize: 0.92,
-          builder: (ctx, scroll) {
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
-                  child: Row(
-                    children: [
-                      Text(
-                        '目录（${widget.chapters.length}）',
-                        style: const TextStyle(
-                          color: _chromeFg,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: _chromeFg),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('取消'),
                 ),
-                Expanded(
-                  child: ListView.builder(
-                    controller: scroll,
-                    itemCount: widget.chapters.length,
-                    itemBuilder: (_, i) {
-                      final ch = widget.chapters[i];
-                      final active = i == _chapterIndex;
-                      return ListTile(
-                        dense: true,
-                        selected: active,
-                        selectedTileColor: Colors.white12,
-                        title: Text(
-                          ch.title,
-                          style: TextStyle(
-                            color: active ? _accent : _chromeFg,
-                            fontWeight:
-                                active ? FontWeight.w600 : FontWeight.normal,
-                          ),
-                        ),
-                        onTap: () => Navigator.pop(ctx, i),
-                      );
-                    },
-                  ),
+                TextButton(
+                  onPressed: () async {
+                    await MangaPrefs.setEInk(
+                      enabled: true,
+                      threshold: threshold,
+                    );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) setState(() {});
+                  },
+                  child: const Text('确认'),
                 ),
               ],
             );
@@ -663,48 +716,211 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
         );
       },
     );
-    if (chosen != null && chosen != _chapterIndex) {
-      setState(() => _chapterIndex = chosen);
-      await _loadChapter();
-    }
   }
 
-  Future<void> _onMoreSelected(String value) async {
-    switch (value) {
-      case 'catalog':
-        await _showCatalog();
-      case 'refresh':
+  Future<void> _showFooterConfigDialog() async {
+    var cfg = MangaPrefs.footer;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            Widget check(String label, bool value, ValueChanged<bool> onChanged) {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Checkbox(
+                    value: value,
+                    onChanged: (v) => onChanged(v ?? false),
+                  ),
+                  Text(label),
+                ],
+              );
+            }
+
+            return AlertDialog(
+              contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '页脚配置',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Theme.of(ctx).colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('《章节和文案》隐藏'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      children: [
+                        check(
+                          '《章节.》文案',
+                          !cfg.hideChapterLabel,
+                          (v) => setLocal(
+                            () => cfg = cfg.copyWith(hideChapterLabel: !v),
+                          ),
+                        ),
+                        check(
+                          '章节',
+                          !cfg.hideChapter,
+                          (v) =>
+                              setLocal(() => cfg = cfg.copyWith(hideChapter: !v)),
+                        ),
+                        check(
+                          '章节名称',
+                          !cfg.hideChapterName,
+                          (v) => setLocal(
+                            () => cfg = cfg.copyWith(hideChapterName: !v),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('《页数和文案》隐藏'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      children: [
+                        check(
+                          '《页数.》文案',
+                          !cfg.hidePageNumberLabel,
+                          (v) => setLocal(
+                            () => cfg = cfg.copyWith(hidePageNumberLabel: !v),
+                          ),
+                        ),
+                        check(
+                          '页数',
+                          !cfg.hidePageNumber,
+                          (v) => setLocal(
+                            () => cfg = cfg.copyWith(hidePageNumber: !v),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('《总进度和文案》隐藏'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      children: [
+                        check(
+                          '《总进度.》文案',
+                          !cfg.hideProgressRatioLabel,
+                          (v) => setLocal(
+                            () =>
+                                cfg = cfg.copyWith(hideProgressRatioLabel: !v),
+                          ),
+                        ),
+                        check(
+                          '总进度',
+                          !cfg.hideProgressRatio,
+                          (v) => setLocal(
+                            () => cfg = cfg.copyWith(hideProgressRatio: !v),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('页脚'),
+                    Row(
+                      children: [
+                        check(
+                          '隐藏页脚',
+                          cfg.hideFooter,
+                          (v) =>
+                              setLocal(() => cfg = cfg.copyWith(hideFooter: v)),
+                        ),
+                        Radio<int>(
+                          value: 0,
+                          groupValue: cfg.footerOrientation,
+                          onChanged: (v) => setLocal(
+                            () =>
+                                cfg = cfg.copyWith(footerOrientation: v ?? 0),
+                          ),
+                        ),
+                        const Text('靠左'),
+                        Radio<int>(
+                          value: 1,
+                          groupValue: cfg.footerOrientation,
+                          onChanged: (v) => setLocal(
+                            () =>
+                                cfg = cfg.copyWith(footerOrientation: v ?? 1),
+                          ),
+                        ),
+                        const Text('居中'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await MangaPrefs.setFooter(cfg);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) setState(() {});
+                  },
+                  child: const Text('确认'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _openCatalog() async {
+    _runMenuOut();
+    final current = _chapter;
+    await TocSheet.show(
+      context,
+      chapters: widget.chapters,
+      currentChapter: current?.title,
+      currentChapterId: current?.id,
+      bookId: widget.book.id,
+      onChapterTap: (ch) async {
+        final i = widget.chapters.indexWhere((c) => c.id == ch.id);
+        if (i < 0 || i == _chapterIndex) return;
+        setState(() => _chapterIndex = i);
         await _loadChapter();
-      case 'direction':
-        await MangaPrefs.setDirection(MangaPrefs.direction.next);
-        setState(() {
-          _pageController?.dispose();
-          _pageController = _isHorizontal
-              ? PageController(initialPage: _pageIndex)
-              : null;
-        });
-      case 'filter':
-        await _showColorFilterDialog();
-      case 'eink':
-        final next = !MangaPrefs.enableEInk;
-        await MangaPrefs.setEInk(enabled: next);
-        setState(() {});
-        if (next && mounted) await _showEpaperDialog();
-      case 'gray':
-        await MangaPrefs.setGray(!MangaPrefs.enableGray);
-        setState(() {});
-      case 'scale':
-        await MangaPrefs.setDisableScale(!MangaPrefs.disableScale);
-        setState(() {});
-      case 'click':
-        await MangaPrefs.setDisableClickScroll(!MangaPrefs.disableClickScroll);
-        setState(() {});
-      case 'title':
-        await MangaPrefs.setHideTitle(!MangaPrefs.hideTitle);
-        setState(() {});
-      case 'predownload':
+      },
+    );
+  }
+
+  Future<void> _openChangeSource() async {
+    _runMenuOut();
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => ChangeSourcePage(book: widget.book)),
+    );
+  }
+
+  void _setAutoPage(bool enabled) {
+    _autoPageTimer?.cancel();
+    _autoPageEnabled = enabled;
+    if (!enabled) return;
+    final secs = math.max(1, MangaPrefs.autoPageSpeed);
+    _autoPageTimer = Timer.periodic(Duration(seconds: secs), (_) {
+      if (!mounted || !_autoPageEnabled || _imageUrls.isEmpty) return;
+      if (_pageIndex + 1 < _imageUrls.length) {
+        _goToPage(_pageIndex + 1);
+      } else {
+        unawaited(_skipChapter(1));
+      }
+    });
+  }
+
+  Future<void> _onMenuSelected(String value) async {
+    switch (value) {
+      case 'pre_download':
         final n = await _pickNumber(
-          title: '预下载图片数',
+          title: '预下载',
           value: MangaPrefs.preDownloadNum,
           min: 0,
           max: 50,
@@ -714,6 +930,61 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
           _precacheNearby();
           setState(() {});
         }
+      case 'disable_scale':
+        await MangaPrefs.setDisableScale(!MangaPrefs.disableScale);
+        setState(() {});
+      case 'disable_click':
+        await MangaPrefs.setDisableClickScroll(!MangaPrefs.disableClickScroll);
+        setState(() {});
+      case 'auto_page':
+        final next = !_autoPageEnabled;
+        _setAutoPage(next);
+        setState(() {});
+      case 'auto_page_speed':
+        final n = await _pickNumber(
+          title: '设置自动翻页速度',
+          value: MangaPrefs.autoPageSpeed,
+          min: 1,
+          max: 20,
+        );
+        if (n != null) {
+          await MangaPrefs.setAutoPageSpeed(n);
+          if (_autoPageEnabled) _setAutoPage(true);
+          setState(() {});
+        }
+      case 'horizontal':
+        await MangaPrefs.setHorizontalScroll(!MangaPrefs.enableHorizontalScroll);
+        setState(() {
+          _pageController?.dispose();
+          _pageController = _isHorizontal
+              ? PageController(initialPage: _pageIndex)
+              : null;
+        });
+      case 'disable_h_snap':
+        await MangaPrefs.setDisableHorizontalPageSnap(
+          !MangaPrefs.disableHorizontalPageSnap,
+        );
+        setState(() {});
+      case 'disable_anim':
+        await MangaPrefs.setDisablePageAnim(!MangaPrefs.disablePageAnim);
+        setState(() {});
+      case 'footer':
+        await _showFooterConfigDialog();
+      case 'filter':
+        await _showColorFilterDialog();
+      case 'hide_title':
+        await MangaPrefs.setHideTitle(!MangaPrefs.hideTitle);
+        setState(() {});
+      case 'eink':
+        final next = !MangaPrefs.enableEInk;
+        await MangaPrefs.setEInk(enabled: next);
+        setState(() {});
+        if (next && mounted) await _showEpaperDialog();
+      case 'eink_setting':
+        await _showEpaperDialog();
+      case 'gray':
+        await MangaPrefs.setGray(!MangaPrefs.enableGray);
+        setState(() {});
     }
   }
 
@@ -749,9 +1020,9 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
                   onPressed: () => Navigator.pop(ctx),
                   child: const Text('取消'),
                 ),
-                FilledButton(
+                TextButton(
                   onPressed: () => Navigator.pop(ctx, v),
-                  child: const Text('确定'),
+                  child: const Text('确认'),
                 ),
               ],
             );
@@ -761,191 +1032,280 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
     );
   }
 
-  Widget _topChrome() {
+  /// MangaMenu TitleBar — 对齐 `view_manga_menu.xml` + `menu/book_manga.xml`
+  Widget _mangaMenuTop(ThemeData theme) {
     final source = context.read<SourceProvider>().findSourceForBook(widget.book);
+    final onSurface = theme.colorScheme.onSurface;
+    final menuBg = theme.colorScheme.surfaceContainerHigh;
+
     return Material(
-      color: _chromeBg,
+      color: menuBg,
+      elevation: 2,
       child: SafeArea(
         bottom: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: _chromeFg),
-                  onPressed: () => Navigator.maybePop(context),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
+            SizedBox(
+              height: 48,
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.arrow_back, color: onSurface),
+                    onPressed: () => Navigator.maybePop(context),
+                  ),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () {
+                        // 对齐 MangaMenu: openBookInfoActivity
+                      },
+                      child: Text(
                         widget.book.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _chromeFg,
+                        style: TextStyle(
+                          color: onSurface,
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      Text(
-                        _chapter?.title ?? '',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.swap_horiz, color: onSurface),
+                    tooltip: '换源',
+                    onPressed: () => unawaited(_openChangeSource()),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.refresh, color: onSurface),
+                    tooltip: '刷新',
+                    onPressed: () {
+                      _runMenuOut();
+                      unawaited(_loadChapter());
+                    },
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.menu_book_outlined, color: onSurface),
+                    tooltip: '目录',
+                    onPressed: () => unawaited(_openCatalog()),
+                  ),
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert, color: onSurface),
+                    onSelected: (v) => unawaited(_onMenuSelected(v)),
+                    itemBuilder: (_) => [
+                      CheckedPopupMenuItem(
+                        value: 'disable_scale',
+                        checked: MangaPrefs.disableScale,
+                        child: const Text('禁用漫画缩放'),
+                      ),
+                      CheckedPopupMenuItem(
+                        value: 'disable_click',
+                        checked: MangaPrefs.disableClickScroll,
+                        child: const Text('禁用点击翻页'),
+                      ),
+                      CheckedPopupMenuItem(
+                        value: 'auto_page',
+                        checked: _autoPageEnabled,
+                        child: const Text('开启自动翻页'),
+                      ),
+                      if (_autoPageEnabled)
+                        PopupMenuItem(
+                          value: 'auto_page_speed',
+                          child: Text('翻页速度 ${MangaPrefs.autoPageSpeed}'),
                         ),
+                      CheckedPopupMenuItem(
+                        value: 'horizontal',
+                        checked: MangaPrefs.enableHorizontalScroll,
+                        child: const Text('水平滚动'),
+                      ),
+                      if (MangaPrefs.enableHorizontalScroll)
+                        CheckedPopupMenuItem(
+                          value: 'disable_h_snap',
+                          checked: MangaPrefs.disableHorizontalPageSnap,
+                          child: const Text('禁用水平翻页效果'),
+                        ),
+                      CheckedPopupMenuItem(
+                        value: 'disable_anim',
+                        checked: MangaPrefs.disablePageAnim,
+                        child: const Text('禁用翻页动画'),
+                      ),
+                      const PopupMenuItem(
+                        value: 'footer',
+                        child: Text('页脚配置'),
+                      ),
+                      const PopupMenuItem(
+                        value: 'filter',
+                        child: Text('滤镜'),
+                      ),
+                      CheckedPopupMenuItem(
+                        value: 'hide_title',
+                        checked: MangaPrefs.hideTitle,
+                        child: const Text('隐藏漫画列表标题'),
+                      ),
+                      CheckedPopupMenuItem(
+                        value: 'eink',
+                        checked: MangaPrefs.enableEInk,
+                        child: const Text('墨水屏'),
+                      ),
+                      if (MangaPrefs.enableEInk)
+                        const PopupMenuItem(
+                          value: 'eink_setting',
+                          child: Text('墨水屏设置'),
+                        ),
+                      CheckedPopupMenuItem(
+                        value: 'gray',
+                        checked: MangaPrefs.enableGray,
+                        child: const Text('开启图片灰色'),
+                      ),
+                      PopupMenuItem(
+                        value: 'pre_download',
+                        child: Text('预下载${MangaPrefs.preDownloadNum}页'),
                       ),
                     ],
                   ),
-                ),
-                if (source != null)
+                ],
+              ),
+            ),
+            // title_bar_addition
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 1, 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _chapter?.title ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: onSurface, fontSize: 13),
+                        ),
+                        if ((_chapter?.url ?? '').isNotEmpty)
+                          Text(
+                            _chapter!.url,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: onSurface.withValues(alpha: 0.55),
+                              fontSize: 11,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                   Container(
-                    margin: const EdgeInsets.only(right: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    constraints: const BoxConstraints(maxWidth: 120),
+                    margin: const EdgeInsets.all(1),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _accent,
+                      color: theme.colorScheme.primary,
                       borderRadius: BorderRadius.circular(2),
                     ),
+                    alignment: Alignment.center,
                     child: Text(
-                      source.bookSourceName,
+                      source?.bookSourceName ?? '书源',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                      style: TextStyle(
+                        color: theme.colorScheme.onPrimary,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: _chromeFg),
-                  onSelected: (v) => unawaited(_onMoreSelected(v)),
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(value: 'catalog', child: Text('目录')),
-                    const PopupMenuItem(value: 'refresh', child: Text('刷新')),
-                    PopupMenuItem(
-                      value: 'direction',
-                      child: Text('阅读方向：${MangaPrefs.direction.label}'),
-                    ),
-                    const PopupMenuItem(value: 'filter', child: Text('颜色滤镜')),
-                    PopupMenuItem(
-                      value: 'eink',
-                      child: Text(MangaPrefs.enableEInk ? '关闭墨水屏' : '墨水屏模式'),
-                    ),
-                    PopupMenuItem(
-                      value: 'gray',
-                      child: Text(MangaPrefs.enableGray ? '关闭灰度' : '灰度'),
-                    ),
-                    PopupMenuItem(
-                      value: 'scale',
-                      child: Text(
-                        MangaPrefs.disableScale ? '启用缩放' : '禁用缩放',
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'click',
-                      child: Text(
-                        MangaPrefs.disableClickScroll ? '启用点击翻页' : '禁用点击翻页',
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'title',
-                      child: Text(
-                        MangaPrefs.hideTitle ? '显示章节标题' : '隐藏章节标题',
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'predownload',
-                      child: Text('预下载：${MangaPrefs.preDownloadNum}'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            if ((_chapter?.url ?? '').isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    _chapter!.url,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white38, fontSize: 11),
-                  ),
-                ),
+                ],
               ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _bottomChrome() {
+  /// bottom_menu — 对齐 view_manga_menu：上一章 | SeekBar | 下一章
+  Widget _mangaMenuBottom(ThemeData theme) {
     final canPrev = _chapterIndex > 0;
     final canNext = _chapterIndex + 1 < widget.chapters.length;
     final maxPage = math.max(0, _imageUrls.length - 1).toDouble();
     final value = (_seeking ? _seekValue : _pageIndex.toDouble())
         .clamp(0.0, math.max(maxPage, 0.0));
+    final menuBg = theme.colorScheme.surfaceContainerHigh;
+    final onSurface = theme.colorScheme.onSurface;
 
     return Material(
-      color: _chromeBg,
+      color: menuBg,
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 4, 10),
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
           child: Row(
             children: [
-              TextButton(
-                onPressed: canPrev ? () => unawaited(_skipChapter(-1)) : null,
-                style: TextButton.styleFrom(
-                  foregroundColor: _chromeFg,
-                  disabledForegroundColor: Colors.white24,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: TextButton(
+                  onPressed:
+                      canPrev ? () => unawaited(_skipChapter(-1)) : null,
+                  style: TextButton.styleFrom(
+                    foregroundColor: onSurface,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    textStyle: const TextStyle(fontSize: 14),
+                  ),
+                  child: const Text('上一章'),
                 ),
-                child: const Text('上一章'),
               ),
               Expanded(
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 3,
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 7,
+                child: SizedBox(
+                  height: 25,
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 3,
+                      thumbShape:
+                          const RoundSliderThumbShape(enabledThumbRadius: 7),
+                      activeTrackColor:
+                          theme.colorScheme.primary.withValues(alpha: 0.55),
+                      inactiveTrackColor:
+                          onSurface.withValues(alpha: 0.24),
+                      thumbColor: theme.colorScheme.primary,
                     ),
-                    activeTrackColor: _accent.withValues(alpha: 0.55),
-                    inactiveTrackColor: Colors.white24,
-                    thumbColor: _accent,
-                  ),
-                  child: Slider(
-                    min: 0,
-                    max: maxPage <= 0 ? 1 : maxPage,
-                    divisions: maxPage > 0 ? maxPage.toInt() : null,
-                    value: maxPage <= 0 ? 0.0 : value.toDouble(),
-                    onChangeStart: (_) {
-                      setState(() {
-                        _seeking = true;
-                        _seekValue = _pageIndex.toDouble();
-                      });
-                    },
-                    onChanged: maxPage <= 0
-                        ? null
-                        : (v) => setState(() => _seekValue = v),
-                    onChangeEnd: maxPage <= 0
-                        ? null
-                        : (v) {
-                            setState(() => _seeking = false);
-                            _goToPage(v.round());
-                            unawaited(_persistProgress());
-                          },
+                    child: Slider(
+                      min: 0,
+                      max: maxPage <= 0 ? 1 : maxPage,
+                      divisions: maxPage > 0 ? maxPage.toInt() : null,
+                      value: maxPage <= 0 ? 0.0 : value.toDouble(),
+                      onChangeStart: (_) {
+                        setState(() {
+                          _seeking = true;
+                          _seekValue = _pageIndex.toDouble();
+                        });
+                      },
+                      onChanged: maxPage <= 0
+                          ? null
+                          : (v) => setState(() => _seekValue = v),
+                      onChangeEnd: maxPage <= 0
+                          ? null
+                          : (v) {
+                              setState(() => _seeking = false);
+                              _goToPage(v.round());
+                              unawaited(_persistProgress());
+                            },
+                    ),
                   ),
                 ),
               ),
-              TextButton(
-                onPressed: canNext ? () => unawaited(_skipChapter(1)) : null,
-                style: TextButton.styleFrom(
-                  foregroundColor: _chromeFg,
-                  disabledForegroundColor: Colors.white24,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: TextButton(
+                  onPressed:
+                      canNext ? () => unawaited(_skipChapter(1)) : null,
+                  style: TextButton.styleFrom(
+                    foregroundColor: onSurface,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    textStyle: const TextStyle(fontSize: 14),
+                  ),
+                  child: const Text('下一章'),
                 ),
-                child: const Text('下一章'),
               ),
             ],
           ),
@@ -954,8 +1314,60 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
     );
   }
 
+  Widget _mangaMenuOverlay(ThemeData theme) {
+    if (!_chromeVisible && _menuAnim.isDismissed) {
+      return const SizedBox.shrink();
+    }
+    return Positioned.fill(
+      child: AnimatedBuilder(
+        animation: _menuAnim,
+        builder: (context, _) {
+          final t = Curves.easeOutCubic.transform(_menuAnim.value);
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: _runMenuOut,
+                  behavior: HitTestBehavior.opaque,
+                  child: ColoredBox(
+                    color: Colors.black.withValues(alpha: 0.001),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Transform.translate(
+                  offset: Offset(0, -80 * (1 - t)),
+                  child: Opacity(
+                    opacity: t.clamp(0.0, 1.0),
+                    child: _mangaMenuTop(theme),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Transform.translate(
+                  offset: Offset(0, 80 * (1 - t)),
+                  child: Opacity(
+                    opacity: t.clamp(0.0, 1.0),
+                    child: _mangaMenuBottom(theme),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
@@ -964,22 +1376,59 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            _buildBody(),
-            if (!_chromeVisible) _infoBar(),
-            if (_chromeVisible) ...[
-              Positioned.fill(
-                child: GestureDetector(
-                  onTap: _toggleChrome,
-                  behavior: HitTestBehavior.translucent,
-                  child: const ColoredBox(color: Colors.transparent),
-                ),
-              ),
-              Positioned(top: 0, left: 0, right: 0, child: _topChrome()),
-              Positioned(bottom: 0, left: 0, right: 0, child: _bottomChrome()),
-            ],
+            _buildContent(),
+            if (!_chromeVisible) _infoBar(theme),
+            _mangaMenuOverlay(theme),
+            _loadingOverlay(theme),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// ReaderInfoBarView 描边文字近似
+class _OutlinedText extends StatelessWidget {
+  final String text;
+  final Color fill;
+  final Color stroke;
+  final double fontSize;
+  final int maxLines;
+
+  const _OutlinedText(
+    this.text, {
+    required this.fill,
+    required this.stroke,
+    this.fontSize = 11,
+    this.maxLines = 1,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Text(
+          text,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: fontSize,
+            foreground: Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2
+              ..color = stroke,
+            shadows: const [
+              Shadow(blurRadius: 2, offset: Offset(1, 1), color: Colors.black54),
+            ],
+          ),
+        ),
+        Text(
+          text,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: fontSize, color: fill),
+        ),
+      ],
     );
   }
 }

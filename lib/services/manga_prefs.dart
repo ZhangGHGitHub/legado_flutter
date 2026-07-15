@@ -20,6 +20,83 @@ extension MangaReadDirectionX on MangaReadDirection {
       .values[(index + 1) % MangaReadDirection.values.length];
 }
 
+/// 页脚配置 — 对齐 `MangaFooterConfig` / `dialog_manga_footer_setting.xml`
+class MangaFooterConfig {
+  final bool hideFooter;
+  final bool hideChapterName;
+  final bool hidePageNumber;
+  final bool hidePageNumberLabel;
+  final bool hideChapter;
+  final bool hideChapterLabel;
+  final bool hideProgressRatio;
+  final bool hideProgressRatioLabel;
+  /// 0=靠左 ALIGN_LEFT，1=居中 ALIGN_CENTER（[ReaderInfoBarView]）
+  final int footerOrientation;
+
+  const MangaFooterConfig({
+    this.hideFooter = false,
+    this.hideChapterName = false,
+    this.hidePageNumber = false,
+    this.hidePageNumberLabel = false,
+    this.hideChapter = false,
+    this.hideChapterLabel = false,
+    this.hideProgressRatio = false,
+    this.hideProgressRatioLabel = false,
+    this.footerOrientation = 1,
+  });
+
+  MangaFooterConfig copyWith({
+    bool? hideFooter,
+    bool? hideChapterName,
+    bool? hidePageNumber,
+    bool? hidePageNumberLabel,
+    bool? hideChapter,
+    bool? hideChapterLabel,
+    bool? hideProgressRatio,
+    bool? hideProgressRatioLabel,
+    int? footerOrientation,
+  }) {
+    return MangaFooterConfig(
+      hideFooter: hideFooter ?? this.hideFooter,
+      hideChapterName: hideChapterName ?? this.hideChapterName,
+      hidePageNumber: hidePageNumber ?? this.hidePageNumber,
+      hidePageNumberLabel: hidePageNumberLabel ?? this.hidePageNumberLabel,
+      hideChapter: hideChapter ?? this.hideChapter,
+      hideChapterLabel: hideChapterLabel ?? this.hideChapterLabel,
+      hideProgressRatio: hideProgressRatio ?? this.hideProgressRatio,
+      hideProgressRatioLabel:
+          hideProgressRatioLabel ?? this.hideProgressRatioLabel,
+      footerOrientation: footerOrientation ?? this.footerOrientation,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'hideFooter': hideFooter,
+        'hideChapterName': hideChapterName,
+        'hidePageNumber': hidePageNumber,
+        'hidePageNumberLabel': hidePageNumberLabel,
+        'hideChapter': hideChapter,
+        'hideChapterLabel': hideChapterLabel,
+        'hideProgressRatio': hideProgressRatio,
+        'hideProgressRatioLabel': hideProgressRatioLabel,
+        'footerOrientation': footerOrientation,
+      };
+
+  factory MangaFooterConfig.fromJson(Map<String, dynamic> json) {
+    return MangaFooterConfig(
+      hideFooter: json['hideFooter'] as bool? ?? false,
+      hideChapterName: json['hideChapterName'] as bool? ?? false,
+      hidePageNumber: json['hidePageNumber'] as bool? ?? false,
+      hidePageNumberLabel: json['hidePageNumberLabel'] as bool? ?? false,
+      hideChapter: json['hideChapter'] as bool? ?? false,
+      hideChapterLabel: json['hideChapterLabel'] as bool? ?? false,
+      hideProgressRatio: json['hideProgressRatio'] as bool? ?? false,
+      hideProgressRatioLabel: json['hideProgressRatioLabel'] as bool? ?? false,
+      footerOrientation: (json['footerOrientation'] as num?)?.toInt() ?? 1,
+    );
+  }
+}
+
 /// 颜色滤镜 — 对齐 `MangaColorFilterConfig` / `dialog_manga_color_filter.xml`
 class MangaColorFilterConfig {
   final int r;
@@ -87,9 +164,14 @@ class MangaPrefs {
   static const _kDisableClickScroll = 'manga_disable_click_scroll_v1';
   static const _kPreDownload = 'manga_pre_download_num_v1';
   static const _kHideTitle = 'manga_hide_title_v1';
+  static const _kFooter = 'manga_footer_config_v1';
+  static const _kDisablePageAnim = 'manga_disable_page_anim_v1';
+  static const _kDisableHSnap = 'manga_disable_h_page_snap_v1';
+  static const _kAutoPageSpeed = 'manga_auto_page_speed_v1';
 
   static MangaReadDirection direction = MangaReadDirection.vertical;
   static MangaColorFilterConfig colorFilter = const MangaColorFilterConfig();
+  static MangaFooterConfig footer = const MangaFooterConfig();
   static bool enableEInk = false;
   static int eInkThreshold = 128;
   static bool enableGray = false;
@@ -97,6 +179,13 @@ class MangaPrefs {
   static bool disableClickScroll = false;
   static int preDownloadNum = 10;
   static bool hideTitle = false;
+  static bool disablePageAnim = false;
+  static bool disableHorizontalPageSnap = false;
+  static int autoPageSpeed = 3;
+
+  static bool get enableHorizontalScroll =>
+      direction == MangaReadDirection.leftToRight ||
+      direction == MangaReadDirection.rightToLeft;
 
   static bool _loaded = false;
 
@@ -116,6 +205,16 @@ class MangaPrefs {
         colorFilter = const MangaColorFilterConfig();
       }
     }
+    final footerRaw = p.getString(_kFooter);
+    if (footerRaw != null && footerRaw.isNotEmpty) {
+      try {
+        footer = MangaFooterConfig.fromJson(
+          Map<String, dynamic>.from(jsonDecode(footerRaw) as Map),
+        );
+      } catch (_) {
+        footer = const MangaFooterConfig();
+      }
+    }
     enableEInk = p.getBool(_kEInk) ?? false;
     eInkThreshold = (p.getInt(_kEInkThreshold) ?? 128).clamp(0, 255);
     enableGray = p.getBool(_kGray) ?? false;
@@ -123,6 +222,9 @@ class MangaPrefs {
     disableClickScroll = p.getBool(_kDisableClickScroll) ?? false;
     preDownloadNum = (p.getInt(_kPreDownload) ?? 10).clamp(0, 50);
     hideTitle = p.getBool(_kHideTitle) ?? false;
+    disablePageAnim = p.getBool(_kDisablePageAnim) ?? false;
+    disableHorizontalPageSnap = p.getBool(_kDisableHSnap) ?? false;
+    autoPageSpeed = (p.getInt(_kAutoPageSpeed) ?? 3).clamp(1, 20);
     _loaded = true;
   }
 
@@ -132,6 +234,14 @@ class MangaPrefs {
     await p.setInt(_kDirection, value.index);
   }
 
+  static Future<void> setHorizontalScroll(bool enabled) async {
+    await setDirection(
+      enabled
+          ? MangaReadDirection.leftToRight
+          : MangaReadDirection.vertical,
+    );
+  }
+
   static Future<void> setColorFilter(MangaColorFilterConfig value) async {
     colorFilter = value;
     final p = await SharedPreferences.getInstance();
@@ -139,6 +249,12 @@ class MangaPrefs {
       _kFilter,
       value.isIdentity ? '' : jsonEncode(value.toJson()),
     );
+  }
+
+  static Future<void> setFooter(MangaFooterConfig value) async {
+    footer = value;
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kFooter, jsonEncode(value.toJson()));
   }
 
   static Future<void> setEInk({required bool enabled, int? threshold}) async {
@@ -181,6 +297,24 @@ class MangaPrefs {
     hideTitle = value;
     final p = await SharedPreferences.getInstance();
     await p.setBool(_kHideTitle, value);
+  }
+
+  static Future<void> setDisablePageAnim(bool value) async {
+    disablePageAnim = value;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kDisablePageAnim, value);
+  }
+
+  static Future<void> setDisableHorizontalPageSnap(bool value) async {
+    disableHorizontalPageSnap = value;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kDisableHSnap, value);
+  }
+
+  static Future<void> setAutoPageSpeed(int value) async {
+    autoPageSpeed = value.clamp(1, 20);
+    final p = await SharedPreferences.getInstance();
+    await p.setInt(_kAutoPageSpeed, autoPageSpeed);
   }
 
   /// 书源类型是否为图片/漫画（`BookSourceType.image == 2`）
