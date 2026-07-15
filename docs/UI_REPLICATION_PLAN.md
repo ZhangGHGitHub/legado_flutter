@@ -171,7 +171,7 @@
 | 23 | `activity_source_debug.xml` | 书源调试 | ✅ `source_debug_panel.dart` | 需核对 |
 | 24 | `activity_source_login.xml` | 书源登录 | ❌ **缺失** | 需要新建（含动态表单） |
 | 25 | `activity_ai_chat.xml` | AI 聊天 | ✅ `ai_chat_page.dart` | **缺工具调用UI、配置入口** |
-| 26 | `activity_welcome.xml` | 欢迎页 | ✅ 隐私协议 Dialog | 需核对 |
+| 26 | `activity_welcome.xml` | 欢迎页 | ✅ **基本完成** | UI-26 首次启动欢迎+隐私；回访不阻断 |
 | 27 | `activity_web_view.xml` | WebView | ⚠️ `webview_flutter` 已引入 | 需核对 |
 | 28 | `activity_code_edit.xml` | 代码编辑器 | ❌ **缺失**（低优） | |
 | 29 | `activity_file_manage.xml` | 文件管理 | ✅ `file_manage_page.dart` | UI-8：数据目录基础浏览 |
@@ -591,10 +591,11 @@
 - [x] 赞赏/收款二维码外链打开；红包搜索码复制；公众号名复制；入口：我的 → 捐赠
 - [ ] 店铺(ktt)/JS 拉链、应用内嵌二维码大图（后续；现仓 Jingshiro 已摘除 DonateFragment）
 
-#### Task UI-26: 欢迎页 (`activity_welcome.xml`)
+#### Task UI-26: 欢迎页 (`activity_welcome.xml`) — ✅ 基本完成（2026-07-16）
 
-- [ ] 首次启动引导（功能简介）
-- [ ] 隐私协议确认（已有 Dialog ✅）
+- [x] 对齐 `activity_welcome.xml` 品牌区（竖排「阅读 / 享受美好时光」、书本图标、「品读万千故事」）
+- [x] 首次启动引导（功能简介）+ 跳过 / 同意并进入；SharedPreferences 只展示一次
+- [x] 隐私协议确认（欢迎页主路径；MainShell Dialog 兜底）
 
 #### Task UI-27: 代码编辑器 (`activity_code_edit.xml`)
 
@@ -641,7 +642,7 @@ Task UI-22: 有声播放器 (TTS)  ✅ 基本完成（2026-07-16）
 Task UI-23: 漫画阅读器  ✅ 基本完成（2026-07-16）
 Task UI-24: 模拟追读  🟡 对话框+章数解锁+Book/DB 同步；WebDAV/书架未读数仍开放
 Task UI-25: 捐赠页  ✅ 基本完成（2026-07-16）
-Task UI-26: 欢迎引导页
+Task UI-26: 欢迎引导页  ✅ 基本完成（2026-07-16）
 Task UI-27: 代码编辑器（低优）
 ```
 
