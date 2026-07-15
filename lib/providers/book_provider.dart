@@ -41,6 +41,16 @@ class BookProvider extends ChangeNotifier {
   bool _isRefreshingToc = false;
   bool get isRefreshingToc => _isRefreshingToc;
 
+  /// 书架下拉刷新：正在联网更新目录的书 ID（对齐 legado `onUpTocBooks`）
+  final Set<String> _shelfUpdatingBookIds = {};
+  int _shelfUpdateQueued = 0;
+
+  bool isBookShelfUpdating(String bookId) => _shelfUpdatingBookIds.contains(bookId);
+
+  /// 待更新 + 更新中数量（对齐 `postUpBooksLiveData` / 主框架角标，后续可接）
+  int get shelfUpdateActiveCount =>
+      _shelfUpdatingBookIds.length + _shelfUpdateQueued;
+
   List<Book> get books => _books;
   List<Chapter> get currentChapters => _currentChapters;
   bool get isLoading => _isLoading;
@@ -96,6 +106,126 @@ class BookProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 书架下拉刷新 — 对齐 legado `MainViewModel.upToc` + `BooksFragment` listener：
+  /// 非本地书后台并行拉目录，不阻塞下拉指示器；单书更新时列表项显示 `RotateLoading`。
+  Future<void> refreshShelfToc(
+    Iterable<Book> books, {
+    required BookSource? Function(Book book) resolveSource,
+    bool onlyUpdateRead = false,
+    int concurrency = 3,
+  }) async {
+    final targets = <Book>[];
+    for (final book in books) {
+      if (book.type == 'local' || book.bookSourceUrl.isEmpty) continue;
+      if (resolveSource(book) == null) continue;
+      if (onlyUpdateRead && _hasUnreadChapters(book)) continue;
+      if (_shelfUpdatingBookIds.contains(book.id)) continue;
+      targets.add(book);
+    }
+    if (targets.isEmpty) return;
+
+    _shelfUpdateQueued = targets.length;
+    notifyListeners();
+
+    var index = 0;
+    Future<void> worker() async {
+      while (true) {
+        if (index >= targets.length) return;
+        final book = targets[index++];
+        final source = resolveSource(book);
+        if (source == null) {
+          _shelfUpdateQueued = (_shelfUpdateQueued - 1).clamp(0, 1 << 30);
+          notifyListeners();
+          continue;
+        }
+
+        _shelfUpdatingBookIds.add(book.id);
+        _shelfUpdateQueued = (_shelfUpdateQueued - 1).clamp(0, 1 << 30);
+        notifyListeners();
+        try {
+          await _refreshBookTocOnShelf(book, source);
+          _books = await _db.getBooks();
+        } catch (e, st) {
+          debugPrint('书架目录更新失败 ${book.name}: $e\n$st');
+        } finally {
+          _shelfUpdatingBookIds.remove(book.id);
+          notifyListeners();
+        }
+      }
+    }
+
+    final workers = List.generate(
+      concurrency.clamp(1, targets.length),
+      (_) => worker(),
+    );
+    await Future.wait(workers);
+    _shelfUpdateQueued = 0;
+    _books = await _db.getBooks();
+    notifyListeners();
+  }
+
+  static final _chapterNumRe = RegExp(r'(\d{1,6})');
+
+  bool _hasUnreadChapters(Book book) {
+    final last = _chapterNumRe.firstMatch(book.lastChapter ?? '')?.group(1);
+    final cur = _chapterNumRe.firstMatch(book.currentChapter ?? '')?.group(1);
+    if (last != null && cur != null) {
+      final ln = int.tryParse(last);
+      final cn = int.tryParse(cur);
+      if (ln != null && cn != null && ln > cn) return true;
+    }
+    final lastTitle = book.lastChapter;
+    final curTitle = book.currentChapter;
+    return lastTitle != null &&
+        lastTitle.isNotEmpty &&
+        curTitle != null &&
+        curTitle.isNotEmpty &&
+        lastTitle != curTitle;
+  }
+
+  Future<void> _refreshBookTocOnShelf(Book book, BookSource source) async {
+    final remote = await _sourceService.getChapters(book, source: source);
+    final local = await _db.getChapters(book.id);
+    final merged = _mergeTocWithLocal(remote, local);
+    await _db.insertChapters(
+      merged
+          .map(
+            (c) => Chapter(
+              id: c.id,
+              bookId: c.bookId,
+              title: c.title,
+              index: c.index,
+              url: c.url,
+              isDownloaded: c.isDownloaded,
+            ),
+          )
+          .toList(),
+    );
+
+    var updated = book;
+    try {
+      final info = await _sourceService.getBookInfo(source, book.sourceUrl);
+      final lastFromInfo = info['lastChapter'];
+      final lastFromToc = merged.isNotEmpty ? merged.last.title : null;
+      updated = book.copyWith(
+        lastChapter: (lastFromInfo != null && lastFromInfo.isNotEmpty)
+            ? lastFromInfo
+            : lastFromToc,
+        coverUrl: info['coverUrl']?.isNotEmpty == true
+            ? info['coverUrl']!
+            : book.coverUrl,
+        description: info['intro']?.isNotEmpty == true
+            ? info['intro']!
+            : book.description,
+      );
+    } catch (_) {
+      if (merged.isNotEmpty) {
+        updated = book.copyWith(lastChapter: merged.last.title);
+      }
+    }
+    await _db.insertBook(updated);
+  }
+
   /// 添加书籍到书架
   Future<void> addBook(Book book) async {
     await _db.insertBook(book);
@@ -107,6 +237,25 @@ class BookProvider extends ChangeNotifier {
   Future<void> removeBook(String bookId) async {
     await _db.deleteBook(bookId);
     await BookHelp.clearBookCache(bookId);
+    _books = await _db.getBooks();
+    notifyListeners();
+  }
+
+  /// 批量从书架移除
+  Future<void> removeBooks(Iterable<String> bookIds) async {
+    for (final id in bookIds) {
+      await _db.deleteBook(id);
+      await BookHelp.clearBookCache(id);
+    }
+    _books = await _db.getBooks();
+    notifyListeners();
+  }
+
+  /// 批量更新分组
+  Future<void> updateBooksGroup(Iterable<String> bookIds, String group) async {
+    for (final id in bookIds) {
+      await _db.updateBookGroup(id, group);
+    }
     _books = await _db.getBooks();
     notifyListeners();
   }

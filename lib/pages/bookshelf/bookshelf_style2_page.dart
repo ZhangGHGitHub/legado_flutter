@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/book.dart';
 import '../../providers/book_provider.dart';
+import '../../providers/source_provider.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_cover.dart';
+import '../../widgets/legado_refresh_indicator.dart';
 import '../../widgets/read_badge.dart';
 import '../book/book_info_page.dart';
 import '../search/search_page.dart';
@@ -178,57 +182,86 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
             );
           }
 
-          return RefreshIndicator(
-            onRefresh: () => provider.loadBooks(),
-            child: GridView.builder(
-              controller: widget.scrollController,
-              padding: const EdgeInsets.all(12),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: LegadoTokens.bookshelfGridCols,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 10,
-                childAspectRatio: 0.52,
-              ),
-              itemCount: books.length,
-              itemBuilder: (_, i) {
-                final book = books[i];
-                return InkWell(
-                  onTap: () => _openBook(book),
-                  onLongPress: () => _confirmRemove(book),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: BookCover(
-                          coverUrl: book.coverUrl,
-                          author: book.author,
-                          width: double.infinity,
-                          radius: LegadoTokens.radiusCover,
+          return LegadoRefreshIndicator(
+            enabled: books.isNotEmpty,
+            onRefreshTriggered: () {
+              final sources = context.read<SourceProvider>();
+              unawaited(
+                provider.refreshShelfToc(
+                  books,
+                  resolveSource: sources.findSourceForBook,
+                ),
+              );
+            },
+            child: ScrollConfiguration(
+              behavior: LegadoScrollBehavior(
+                overscrollColor: Theme.of(context).colorScheme.primary,
+              ).copyWith(scrollbars: true),
+              child: GridView.builder(
+                controller: widget.scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(12),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: LegadoTokens.bookshelfGridCols,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 0.52,
+                ),
+                itemCount: books.length,
+                itemBuilder: (_, i) {
+                  final book = books[i];
+                  final updating = provider.isBookShelfUpdating(book.id);
+                  return InkWell(
+                    onTap: () => _openBook(book),
+                    onLongPress: () => _confirmRemove(book),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: Stack(
+                            alignment: Alignment.topRight,
+                            children: [
+                              BookCover(
+                                coverUrl: book.coverUrl,
+                                author: book.author,
+                                width: double.infinity,
+                                radius: LegadoTokens.radiusCover,
+                              ),
+                              if (updating)
+                                const Padding(
+                                  padding: EdgeInsets.all(4),
+                                  child: LegadoShelfUpdatingIndicator(size: 22),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        book.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      if (book.author.isNotEmpty)
+                        const SizedBox(height: 6),
                         Text(
-                          book.author,
-                          maxLines: 1,
+                          book.name,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ReadBadge.fromBook(book),
-                    ],
-                  ),
-                );
-              },
+                        if (book.author.isNotEmpty)
+                          Text(
+                            book.author,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        if (!updating) ReadBadge.fromBook(book),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           );
         },

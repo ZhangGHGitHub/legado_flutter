@@ -250,7 +250,7 @@
 | 长按菜单 | 置顶/删除/移动分组/详情 | ✅ UI-7 | |
 | 更多菜单 | 添加本地/缓存全部/分组管理/整理 | ✅（整理→UI-10 占位） | |
 | style2 网格 | 3 列封面墙 + 分组 Drawer | ✅ `bookshelf_style2_page.dart` | 未按本次列表截图改网格 |
-| 下拉刷新 | `SwipeRefreshLayout` | ✅ `RefreshIndicator` | |
+| 下拉刷新 | `SwipeRefreshLayout` + accent 色 + 松手即停转圈；后台 `upToc`；单书 `RotateLoading` | ✅ `LegadoRefreshIndicator` + `refreshShelfToc`（2026-07-15） | 主框架「待更新」角标、分组 `onlyUpdateRead`/`enableRefresh` 仍开放 |
 
 ### 2.3 「我的」页 (`ui/main/my/MyFragment` ⚔ `my_page.dart`)
 
@@ -667,4 +667,46 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 
 ---
 
-> 最后更新：2026-07-15 | 引擎 v0.5.6 | Focus: UI 复刻（S1：UI-2 主题 zip 导入；HTTP TTS/真仿真卷曲网格/OpenCC/全书联网搜/模拟追读 Book 同步仍开放；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)
+---
+
+## 七、动画与动效对齐（Motion）
+
+> 参照：`fragment_books.xml` / `BooksFragment.kt` / `RotateLoading` / 阅读器 `PageAnim`
+
+### 7.1 书架
+
+| 动效 | Jingshiro | Flutter（2026-07-15） | 差距 |
+|------|-----------|----------------------|------|
+| 下拉刷新指示器 | `SwipeRefreshLayout`，`accentColor` 圆环，2dp 线宽 | `LegadoRefreshIndicator`：`primary` 色 + 120ms 即结束 | ✅ 行为对齐 |
+| 刷新语义 | 松手即 `isRefreshing=false`；`upToc` 后台并行更目录 | `refreshShelfToc` 后台队列（默认并发 3） | ✅ |
+| 单书更新中 | 隐藏未读角标 → `RotateLoading` 26dp | `LegadoShelfUpdatingIndicator` 替换角标/网格角标 | ✅ 近似（Flutter 为 `CircularProgressIndicator`） |
+| 列表 overscroll 光晕 | `setEdgeEffectColor(primaryColor)` | `LegadoScrollBehavior` | ✅ |
+| 滚到顶 | 双击书架 Tab `smoothScrollToPosition(0)` | `main_shell` 已有双击滚顶 | 需核对 E-Ink 模式用 `scrollTo` |
+| 书架快速滚动条 | `FastScrollRecyclerView` 可配置 | ❌ 未做 | UI-7 开放 |
+| 列表 item 动画 | `itemAnimator = null`（无插入动画） | 默认 Material 列表动画 | 可显式 `itemAnimator` 关闭 |
+
+### 7.2 阅读器
+
+| 动效 | Jingshiro | Flutter | 差距 |
+|------|-----------|---------|------|
+| 顶/底栏显隐 | 点击中区切换 + ~3s 自动隐藏 | ✅ UI-1 | 缓动曲线可再抠 |
+| 翻页 | 覆盖/滑动/仿真卷曲/滚动/无 | 五档已有；仿真为透视近似 | 真·书页网格卷曲仍开放 |
+| 菜单面板 | BottomSheet / Dialog 滑入 | `showModalBottomSheet` | 圆角/时长/遮罩透明度可再对齐 |
+| 朗读/界面/设置面板 | 独立 Dialog XML | 内嵌 `reader_settings` | 分层面板切换动画未逐项对齐 |
+
+### 7.3 主框架 / 其它
+
+| 动效 | Jingshiro | Flutter | 差距 |
+|------|-----------|---------|------|
+| Tab 切换 | `ViewPager` 滑动（可关） | `IndexedStack` 无滑动 | 可选补横向切换动画 |
+| 发现下拉刷新 | 无统一 SwipeRefresh（按页） | `RefreshIndicator` 拉发现列表 | 发现页 legado 无等价下拉 |
+| 书架更新角标 | `BadgeView` + `onUpBooksLiveData` | `shelfUpdateActiveCount` 已埋点未接 UI | 主框架角标待接 |
+
+### UI-7 / UI-10 动画备注
+
+- **UI-7**：下拉刷新与单书 `RotateLoading` 已对齐；精确未读章数字段、`onlyUpdateRead` 分组策略、主框架待更新角标仍开放。
+- **UI-10**：书架整理拖拽排序需 `ReorderableListView` + legado `itemAnimator=null` 无弹跳风格。
+
+---
+
+> 最后更新：2026-07-15 | 引擎 v0.5.6 | Focus: UI 复刻（书架下拉刷新动效对齐；HTTP TTS/真仿真卷曲网格/OpenCC/全书联网搜/模拟追读 Book 同步仍开放；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)

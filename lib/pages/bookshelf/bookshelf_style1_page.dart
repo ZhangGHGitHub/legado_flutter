@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,6 +7,7 @@ import '../../models/book.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../widgets/book_cover.dart';
+import '../../widgets/legado_refresh_indicator.dart';
 import '../book/book_info_page.dart';
 import '../config/feature_placeholder_page.dart';
 import '../search/search_page.dart';
@@ -218,21 +221,37 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
         ),
       );
     }
-    return RefreshIndicator(
-      onRefresh: () => provider.loadBooks(),
-      child: _showGrouped && _selectedGroup == '__all__'
-          ? _buildGrouped(books)
-          : ListView.builder(
-              controller: widget.scrollController,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: books.length,
-              itemBuilder: (_, i) => _BookItem(
-                book: books[i],
-                isPinned: _pinnedIds.contains(books[i].id),
-                onTap: () => _openBook(books[i]),
-                onLongPress: () => _showBookActions(books[i]),
+    return LegadoRefreshIndicator(
+      enabled: books.isNotEmpty,
+      onRefreshTriggered: () {
+        final sources = context.read<SourceProvider>();
+        unawaited(
+          provider.refreshShelfToc(
+            books,
+            resolveSource: sources.findSourceForBook,
+          ),
+        );
+      },
+      child: ScrollConfiguration(
+        behavior: LegadoScrollBehavior(
+          overscrollColor: Theme.of(context).colorScheme.primary,
+        ).copyWith(scrollbars: true),
+        child: _showGrouped && _selectedGroup == '__all__'
+            ? _buildGrouped(books, provider)
+            : ListView.builder(
+                controller: widget.scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: books.length,
+                itemBuilder: (_, i) => _BookItem(
+                  book: books[i],
+                  isPinned: _pinnedIds.contains(books[i].id),
+                  isUpdating: provider.isBookShelfUpdating(books[i].id),
+                  onTap: () => _openBook(books[i]),
+                  onLongPress: () => _showBookActions(books[i]),
+                ),
               ),
-            ),
+      ),
     );
   }
 
@@ -307,7 +326,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     );
   }
 
-  Widget _buildGrouped(List<Book> books) {
+  Widget _buildGrouped(List<Book> books, BookProvider provider) {
     final groups = <String, List<Book>>{};
     for (final b in books) {
       groups.putIfAbsent(b.group.isNotEmpty ? b.group : '未分组', () => []).add(b);
@@ -322,6 +341,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
       );
     return ListView(
       controller: widget.scrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
       children: sorted
           .map(
             (g) => Column(
@@ -338,6 +358,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                   (b) => _BookItem(
                     book: b,
                     isPinned: _pinnedIds.contains(b.id),
+                    isUpdating: provider.isBookShelfUpdating(b.id),
                     onTap: () => _openBook(b),
                     onLongPress: () => _showBookActions(b),
                   ),
@@ -533,11 +554,13 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
 class _BookItem extends StatelessWidget {
   final Book book;
   final bool isPinned;
+  final bool isUpdating;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   const _BookItem({
     required this.book,
     this.isPinned = false,
+    this.isUpdating = false,
     required this.onTap,
     required this.onLongPress,
   });
@@ -618,7 +641,9 @@ class _BookItem extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            _UnreadBadge(book: book),
+            isUpdating
+                ? const LegadoShelfUpdatingIndicator()
+                : _UnreadBadge(book: book),
           ],
         ),
       ),
