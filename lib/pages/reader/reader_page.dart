@@ -38,6 +38,7 @@ import 'search_content_page.dart';
 import 'search_content_result.dart';
 import 'simulated_reading_dialog.dart';
 import 'tts_panel.dart';
+import '../audio/audio_play_page.dart';
 import '../../widgets/note_editor_sheet.dart';
 import '../../widgets/reader_selectable_text.dart';
 
@@ -520,9 +521,37 @@ class _ReaderPageState extends State<ReaderPage> {
       },
       onPrevPage: _prevPage,
       onNextPage: _nextPage,
+      onOpenAudioPlayer: _openAudioPlayPage,
     ).whenComplete(() {
       if (mounted) _scheduleAutoHide();
     });
+  }
+
+  /// UI-22：有声播放器（对齐 activity_audio_play）
+  Future<void> _openAudioPlayPage() async {
+    _autoHideTimer?.cancel();
+    final chapters =
+        _readableChapters.isNotEmpty ? _readableChapters : widget.allChapters;
+    if (chapters.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('暂无章节，无法打开有声播放器')),
+        );
+      }
+      return;
+    }
+    final idx = _currentIndex.clamp(0, chapters.length - 1);
+    await AudioPlayPage.open(
+      context,
+      book: widget.book,
+      chapters: chapters,
+      initialChapterIndex: idx,
+      initialContent: _content,
+      onChapterChanged: (i) {
+        if (mounted && i != _currentIndex) _goToChapter(i);
+      },
+    );
+    if (mounted) _scheduleAutoHide();
   }
 
   void _openAutoReadPanel() {
@@ -1498,7 +1527,7 @@ class _ReaderPageState extends State<ReaderPage> {
       case 'update_toc':
         _showNotImplemented('更新目录');
       case 'tts':
-        _openTtsPanel();
+        unawaited(_openAudioPlayPage());
       case 'auto_read':
         _openAutoReadPanel();
       case 'search_content':
@@ -1953,7 +1982,8 @@ class _ReaderPageState extends State<ReaderPage> {
                       theme,
                       icon: Icons.headphones,
                       label: '朗读',
-                      onTap: _openTtsPanel,
+                      onTap: _openAudioPlayPage,
+                      onLongPress: _openTtsPanel,
                     ),
                     _chromeNavItem(
                       theme,
@@ -2010,6 +2040,7 @@ class _ReaderPageState extends State<ReaderPage> {
     IconData? icon,
     required String label,
     required VoidCallback onTap,
+    VoidCallback? onLongPress,
     bool aaLabel = false,
   }) {
     final color = theme.text.withValues(alpha: 0.9);
@@ -2018,6 +2049,12 @@ class _ReaderPageState extends State<ReaderPage> {
         _keepChromeAlive();
         onTap();
       },
+      onLongPress: onLongPress == null
+          ? null
+          : () {
+              _keepChromeAlive();
+              onLongPress();
+            },
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -2166,7 +2203,9 @@ class _ReaderPageState extends State<ReaderPage> {
         final panel = ReaderSettingsPanel(
           settings: _settings,
           onChanged: _onSettingsChanged,
-          onOpenTts: _openTtsPanel,
+          onOpenTts: () {
+            unawaited(_openAudioPlayPage());
+          },
           onOpenAutoRead: _openAutoReadPanel,
           onOpenClickZone: _openClickZonePanel,
           onOpenMoreSettings: _openMoreSettingsPanel,

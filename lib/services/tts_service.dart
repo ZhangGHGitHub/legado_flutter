@@ -4,13 +4,29 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
-/// TTS 朗读服务（UI-2）。
+/// TTS 朗读服务（UI-2 / UI-22）。
 ///
 /// 系统引擎经 [FlutterTts] 发音（Android / iOS / macOS）；
 /// Windows / Linux 桌面无原生插件（避免 nuget），走 stub；HTTP TTS 仍为占位。
 enum TtsPlaybackState { idle, playing, paused }
 
 enum TtsCapability { stub, platform }
+
+/// 对齐 Jingshiro [AudioPlay.PlayMode]
+enum TtsPlayMode {
+  listEndStop('列表播放'),
+  singleLoop('单曲循环'),
+  random('随机播放'),
+  listLoop('列表循环');
+
+  const TtsPlayMode(this.label);
+  final String label;
+
+  TtsPlayMode next() {
+    const order = TtsPlayMode.values;
+    return order[(index + 1) % order.length];
+  }
+}
 
 class TtsEngineOption {
   final String id;
@@ -44,7 +60,13 @@ class TtsService extends ChangeNotifier {
   String _engineId = 'system';
   bool _backgroundPlay = false;
   int? _timerMinutes;
+  DateTime? _timerDeadline;
   Timer? _stopTimer;
+  Timer? _timerTick;
+  TtsPlayMode _playMode = TtsPlayMode.listEndStop;
+
+  /// 当当前绑定文本全部朗读完成时触发（含 stub）。
+  VoidCallback? onPlaybackCompleted;
 
   String _fullText = '';
   List<String> _sentences = const [];
@@ -56,6 +78,16 @@ class TtsService extends ChangeNotifier {
   String get engineId => _engineId;
   bool get backgroundPlay => _backgroundPlay;
   int? get timerMinutes => _timerMinutes;
+  TtsPlayMode get playMode => _playMode;
+  /// 定时关闭剩余分钟（向上取整）；未设置返回 null。
+  int? get timerRemainingMinutes {
+    final deadline = _timerDeadline;
+    if (deadline == null) return null;
+    final left = deadline.difference(DateTime.now()).inSeconds;
+    if (left <= 0) return 0;
+    return (left + 59) ~/ 60;
+  }
+
   TtsCapability get capability =>
       _engineId == 'system' && _platformAvailable
           ? TtsCapability.platform
@@ -130,7 +162,7 @@ class TtsService extends ChangeNotifier {
   }
 
   void setSpeechRate(double v) {
-    _speechRate = v.clamp(0.5, 2.0);
+    _speechRate = v.clamp(0.5, 3.0);
     unawaited(_applyVoiceParams());
     notifyListeners();
   }
@@ -151,13 +183,35 @@ class TtsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setPlayMode(TtsPlayMode mode) {
+    _playMode = mode;
+    notifyListeners();
+  }
+
+  void cyclePlayMode() {
+    _playMode = _playMode.next();
+    notifyListeners();
+  }
+
   void setTimerMinutes(int? minutes) {
     _timerMinutes = minutes;
     _stopTimer?.cancel();
     _stopTimer = null;
+    _timerTick?.cancel();
+    _timerTick = null;
+    _timerDeadline = null;
     if (minutes != null && minutes > 0) {
+      _timerDeadline = DateTime.now().add(Duration(minutes: minutes));
       _stopTimer = Timer(Duration(minutes: minutes), () {
+        _timerDeadline = null;
+        _timerTick?.cancel();
+        _timerTick = null;
         unawaited(stop());
+        notifyListeners();
+      });
+      // 便于 UI 显示剩余分钟（对齐 Jingshiro AUDIO_DS）。
+      _timerTick = Timer.periodic(const Duration(seconds: 15), (_) {
+        notifyListeners();
       });
     }
     notifyListeners();
@@ -229,6 +283,19 @@ class TtsService extends ChangeNotifier {
     }
     _state = TtsPlaybackState.idle;
     notifyListeners();
+    onPlaybackCompleted?.call();
+  }
+
+  /// 跳转到指定句并可选继续播放（快进/后退）。
+  Future<void> seekSentence(int index, {bool resumeIfActive = true}) async {
+    if (_sentences.isEmpty) return;
+    final wasActive = isActive;
+    _sentenceIndex = index.clamp(0, _sentences.length - 1);
+    notifyListeners();
+    if (resumeIfActive && wasActive) {
+      await stop();
+      await _speakFromCurrent();
+    }
   }
 
   Future<void> pause() async {

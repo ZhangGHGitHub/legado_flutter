@@ -179,7 +179,7 @@
 | 31 | `activity_dict_rule.xml` | 字典规则 | ✅ 基本完成（2026-07-15） | UI-21 |
 | 32 | `activity_manga.xml` | 漫画阅读 | ❌ **缺失** | **新功能模块** |
 | 33 | `activity_qrcode_capture.xml` | 扫码 | ❌ **缺失**（低优） | |
-| 34 | `activity_audio_play.xml` | 有声播放 | ❌ **缺失** | **新功能模块** |
+| 34 | `activity_audio_play.xml` | 有声播放 | ✅ **基本完成** | UI-22 TTS 播放器（MP3 流后续） |
 | 35 | `activity_video_player.xml` | 视频播放 | ❌ **缺失**（低优） | |
 | 36 | `activity_search_content.xml` | 全文搜索 | 🟡 `search_content_page.dart` | 当前章+缓存章搜索；上/下结果；未缓存网络章跳过（对齐 legado） |
 | 37 | `activity_txt_toc_rule.xml` | TXT 目录规则 | ✅ 基本完成（2026-07-15） | UI-20 |
@@ -557,11 +557,14 @@
 - [x] SharedPreferences 持久化 + Jingshiro `dictRules.json` 种子
 - [ ] 拖拽排序 / 在线·扫码导入 / 完整 AnalyzeUrl+JS 查词（后续）
 
-#### Task UI-22: 有声播放器 (`activity_audio_play.xml`)
+#### Task UI-22: 有声播放器 (`activity_audio_play.xml`) — ✅ 基本完成（2026-07-16）
 
-- [ ] TTS 播放控件（播放/暂停/快进/后退）
-- [ ] 播放列表
-- [ ] 定时关闭
+- [x] TTS 播放控件（播放/暂停/快进/后退；句级进度条）
+- [x] 播放列表（章节目录底栏 sheet）
+- [x] 定时关闭（0–180 分钟 SliderPopup 对齐）
+- [x] 语速 / 播放模式（列表播放·单曲循环·随机·列表循环）
+- [x] 阅读器底栏「朗读」入口；长按仍打开朗读面板；面板可进全屏播放器
+- [ ] 真有声源 MP3 流播放 / 歌词 LyricViewX / HTTP TTS（后续）
 
 #### Task UI-23: 漫画阅读器 (`activity_manga.xml`)
 
@@ -630,7 +633,7 @@ Task UI-21: 字典规则  ✅ 基本完成（2026-07-15）
 Task UI-17: 扫码导入
 Task UI-18: 文件管理
 Task UI-19: 规则订阅
-Task UI-22: 有声播放器 (TTS)
+Task UI-22: 有声播放器 (TTS)  ✅ 基本完成（2026-07-16）
 Task UI-23: 漫画阅读器
 Task UI-24: 模拟追读  🟡 对话框+章数解锁+Book/DB 同步；WebDAV/书架未读数仍开放
 Task UI-25: 捐赠页
@@ -673,7 +676,7 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 | **阅读器** | **93%** | UI-1+UI-2：超时分档+翻页五档+沉浸+系统 TTS+全文搜索(缓存)+模拟追读+主题 zip；HTTP TTS/真仿真卷曲/词级简繁/全书联网搜仍开放 |
 | 书源管理 | 90% | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
 | RSS | 50% | Tab+源管理已有；**文章/阅读延后 S4** |
-| 新模块(有声/漫画/扫码等) | 5% | 全部缺失 |
+| 新模块(有声/漫画/扫码等) | 15% | UI-22 有声播放器基本完成；漫画/扫码等仍缺 |
 | **综合** | **~60%** | |
 
 ---

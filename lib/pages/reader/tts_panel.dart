@@ -10,6 +10,7 @@ class TtsPanel extends StatefulWidget {
   final VoidCallback onNextChapter;
   final VoidCallback onPrevPage;
   final VoidCallback onNextPage;
+  final VoidCallback? onOpenAudioPlayer;
 
   const TtsPanel({
     super.key,
@@ -18,6 +19,7 @@ class TtsPanel extends StatefulWidget {
     required this.onNextChapter,
     required this.onPrevPage,
     required this.onNextPage,
+    this.onOpenAudioPlayer,
   });
 
   static Future<void> show(
@@ -27,6 +29,7 @@ class TtsPanel extends StatefulWidget {
     required VoidCallback onNextChapter,
     required VoidCallback onPrevPage,
     required VoidCallback onNextPage,
+    VoidCallback? onOpenAudioPlayer,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -40,6 +43,7 @@ class TtsPanel extends StatefulWidget {
         onNextChapter: onNextChapter,
         onPrevPage: onPrevPage,
         onNextPage: onNextPage,
+        onOpenAudioPlayer: onOpenAudioPlayer,
       ),
     );
   }
@@ -114,6 +118,15 @@ class _TtsPanelState extends State<TtsPanel> {
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                   ),
                   const Spacer(),
+                  if (widget.onOpenAudioPlayer != null)
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        widget.onOpenAudioPlayer!();
+                      },
+                      icon: const Icon(Icons.headphones, size: 18),
+                      label: const Text('播放界面'),
+                    ),
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.pop(context),
@@ -195,10 +208,10 @@ class _TtsPanelState extends State<TtsPanel> {
                   const Text('语速', style: TextStyle(fontSize: 13)),
                   Expanded(
                     child: Slider(
-                      value: _tts.speechRate,
+                      value: _tts.speechRate.clamp(0.5, 3.0),
                       min: 0.5,
-                      max: 2.0,
-                      divisions: 15,
+                      max: 3.0,
+                      divisions: 25,
                       label: _tts.speechRate.toStringAsFixed(1),
                       onChanged: _tts.setSpeechRate,
                     ),
