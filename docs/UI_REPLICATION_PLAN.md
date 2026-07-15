@@ -214,7 +214,7 @@
 | 20 | `dialog_login.xml` | ❌ **缺失** | 书源登录表单 |
 | 21 | `dialog_auto_read.xml` | ❌ **缺失** | 自动阅读设置 |
 | 22 | `dialog_click_action_config.xml` | ✅ `click_action_panel.dart` | 九宫格 + 全量动作选项；prefs 持久化 |
-| 23 | `dialog_simulated_reading.xml` | 🟡 `simulated_reading_dialog.dart` | 模拟追读：开关/开始日期/起始章节/日更章数；目录与翻章裁剪 |
+| 23 | `dialog_simulated_reading.xml` | 🟡 `simulated_reading_dialog.dart` | 模拟追读：对话框+章数解锁；Book/DB `simRead*` 已持久化；书架未读数联动仍开放 |
 | 24 | `dialog_page_key.xml` | ❌ **缺失** | 翻页按键配置 |
 | 25 | `dialog_read_padding.xml` | ⚠️ 可能内嵌 | 阅读边距设置 |
 | 26 | `dialog_thought_underline_style.xml` | ❌ **缺失** | 想法下划线样式 |
@@ -322,7 +322,7 @@
 | **想法/批注** | 长按选文 → 写想法 | ⚠️ 有 `note_editor_sheet` | **需确认交互已连接** |
 | **书票 overlay** | 首尾显示评分+时长 | ❌ | **BookplateService 已有数据层** |
 | **换源** | 阅读器内换源 | ✅ `change_source_page.dart` | |
-| **模拟追读** | `dialog_simulated_reading.xml` | 🟡 UI-2 | 对话框文案对齐；按日期解锁章数；配置存 SharedPreferences（未并入 Book JSON） |
+| **模拟追读** | `dialog_simulated_reading.xml` | 🟡 UI-24 | 对话框+章数解锁；配置写入 Book/DB（备份 JSON 含字段）；WebDAV/书架未读数联动仍开放 |
 | **点击行为配置** | `dialog_click_action_config.xml` | ✅ UI-2 | 九宫格（对齐 AppConfig 默认）+ 选择操作列表；`ClickActionPrefs` 持久化 |
 | **翻页按键配置** | `dialog_page_key.xml` | ✅ UI-2 | 音量键 + 蓝牙键 + 自定义录制 |
 | **AI 入口** | 侧滑/FAB → AiChat | ✅ `ai_chat_page.dart` | 需核对入口位置 |
@@ -395,7 +395,7 @@
 - [x] **排版** — 中/粗/细、缩进 0–4、字距/段距、简繁字级表、两端对齐、底部对齐；芯片顺序对齐 `dialog_read_book_style`
 - [x] **翻页动画** — 覆盖 / 滑动 / 仿真(透视近似) / 滚动 / 无
 - [x] **全文搜索**（`activity_search_content`）— 结果页 + 阅读内上/下结果；当前章与缓存章
-- [x] **模拟追读**（`dialog_simulated_reading`）— 开关/日期/起始章/日更；目录与后章裁剪
+- [x] **模拟追读**（`dialog_simulated_reading`）— 开关/日期/起始章/日更；目录与后章裁剪；Book/DB `simRead*` 同步
 
 - [x] **主题 zip**（`dialog_read_bg_text` 长按入口）— 共用布局 + 长按主题 → 导入/导出 zip + 文字/背景/强调色；`ReadStyleZipService` + 槽位覆盖 prefs
 
@@ -406,7 +406,7 @@
 - 主题 zip：自定义字体文件已落盘但阅读器未 `FontLoader`；关闭共用布局后排版仍全局（未做每主题独立字号行距）；内置 assets 背景图库未做
 - 文字底部对齐为分页贴底，未做 legado 行距重分配式撑满
 - 全文搜索：未做全书联网扫章（净化/正则菜单已落地）
-- 模拟追读：配置未并入 Book 实体/WebDAV 同步；仅本地 SharedPreferences
+- 模拟追读：Book/DB 字段已同步；WebDAV 远端合并与书架未读数联动仍开放；旧 SharedPreferences 会在进入阅读器时迁移
 
 另：正文阻塞修复同轮收尾 — 空解析 `Err`、坏占位不缓存、`toEngineJson` 保嵌套规则、失败展示真实错误。
 
@@ -563,13 +563,14 @@
 - [ ] 滤镜（`dialog_manga_color_filter.xml`）
 - [ ] 墨水屏模式（`dialog_manga_epaper.xml`）
 
-#### Task UI-24: 模拟追读 (`dialog_simulated_reading.xml`) — 🟡 基础可用（2026-07-14）
+#### Task UI-24: 模拟追读 (`dialog_simulated_reading.xml`) — 🟡 Book/DB 已同步（2026-07-15）
 
 > 对标 legado「模拟追读」：按开始日期 / 起始章节 / 日更章数解锁 TOC，**不是**自动翻页。
 
 - [x] 对话框：开关 / 开始日期 / 起始章节 / 日更章数（中文文案对齐 `values-zh`）
 - [x] `simulatedTotalChapterNum` 公式裁剪目录与后章翻页
-- [ ] 写入 Book.readConfig + 备份同步；书架未读数联动
+- [x] 写入 Book 实体字段 + SQLite schema v11（`simRead*`）；进备份 JSON；旧 SharedPreferences 迁移
+- [ ] WebDAV 远端合并策略 / 书架未读数联动（legado `durChapterIndex` 可见差）
 
 #### Task UI-25: 捐赠页 (`activity_donate.xml`)
 
@@ -623,7 +624,7 @@ Task UI-19: 规则订阅
 Task UI-21: 字典规则
 Task UI-22: 有声播放器 (TTS)
 Task UI-23: 漫画阅读器
-Task UI-24: 模拟追读  🟡 对话框+章数解锁
+Task UI-24: 模拟追读  🟡 对话框+章数解锁+Book/DB 同步；WebDAV/书架未读数仍开放
 Task UI-25: 捐赠页
 Task UI-26: 欢迎引导页
 Task UI-27: 代码编辑器（低优）
@@ -711,4 +712,4 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 
 ---
 
-> 最后更新：2026-07-15 | 引擎 v0.5.6 | Focus: UI 复刻（书架下拉刷新动效对齐；HTTP TTS/真仿真卷曲网格/OpenCC/全书联网搜/模拟追读 Book 同步仍开放；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)
+> 最后更新：2026-07-15 | 引擎 v0.5.6 | Focus: UI 复刻（模拟追读 Book/DB 已同步；HTTP TTS/真仿真卷曲网格/OpenCC/全书联网搜/书架未读数联动仍开放；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)

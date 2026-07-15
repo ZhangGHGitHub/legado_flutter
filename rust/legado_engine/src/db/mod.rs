@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use std::sync::Mutex;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i32 = 10;
+const SCHEMA_VERSION: i32 = 11;
 
 static DB: OnceCell<Mutex<EngineDb>> = OnceCell::new();
 
@@ -53,6 +53,10 @@ impl EngineDb {
                bookSourceUrl TEXT DEFAULT '',
                bookGroup TEXT DEFAULT '',
                readIteration INTEGER DEFAULT 0,
+               simReadEnabled INTEGER DEFAULT 0,
+               simReadStartDate TEXT DEFAULT '',
+               simReadStartChapter INTEGER DEFAULT 0,
+               simReadDailyChapters INTEGER DEFAULT 3,
                updatedAt TEXT DEFAULT (datetime('now'))
              );
              CREATE TABLE IF NOT EXISTS book_sources (
@@ -143,6 +147,24 @@ impl EngineDb {
                 [],
             );
         }
+        if current < 11 {
+            let _ = conn.execute(
+                "ALTER TABLE books ADD COLUMN simReadEnabled INTEGER DEFAULT 0",
+                [],
+            );
+            let _ = conn.execute(
+                "ALTER TABLE books ADD COLUMN simReadStartDate TEXT DEFAULT ''",
+                [],
+            );
+            let _ = conn.execute(
+                "ALTER TABLE books ADD COLUMN simReadStartChapter INTEGER DEFAULT 0",
+                [],
+            );
+            let _ = conn.execute(
+                "ALTER TABLE books ADD COLUMN simReadDailyChapters INTEGER DEFAULT 3",
+                [],
+            );
+        }
         if current < SCHEMA_VERSION {
             conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
         }
@@ -160,8 +182,9 @@ impl EngineDb {
         self.conn.execute(
             "INSERT INTO books (id, name, author, coverUrl, type, progress, currentChapter,
               lastChapter, currentPageIndex, isFavorite, sourceUrl, description, bookSourceUrl,
-              bookGroup, readIteration)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
+              bookGroup, readIteration, simReadEnabled, simReadStartDate, simReadStartChapter,
+              simReadDailyChapters)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)
              ON CONFLICT(id) DO UPDATE SET
                name=excluded.name, author=excluded.author, coverUrl=excluded.coverUrl,
                type=excluded.type, progress=excluded.progress, currentChapter=excluded.currentChapter,
@@ -169,6 +192,9 @@ impl EngineDb {
                isFavorite=excluded.isFavorite, sourceUrl=excluded.sourceUrl,
                description=excluded.description, bookSourceUrl=excluded.bookSourceUrl,
                bookGroup=excluded.bookGroup, readIteration=excluded.readIteration,
+               simReadEnabled=excluded.simReadEnabled, simReadStartDate=excluded.simReadStartDate,
+               simReadStartChapter=excluded.simReadStartChapter,
+               simReadDailyChapters=excluded.simReadDailyChapters,
                updatedAt=datetime('now')",
             params![
                 id,
@@ -186,6 +212,22 @@ impl EngineDb {
                 str_field(&v, "bookSourceUrl").unwrap_or_default(),
                 str_field(&v, "group").or_else(|_| str_field(&v, "bookGroup")).unwrap_or_default(),
                 i64_field(&v, "readIteration"),
+                // 缺省 false / 3，避免 bool_field 缺键时默认 true、日更被 clamp 成 1
+                v.get("simReadEnabled")
+                    .map(|_| bool_field(&v, "simReadEnabled"))
+                    .unwrap_or(false) as i64,
+                str_field(&v, "simReadStartDate").unwrap_or_default(),
+                i64_field(&v, "simReadStartChapter").max(0),
+                v.get("simReadDailyChapters")
+                    .map(|_| {
+                        let d = i64_field(&v, "simReadDailyChapters");
+                        if d < 1 {
+                            3
+                        } else {
+                            d.min(999)
+                        }
+                    })
+                    .unwrap_or(3),
             ],
         )?;
         Ok(())
@@ -195,10 +237,17 @@ impl EngineDb {
         let mut stmt = self.conn.prepare(
             "SELECT id, name, author, coverUrl, type, progress, currentChapter, lastChapter,
                     currentPageIndex, isFavorite, sourceUrl, description, bookSourceUrl, bookGroup,
-                    readIteration
+                    readIteration, simReadEnabled, simReadStartDate, simReadStartChapter,
+                    simReadDailyChapters
              FROM books ORDER BY updatedAt DESC",
         )?;
         let rows = stmt.query_map([], |row| {
+            let daily_raw = row.get::<_, Option<i64>>(18)?.unwrap_or(3);
+            let daily = if daily_raw < 1 {
+                3
+            } else {
+                daily_raw.min(999)
+            };
             Ok(json!({
                 "id": row.get::<_, String>(0)?,
                 "name": row.get::<_, String>(1)?,
@@ -215,6 +264,10 @@ impl EngineDb {
                 "bookSourceUrl": row.get::<_, String>(12)?,
                 "group": row.get::<_, String>(13)?,
                 "readIteration": row.get::<_, Option<i64>>(14)?.unwrap_or(0),
+                "simReadEnabled": row.get::<_, Option<i64>>(15)?.unwrap_or(0) == 1,
+                "simReadStartDate": row.get::<_, Option<String>>(16)?.unwrap_or_default(),
+                "simReadStartChapter": row.get::<_, Option<i64>>(17)?.unwrap_or(0).max(0),
+                "simReadDailyChapters": daily,
             }))
         })?;
         rows.map(|r| {
@@ -1198,6 +1251,34 @@ mod tests {
         let books = db.get_books_json().unwrap();
         assert_eq!(books.len(), 1);
         assert!(books[0].contains("斗破"));
+        let book: Value = serde_json::from_str(&books[0]).unwrap();
+        assert_eq!(book.get("simReadEnabled").and_then(|x| x.as_bool()), Some(false));
+        assert_eq!(
+            book.get("simReadDailyChapters").and_then(|x| x.as_i64()),
+            Some(3)
+        );
+
+        db.insert_book_json(
+            r#"{"id":"b1","name":"斗破","author":"土豆","sourceUrl":"http://x/1",
+                "simReadEnabled":true,"simReadStartDate":"2026-07-01",
+                "simReadStartChapter":2,"simReadDailyChapters":5}"#,
+        )
+        .unwrap();
+        let books2 = db.get_books_json().unwrap();
+        let book2: Value = serde_json::from_str(&books2[0]).unwrap();
+        assert_eq!(book2.get("simReadEnabled").and_then(|x| x.as_bool()), Some(true));
+        assert_eq!(
+            book2.get("simReadStartDate").and_then(|x| x.as_str()),
+            Some("2026-07-01")
+        );
+        assert_eq!(
+            book2.get("simReadStartChapter").and_then(|x| x.as_i64()),
+            Some(2)
+        );
+        assert_eq!(
+            book2.get("simReadDailyChapters").and_then(|x| x.as_i64()),
+            Some(5)
+        );
     }
 
     #[test]

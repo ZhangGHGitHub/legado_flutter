@@ -185,7 +185,21 @@ class _ReaderPageState extends State<ReaderPage> {
       );
 
   Future<void> _loadSimulatedReading() async {
-    final cfg = await SimulatedReadingPrefs.load(widget.book.id);
+    final provider = context.read<BookProvider>();
+    final book = provider.findBookById(widget.book.id) ?? widget.book;
+    final loaded = await SimulatedReadingPrefs.loadForBook(book);
+    var cfg = loaded.config;
+    if (loaded.needsBookMigrate) {
+      final persisted = await provider.updateSimulatedReading(
+        book,
+        enabled: cfg.enabled,
+        startDate: SimulatedReadingConfig.formatDate(cfg.startDate),
+        startChapter: cfg.startChapter,
+        dailyChapters: cfg.dailyChapters,
+      );
+      cfg = SimulatedReadingConfig.fromBook(persisted);
+      await SimulatedReadingPrefs.save(widget.book.id, cfg);
+    }
     if (!mounted) return;
     setState(() => _simRead = cfg);
     if (cfg.enabled && _currentIndex > _maxReadableIndex && _maxReadableIndex >= 0) {
@@ -869,6 +883,15 @@ class _ReaderPageState extends State<ReaderPage> {
     );
     if (!mounted) return;
     if (next != null) {
+      final provider = context.read<BookProvider>();
+      final book = provider.findBookById(widget.book.id) ?? widget.book;
+      await provider.updateSimulatedReading(
+        book,
+        enabled: next.enabled,
+        startDate: SimulatedReadingConfig.formatDate(next.startDate),
+        startChapter: next.startChapter,
+        dailyChapters: next.dailyChapters,
+      );
       await SimulatedReadingPrefs.save(widget.book.id, next);
       if (!mounted) return;
       setState(() => _simRead = next);

@@ -17,6 +17,14 @@ class Book {
   /// 阅读轮次（对齐 Jingshiro `readIteration`）：
   /// 0=未读完，1=读完，2=二刷，3=二刷完，依此类推。
   final int readIteration;
+  /// 模拟追读：开关
+  final bool simReadEnabled;
+  /// 模拟追读：开始日期（YYYY-MM-DD）；空表示未写入 DB
+  final String simReadStartDate;
+  /// 模拟追读：0-based 起始章节
+  final int simReadStartChapter;
+  /// 模拟追读：每日解锁章数
+  final int simReadDailyChapters;
 
   Book({
     required this.id,
@@ -34,6 +42,10 @@ class Book {
     this.bookSourceUrl = '',
     this.group = '',
     this.readIteration = 0,
+    this.simReadEnabled = false,
+    this.simReadStartDate = '',
+    this.simReadStartChapter = 0,
+    this.simReadDailyChapters = 3,
   });
 
   /// 「读完」「N刷」「N刷完」标签文案；无标记时返回 null
@@ -66,6 +78,10 @@ class Book {
     String? bookSourceUrl,
     String? group,
     int? readIteration,
+    bool? simReadEnabled,
+    String? simReadStartDate,
+    int? simReadStartChapter,
+    int? simReadDailyChapters,
   }) {
     return Book(
       id: id ?? this.id,
@@ -83,6 +99,10 @@ class Book {
       bookSourceUrl: bookSourceUrl ?? this.bookSourceUrl,
       group: group ?? this.group,
       readIteration: readIteration ?? this.readIteration,
+      simReadEnabled: simReadEnabled ?? this.simReadEnabled,
+      simReadStartDate: simReadStartDate ?? this.simReadStartDate,
+      simReadStartChapter: simReadStartChapter ?? this.simReadStartChapter,
+      simReadDailyChapters: simReadDailyChapters ?? this.simReadDailyChapters,
     );
   }
 
@@ -104,6 +124,11 @@ class Book {
       bookSourceUrl: json['bookSourceUrl'] as String? ?? '',
       group: json['group'] as String? ?? '',
       readIteration: (json['readIteration'] as num?)?.toInt() ?? 0,
+      simReadEnabled: json['simReadEnabled'] as bool? ?? false,
+      simReadStartDate: json['simReadStartDate'] as String? ?? '',
+      simReadStartChapter: (json['simReadStartChapter'] as num?)?.toInt() ?? 0,
+      simReadDailyChapters:
+          ((json['simReadDailyChapters'] as num?)?.toInt() ?? 3).clamp(1, 999),
     );
   }
 
@@ -125,6 +150,10 @@ class Book {
       'bookSourceUrl': bookSourceUrl,
       'group': group,
       'readIteration': readIteration,
+      'simReadEnabled': simReadEnabled,
+      'simReadStartDate': simReadStartDate,
+      'simReadStartChapter': simReadStartChapter,
+      'simReadDailyChapters': simReadDailyChapters,
     };
   }
 

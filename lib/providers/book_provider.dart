@@ -292,6 +292,35 @@ class BookProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 按 id 取书架上的书（阅读器模拟追读等）
+  Book? findBookById(String bookId) {
+    for (final b in _books) {
+      if (b.id == bookId) return b;
+    }
+    return null;
+  }
+
+  /// 更新模拟追读字段（写入 Book / DB，进入备份 JSON）
+  Future<Book> updateSimulatedReading(
+    Book book, {
+    required bool enabled,
+    required String startDate,
+    required int startChapter,
+    required int dailyChapters,
+  }) async {
+    final base = findBookById(book.id) ?? book;
+    final next = base.copyWith(
+      simReadEnabled: enabled,
+      simReadStartDate: startDate,
+      simReadStartChapter: startChapter < 0 ? 0 : startChapter,
+      simReadDailyChapters: dailyChapters < 1 ? 3 : dailyChapters.clamp(1, 999),
+    );
+    await _db.insertBook(next);
+    _books = await _db.getBooks();
+    notifyListeners();
+    return findBookById(book.id) ?? next;
+  }
+
   /// 从本地导入 TXT/EPUB
   Future<Book?> importLocalBook() async {
     _isLoading = true;
