@@ -52,6 +52,26 @@ impl CookieJar {
         parts.join("; ")
     }
 
+    /// 读取指定 Cookie 原始值（与 Set-Cookie 中一致，不作 URL decode）
+    pub fn get_cookie_value(&self, url: &str, name: &str) -> Option<String> {
+        let domain = extract_domain(url);
+        if domain.is_empty() {
+            return None;
+        }
+        let now = chrono_now_ms();
+        for d in domain_chain(&domain) {
+            if let Some(domain_cookies) = self.cookies.get(&d) {
+                if let Some(cookie) = domain_cookies.get(name) {
+                    if cookie.expiry > 0 && now > cookie.expiry {
+                        continue;
+                    }
+                    return Some(cookie.value.clone());
+                }
+            }
+        }
+        None
+    }
+
     fn parse_and_store(&mut self, domain: &str, header: &str) {
         let parts: Vec<&str> = header.split(';').collect();
         if parts.is_empty() {
@@ -127,4 +147,31 @@ fn chrono_now_ms() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn get_cookie_value_keeps_urlencoded() {
+        let mut jar = CookieJar::new();
+        jar.save_from_headers(
+            "https://www.rrssk.com/k-x.html",
+            &["ge_ua_p=%2Babc%2Fxyz; Path=/; Max-Age=3600".to_string()],
+        );
+        assert_eq!(
+            jar.get_cookie_value("https://www.rrssk.com/", "ge_ua_p").as_deref(),
+            Some("%2Babc%2Fxyz")
+        );
+        jar.save_from_headers(
+            "https://www.rrssk.com/",
+            &["ge_ua_key=%2Bkey; Path=/; Domain=rrssk.com; Max-Age=3600".to_string()],
+        );
+        assert_eq!(
+            jar.get_cookie_value("https://www.rrssk.com/a", "ge_ua_key")
+                .as_deref(),
+            Some("%2Bkey")
+        );
+    }
 }

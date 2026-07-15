@@ -59,6 +59,9 @@ fn http_client() -> Result<Client, String> {
 const USER_AGENT_STR: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
 AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
+const ACCEPT_STR: &str =
+    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8";
+
 /// URL 请求配置
 #[derive(Debug, Clone)]
 pub struct RequestConfig {
@@ -174,7 +177,8 @@ pub async fn fetch_text(
         .bytes()
         .await
         .map_err(|e| format!("读取响应失败: {e}"))?;
-    charset::decode_bytes(&bytes, charset)
+    let text = charset::decode_bytes(&bytes, charset)?;
+    maybe_pass_ge_ua_and_retry(url, method, body, charset, None, text).await
 }
 
 /// HTTP 响应元数据（调试用）
@@ -237,6 +241,28 @@ pub async fn fetch_with_source_meta(
     charset: &str,
     source_json: &str,
 ) -> Result<FetchResponse, String> {
+    let resp = fetch_with_source_meta_once(url, method, body, charset, source_json).await?;
+    if !super::ge_ua::is_challenge(&resp.body) {
+        return Ok(resp);
+    }
+
+    pass_ge_ua_challenge(url, &resp.body).await?;
+    let retry = fetch_with_source_meta_once(url, method, body, charset, source_json).await?;
+    if super::ge_ua::is_challenge(&retry.body) {
+        return Err(
+            "命中 WAF 验证页（人人书云MAX GE-UA），自动验证后仍被拦截".to_string(),
+        );
+    }
+    Ok(retry)
+}
+
+async fn fetch_with_source_meta_once(
+    url: &str,
+    method: &str,
+    body: Option<&str>,
+    charset: &str,
+    source_json: &str,
+) -> Result<FetchResponse, String> {
     let headers = build_source_headers(url, source_json);
     let response = send_request(url, method, body, charset, headers).await?;
     let status_code = response.status().as_u16();
@@ -254,13 +280,109 @@ pub async fn fetch_with_source_meta(
     })
 }
 
+async fn maybe_pass_ge_ua_and_retry(
+    url: &str,
+    method: &str,
+    body: Option<&str>,
+    charset: &str,
+    source_json: Option<&str>,
+    text: String,
+) -> Result<String, String> {
+    if !super::ge_ua::is_challenge(&text) {
+        return Ok(text);
+    }
+    pass_ge_ua_challenge(url, &text).await?;
+    let retry = if let Some(sj) = source_json {
+        fetch_with_source_meta_once(url, method, body, charset, sj)
+            .await?
+            .body
+    } else {
+        let mut headers = default_headers();
+        let cookie_str = COOKIE_JAR.lock().unwrap().get_cookie(url);
+        if !cookie_str.is_empty() {
+            if let Ok(v) = HeaderValue::from_str(&cookie_str) {
+                headers.insert("Cookie", v);
+            }
+        }
+        let response = send_request(url, method, body, charset, headers).await?;
+        save_cookies(url, &response);
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| format!("读取响应失败: {e}"))?;
+        charset::decode_bytes(&bytes, charset)?
+    };
+    if super::ge_ua::is_challenge(&retry) {
+        return Err(
+            "命中 WAF 验证页（人人书云MAX GE-UA），自动验证后仍被拦截".to_string(),
+        );
+    }
+    Ok(retry)
+}
+
+/// 完成一次 GE-UA POST 校验，写入 `ge_ua_key` 等 Cookie
+async fn pass_ge_ua_challenge(url: &str, challenge_html: &str) -> Result<(), String> {
+    let params = super::ge_ua::parse_challenge(challenge_html)
+        .ok_or_else(|| "命中 WAF 验证页，但无法解析 GE-UA 参数".to_string())?;
+
+    let cookie_val = {
+        let jar = COOKIE_JAR.lock().map_err(|_| "Cookie 锁失败".to_string())?;
+        jar.get_cookie_value(url, &params.cpk)
+    }
+    .ok_or_else(|| {
+        format!(
+            "命中 WAF 验证页，缺少 Cookie {}，无法自动验证",
+            params.cpk
+        )
+    })?;
+
+    let sum = super::ge_ua::compute_sum(&cookie_val, params.nonce);
+    let origin = super::ge_ua::origin_of(url);
+    let post_body = format!("sum={sum}&nonce={}", params.nonce);
+
+    let mut headers = default_headers();
+    headers.insert(
+        ACCEPT,
+        HeaderValue::from_static("*/*"),
+    );
+    if let Ok(v) = HeaderValue::from_str(&origin) {
+        headers.insert("Origin", v);
+    }
+    if let Ok(v) = HeaderValue::from_str(&format!("{origin}/")) {
+        headers.insert("Referer", v);
+    }
+    if let Ok(v) = HeaderValue::from_str(&params.step) {
+        headers.insert("X-GE-UA-Step", v);
+    }
+    if let Ok(v) = HeaderValue::from_str(&format!("{}={cookie_val}", params.cpk)) {
+        headers.insert("Cookie", v);
+    }
+
+    let response = send_request(url, "POST", Some(&post_body), "UTF-8", headers).await?;
+    save_cookies(url, &response);
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("读取 WAF 验证响应失败: {e}"))?;
+    let text = String::from_utf8_lossy(&bytes).to_string();
+    let ok = text.contains("\"ok\":true")
+        || text.contains("\"ok\": true")
+        || text.contains("'ok':true");
+    if !ok {
+        return Err(format!(
+            "命中 WAF 验证页，自动验证未通过: {}",
+            text.chars().take(120).collect::<String>()
+        ));
+    }
+    // 浏览器脚本在成功后会等约 1s 再 reload；略等以对齐服务端放行窗口
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    Ok(())
+}
+
 fn default_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert(USER_AGENT, HeaderValue::from_static(USER_AGENT_STR));
-    headers.insert(
-        ACCEPT,
-        HeaderValue::from_static("application/json, text/plain, */*"),
-    );
+    headers.insert(ACCEPT, HeaderValue::from_static(ACCEPT_STR));
     headers.insert(
         ACCEPT_LANGUAGE,
         HeaderValue::from_static("zh-CN,zh;q=0.9,en;q=0.8"),
