@@ -46,6 +46,9 @@ dependencies:
   battery_plus: ^7.1.0
   wakelock_plus: ^1.5.2
   archive: ^4.0.9
+  mobile_scanner: ^7.2.1
+  zxing2: ^0.2.4
+  image: ^4.8.0
 
 dev_dependencies:
   flutter_test:

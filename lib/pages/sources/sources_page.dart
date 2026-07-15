@@ -10,6 +10,7 @@ import '../../widgets/error_view.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/source_status_dot.dart';
 import '../../widgets/source_validation_sheet.dart';
+import '../qrcode/qrcode_capture_page.dart';
 import 'source_editor_page.dart';
 import 'source_login_page.dart';
 import 'source_market_page.dart';
@@ -176,6 +177,8 @@ class _SourcesPageState extends State<SourcesPage> {
                   _showPasteDialog(context);
                 } else if (v == 'import_url') {
                   _showImportUrlDialog(context);
+                } else if (v == 'import_qr') {
+                  _importFromQr(context);
                 }
               },
               itemBuilder: (_) => [
@@ -202,6 +205,16 @@ class _SourcesPageState extends State<SourcesPage> {
                   child: ListTile(
                     leading: Icon(Icons.cloud_download, size: 20),
                     title: Text('从URL导入'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                // 对齐 Jingshiro book_source.xml menu_import_qr → import_by_qr_code
+                const PopupMenuItem(
+                  value: 'import_qr',
+                  child: ListTile(
+                    leading: Icon(Icons.qr_code_scanner, size: 20),
+                    title: Text('二维码导入'),
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                   ),
@@ -606,6 +619,32 @@ class _SourcesPageState extends State<SourcesPage> {
             child: const Text('导入'),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 二维码导入 — 对齐 Jingshiro `menu_import_qr` → QrCodeActivity → ImportBookSourceDialog
+  Future<void> _importFromQr(BuildContext context) async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const QrCodeCapturePage()),
+    );
+    if (result == null || result.isEmpty || !context.mounted) return;
+    final provider = context.read<SourceProvider>();
+    final success = await provider.importSources(result);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? (provider.statusMessage.isNotEmpty
+                  ? '✅ ${provider.statusMessage}'
+                  : '✅ 书源导入成功')
+              : (provider.statusMessage.isNotEmpty
+                  ? '❌ ${provider.statusMessage}'
+                  : '❌ 导入失败'),
+        ),
+        backgroundColor: success ? null : Colors.red,
       ),
     );
   }
