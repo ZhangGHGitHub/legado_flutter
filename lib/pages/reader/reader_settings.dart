@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../models/click_zone.dart';
 import '../../models/read_style_config.dart';
+import '../../models/theme_typography.dart';
 import '../../services/read_style_prefs.dart';
+import '../../services/reader_font_loader.dart';
 import 'bg_text_config_panel.dart';
 
 export '../../models/click_zone.dart' show ClickZoneAction, ClickZoneLayout;
@@ -336,18 +340,7 @@ class ReaderSettings {
     );
   }
 
-  String get fontLabel {
-    switch (fontFamily) {
-      case 'serif':
-        return '衬线';
-      case 'monospace':
-        return '等宽';
-      case '':
-        return '系统默认';
-      default:
-        return fontFamily;
-    }
-  }
+  String get fontLabel => ReaderFontLoader.displayName(fontFamily);
 
   String get indentLabel {
     const labels = ['无缩进', '一字符缩进', '二字符缩进', '三字符缩进', '四字符缩进'];
@@ -454,6 +447,25 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
   void _update(ReaderSettings s) {
     setState(() => _s = s);
     widget.onChanged(s);
+    if (!s.shareLayout) {
+      unawaited(
+        ReadStylePrefs.saveTypography(
+          s.themeName,
+          ThemeTypography.fromReaderSettings(s),
+        ),
+      );
+    }
+  }
+
+  Future<void> _applyThemeTypography(String themeName) async {
+    if (_s.shareLayout) return;
+    final saved = await ReadStylePrefs.loadTypography(themeName);
+    if (!mounted) return;
+    if (saved != null) {
+      _update(saved.applyTo(_s.copyWith(themeName: themeName)));
+    } else {
+      _update(_s.copyWith(themeName: themeName));
+    }
   }
 
   void _toast(String msg) {
