@@ -177,7 +177,7 @@
 | 29 | `activity_file_manage.xml` | 文件管理 | ✅ `file_manage_page.dart` | UI-8：数据目录基础浏览 |
 | 30 | `activity_donate.xml` | 捐赠 | ❌ **缺失**（低优） | |
 | 31 | `activity_dict_rule.xml` | 字典规则 | ✅ 基本完成（2026-07-15） | UI-21 |
-| 32 | `activity_manga.xml` | 漫画阅读 | ❌ **缺失** | **新功能模块** |
+| 32 | `activity_manga.xml` | 漫画阅读 | ✅ **基本完成** | UI-23 漫画阅读器（引擎图片章后续） |
 | 33 | `activity_qrcode_capture.xml` | 扫码 | ❌ **缺失**（低优） | |
 | 34 | `activity_audio_play.xml` | 有声播放 | ✅ **基本完成** | UI-22 TTS 播放器（MP3 流后续） |
 | 35 | `activity_video_player.xml` | 视频播放 | ❌ **缺失**（低优） | |
@@ -566,13 +566,14 @@
 - [x] 阅读器底栏「朗读」入口；长按仍打开朗读面板；面板可进全屏播放器
 - [ ] 真有声源 MP3 流播放 / 歌词 LyricViewX / HTTP TTS（后续）
 
-#### Task UI-23: 漫画阅读器 (`activity_manga.xml`)
+#### Task UI-23: 漫画阅读器 (`activity_manga.xml`) — ✅ 基本完成（2026-07-16）
 
-- [ ] 图片加载/预加载
-- [ ] 缩放/平移手势
-- [ ] 阅读方向（左→右/右→左/上→下）
-- [ ] 滤镜（`dialog_manga_color_filter.xml`）
-- [ ] 墨水屏模式（`dialog_manga_epaper.xml`）
+- [x] 图片加载/预加载（正文 `<img>`/URL 解析 + `precacheImage`；空结果可重试 stub）
+- [x] 缩放/平移手势（`InteractiveViewer`；可禁用）
+- [x] 阅读方向（左→右/右→左/上→下）
+- [x] 滤镜（`dialog_manga_color_filter.xml`：亮度/RGBA）
+- [x] 墨水屏模式（`dialog_manga_epaper.xml`：阈值；灰度互斥）
+- [ ] 真漫画源整章多页引擎联调 / Footer 配置弹窗（后续）
 
 #### Task UI-24: 模拟追读 (`dialog_simulated_reading.xml`) — 🟡 Book/DB 已同步（2026-07-15）
 
@@ -634,7 +635,7 @@ Task UI-17: 扫码导入
 Task UI-18: 文件管理
 Task UI-19: 规则订阅
 Task UI-22: 有声播放器 (TTS)  ✅ 基本完成（2026-07-16）
-Task UI-23: 漫画阅读器
+Task UI-23: 漫画阅读器  ✅ 基本完成（2026-07-16）
 Task UI-24: 模拟追读  🟡 对话框+章数解锁+Book/DB 同步；WebDAV/书架未读数仍开放
 Task UI-25: 捐赠页
 Task UI-26: 欢迎引导页
@@ -676,7 +677,7 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 | **阅读器** | **93%** | UI-1+UI-2：超时分档+翻页五档+沉浸+系统 TTS+全文搜索(缓存)+模拟追读+主题 zip；HTTP TTS/真仿真卷曲/词级简繁/全书联网搜仍开放 |
 | 书源管理 | 90% | UI-4：分组/绿红灰校验点/批量/搜索排序；扫码仍缺 |
 | RSS | 50% | Tab+源管理已有；**文章/阅读延后 S4** |
-| 新模块(有声/漫画/扫码等) | 15% | UI-22 有声播放器基本完成；漫画/扫码等仍缺 |
+| 新模块(有声/漫画/扫码等) | 28% | UI-22/23 有声+漫画基本完成；扫码等仍缺 |
 | **综合** | **~60%** | |
 
 ---

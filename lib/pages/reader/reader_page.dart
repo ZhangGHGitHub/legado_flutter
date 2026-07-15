@@ -39,6 +39,7 @@ import 'search_content_result.dart';
 import 'simulated_reading_dialog.dart';
 import 'tts_panel.dart';
 import '../audio/audio_play_page.dart';
+import '../manga/manga_reader_page.dart';
 import '../../widgets/note_editor_sheet.dart';
 import '../../widgets/reader_selectable_text.dart';
 
@@ -550,6 +551,30 @@ class _ReaderPageState extends State<ReaderPage> {
       onChapterChanged: (i) {
         if (mounted && i != _currentIndex) _goToChapter(i);
       },
+    );
+    if (mounted) _scheduleAutoHide();
+  }
+
+  /// UI-23：漫画阅读器（对齐 activity_manga）
+  Future<void> _openMangaReader() async {
+    _autoHideTimer?.cancel();
+    final chapters =
+        _readableChapters.isNotEmpty ? _readableChapters : widget.allChapters;
+    if (chapters.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('暂无章节，无法打开漫画阅读器')),
+        );
+      }
+      return;
+    }
+    final idx = _currentIndex.clamp(0, chapters.length - 1);
+    await MangaReaderPage.open(
+      context,
+      book: widget.book,
+      chapters: chapters,
+      initialChapterIndex: idx,
+      initialContent: _content,
     );
     if (mounted) _scheduleAutoHide();
   }
@@ -1528,6 +1553,8 @@ class _ReaderPageState extends State<ReaderPage> {
         _showNotImplemented('更新目录');
       case 'tts':
         unawaited(_openAudioPlayPage());
+      case 'manga':
+        unawaited(_openMangaReader());
       case 'auto_read':
         _openAutoReadPanel();
       case 'search_content':
@@ -1577,6 +1604,7 @@ class _ReaderPageState extends State<ReaderPage> {
       item('book_info', Icons.info_outline, '书籍信息'),
       const PopupMenuDivider(),
       item('tts', Icons.record_voice_over_outlined, '朗读'),
+      item('manga', Icons.auto_stories_outlined, '漫画阅读'),
       item('auto_read', Icons.speed, '自动阅读'),
       item('click_zone', Icons.grid_on, '点击区域设置'),
       item('more_settings', Icons.settings, '设置'),

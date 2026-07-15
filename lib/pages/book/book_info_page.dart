@@ -15,9 +15,11 @@ import '../../services/book_source_service.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_cover.dart';
 import '../reader/reader_page.dart';
+import '../manga/manga_reader_page.dart';
 import 'change_cover_page.dart';
 import 'change_source_page.dart';
 import 'toc_sheet.dart';
+import '../../services/manga_prefs.dart';
 
 /// Legado 主色红（换源芯片 / 阅读按钮），对齐 Jingshiro BookInfo
 const Color _kAccentRed = LegadoTokens.sourceDotRed;
@@ -417,14 +419,23 @@ class _BookInfoPageState extends State<BookInfoPage> {
       bookId: _book.id,
       onChapterTap: (chapter) async {
         Navigator.pop(context);
+        final idx = chapters.indexWhere((c) => c.id == chapter.id);
+        final source = context.read<SourceProvider>().findSourceForBook(_book);
+        final useManga = MangaPrefs.isImageSourceType(source?.bookSourceType);
         await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ReaderPage(
-              book: _book,
-              chapter: chapter,
-              allChapters: chapters,
-            ),
+            builder: (_) => useManga
+                ? MangaReaderPage(
+                    book: _book,
+                    chapters: chapters,
+                    initialChapterIndex: idx < 0 ? 0 : idx,
+                  )
+                : ReaderPage(
+                    book: _book,
+                    chapter: chapter,
+                    allChapters: chapters,
+                  ),
           ),
         );
         if (mounted) _refreshChapters();
@@ -591,14 +602,25 @@ class _BookInfoPageState extends State<BookInfoPage> {
     } else {
       startChapter = provider.currentChapters.first;
     }
+    final chapterIndex = provider.currentChapters
+        .indexWhere((c) => c.id == startChapter.id)
+        .clamp(0, provider.currentChapters.length - 1);
+    final source = context.read<SourceProvider>().findSourceForBook(latestBook);
+    final useManga = MangaPrefs.isImageSourceType(source?.bookSourceType);
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ReaderPage(
-          book: latestBook,
-          chapter: startChapter,
-          allChapters: provider.currentChapters,
-        ),
+        builder: (_) => useManga
+            ? MangaReaderPage(
+                book: latestBook,
+                chapters: provider.currentChapters,
+                initialChapterIndex: chapterIndex,
+              )
+            : ReaderPage(
+                book: latestBook,
+                chapter: startChapter,
+                allChapters: provider.currentChapters,
+              ),
       ),
     );
   }
