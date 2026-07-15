@@ -18,11 +18,11 @@ import '../ai/ai_config_dialog.dart';
 import '../book/bookmark_page.dart';
 import '../cache/cache_book_page.dart';
 import '../config/config_page.dart';
-import '../config/feature_placeholder_page.dart';
 import '../obsidian/obsidian_export_dialog.dart';
 import '../reader/ai_chat_page.dart';
 import '../replace/replace_page.dart';
 import '../sources/sources_page.dart';
+import '../dict/dict_rule_page.dart';
 import '../txt_toc/txt_toc_rule_page.dart';
 import 'file_manage_page.dart';
 import 'read_record_page.dart';
@@ -414,13 +414,7 @@ class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
                   icon: Icons.menu_book_outlined,
                   title: '字典规则',
                   subtitle: '配置字典规则',
-                  onTap: () => _openPage(
-                    const FeaturePlaceholderPage(
-                      title: '字典规则',
-                      subtitle: '将支持阅读字典与释义规则',
-                      icon: Icons.menu_book_outlined,
-                    ),
-                  ),
+                  onTap: () => _openPage(const DictRulePage()),
                 ),
                 const LegadoListDivider(),
                 LegadoListTile(

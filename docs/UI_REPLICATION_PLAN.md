@@ -176,7 +176,7 @@
 | 28 | `activity_code_edit.xml` | 代码编辑器 | ❌ **缺失**（低优） | |
 | 29 | `activity_file_manage.xml` | 文件管理 | ✅ `file_manage_page.dart` | UI-8：数据目录基础浏览 |
 | 30 | `activity_donate.xml` | 捐赠 | ❌ **缺失**（低优） | |
-| 31 | `activity_dict_rule.xml` | 字典规则 | ❌ **缺失**（低优） | |
+| 31 | `activity_dict_rule.xml` | 字典规则 | ✅ 基本完成（2026-07-15） | UI-21 |
 | 32 | `activity_manga.xml` | 漫画阅读 | ❌ **缺失** | **新功能模块** |
 | 33 | `activity_qrcode_capture.xml` | 扫码 | ❌ **缺失**（低优） | |
 | 34 | `activity_audio_play.xml` | 有声播放 | ❌ **缺失** | **新功能模块** |
@@ -262,7 +262,7 @@
 | 1. 书源管理 | → BookSourceActivity | ✅ | |
 | 2. TXT 目录规则 | → TxtTocRuleActivity | ✅ 管理页 | UI-20 |
 | 3. 替换净化 | → ReplaceRuleActivity | ✅ | |
-| 4. 字典规则 | → DictRuleActivity | ⚠️ 占位页 | → UI-21 |
+| 4. 字典规则 | → DictRuleActivity | ✅ 管理页 | UI-21 |
 | 5. 主题模式 | Dialog (跟随系统/浅色/深色) | ✅ | |
 | 6. 备份与恢复 | → ConfigPage(backup) | ✅ | |
 | 7. 主题设置 | → ConfigPage(theme) | ✅ | |
@@ -550,10 +550,12 @@
 - [x] SharedPreferences 持久化；Dart 分章回退优先启用规则
 - [ ] 拖拽排序 / 在线·扫码导入 / 导出（后续）
 
-#### Task UI-21: 字典规则 (`activity_dict_rule.xml` + `dialog_dict_rule_edit.xml`)
+#### Task UI-21: 字典规则 (`activity_dict_rule.xml` + `dialog_dict_rule_edit.xml`) — ✅ 基本完成（2026-07-15）
 
-- [ ] 查词规则管理
-- [ ] 规则测试
+- [x] 查词规则管理（列表启用开关 / 编辑 / 多选操作栏 / 导入内置）
+- [x] 规则测试（编辑对话框：测试词 + 简化 HTTP/`{{key}}`；`@js` 提示）
+- [x] SharedPreferences 持久化 + Jingshiro `dictRules.json` 种子
+- [ ] 拖拽排序 / 在线·扫码导入 / 完整 AnalyzeUrl+JS 查词（后续）
 
 #### Task UI-22: 有声播放器 (`activity_audio_play.xml`)
 
@@ -619,6 +621,7 @@ Task UI-16: 下载选项 Dialog  ✅ 基本完成（HTML 导出延后）
 Task UI-14: AI 配置 Dialog  ✅ 基本完成（2026-07-15）
 Task UI-15: Obsidian 导出配置  ✅ 基本完成（2026-07-15）
 Task UI-20: TXT 目录规则  ✅ 基本完成（2026-07-15）
+Task UI-21: 字典规则  ✅ 基本完成（2026-07-15）
 ```
 
 ### S3 — 功能模块（3-4 周）：新功能 + 低优先级
@@ -627,7 +630,6 @@ Task UI-20: TXT 目录规则  ✅ 基本完成（2026-07-15）
 Task UI-17: 扫码导入
 Task UI-18: 文件管理
 Task UI-19: 规则订阅
-Task UI-21: 字典规则
 Task UI-22: 有声播放器 (TTS)
 Task UI-23: 漫画阅读器
 Task UI-24: 模拟追读  🟡 对话框+章数解锁+Book/DB 同步；WebDAV/书架未读数仍开放
@@ -663,7 +665,7 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 |------|:---:|------|
 | 主框架 + 导航 | 85% | 四 Tab 就位，缺角标/默认首页/可配置隐藏 |
 | 书架 | 92% | UI-7：长按菜单 + 列表布局对齐截图（顶栏 Tab/四行元数据/角标）；精确未读章数与整理拖拽仍开放 |
-| 我的页 | 94% | UI-8：快捷四格长按+Web 状态；文件管理基础浏览；书签/想法 Tab；TXT 目录规则已落地；字典仍为占位 |
+| 我的页 | 96% | UI-8：快捷四格长按+Web 状态；文件管理基础浏览；书签/想法 Tab；TXT 目录规则+字典规则已落地 |
 | 搜索 | 90% | UI-3：按书源分组 + 精准搜索 + Scope |
 | 发现 | 85% | 接近完成 |
 | 书籍详情 | 96% | UI-6：截图布局（模糊头图/红芯片/删除+阅读底栏）；换源页后端仍占位；图标字形可再抠 |
