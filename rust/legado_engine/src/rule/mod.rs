@@ -5,6 +5,7 @@ pub mod html_content;
 pub mod html_explore;
 pub mod html_search;
 pub mod html_toc;
+pub mod js_crypto;
 pub mod js_engine;
 pub mod json_book_info;
 pub mod json_content;

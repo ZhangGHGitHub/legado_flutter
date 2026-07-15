@@ -31,6 +31,10 @@ thiserror = "2"
 log = "0.4"
 flate2 = "1"
 rquickjs = "0.12.1"
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+ecb = { version = "0.1", features = ["alloc"] }
+base64 = "0.22"
 rusqlite = { version = "0.32", features = ["bundled"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 quick-xml = "0.37"
