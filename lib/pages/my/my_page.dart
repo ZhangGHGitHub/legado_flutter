@@ -19,6 +19,7 @@ import '../book/bookmark_page.dart';
 import '../cache/cache_book_page.dart';
 import '../config/config_page.dart';
 import '../config/feature_placeholder_page.dart';
+import '../obsidian/obsidian_export_dialog.dart';
 import '../reader/ai_chat_page.dart';
 import '../replace/replace_page.dart';
 import '../sources/sources_page.dart';
@@ -490,6 +491,13 @@ class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
                   onTap: () async {
                     await AiConfigDialog.show(context);
                   },
+                ),
+                const LegadoListDivider(),
+                LegadoListTile(
+                  icon: Icons.outbox_outlined,
+                  title: '导出到 Obsidian',
+                  subtitle: 'REST API 或本地仓库',
+                  onTap: () => ObsidianExportDialog.show(context),
                 ),
                 const LegadoListDivider(),
                 LegadoListTile(

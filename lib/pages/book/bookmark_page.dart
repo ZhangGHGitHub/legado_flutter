@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../models/book.dart';
-import '../../services/note_export_service.dart';
 import '../../services/note_service.dart';
 import '../../src/rust/api.dart' as rust_api;
 import '../../widgets/empty_state.dart';
 import '../../widgets/note_editor_sheet.dart';
 import '../../widgets/note_share_card.dart';
+import '../obsidian/obsidian_export_dialog.dart';
 
 bool _isBookmarkNote(rust_api.NoteDto n) => n.noteContent.startsWith('书签');
 
@@ -58,17 +58,7 @@ class _BookmarkPageState extends State<BookmarkPage>
   }
 
   Future<void> _exportObsidian() async {
-    final path = await NoteExportService.exportToLocalFiles();
-    if (!mounted) return;
-    if (path.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('暂无想法可导出')),
-      );
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已导出到 $path')),
-    );
+    await ObsidianExportDialog.show(context);
   }
 
   Future<void> _shareNote(rust_api.NoteDto note) async {

@@ -511,11 +511,12 @@
 - [x] 预设 System Prompt（人设）、工具开关、头像 URL
 - [ ] AI 对话聊天本体仍占位（配置已可保存）
 
-#### Task UI-15: Obsidian 导出配置 (`dialog_obsidian_export.xml`)
+#### Task UI-15: Obsidian 导出配置 (`dialog_obsidian_export.xml`) — ✅ 基本完成（2026-07-15）
 
-- [ ] REST API 模式：URL + Token + Vault 路径
-- [ ] 本地文件模式：文件夹路径
-- [ ] 导出范围选择（当前书/全部）
+- [x] REST API 模式：URL + Token + Vault 路径 + 测试连接
+- [x] 本地文件模式：文件夹路径（file_picker）+ 相对子目录
+- [x] 导出范围：全部想法（书签页入口）；可选 bookId
+- [x] 自动导出开关偏好持久化（触发点后续可接写想法）
 
 #### Task UI-16: 下载选项 (`dialog_download_choice.xml`) — ✅ 基本完成（2026-07-15）
 
@@ -614,7 +615,7 @@ Task UI-11: 书源登录（动态表单 + JS）  🟡 表单+URL；JS/WebView �
 Task UI-13: 缓存管理页面  ✅ 基本完成（2026-07-15）
 Task UI-16: 下载选项 Dialog  ✅ 基本完成（HTML 导出延后）
 Task UI-14: AI 配置 Dialog  ✅ 基本完成（2026-07-15）
-Task UI-15: Obsidian 导出配置
+Task UI-15: Obsidian 导出配置  ✅ 基本完成（2026-07-15）
 Task UI-20: TXT 目录规则
 ```
 
