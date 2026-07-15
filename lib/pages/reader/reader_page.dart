@@ -424,6 +424,11 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   void _runClickAction(ClickZoneAction action) {
+    // 菜单已显示时点翻页区：只收起菜单（对齐 legado vwMenuBg），避免「翻页+出菜单」双动作
+    if (_chromeVisible && action != ClickZoneAction.menu) {
+      _hideChrome();
+      return;
+    }
     switch (action) {
       case ClickZoneAction.none:
         break;
@@ -566,14 +571,21 @@ class _ReaderPageState extends State<ReaderPage> {
     });
   }
 
-  void _toggleChrome() {
-    setState(() => _chromeVisible = !_chromeVisible);
+  void _hideChrome() {
+    if (!_chromeVisible) return;
+    setState(() => _chromeVisible = false);
     _applySystemUi();
+    _autoHideTimer?.cancel();
+  }
+
+  void _toggleChrome() {
     if (_chromeVisible) {
-      _scheduleAutoHide();
-    } else {
-      _autoHideTimer?.cancel();
+      _hideChrome();
+      return;
     }
+    setState(() => _chromeVisible = true);
+    _applySystemUi();
+    _scheduleAutoHide();
   }
 
   void _keepChromeAlive() {
@@ -582,6 +594,17 @@ class _ReaderPageState extends State<ReaderPage> {
       _applySystemUi();
     }
     _scheduleAutoHide();
+  }
+
+  /// 对齐 legado ReadMenu.vwMenuBg：菜单展开时点正文区只收菜单，不穿透到九宫格翻页
+  Widget _chromeDismissScrim() {
+    if (!_chromeVisible) return const SizedBox.shrink();
+    return Positioned.fill(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _hideChrome,
+      ),
+    );
   }
 
   void _countChapterChars(String content) {
@@ -1223,7 +1246,7 @@ class _ReaderPageState extends State<ReaderPage> {
       dyingPage?.dispose();
     });
     _loadContent();
-    _keepChromeAlive();
+    // 勿在此 _keepChromeAlive：翻页/点右侧下一页切章时会误弹出菜单（含「设置」入口）
   }
 
   void _syncPreload() {
@@ -2365,6 +2388,7 @@ class _ReaderPageState extends State<ReaderPage> {
               right: 12,
               child: _autoReadBadge(theme),
             ),
+          _chromeDismissScrim(),
           // 顶栏 overlay（始终挂树，避免 AXTree remount）
           Positioned(
             top: 0,
@@ -2596,6 +2620,7 @@ class _ReaderPageState extends State<ReaderPage> {
               right: 12,
               child: _autoReadBadge(theme),
             ),
+          _chromeDismissScrim(),
           Positioned(
             top: 0,
             left: 0,
