@@ -23,6 +23,7 @@ import '../obsidian/obsidian_export_dialog.dart';
 import '../reader/ai_chat_page.dart';
 import '../replace/replace_page.dart';
 import '../sources/sources_page.dart';
+import '../txt_toc/txt_toc_rule_page.dart';
 import 'file_manage_page.dart';
 import 'read_record_page.dart';
 import 'reading_skill_page.dart';
@@ -392,13 +393,7 @@ class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
                   icon: Icons.article_outlined,
                   title: 'TXT 目录规则',
                   subtitle: '配置 TXT 目录规则',
-                  onTap: () => _openPage(
-                    const FeaturePlaceholderPage(
-                      title: 'TXT 目录规则',
-                      subtitle: '将支持本地 TXT 文件的目录识别规则配置',
-                      icon: Icons.article_outlined,
-                    ),
-                  ),
+                  onTap: () => _openPage(const TxtTocRulePage()),
                 ),
                 const LegadoListDivider(),
                 LegadoListTile(

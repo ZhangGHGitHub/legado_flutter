@@ -8,6 +8,7 @@ import '../bridge/legado_engine_bridge.dart';
 import '../models/book.dart';
 import '../models/chapter.dart';
 import '../database/database_helper.dart';
+import 'txt_toc_rule_prefs.dart';
 
 /// 本地书籍导入服务 - 支持 TXT/EPUB（Rust 分章/解析）
 class LocalBookService {
@@ -63,7 +64,7 @@ class LocalBookService {
     final bookName = p.withoutExtension(fileName);
     final bookId = 'local_${DateTime.now().millisecondsSinceEpoch}';
 
-    final parsed = _parseTxtChapters(text);
+    final parsed = await _parseTxtChapters(text);
     final book = Book(
       id: bookId,
       name: bookName,
@@ -129,7 +130,9 @@ class LocalBookService {
     return book;
   }
 
-  List<({String title, String content})> _parseTxtChapters(String text) {
+  Future<List<({String title, String content})>> _parseTxtChapters(
+    String text,
+  ) async {
     if (LegadoEngineBridge.isAvailable) {
       try {
         return LegadoEngineBridge.parseTxtChapters(text);
@@ -137,6 +140,7 @@ class LocalBookService {
         debugPrint('TXT Rust 分章失败，回退 Dart: $e');
       }
     }
+    await TxtTocRulePrefs.load();
     return _splitChaptersDart(text);
   }
 
@@ -179,33 +183,55 @@ class LocalBookService {
     ]);
   }
 
-  /// Dart 回退分章
+  /// Dart 回退分章：优先使用用户启用的 TXT 目录规则
   List<({String title, String content})> _splitChaptersDart(String text) {
-    final patterns = [
-      RegExp(r'第[一二三四五六七八九十百千零0-9]+章\s*[^\n]*'),
-      RegExp(r'第[一二三四五六七八九十百千零0-9]+节\s*[^\n]*'),
-      RegExp(r'第[一二三四五六七八九十百千零0-9]+回\s*[^\n]*'),
-      RegExp(r'Chapter\s+[0-9]+\s*[^\n]*', caseSensitive: false),
-      RegExp(r'VOL\.[0-9]+\s*[^\n]*', caseSensitive: false),
-    ];
-
-    RegExp? usedPattern;
-    for (final pattern in patterns) {
-      if (pattern.hasMatch(text)) {
-        usedPattern = pattern;
-        break;
+    final patterns = <RegExp>[];
+    for (final rule in TxtTocRulePrefs.enabledRules) {
+      try {
+        patterns.add(RegExp(rule.rule, multiLine: true));
+      } catch (e) {
+        debugPrint('跳过无效 TOC 规则 ${rule.name}: $e');
       }
     }
-    if (usedPattern == null) return [];
+    if (patterns.isEmpty) {
+      patterns.addAll([
+        RegExp(r'第[一二三四五六七八九十百千零0-9]+章\s*[^\n]*'),
+        RegExp(r'第[一二三四五六七八九十百千零0-9]+节\s*[^\n]*'),
+        RegExp(r'第[一二三四五六七八九十百千零0-9]+回\s*[^\n]*'),
+        RegExp(r'Chapter\s+[0-9]+\s*[^\n]*', caseSensitive: false),
+        RegExp(r'VOL\.[0-9]+\s*[^\n]*', caseSensitive: false),
+      ]);
+    }
 
-    final matches = usedPattern.allMatches(text).toList();
-    if (matches.isEmpty) return [];
+    RegExp? usedPattern;
+    List<RegExpMatch> bestMatches = const [];
+    for (final pattern in patterns) {
+      final matches = pattern.allMatches(text).toList();
+      if (matches.length >= 2 &&
+          (usedPattern == null || matches.length > bestMatches.length)) {
+        usedPattern = pattern;
+        bestMatches = matches;
+      }
+    }
+    // 仅命中 1 次也可用（短篇）；优先多命中规则
+    if (usedPattern == null) {
+      for (final pattern in patterns) {
+        final matches = pattern.allMatches(text).toList();
+        if (matches.isNotEmpty) {
+          usedPattern = pattern;
+          bestMatches = matches;
+          break;
+        }
+      }
+    }
+    if (usedPattern == null || bestMatches.isEmpty) return [];
 
     final out = <({String title, String content})>[];
-    for (var i = 0; i < matches.length; i++) {
-      final title = matches[i].group(0)!.trim();
-      final start = matches[i].end;
-      final end = i + 1 < matches.length ? matches[i + 1].start : text.length;
+    for (var i = 0; i < bestMatches.length; i++) {
+      final title = bestMatches[i].group(0)!.trim();
+      final start = bestMatches[i].end;
+      final end =
+          i + 1 < bestMatches.length ? bestMatches[i + 1].start : text.length;
       final content = text.substring(start, end).trim();
       if (content.isEmpty) continue;
       out.add((title: title, content: content));

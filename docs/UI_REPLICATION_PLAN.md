@@ -182,7 +182,7 @@
 | 34 | `activity_audio_play.xml` | 有声播放 | ❌ **缺失** | **新功能模块** |
 | 35 | `activity_video_player.xml` | 视频播放 | ❌ **缺失**（低优） | |
 | 36 | `activity_search_content.xml` | 全文搜索 | 🟡 `search_content_page.dart` | 当前章+缓存章搜索；上/下结果；未缓存网络章跳过（对齐 legado） |
-| 37 | `activity_txt_toc_rule.xml` | TXT 目录规则 | ❌ **缺失**（低优） | |
+| 37 | `activity_txt_toc_rule.xml` | TXT 目录规则 | ✅ 基本完成（2026-07-15） | UI-20 |
 | 38 | `activity_rss_source_debug.xml` | RSS 源调试 | ❌ **缺失** | |
 | 39 | `activity_rss_source_edit.xml` | RSS 源编辑 | ❌ **缺失** | |
 | 40 | `activity_rule_sub.xml` | 规则订阅 | ❌ **缺失**（低优） | |
@@ -260,7 +260,7 @@
 | Web 服务状态 | 「已开启」/「未开启」+ IP:端口 | ✅ | 四格文案「已开启」；地址在长按菜单 |
 | **设置列表 14 项** | 见下 | Flutter 当前 | 差距 |
 | 1. 书源管理 | → BookSourceActivity | ✅ | |
-| 2. TXT 目录规则 | → TxtTocRuleActivity | ⚠️ 占位页 | → UI-20 |
+| 2. TXT 目录规则 | → TxtTocRuleActivity | ✅ 管理页 | UI-20 |
 | 3. 替换净化 | → ReplaceRuleActivity | ✅ | |
 | 4. 字典规则 | → DictRuleActivity | ⚠️ 占位页 | → UI-21 |
 | 5. 主题模式 | Dialog (跟随系统/浅色/深色) | ✅ | |
@@ -543,10 +543,12 @@
 - [ ] 规则订阅源管理
 - [ ] 从 URL 更新替换规则/书源
 
-#### Task UI-20: TXT 目录规则 (`activity_txt_toc_rule.xml`)
+#### Task UI-20: TXT 目录规则 (`activity_txt_toc_rule.xml`) — ✅ 基本完成（2026-07-15）
 
-- [ ] 自定义 TXT 章节识别正则
-- [ ] 预设模板（"第X章"/"Chapter X"等）
+- [x] 自定义 TXT 章节识别正则（管理页 + 编辑对话框）
+- [x] 预设模板（Jingshiro 内置规则种子；导入/恢复默认）
+- [x] SharedPreferences 持久化；Dart 分章回退优先启用规则
+- [ ] 拖拽排序 / 在线·扫码导入 / 导出（后续）
 
 #### Task UI-21: 字典规则 (`activity_dict_rule.xml` + `dialog_dict_rule_edit.xml`)
 
@@ -616,7 +618,7 @@ Task UI-13: 缓存管理页面  ✅ 基本完成（2026-07-15）
 Task UI-16: 下载选项 Dialog  ✅ 基本完成（HTML 导出延后）
 Task UI-14: AI 配置 Dialog  ✅ 基本完成（2026-07-15）
 Task UI-15: Obsidian 导出配置  ✅ 基本完成（2026-07-15）
-Task UI-20: TXT 目录规则
+Task UI-20: TXT 目录规则  ✅ 基本完成（2026-07-15）
 ```
 
 ### S3 — 功能模块（3-4 周）：新功能 + 低优先级
@@ -661,7 +663,7 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 |------|:---:|------|
 | 主框架 + 导航 | 85% | 四 Tab 就位，缺角标/默认首页/可配置隐藏 |
 | 书架 | 92% | UI-7：长按菜单 + 列表布局对齐截图（顶栏 Tab/四行元数据/角标）；精确未读章数与整理拖拽仍开放 |
-| 我的页 | 92% | UI-8：快捷四格长按+Web 状态；文件管理基础浏览；书签/想法 Tab；TXT/字典仍为占位 |
+| 我的页 | 94% | UI-8：快捷四格长按+Web 状态；文件管理基础浏览；书签/想法 Tab；TXT 目录规则已落地；字典仍为占位 |
 | 搜索 | 90% | UI-3：按书源分组 + 精准搜索 + Scope |
 | 发现 | 85% | 接近完成 |
 | 书籍详情 | 96% | UI-6：截图布局（模糊头图/红芯片/删除+阅读底栏）；换源页后端仍占位；图标字形可再抠 |
