@@ -1,6 +1,10 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+
+import 'code_edit_formatter.dart';
+import 'code_edit_highlighter.dart';
+import 'code_edit_prefs.dart';
+import 'code_edit_theme.dart';
+import 'keyboard_tool_bar.dart';
 
 /// 代码编辑结果 — 对齐 Jingshiro [CodeEditActivity] `RESULT_OK` extras。
 class CodeEditResult {
@@ -12,9 +16,8 @@ class CodeEditResult {
 
 /// 代码编辑器 — 1:1 对齐 Jingshiro [activity_code_edit.xml] + [CodeEditActivity]。
 ///
-/// Chrome：TitleBar、搜索/保存、溢出菜单（主题/格式化/设置/自动换行/日志）、
-/// 底栏查找·替换（正则、上个/下个/替换/全部）。
-/// 语法高亮为 stub（无 Sora TextMate）；monospace + 可选暗色主题底。
+/// Chrome：TitleBar、搜索/保存、溢出菜单、底栏查找替换、键盘辅助条。
+/// 语法高亮：轻量 JSON/JS tokenizer，颜色对齐 TextMate Monokai 等主题。
 class CodeEditPage extends StatefulWidget {
   const CodeEditPage({
     super.key,
@@ -25,22 +28,12 @@ class CodeEditPage extends StatefulWidget {
     this.languageName,
   });
 
-  /// 对齐 intent `text` / `cacheKey` 只读文本。
   final String initialText;
-
-  /// 对齐 intent `title`；空则用 `@string/edit_code`「编辑代码」。
   final String? title;
-
-  /// 对齐 intent `cursorPosition`。
   final int cursorPosition;
-
-  /// 对齐 ViewModel `writable`（cacheKey 只读时为 false）。
   final bool writable;
-
-  /// 对齐 intent `languageName`（如 `source.js`）；用于格式化分支。
   final String? languageName;
 
-  /// 打开编辑器并等待结果（对齐 `StartActivityForResult`）。
   static Future<CodeEditResult?> open(
     BuildContext context, {
     required String text,
@@ -67,18 +60,7 @@ class CodeEditPage extends StatefulWidget {
 }
 
 class _CodeEditPageState extends State<CodeEditPage> {
-  static const _themeNames = [
-    'Monokai Dimmed',
-    'Monokai',
-    'Modern Dark',
-    'Modern Light',
-    'Solarized Dark',
-    'Solarized Light',
-    'Abyss',
-    'Quiet Light',
-  ];
-
-  late final TextEditingController _controller;
+  late HighlightEditingController _controller;
   late final FocusNode _editorFocus;
   final _findCtrl = TextEditingController();
   final _replaceCtrl = TextEditingController();
@@ -86,21 +68,52 @@ class _CodeEditPageState extends State<CodeEditPage> {
   final _replaceFocus = FocusNode();
 
   late String _initialText;
+  bool _ready = false;
   bool _searchVisible = false;
   bool _replaceVisible = false;
   bool _isRegex = true;
   bool _autoWrap = true;
+  bool _autoComplete = true;
+  bool _themeAuto = true;
   double _fontSize = 18;
   int _themeIndex = 1;
+  int _themeLightIndex = 1;
+  int _themeDarkIndex = 1;
   int _matchIndex = -1;
   List<TextRange> _matches = const [];
 
+  final List<String> _undoStack = [];
+  final List<String> _redoStack = [];
+  bool _applyingHistory = false;
   @override
   void initState() {
     super.initState();
     _initialText = widget.initialText;
-    _controller = TextEditingController(text: _initialText);
+    _controller = HighlightEditingController(
+      text: _initialText,
+      palette: CodeEditPalette.byIndex(1),
+    );
     _editorFocus = FocusNode();
+    _controller.addListener(_onTextChanged);
+    _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    final s = await CodeEditPrefs.load();
+    if (!mounted) return;
+    final systemDark = Theme.of(context).brightness == Brightness.dark;
+    final idx = s.resolveThemeIndex(systemDark: systemDark);
+    setState(() {
+      _themeLightIndex = s.themeIndex;
+      _themeDarkIndex = s.themeDarkIndex;
+      _themeAuto = s.themeAuto;
+      _themeIndex = idx;
+      _fontSize = s.fontScale.toDouble();
+      _autoWrap = s.autoWrap;
+      _autoComplete = s.autoComplete;
+      _controller.palette = CodeEditPalette.byIndex(idx);
+      _ready = true;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final pos = widget.cursorPosition.clamp(0, _controller.text.length);
@@ -109,8 +122,19 @@ class _CodeEditPageState extends State<CodeEditPage> {
     });
   }
 
+  void _onTextChanged() {
+    if (_applyingHistory) return;
+    final t = _controller.text;
+    if (_undoStack.isEmpty || _undoStack.last != t) {
+      _undoStack.add(t);
+      if (_undoStack.length > 80) _undoStack.removeAt(0);
+      _redoStack.clear();
+    }
+  }
+
   @override
   void dispose() {
+    _controller.removeListener(_onTextChanged);
     _controller.dispose();
     _editorFocus.dispose();
     _findCtrl.dispose();
@@ -120,12 +144,10 @@ class _CodeEditPageState extends State<CodeEditPage> {
     super.dispose();
   }
 
-  bool get _isDarkTheme {
-    final name = _themeNames[_themeIndex.clamp(0, _themeNames.length - 1)];
-    return name.contains('Dark') ||
-        name == 'Monokai' ||
-        name == 'Monokai Dimmed' ||
-        name == 'Abyss';
+  CodeEditPalette get _palette => CodeEditPalette.byIndex(_themeIndex);
+
+  Future<void> _log(String line) async {
+    await CodeEditPrefs.appendLog(line);
   }
 
   Future<void> _save({required bool checkUnsaved}) async {
@@ -165,12 +187,13 @@ class _CodeEditPageState extends State<CodeEditPage> {
           ],
         ),
       );
-      // 是 = 继续编辑；否 = 不保存退出（对齐 CodeEditActivity.save(check=true)）
       if (!mounted || cont == true || cont == null) return;
       Navigator.of(context).pop();
       return;
     }
 
+    await _log('保存 ${text.length} 字符');
+    if (!mounted) return;
     Navigator.of(context).pop(
       CodeEditResult(text: text, cursorPosition: cursor),
     );
@@ -218,12 +241,11 @@ class _CodeEditPageState extends State<CodeEditPage> {
         }
       } else {
         var from = 0;
-        final q = query;
         while (true) {
-          final i = text.indexOf(q, from);
+          final i = text.indexOf(query, from);
           if (i < 0) break;
-          ranges.add(TextRange(start: i, end: i + q.length));
-          from = i + (q.isEmpty ? 1 : q.length);
+          ranges.add(TextRange(start: i, end: i + query.length));
+          from = i + query.length;
         }
       }
     } on FormatException {
@@ -275,25 +297,22 @@ class _CodeEditPageState extends State<CodeEditPage> {
     if (_matches.isEmpty || _matchIndex < 0) return;
     final r = _matches[_matchIndex];
     final repl = _replaceCtrl.text;
-    final text = _controller.text;
-    final next = text.replaceRange(r.start, r.end, repl);
-    final cursor = r.start + repl.length;
+    final next = _controller.text.replaceRange(r.start, r.end, repl);
     _controller.value = TextEditingValue(
       text: next,
-      selection: TextSelection.collapsed(offset: cursor),
+      selection: TextSelection.collapsed(offset: r.start + repl.length),
     );
     _runSearch(_findCtrl.text);
   }
 
   void _replaceAll() {
     if (_matches.isEmpty || _findCtrl.text.isEmpty) return;
-    final repl = _replaceCtrl.text;
     String next;
     try {
       if (_isRegex) {
-        next = _controller.text.replaceAll(RegExp(_findCtrl.text), repl);
+        next = _controller.text.replaceAll(RegExp(_findCtrl.text), _replaceCtrl.text);
       } else {
-        next = _controller.text.replaceAll(_findCtrl.text, repl);
+        next = _controller.text.replaceAll(_findCtrl.text, _replaceCtrl.text);
       }
     } on FormatException {
       return;
@@ -302,55 +321,124 @@ class _CodeEditPageState extends State<CodeEditPage> {
     _runSearch(_findCtrl.text);
   }
 
-  void _formatCode() {
+  Future<void> _formatCode() async {
     final text = _controller.text;
-    final lang = widget.languageName ?? '';
-    if (lang.contains('markdown')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('markdown不需要格式化')),
-      );
-      return;
-    }
     try {
-      final decoded = jsonDecode(text);
-      final pretty = const JsonEncoder.withIndent('  ').convert(decoded);
+      final pretty = CodeEditFormatter.format(
+        text,
+        languageName: widget.languageName,
+      );
       _controller.text = pretty;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已格式化')),
-      );
-    } catch (_) {
-      // 无 js-beautify WebView：非 JSON 时仅 trim 行空白（stub）
-      final lines = text.split('\n').map((l) => l.trimRight()).toList();
-      _controller.text = lines.join('\n').trim();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已整理空白（完整 JS 格式化待接）')),
-      );
+      await _log('格式化成功');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已格式化')),
+        );
+      }
+    } on FormatSkipException catch (e) {
+      await _log(e.message);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } catch (e) {
+      await _log('格式化失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('格式化失败: $e')),
+        );
+      }
     }
   }
 
   Future<void> _showThemePicker() async {
-    final picked = await showDialog<int>(
+    var auto = _themeAuto;
+    var light = _themeLightIndex;
+    var dark = _themeDarkIndex;
+    await showDialog<void>(
       context: context,
-      builder: (ctx) => SimpleDialog(
-        title: const Text('选择主题'),
-        children: [
-          for (var i = 0; i < _themeNames.length; i++)
-            ListTile(
-              title: Text(_themeNames[i]),
-              trailing: i == _themeIndex
-                  ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary)
-                  : null,
-              onTap: () => Navigator.pop(ctx, i),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final systemDark = Theme.of(ctx).brightness == Brightness.dark;
+          final active = auto && systemDark ? dark : light;
+          return AlertDialog(
+            title: const Text('选择主题'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SwitchListTile(
+                    title: const Text('跟随系统深色'),
+                    value: auto,
+                    onChanged: (v) => setLocal(() => auto = v),
+                  ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 280),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: CodeEditPalette.names.length,
+                      itemBuilder: (_, i) {
+                        return ListTile(
+                          title: Text(CodeEditPalette.names[i]),
+                          trailing: i == active
+                              ? Icon(
+                                  Icons.check,
+                                  color: Theme.of(ctx).colorScheme.primary,
+                                )
+                              : null,
+                          onTap: () => setLocal(() {
+                            if (auto && systemDark) {
+                              dark = i;
+                            } else {
+                              light = i;
+                            }
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await CodeEditPrefs.saveThemeAuto(auto);
+                  await CodeEditPrefs.saveTheme(light, dark: false);
+                  await CodeEditPrefs.saveTheme(dark, dark: true);
+                  if (!mounted) return;
+                  final sysDark =
+                      Theme.of(context).brightness == Brightness.dark;
+                  final idx = auto && sysDark ? dark : light;
+                  setState(() {
+                    _themeAuto = auto;
+                    _themeLightIndex = light;
+                    _themeDarkIndex = dark;
+                    _themeIndex = idx;
+                    _controller.palette = CodeEditPalette.byIndex(idx);
+                  });
+                  await _log('主题 → ${CodeEditPalette.names[idx]}');
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: const Text('确定'),
+              ),
+            ],
+          );
+        },
       ),
     );
-    if (picked != null) setState(() => _themeIndex = picked);
   }
 
   Future<void> _showSettings() async {
     var font = _fontSize;
     var wrap = _autoWrap;
+    var complete = _autoComplete;
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -361,13 +449,13 @@ class _CodeEditPageState extends State<CodeEditPage> {
             children: [
               Row(
                 children: [
-                  const Text('字号'),
+                  Text('字号 ${font.round()}'),
                   Expanded(
                     child: Slider(
                       value: font,
-                      min: 12,
-                      max: 28,
-                      divisions: 16,
+                      min: 9,
+                      max: 36,
+                      divisions: 27,
                       label: font.round().toString(),
                       onChanged: (v) => setLocal(() => font = v),
                     ),
@@ -379,6 +467,11 @@ class _CodeEditPageState extends State<CodeEditPage> {
                 value: wrap,
                 onChanged: (v) => setLocal(() => wrap = v),
               ),
+              SwitchListTile(
+                title: const Text('自动补全'),
+                value: complete,
+                onChanged: (v) => setLocal(() => complete = v),
+              ),
             ],
           ),
           actions: [
@@ -387,12 +480,18 @@ class _CodeEditPageState extends State<CodeEditPage> {
               child: const Text('关闭'),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
+                await CodeEditPrefs.saveFontScale(font.round());
+                await CodeEditPrefs.saveAutoWrap(wrap);
+                await CodeEditPrefs.saveAutoComplete(complete);
+                if (!mounted) return;
                 setState(() {
                   _fontSize = font;
                   _autoWrap = wrap;
+                  _autoComplete = complete;
                 });
-                Navigator.pop(ctx);
+                await _log('设置 字号=${font.round()} 换行=$wrap');
+                if (ctx.mounted) Navigator.pop(ctx);
               },
               child: const Text('确定'),
             ),
@@ -402,21 +501,140 @@ class _CodeEditPageState extends State<CodeEditPage> {
     );
   }
 
-  void _showLog() {
-    showDialog<void>(
+  Future<void> _toggleAutoWrap() async {
+    final next = !_autoWrap;
+    setState(() => _autoWrap = next);
+    await CodeEditPrefs.saveAutoWrap(next);
+    await _log('自动换行 → $next');
+  }
+
+  Future<void> _showLog() async {
+    final logs = await CodeEditPrefs.loadLog();
+    if (!mounted) return;
+    await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('日志'),
-        content: const SizedBox(
+        content: SizedBox(
           width: double.maxFinite,
-          child: Text('暂无日志', style: TextStyle(fontFamily: 'monospace')),
+          height: 320,
+          child: logs.isEmpty
+              ? const Text('暂无日志', style: TextStyle(fontFamily: 'monospace'))
+              : ListView.builder(
+                  itemCount: logs.length,
+                  itemBuilder: (_, i) => Text(
+                    logs[logs.length - 1 - i],
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  ),
+                ),
         ),
         actions: [
+          TextButton(
+            onPressed: () async {
+              await CodeEditPrefs.clearLog();
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('清空'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('关闭'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _undo() {
+    if (_undoStack.length < 2) return;
+    _applyingHistory = true;
+    final current = _undoStack.removeLast();
+    _redoStack.add(current);
+    final prev = _undoStack.last;
+    _controller.value = TextEditingValue(
+      text: prev,
+      selection: TextSelection.collapsed(offset: prev.length),
+    );
+    _applyingHistory = false;
+  }
+
+  void _redo() {
+    if (_redoStack.isEmpty) return;
+    _applyingHistory = true;
+    final next = _redoStack.removeLast();
+    _undoStack.add(next);
+    _controller.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
+    );
+    _applyingHistory = false;
+  }
+
+  void _sendText(String text) {
+    final focus = FocusManager.instance.primaryFocus;
+    // 查找/替换框优先
+    if (_findFocus.hasFocus) {
+      _insertInto(_findCtrl, text);
+      _runSearch(_findCtrl.text);
+      return;
+    }
+    if (_replaceFocus.hasFocus) {
+      _insertInto(_replaceCtrl, text);
+      return;
+    }
+    if (focus == null || _editorFocus.hasFocus || focus == _editorFocus) {
+      _insertInto(_controller, text);
+      return;
+    }
+    _insertInto(_controller, text);
+  }
+
+  void _insertInto(TextEditingController c, String text) {
+    final value = c.value;
+    final start = value.selection.start < 0
+        ? value.text.length
+        : value.selection.start;
+    final end =
+        value.selection.end < 0 ? value.text.length : value.selection.end;
+    final s = start <= end ? start : end;
+    final e = start <= end ? end : start;
+    final next = value.text.replaceRange(s, e, text);
+    c.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: s + text.length),
+    );
+  }
+
+  void _showHelp() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('书源教程'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _log('帮助: 书源教程');
+              },
+            ),
+            ListTile(
+              title: const Text('js教程'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _log('帮助: js教程');
+              },
+            ),
+            ListTile(
+              title: const Text('正则教程'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _log('帮助: 正则教程');
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -430,10 +648,21 @@ class _CodeEditPageState extends State<CodeEditPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dark = _isDarkTheme;
-    final editorBg = dark ? const Color(0xFF1E1E1E) : theme.colorScheme.surface;
-    final editorFg = dark ? const Color(0xFFD4D4D4) : theme.colorScheme.onSurface;
+    final palette = _palette;
     final cardBg = theme.colorScheme.surfaceContainerLow;
+
+    if (!_ready) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(
+            (widget.title?.trim().isNotEmpty == true)
+                ? widget.title!.trim()
+                : '编辑代码',
+          ),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return PopScope(
       canPop: false,
@@ -470,7 +699,7 @@ class _CodeEditPageState extends State<CodeEditPage> {
                   case _CodeMenu.settings:
                     _showSettings();
                   case _CodeMenu.autoWrap:
-                    setState(() => _autoWrap = !_autoWrap);
+                    _toggleAutoWrap();
                   case _CodeMenu.log:
                     _showLog();
                 }
@@ -505,61 +734,69 @@ class _CodeEditPageState extends State<CodeEditPage> {
           children: [
             Expanded(
               child: ColoredBox(
-                color: editorBg,
-                child: _autoWrap
-                    ? TextField(
-                        controller: _controller,
-                        focusNode: _editorFocus,
-                        readOnly: !widget.writable,
-                        maxLines: null,
-                        expands: true,
-                        textAlignVertical: TextAlignVertical.top,
-                        style: TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: _fontSize,
-                          height: 1.45,
-                          color: editorFg,
-                        ),
-                        cursorColor: theme.colorScheme.primary,
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.all(12),
-                        ),
-                        keyboardType: TextInputType.multiline,
-                      )
-                    : SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minWidth: MediaQuery.sizeOf(context).width,
-                            minHeight: MediaQuery.sizeOf(context).height * 0.5,
-                          ),
-                          child: IntrinsicWidth(
-                            child: TextField(
-                              controller: _controller,
-                              focusNode: _editorFocus,
-                              readOnly: !widget.writable,
-                              maxLines: null,
-                              style: TextStyle(
-                                fontFamily: 'monospace',
-                                fontSize: _fontSize,
-                                height: 1.45,
-                                color: editorFg,
-                              ),
-                              cursorColor: theme.colorScheme.primary,
-                              decoration: const InputDecoration(
-                                border: InputBorder.none,
-                                contentPadding: EdgeInsets.all(12),
-                              ),
-                              keyboardType: TextInputType.multiline,
-                            ),
-                          ),
-                        ),
-                      ),
+                color: palette.background,
+                child: _buildEditor(palette, theme),
               ),
             ),
+            // 对齐 KeyboardToolPop：片段芯片（桌面无 IME 时仍常驻便于操作）
+            if (widget.writable)
+              KeyboardToolBar(
+                onSendText: _sendText,
+                onUndo: _undo,
+                onRedo: _redo,
+                onHelp: _showHelp,
+              ),
             if (_searchVisible) _buildSearchGroup(cardBg, theme),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditor(CodeEditPalette palette, ThemeData theme) {
+    final style = TextStyle(
+      fontFamily: 'monospace',
+      fontSize: _fontSize,
+      height: 1.45,
+      color: palette.foreground,
+    );
+    final field = TextField(
+      controller: _controller,
+      focusNode: _editorFocus,
+      readOnly: !widget.writable,
+      maxLines: null,
+      expands: _autoWrap,
+      textAlignVertical: TextAlignVertical.top,
+      style: style,
+      cursorColor: palette.keyword,
+      decoration: const InputDecoration(
+        border: InputBorder.none,
+        contentPadding: EdgeInsets.all(12),
+      ),
+      keyboardType: TextInputType.multiline,
+    );
+    if (_autoWrap) return field;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: MediaQuery.sizeOf(context).width,
+          minHeight: MediaQuery.sizeOf(context).height * 0.4,
+        ),
+        child: IntrinsicWidth(
+          child: TextField(
+            controller: _controller,
+            focusNode: _editorFocus,
+            readOnly: !widget.writable,
+            maxLines: null,
+            style: style,
+            cursorColor: palette.keyword,
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.all(12),
+            ),
+            keyboardType: TextInputType.multiline,
+          ),
         ),
       ),
     );

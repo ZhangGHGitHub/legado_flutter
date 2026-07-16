@@ -173,7 +173,7 @@
 | 25 | `activity_ai_chat.xml` | AI 聊天 | ✅ `ai_chat_page.dart` | **缺工具调用UI、配置入口** |
 | 26 | `activity_welcome.xml` | 欢迎页 | ✅ **1:1 闪屏** | UI-26：竖排品牌+icon_read_book+品读万千故事；500ms→主页；隐私在 MainShell Dialog |
 | 27 | `activity_web_view.xml` | WebView | ⚠️ `webview_flutter` 已引入 | 需核对 |
-| 28 | `activity_code_edit.xml` | 代码编辑器 | ✅ **基本完成** | UI-27：TitleBar+搜索/保存+底栏查找替换；Sora 语法高亮 stub |
+| 28 | `activity_code_edit.xml` | 代码编辑器 | ✅ **基本完成** | UI-27：高亮/格式化/偏好持久化/键盘辅助条；非 Sora TextMate 引擎 |
 | 29 | `activity_file_manage.xml` | 文件管理 | ✅ **1:1 基本完成** | UI-18：TitleBar 筛选+路径条+列表；长按删除；桌面打开回退 |
 | 30 | `activity_donate.xml` | 捐赠 | 🟡 **1:1 返工** | UI-25：去掉 Flutter 免责声明；渠道文案对齐 values-zh |
 | 31 | `activity_dict_rule.xml` | 字典规则 | ✅ 基本完成（2026-07-15） | UI-21 |
@@ -185,7 +185,7 @@
 | 37 | `activity_txt_toc_rule.xml` | TXT 目录规则 | ✅ 基本完成（2026-07-15） | UI-20 |
 | 38 | `activity_rss_source_debug.xml` | RSS 源调试 | ❌ **缺失** | |
 | 39 | `activity_rss_source_edit.xml` | RSS 源编辑 | ❌ **缺失** | |
-| 40 | `activity_rule_sub.xml` | 规则订阅 | ❌ **缺失**（低优） | |
+| 40 | `activity_rule_sub.xml` | 规则订阅 | ✅ **基本完成** | UI-19：列表+编辑 Dialog+三类型 URL 导入；自动更新轻量版 |
 | 41 | `activity_translucence.xml` | 半透明容器 | — | 不是独立页面 |
 
 ### 1.2 Dialog 对话框对照（关键项）
@@ -544,10 +544,12 @@
 - [x] 空目录展示「空」（对齐布局 `tv_empty_msg`）
 - [x] 我的页入口副标题对齐 `file_manage_summary`
 
-#### Task UI-19: 规则订阅 (`activity_rule_sub.xml` + `dialog_rule_sub_edit.xml`)
+#### Task UI-19: 规则订阅 (`activity_rule_sub.xml` + `dialog_rule_sub_edit.xml`) — ✅ 基本完成（2026-07-16）
 
-- [ ] 规则订阅源管理
-- [ ] 从 URL 更新替换规则/书源
+- [x] 规则订阅源管理（列表 / 添加 / 编辑 Dialog / 删除 / 拖拽排序；入口：订阅 Tab「规则订阅」）
+- [x] 从 URL 更新替换规则/书源/订阅源（type 0/1/2 点击打开导入选择 Dialog）
+- [x] 自动更新 / 静默更新 / 间隔字段 1:1 持久化；冷启动 ~1s + 进入订阅页按间隔检查（对齐 `ruleSubsUp` / `RuleUpdate`）
+- [ ] 完整后台 WorkManager/系统定时；导入 Dialog 未做到 Jingshiro 全量 diff 勾选态（后续）
 
 #### Task UI-20: TXT 目录规则 (`activity_txt_toc_rule.xml`) — ✅ 基本完成（2026-07-15）
 
@@ -611,7 +613,11 @@
 - [x] 底栏 `search_group`：搜索结果、正则、查找/替换、上个/下个/替换/全部
 - [x] 未保存退出对话框（`exit` / `exit_no_save`）；保存回传 text+cursorPosition
 - [x] 书源编辑入口：`menu_fullscreen_edit`（编辑内容）→ `CodeEditPage`
-- [ ] Sora TextMate 语法高亮（stub：monospace + 主题底色；完整高亮后续）
+- [x] JSON/JS 轻量词法高亮（颜色对齐 TextMate Monokai 等 8 主题；非 Sora 引擎）
+- [x] 格式化：JSON + `<js>`/`@js:`/`@webjs:` 段 + 轻量 beautify（4 空格；非 WebView js-beautify）
+- [x] PreferKey 持久化：`editTheme`/`editThemeDark`/`editTemeAuto`/`editFontScale`/`editAutoWrap`/`editAutoComplete` + 会话日志
+- [x] 键盘辅助条：对齐 `keyboardAssists.json` 片段 + 帮助/撤销/重做（非 PopupWindow 贴键盘）
+- [ ] 真 Sora TextMate 文法 / WebView js-beautify / KeyboardAssistsConfig 自定义（开放）
 
 ---
 
@@ -649,13 +655,13 @@ Task UI-21: 字典规则  ✅ 基本完成（2026-07-15）
 ```
 Task UI-17: 扫码导入  ✅ 基本完成（2026-07-16）
 Task UI-18: 文件管理  ✅ 基本完成（2026-07-16）
-Task UI-19: 规则订阅
+Task UI-19: 规则订阅  ✅ 基本完成（2026-07-16）
 Task UI-22: 有声播放器 (TTS)  🟡 1:1 布局返工（2026-07-16）；MP3/LyricViewX 仍开放
 Task UI-23: 漫画阅读器  🟡 1:1 chrome 返工（2026-07-16）；真漫画源引擎仍开放
 Task UI-24: 模拟追读  🟡 对话框+章数解锁+Book/DB 同步；WebDAV/书架未读数仍开放
 Task UI-25: 捐赠页  🟡 1:1 返工（2026-07-16）；去掉 Flutter 免责声明；店铺/内嵌码仍开放
 Task UI-26: 欢迎引导页  ✅ 1:1 闪屏（2026-07-16）
-Task UI-27: 代码编辑器  ✅ chrome 基本完成（2026-07-16）；Sora 语法高亮仍开放
+Task UI-27: 代码编辑器  ✅ 高亮/格式化/偏好/键盘条（2026-07-16）；Sora/WebView beautify 仍开放
 ```
 
 ### S4 — 延后（RSS 订阅阅读）

@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/pages/code_edit/code_edit_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
 
   testWidgets('CodeEditPage shows Jingshiro chrome titles and toolbar', (
     WidgetTester tester,
@@ -13,12 +18,15 @@ void main() {
         home: CodeEditPage(initialText: '{"a":1}'),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('编辑代码'), findsOneWidget);
     expect(find.byTooltip('搜索'), findsOneWidget);
     expect(find.byTooltip('保存'), findsOneWidget);
     expect(find.text('{"a":1}'), findsOneWidget);
+    // KeyboardToolPop 默认片段
+    expect(find.text('<js>'), findsOneWidget);
+    expect(find.text('@css:'), findsOneWidget);
   });
 
   testWidgets('CodeEditPage search group matches activity_code_edit', (
@@ -29,7 +37,7 @@ void main() {
         home: CodeEditPage(initialText: 'hello world hello'),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('搜索'));
     await tester.pumpAndSettle();
