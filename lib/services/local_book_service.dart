@@ -10,35 +10,62 @@ import '../models/chapter.dart';
 import '../database/database_helper.dart';
 import 'txt_toc_rule_prefs.dart';
 
+/// 本地导入超过大小上限时抛出（消息为可直接展示的中文说明）
+class LocalBookImportException implements Exception {
+  LocalBookImportException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
 /// 本地书籍导入服务 - 支持 TXT/EPUB（Rust 分章/解析）
 class LocalBookService {
-  final DatabaseHelper _db = DatabaseHelper();
+  LocalBookService({DatabaseHelper? db}) : _db = db ?? DatabaseHelper();
+
+  final DatabaseHelper _db;
+
+  /// 本地导入体积上限（约 50MB），防止超大文件导致 OOM
+  static const int maxImportBytes = 50 * 1024 * 1024;
 
   /// 弹出文件选择器，导入本地书籍
   Future<Book?> importFromFile() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['txt', 'epub'],
-        allowMultiple: false,
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['txt', 'epub'],
+      allowMultiple: false,
+    );
+
+    if (result == null || result.files.isEmpty) return null;
+
+    final file = result.files.first;
+    final filePath = file.path;
+    if (filePath == null) return null;
+
+    await _assertWithinSizeLimit(filePath, pickerSize: file.size);
+
+    final ext = p.extension(filePath).toLowerCase();
+    if (ext == '.txt') {
+      return await _importTxt(filePath, file.name);
+    } else if (ext == '.epub') {
+      return await _importEpub(filePath, file.name);
+    }
+    return null;
+  }
+
+  Future<void> _assertWithinSizeLimit(
+    String filePath, {
+    int? pickerSize,
+  }) async {
+    var size = pickerSize ?? 0;
+    if (size <= 0) {
+      size = await File(filePath).length();
+    }
+    if (size > maxImportBytes) {
+      final mb = (size / (1024 * 1024)).toStringAsFixed(1);
+      throw LocalBookImportException(
+        '文件过大（${mb}MB），本地导入上限为 50MB。'
+        '请压缩、拆分后再导入，或改用体积更小的 TXT/EPUB。',
       );
-
-      if (result == null || result.files.isEmpty) return null;
-
-      final file = result.files.first;
-      final filePath = file.path;
-      if (filePath == null) return null;
-
-      final ext = p.extension(filePath).toLowerCase();
-      if (ext == '.txt') {
-        return await _importTxt(filePath, file.name);
-      } else if (ext == '.epub') {
-        return await _importEpub(filePath, file.name);
-      }
-      return null;
-    } catch (e) {
-      debugPrint('文件选择失败: $e');
-      return null;
     }
   }
 
