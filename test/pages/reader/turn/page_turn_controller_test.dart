@@ -97,6 +97,31 @@ void main() {
     );
   });
 
+  test('pageTurnHorizontalSettleDelta 对齐 Cover/Slide onAnimStart', () {
+    // NEXT complete: -(touchX + (viewWidth - startX))
+    expect(
+      pageTurnHorizontalSettleDelta(
+        direction: PageTurnDirection.next,
+        isCancel: false,
+        touchX: 100,
+        startX: 300,
+        viewWidth: 400,
+      ),
+      const Offset(-200, 0),
+    );
+    // PREV complete: viewWidth - (touchX - startX)
+    expect(
+      pageTurnHorizontalSettleDelta(
+        direction: PageTurnDirection.prev,
+        isCancel: false,
+        touchX: 200,
+        startX: 50,
+        viewWidth: 400,
+      ),
+      const Offset(250, 0),
+    );
+  });
+
   group('onPointerUp settle', () {
     testWidgets('完成翻页时 onCompleted 被调用', (tester) async {
       late PageTurnDirection completed;

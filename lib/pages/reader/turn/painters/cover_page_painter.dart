@@ -52,7 +52,12 @@ class CoverPagePainter extends CustomPainter {
     final distanceX = offsetX > 0 ? offsetX - viewWidth : offsetX + viewWidth;
 
     if (direction == PageTurnDirection.prev) {
+      // Base current page under the incoming prev cover (Jingshiro PREV
+      // only draws prevRecorder; without a base layer Flutter shows holes).
+      _drawPage(canvas, cur, size);
       if (offsetX <= viewWidth) {
+        // KT `withTranslation { prevRecorder.draw(canvas) }` uses outer
+        // canvas (likely typo); we draw on the translated canvas.
         _drawPageTranslated(canvas, prev, distanceX, size);
         _addShadow(canvas, distanceX, size);
       } else {

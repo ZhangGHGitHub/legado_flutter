@@ -21,6 +21,39 @@ int pageTurnSettleDurationMs({
   return math.max(durationMs, 1);
 }
 
+/// Cover/Slide vs Simulation use different `onAnimStart` endpoints.
+enum PageTurnSettleStyle { simulation, horizontal }
+
+/// Jingshiro `CoverPageDelegate` / `SlidePageDelegate.onAnimStart` (dy = 0).
+Offset pageTurnHorizontalSettleDelta({
+  required PageTurnDirection direction,
+  required bool isCancel,
+  required double touchX,
+  required double startX,
+  required double viewWidth,
+}) {
+  final double distanceX;
+  if (direction == PageTurnDirection.next) {
+    if (isCancel) {
+      var dis = viewWidth - startX + touchX;
+      if (dis > viewWidth) {
+        dis = viewWidth;
+      }
+      distanceX = viewWidth - dis;
+    } else {
+      distanceX = -(touchX + (viewWidth - startX));
+    }
+  } else {
+    // PREV (and NONE treated as PREV branch in KT `else`)
+    if (isCancel) {
+      distanceX = -(touchX - startX);
+    } else {
+      distanceX = viewWidth - (touchX - startX);
+    }
+  }
+  return Offset(distanceX, 0);
+}
+
 class PageTurnController extends ChangeNotifier {
   PageTurnDirection direction = PageTurnDirection.none;
   double touchX = 0;
@@ -134,6 +167,7 @@ class PageTurnController extends ChangeNotifier {
     required double viewWidth,
     required double viewHeight,
     required void Function(PageTurnDirection) onCompleted,
+    PageTurnSettleStyle settleStyle = PageTurnSettleStyle.simulation,
     int animationSpeed = 100,
   }) {
     if (!_isMoved || direction == PageTurnDirection.none) {
@@ -145,6 +179,7 @@ class PageTurnController extends ChangeNotifier {
       viewWidth: viewWidth,
       viewHeight: viewHeight,
       onCompleted: onCompleted,
+      settleStyle: settleStyle,
       animationSpeed: animationSpeed,
     );
   }
@@ -157,6 +192,7 @@ class PageTurnController extends ChangeNotifier {
     required void Function(PageTurnDirection) onCompleted,
     required bool hasPrev,
     required bool hasNext,
+    PageTurnSettleStyle settleStyle = PageTurnSettleStyle.simulation,
     int animationSpeed = 100,
   }) {
     _abortSettle(applyCompletion: false);
@@ -193,6 +229,7 @@ class PageTurnController extends ChangeNotifier {
       viewWidth: viewWidth,
       viewHeight: viewHeight,
       onCompleted: onCompleted,
+      settleStyle: settleStyle,
       animationSpeed: animationSpeed,
     );
   }
@@ -237,7 +274,18 @@ class PageTurnController extends ChangeNotifier {
   Offset _settleDelta({
     required double viewWidth,
     required double viewHeight,
+    required PageTurnSettleStyle settleStyle,
   }) {
+    if (settleStyle == PageTurnSettleStyle.horizontal) {
+      return pageTurnHorizontalSettleDelta(
+        direction: direction,
+        isCancel: isCancel,
+        touchX: touchX,
+        startX: startX,
+        viewWidth: viewWidth,
+      );
+    }
+
     late double dx;
     late double dy;
     if (isCancel) {
@@ -266,13 +314,20 @@ class PageTurnController extends ChangeNotifier {
     required double viewWidth,
     required double viewHeight,
     required void Function(PageTurnDirection) onCompleted,
+    required PageTurnSettleStyle settleStyle,
     required int animationSpeed,
   }) {
-    _updateCornerForDirection(
+    if (settleStyle == PageTurnSettleStyle.simulation) {
+      _updateCornerForDirection(
+        viewWidth: viewWidth,
+        viewHeight: viewHeight,
+      );
+    }
+    final delta = _settleDelta(
       viewWidth: viewWidth,
       viewHeight: viewHeight,
+      settleStyle: settleStyle,
     );
-    final delta = _settleDelta(viewWidth: viewWidth, viewHeight: viewHeight);
     final fromX = touchX;
     final fromY = touchY;
     final completedDirection = direction;

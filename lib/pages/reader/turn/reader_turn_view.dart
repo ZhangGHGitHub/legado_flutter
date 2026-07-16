@@ -65,6 +65,18 @@ class ReaderTurnViewState extends State<ReaderTurnView>
   bool get _captureHasPrev => widget.pageIndex > 0;
   bool get _captureHasNext => widget.pageIndex < widget.pageCount - 1;
 
+  PageTurnSettleStyle get _settleStyle {
+    switch (widget.mode) {
+      case PageAnimMode.cover:
+      case PageAnimMode.slide:
+        return PageTurnSettleStyle.horizontal;
+      case PageAnimMode.simulation:
+      case PageAnimMode.none:
+      case PageAnimMode.scroll:
+        return PageTurnSettleStyle.simulation;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -173,6 +185,7 @@ class ReaderTurnViewState extends State<ReaderTurnView>
       hasPrev: _gestureHasPrev,
       hasNext: _gestureHasNext,
       onCompleted: _applyCompleted,
+      settleStyle: _settleStyle,
     );
     if (mounted) {
       setState(() => _overlayVisible = false);
@@ -318,6 +331,7 @@ class ReaderTurnViewState extends State<ReaderTurnView>
       viewWidth: size.width,
       viewHeight: size.height,
       onCompleted: _applyCompleted,
+      settleStyle: _settleStyle,
     );
     if (mounted) {
       setState(() => _overlayVisible = false);
