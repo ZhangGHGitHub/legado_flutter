@@ -47,4 +47,64 @@ class SourceLoginPrefs {
     final p = await SharedPreferences.getInstance();
     await p.remove(_headerKey(sourceUrl));
   }
+
+  /// 解析登录头：JSON 头 map，或非 JSON 时当作 Cookie 串（对齐 Rust `login_header_map`）
+  static Map<String, String> parseLoginHeader(String loginHeader) {
+    final t = loginHeader.trim();
+    if (t.isEmpty) return {};
+    try {
+      final v = jsonDecode(t);
+      if (v is Map) {
+        final out = <String, String>{};
+        for (final e in v.entries) {
+          final s = e.value?.toString() ?? '';
+          if (s.isNotEmpty) out[e.key.toString()] = s;
+        }
+        return out;
+      }
+    } catch (_) {}
+    return {'Cookie': t};
+  }
+
+  /// 将登录头合并进书源 JSON 的 `header`（登录头覆盖同名键）
+  static String mergeLoginHeaderIntoSourceJson(
+    String sourceJson,
+    String? loginHeader,
+  ) {
+    final lh = loginHeader?.trim();
+    if (lh == null || lh.isEmpty) return sourceJson;
+    final loginMap = parseLoginHeader(lh);
+    if (loginMap.isEmpty) return sourceJson;
+
+    Map<String, dynamic> obj;
+    try {
+      final decoded = jsonDecode(sourceJson);
+      if (decoded is! Map) return sourceJson;
+      obj = Map<String, dynamic>.from(decoded);
+    } catch (_) {
+      return sourceJson;
+    }
+
+    final merged = <String, String>{};
+    final existing = obj['header'];
+    if (existing is Map) {
+      for (final e in existing.entries) {
+        final s = e.value?.toString() ?? '';
+        if (s.isNotEmpty) merged[e.key.toString()] = s;
+      }
+    } else if (existing is String && existing.trim().isNotEmpty) {
+      try {
+        final parsed = jsonDecode(existing);
+        if (parsed is Map) {
+          for (final e in parsed.entries) {
+            final s = e.value?.toString() ?? '';
+            if (s.isNotEmpty) merged[e.key.toString()] = s;
+          }
+        }
+      } catch (_) {}
+    }
+    merged.addAll(loginMap);
+    obj['header'] = merged;
+    return jsonEncode(obj);
+  }
 }

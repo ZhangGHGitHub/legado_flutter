@@ -38,6 +38,10 @@ pub struct BookSource {
     pub rule_content_next_url: String,
     pub rule_content_replace_regex: Option<String>,
     pub concurrent_rate: Option<String>,
+    /// 顶层 `loginCheckJs` — 请求后检查登录态，可改写响应体（对齐 Jingshiro AnalyzeUrl）
+    pub login_check_js: String,
+    /// `ruleToc.preUpdateJs` — 拉取目录前执行（对齐 Jingshiro getChapterListAwait）
+    pub pre_update_js: String,
     pub js_lib: String,
     pub raw_json: String,
     pub rule_search_obj: Option<Value>,
@@ -131,6 +135,13 @@ impl BookSource {
                 Value::Number(n) => Some(n.to_string()),
                 _ => None,
             }),
+            login_check_js: str_field(map, "loginCheckJs"),
+            pre_update_js: rule_toc_obj
+                .as_ref()
+                .and_then(|o| o.get("preUpdateJs"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             js_lib: str_field(map, "jsLib"),
             raw_json: json_str.to_string(),
             rule_search_obj,
@@ -300,5 +311,17 @@ mod tests {
             bs.rule_content_obj,
             Some(Value::String(ref s)) if s.starts_with("$.data.content")
         ));
+    }
+
+    #[test]
+    fn from_json_parses_login_check_and_pre_update_js() {
+        let src = r#"{
+            "bookSourceUrl":"https://example.com",
+            "loginCheckJs":"result",
+            "ruleToc":{"preUpdateJs":"cache.put('k','v',0); ''","chapterList":"a"}
+        }"#;
+        let bs = BookSource::from_json(src).unwrap();
+        assert_eq!(bs.login_check_js, "result");
+        assert!(bs.pre_update_js.contains("cache.put"));
     }
 }

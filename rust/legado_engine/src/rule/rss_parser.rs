@@ -90,6 +90,18 @@ pub async fn get_articles(
     )
     .await
     .map_err(|e| format!("获取 RSS 失败: {e}"))?;
+    // 对齐 Jingshiro Rss：请求后执行 loginCheckJs（可改写 body）
+    let body = if source.login_check_js.trim().is_empty() {
+        body
+    } else {
+        // 构造最小 JSON 供 apply_login_check_js 读取字段
+        let mini = serde_json::json!({
+            "loginCheckJs": source.login_check_js,
+            "jsLib": source.js_lib,
+        })
+        .to_string();
+        js_engine::apply_login_check_js(&mini, &body, &url)
+    };
     parse_xml(sort_name, &url, &url, &body, &source)
 }
 

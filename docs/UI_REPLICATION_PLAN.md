@@ -761,4 +761,45 @@ Task UI-12:  RSS 文章列表 + 阅读  ✅ 复用 Jingshiro Rss/ParserByRule/De
 
 ---
 
-> 最后更新：2026-07-15 | 引擎 v0.5.6 | Focus: UI 复刻（模拟追读 Book/DB 已同步；HTTP TTS/真仿真卷曲网格/OpenCC/全书联网搜/书架未读数联动仍开放；RSS 延后）| 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)
+## 八、【故意简化 · 后做】清单（2026-07-16）
+
+> **含义**：阶段性**有意**做成简化版（能用但不 1:1），**不是缺陷**。与「字段/入口已有但链路未接」的缺陷分开跟踪。  
+> **状态**：全部标记为 **后做**；当前并行维修只碰缺陷（换源、登录头、loginCheckJs/preUpdateJs、书票接线、书签回跳等）。  
+> **标签**：文内统一用 `【故意简化·后做】`。
+
+| ID | 领域 | 现状（简化版） | 后做目标（对齐 Jingshiro） |
+|----|------|----------------|----------------------------|
+| DS-01 | 朗读 | 系统 TTS + 句级导航 | HTTP TTS 引擎 / 编辑 / 全屏有声真流 + Lyric |
+| DS-02 | 翻页 | 仿真档为透视近似 | 真·书页网格卷曲 |
+| DS-03 | 简繁 | 字级对照表 | OpenCC / 词级 quick-transfer |
+| DS-04 | 主题 zip | 色/背景可导入；FontLoader 未接 | 自定义字体加载 + 每主题独立排版 |
+| DS-05 | 代码编辑 | 轻量高亮 / beautify | Sora TextMate / WebView js-beautify |
+| DS-06 | 主框架 Tab | `IndexedStack` 无滑动 | 可选 ViewPager 横向切换 |
+| DS-07 | 规则订阅定时 | 冷启动 + 进页检查 | WorkManager / 系统定时 |
+| DS-08 | 缓存导出 | 纯文本缓存为主 | txt / epub（及 HTML 导出）完整导出 |
+| DS-09 | 全文搜索 | 当前章 + **已文件缓存**章 | 全书联网边下边搜（可选） |
+| DS-10 | 字典 / TXT 规则 | 管理页 + 简化测试 | 阅读器查词 JS；在线/扫码导入；拖拽排序 |
+| DS-11 | 漫画 / 有声 | chrome 1:1，引擎弱 | 真漫画多页源 / MP3 流播放 |
+| DS-12 | JS 兼容回归 | 少量内置源离线测 | 扩大到社区常用源批量回归 |
+| DS-13 | 书架滚动 | 无 FastScroll | `FastScrollRecyclerView` 等价 |
+| DS-14 | Web 服务 | REST 骨架（books/sources/records…） | 语雀四 Tab 完整局域网 Web（传书/订阅等） |
+| DS-15 | AI | 配置 / 记忆 Dialog | AI 对话聊天本体（工具调用等） |
+| DS-16 | 字体选择 | 系统/衬线/等宽 | 自定义字体文件导入 |
+| DS-17 | 亮度 | 阅读遮罩近似 | 系统亮度 API（若平台允许） |
+| DS-18 | 模拟追读联动 | 对话框 + Book/DB 字段 | 书架未读数 + WebDAV 合并联动 |
+| DS-19 | 备份 | WebDAV + 本地 | 退出时自动备份 |
+| DS-20 | 书源调试 chrome | Tab + 日志可用 | 实时 WebSocket / 1:1 chrome |
+| DS-21 | RSS 调试 / 阅读记录 Dialog | 列表+阅读+编辑已有 | `RssSourceDebug` + 阅读记录 Dialog |
+| DS-22 | 视频播放 / Reading Skill | 无或 EmptyState | 对应 Activity 能力 |
+| DS-23 | 书架配置 Dialog | prefs 分散 | `dialog_bookshelf_config` 集中 UI |
+| DS-24 | 搜索并发 UI | 全源并行 + 超时 | 书源级 concurrentRate 调度展示 / 标签筛选 |
+
+**不要把下列项当成故意简化（属缺陷，应优先修）：**
+
+- 换源页占位、登录头未注入常规 HTTP、`loginCheckJs` / `preUpdateJs` 未执行  
+- 书票 overlay 未挂阅读器、书签点击不回跳  
+- 阅读内替换净化运行时开关等「入口有、行为无」项  
+
+---
+
+> 最后更新：2026-07-16 | 引擎 v0.5.6 | Focus: UI 复刻；**【故意简化·后做】**见第八节；缺陷并行维修中 | 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)

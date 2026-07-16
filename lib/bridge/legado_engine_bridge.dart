@@ -6,6 +6,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/chapter.dart';
+import '../services/source_login_prefs.dart';
 import '../src/rust/api.dart' as rust_api;
 import '../src/rust/frb_generated.dart';
 
@@ -37,7 +38,15 @@ class LegadoEngineBridge {
     }
   }
 
-  static String _sourceJson(BookSource source) => source.toEngineJson();
+  /// 书源 JSON + 登录头合并进 `header`（EN-08，对齐 Jingshiro AnalyzeUrl）
+  static Future<String> _sourceJson(BookSource source) async {
+    final loginHeader =
+        await SourceLoginPrefs.loadHeader(source.bookSourceUrl);
+    return SourceLoginPrefs.mergeLoginHeaderIntoSourceJson(
+      source.toEngineJson(),
+      loginHeader,
+    );
+  }
 
   static Future<List<Map<String, String>>> search(
     BookSource source,
@@ -46,7 +55,7 @@ class LegadoEngineBridge {
     if (!_available) throw StateError('Rust engine not available');
 
     final items = await rust_api.search(
-      sourceJson: _sourceJson(source),
+      sourceJson: await _sourceJson(source),
       keyword: keyword,
     );
     return items
@@ -71,7 +80,7 @@ class LegadoEngineBridge {
     if (!_available) throw StateError('Rust engine not available');
 
     final items = await rust_api.explore(
-      sourceJson: _sourceJson(source),
+      sourceJson: await _sourceJson(source),
       exploreUrl: exploreUrl,
       page: page,
     );
@@ -96,7 +105,7 @@ class LegadoEngineBridge {
     if (!_available) throw StateError('Rust engine not available');
 
     final info = await rust_api.getBookInfo(
-      sourceJson: _sourceJson(source),
+      sourceJson: await _sourceJson(source),
       bookUrl: bookUrl,
     );
     return {
@@ -114,7 +123,7 @@ class LegadoEngineBridge {
     if (!_available) throw StateError('Rust engine not available');
 
     final items = await rust_api.getToc(
-      sourceJson: _sourceJson(source),
+      sourceJson: await _sourceJson(source),
       bookUrl: book.sourceUrl,
     );
     return items.asMap().entries.map((entry) {
@@ -137,7 +146,7 @@ class LegadoEngineBridge {
     if (!_available) throw StateError('Rust engine not available');
 
     return rust_api.getContent(
-      sourceJson: _sourceJson(source),
+      sourceJson: await _sourceJson(source),
       chapterUrl: chapterUrl,
     );
   }
@@ -149,7 +158,7 @@ class LegadoEngineBridge {
     if (!_available) throw StateError('Rust engine not available');
 
     return rust_api.validateSource(
-      sourceJson: _sourceJson(source),
+      sourceJson: await _sourceJson(source),
       keyword: keyword,
     );
   }
@@ -240,7 +249,7 @@ class LegadoEngineBridge {
   ) async {
     if (!_available) throw StateError('Rust engine not available');
     return rust_api.debugSearch(
-      sourceJson: _sourceJson(source),
+      sourceJson: await _sourceJson(source),
       keyword: keyword,
     );
   }
@@ -251,7 +260,7 @@ class LegadoEngineBridge {
   ) async {
     if (!_available) throw StateError('Rust engine not available');
     return rust_api.debugToc(
-      sourceJson: _sourceJson(source),
+      sourceJson: await _sourceJson(source),
       bookUrl: bookUrl,
     );
   }

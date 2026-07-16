@@ -40,6 +40,7 @@ import 'simulated_reading_dialog.dart';
 import 'tts_panel.dart';
 import '../audio/audio_play_page.dart';
 import '../manga/manga_reader_page.dart';
+import '../../widgets/bookplate_overlay.dart';
 import '../../widgets/note_editor_sheet.dart';
 import '../../widgets/reader_selectable_text.dart';
 
@@ -1500,10 +1501,32 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  void _openChangeSource() {
-    Navigator.push(
+  Future<void> _openChangeSource() async {
+    final result = await Navigator.push<Book>(
       context,
       MaterialPageRoute(builder: (_) => ChangeSourcePage(book: widget.book)),
+    );
+    if (result == null || !mounted) return;
+    final provider = context.read<BookProvider>();
+    final chapters = provider.currentChapters;
+    if (chapters.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已换源，但目录为空，请返回详情重试')),
+      );
+      return;
+    }
+    final idx = _currentIndex.clamp(0, chapters.length - 1);
+    if (!mounted) return;
+    await Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReaderPage(
+          book: result,
+          chapter: chapters[idx],
+          allChapters: List<Chapter>.from(chapters),
+        ),
+      ),
     );
   }
 
@@ -1528,7 +1551,7 @@ class _ReaderPageState extends State<ReaderPage> {
           ),
         );
       case 'change_source':
-        _openChangeSource();
+        unawaited(_openChangeSource());
       case 'refresh':
         _refreshChapter();
       case 'bookmark':
@@ -1770,6 +1793,17 @@ class _ReaderPageState extends State<ReaderPage> {
           ),
         ),
       ),
+    );
+  }
+
+  /// 章首/章尾书票（流式插入，不遮挡正文；无独立 prefs 时默认启用）
+  Widget _buildBookplate({required bool isHeader, required Color textColor}) {
+    return BookplateOverlay(
+      book: widget.book,
+      currentChapterIndex: _currentIndex,
+      totalChapters: widget.allChapters.length,
+      textColor: textColor,
+      isHeader: isHeader,
     );
   }
 
@@ -2521,6 +2555,10 @@ class _ReaderPageState extends State<ReaderPage> {
                     minHeight: 2,
                   ),
                 _buildChapterHeader(chapter, theme),
+                if (!_isLoading &&
+                    !_isEmptyBody &&
+                    (!_isHorizontalPaged || _pageIndex == 0))
+                  _buildBookplate(isHeader: true, textColor: theme.text),
                 const Divider(height: 8),
                 Expanded(
                   child: _isLoading && _content == '加载中...'
@@ -2541,6 +2579,13 @@ class _ReaderPageState extends State<ReaderPage> {
                         )
                       : _buildBodyText(theme, paged: true),
                 ),
+                if (!_isLoading &&
+                    _content != '加载中...' &&
+                    !_isEmptyBody &&
+                    _isHorizontalPaged &&
+                    _pages.isNotEmpty &&
+                    _pageIndex == _pages.length - 1)
+                  _buildBookplate(isHeader: false, textColor: theme.text),
                 if (!_isLoading && _content != '加载中...' && !_isEmptyBody)
                   _buildPageFooter(chapter, theme),
               ],
@@ -2758,11 +2803,19 @@ class _ReaderPageState extends State<ReaderPage> {
                                       CrossAxisAlignment.start,
                                   children: [
                                     _buildChapterHeader(chapter, theme),
+                                    _buildBookplate(
+                                      isHeader: true,
+                                      textColor: theme.text,
+                                    ),
                                     ReaderSelectableText(
                                       text: _displayContent,
                                       style: _readerTextStyle(theme.text),
                                       textAlign: _readerTextAlign,
                                       onWriteNote: _openNoteEditor,
+                                    ),
+                                    _buildBookplate(
+                                      isHeader: false,
+                                      textColor: theme.text,
                                     ),
                                     const SizedBox(height: 32),
                                   ],

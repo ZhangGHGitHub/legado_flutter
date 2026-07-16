@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/book.dart';
+import '../../models/chapter.dart';
+import '../../providers/book_provider.dart';
+import '../../providers/source_provider.dart';
 import '../../services/note_service.dart';
 import '../../src/rust/api.dart' as rust_api;
 import '../../widgets/empty_state.dart';
 import '../../widgets/note_editor_sheet.dart';
 import '../../widgets/note_share_card.dart';
 import '../obsidian/obsidian_export_dialog.dart';
+import '../reader/reader_page.dart';
 
 bool _isBookmarkNote(rust_api.NoteDto n) => n.noteContent.startsWith('书签');
 
@@ -90,6 +95,73 @@ class _BookmarkPageState extends State<BookmarkPage>
     return Book(id: note.bookId, name: note.bookId);
   }
 
+  /// 点击书签/想法：书架有书则打开 ReaderPage 并尽量定位章节，否则 SnackBar
+  Future<void> _openNoteInReader(rust_api.NoteDto note) async {
+    final provider = context.read<BookProvider>();
+    final book = provider.findBookById(note.bookId);
+    if (book == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('该书不在书架中，无法跳转阅读')),
+      );
+      return;
+    }
+
+    var chapters = <Chapter>[];
+    if (provider.currentChapters.isNotEmpty &&
+        provider.currentChapters.first.bookId == book.id) {
+      chapters = List<Chapter>.from(provider.currentChapters);
+    } else {
+      final source = context.read<SourceProvider>().findSourceForBook(book);
+      if (source != null) {
+        try {
+          await provider.loadChapters(book, source: source);
+          chapters = List<Chapter>.from(provider.currentChapters);
+        } catch (_) {}
+      }
+      if (chapters.isEmpty) {
+        chapters = await provider.getLocalChapters(book.id);
+      }
+    }
+
+    if (!mounted) return;
+    if (chapters.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('「${book.name}」暂无章节，无法打开阅读器')),
+      );
+      return;
+    }
+
+    var idx = note.position;
+    if (idx < 0 || idx >= chapters.length) {
+      idx = chapters.indexWhere((c) => c.title == note.chapterTitle);
+    }
+    if (idx < 0) idx = 0;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReaderPage(
+          book: book,
+          chapter: chapters[idx],
+          allChapters: chapters,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editThought(rust_api.NoteDto note) async {
+    await showNoteEditorSheet(
+      context,
+      book: _bookFromNote(note),
+      chapterTitle: note.chapterTitle,
+      selectedText: note.selectedText,
+      position: note.position,
+      existing: note,
+    );
+    await _load();
+  }
+
   Widget _buildList({
     required List<rust_api.NoteDto> items,
     required bool bookmarks,
@@ -155,22 +227,12 @@ class _BookmarkPageState extends State<BookmarkPage>
                 ],
               ),
               isThreeLine: true,
-              onTap: bookmarks
-                  ? null
-                  : () async {
-                      await showNoteEditorSheet(
-                        context,
-                        book: _bookFromNote(note),
-                        chapterTitle: note.chapterTitle,
-                        selectedText: note.selectedText,
-                        position: note.position,
-                        existing: note,
-                      );
-                      await _load();
-                    },
+              onTap: () => _openNoteInReader(note),
               trailing: PopupMenuButton<String>(
                 onSelected: (v) async {
                   switch (v) {
+                    case 'edit':
+                      await _editThought(note);
                     case 'share':
                       await _shareNote(note);
                     case 'delete':
@@ -178,6 +240,8 @@ class _BookmarkPageState extends State<BookmarkPage>
                   }
                 },
                 itemBuilder: (ctx) => [
+                  if (!bookmarks)
+                    const PopupMenuItem(value: 'edit', child: Text('编辑')),
                   if (!bookmarks)
                     const PopupMenuItem(value: 'share', child: Text('分享卡片')),
                   const PopupMenuItem(value: 'delete', child: Text('删除')),

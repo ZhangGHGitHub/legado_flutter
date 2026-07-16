@@ -441,7 +441,36 @@ pub async fn fetch_with_source(
 }
 
 /// 带书源自定义头发送请求（含状态码）
+///
+/// 成功后若书源配置了非空 `loginCheckJs`，会对 body 执行登录检查 JS（可改写响应体）。
+/// 请求失败时也会尝试执行（传入错误文本作 result），便于脚本做重登侧效应；随后仍返回原错误。
 pub async fn fetch_with_source_meta(
+    url: &str,
+    method: &str,
+    body: Option<&str>,
+    charset: &str,
+    source_json: &str,
+) -> Result<FetchResponse, String> {
+    let resp = match fetch_with_source_meta_inner(url, method, body, charset, source_json).await {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = crate::rule::js_engine::apply_login_check_js(
+                source_json,
+                &format!("Error Response\n{e}"),
+                url,
+            );
+            return Err(e);
+        }
+    };
+    let new_body = crate::rule::js_engine::apply_login_check_js(source_json, &resp.body, url);
+    Ok(FetchResponse {
+        status_code: resp.status_code,
+        byte_len: new_body.len(),
+        body: new_body,
+    })
+}
+
+async fn fetch_with_source_meta_inner(
     url: &str,
     method: &str,
     body: Option<&str>,

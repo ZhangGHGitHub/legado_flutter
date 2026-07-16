@@ -896,8 +896,27 @@ class _MangaReaderPageState extends State<MangaReaderPage>
 
   Future<void> _openChangeSource() async {
     _runMenuOut();
-    await Navigator.of(context).push<void>(
+    final result = await Navigator.of(context).push<Book>(
       MaterialPageRoute(builder: (_) => ChangeSourcePage(book: widget.book)),
+    );
+    if (result == null || !mounted) return;
+    final provider = context.read<BookProvider>();
+    final chapters = provider.currentChapters;
+    if (chapters.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已换源，但目录为空，请返回详情重试')),
+      );
+      return;
+    }
+    final idx = _chapterIndex.clamp(0, chapters.length - 1);
+    await Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => MangaReaderPage(
+          book: result,
+          chapters: List<Chapter>.from(chapters),
+          initialChapterIndex: idx,
+        ),
+      ),
     );
   }
 

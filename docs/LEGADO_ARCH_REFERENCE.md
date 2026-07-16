@@ -267,7 +267,9 @@ rust/legado_engine/src/rule/
 ```
 
 - HTTP：`reqwest` async + `tokio`（非阻塞 UI）
-- JS 书源（`<js>` / `@js:`）：仍回退 Dart，Rust JS 引擎待 Phase C.2
+- JS：`js_engine`（QuickJS）执行 `<js>` / `@js:` / `jsLib` / `cache`
+- **loginCheckJs（EN-09）**：`fetch_with_source_meta` 成功（及失败）后执行；`result`=响应体，可返回新 body；失败打日志保留原文。未实现完整 `java.getStrResponse` / `initUrl` 重登闭环
+- **preUpdateJs（EN-10）**：`get_toc` 入口在拉目录前执行 `ruleToc.preUpdateJs`；失败打日志不阻断
 
 ### Phase D — Jingshiro 增强
 

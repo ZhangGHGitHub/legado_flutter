@@ -268,6 +268,38 @@ class BookProvider extends ChangeNotifier {
     await _dao.insert(updated);
   }
 
+  /// 换源：保留书架书 id/进度，更新 bookSourceUrl + sourceUrl；已在书架则落库。
+  Future<Book> changeSource(Book current, Book selected) async {
+    final shelf = findBookById(current.id) ?? findShelfBook(current);
+    final base = shelf ?? current;
+    final last = selected.lastChapter?.trim().isNotEmpty == true
+        ? selected.lastChapter
+        : (selected.description.trim().isNotEmpty
+            ? selected.description
+            : base.lastChapter);
+    final updated = base.copyWith(
+      sourceUrl: selected.sourceUrl,
+      bookSourceUrl: selected.bookSourceUrl,
+      coverUrl:
+          selected.coverUrl.isNotEmpty ? selected.coverUrl : base.coverUrl,
+      lastChapter: last,
+      author: selected.author.isNotEmpty ? selected.author : base.author,
+      description: selected.description.isNotEmpty
+          ? selected.description
+          : base.description,
+    );
+    if (shelf != null) {
+      await _dao.insert(updated);
+      _books = await _dao.getAll();
+    }
+    if (_currentChapters.isNotEmpty &&
+        _currentChapters.first.bookId == updated.id) {
+      _currentChapters = [];
+    }
+    notifyListeners();
+    return updated;
+  }
+
   /// 添加书籍到书架
   Future<void> addBook(Book book) async {
     await _dao.insert(book);

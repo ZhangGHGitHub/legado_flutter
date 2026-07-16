@@ -289,11 +289,26 @@ class _BookInfoPageState extends State<BookInfoPage> {
   }
 
   Future<void> _openChangeSource() async {
-    await Navigator.push(
+    final result = await Navigator.push<Book>(
       context,
       MaterialPageRoute(builder: (_) => ChangeSourcePage(book: _book)),
     );
     if (!mounted) return;
+    if (result != null) {
+      setState(() {
+        _book = result;
+        _coverUrl = result.coverUrl.isNotEmpty ? result.coverUrl : _coverUrl;
+        _errorMessage = null;
+      });
+      final shelf = context.read<BookProvider>().findShelfBook(result);
+      if (shelf != null) {
+        setState(() {
+          _book = shelf;
+          _isInShelf = true;
+        });
+      }
+      return;
+    }
     final shelf = context.read<BookProvider>().findShelfBook(_book);
     if (shelf != null) {
       setState(() {

@@ -319,6 +319,142 @@ pub fn run_html_js(script: &str, html: &str, js_lib: &str, base_url: &str) -> Re
     run_with_result(script, html, js_lib, base_url)
 }
 
+/// 从书源 JSON 读取顶层 `loginCheckJs`（空则跳过）
+fn login_check_js_from_source_json(source_json: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(source_json)
+        .ok()
+        .and_then(|v| {
+            v.get("loginCheckJs")
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_default()
+}
+
+fn js_lib_from_source_json(source_json: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(source_json)
+        .ok()
+        .and_then(|v| v.get("jsLib").and_then(|x| x.as_str()).map(|s| s.to_string()))
+        .unwrap_or_default()
+}
+
+/// 对齐 Jingshiro：`AnalyzeUrl.getStrResponseAwait` 之后执行 `loginCheckJs`。
+///
+/// - `result` 为响应体字符串（完整 StrResponse / getStrResponse 重登语义未全量实现）
+/// - JS 返回非空字符串则作为新响应体；失败时打日志并保留原文（不静默丢字段）
+pub fn apply_login_check_js(source_json: &str, body: &str, request_url: &str) -> String {
+    let script = login_check_js_from_source_json(source_json);
+    let script = script.trim();
+    if script.is_empty() {
+        return body.to_string();
+    }
+    let js_lib = js_lib_from_source_json(source_json);
+    match run_login_check_script(script, body, &js_lib, request_url, source_json) {
+        Ok(out) => {
+            if out.is_empty() {
+                body.to_string()
+            } else {
+                out
+            }
+        }
+        Err(e) => {
+            eprintln!("[loginCheckJs] 执行失败（保留原响应）: {e}");
+            body.to_string()
+        }
+    }
+}
+
+fn run_login_check_script(
+    script: &str,
+    body: &str,
+    js_lib: &str,
+    request_url: &str,
+    source_json: &str,
+) -> Result<String, String> {
+    let rt = Runtime::new().map_err(|e| format!("JS Runtime 失败: {e}"))?;
+    let ctx = Context::full(&rt).map_err(|e| format!("JS Context 失败: {e}"))?;
+    ctx.with(|ctx| {
+        init_context(&ctx, js_lib, request_url)?;
+        AJAX_SOURCE_JSON.with(|r| *r.borrow_mut() = source_json.to_string());
+        let escaped = serde_json::to_string(body).unwrap_or_else(|_| "\"\"".to_string());
+        // result 为 body 字符串；同时注入 ajax 书源头上下文
+        let mut code = String::new();
+        code.push_str("var result = ");
+        code.push_str(&escaped);
+        code.push_str(";\nvar src = ");
+        code.push_str(&json_escape(source_json));
+        code.push_str(
+            ";\nif (typeof __legado_set_ajax_ctx === 'function') { __legado_set_ajax_ctx(src, ''); }\n",
+        );
+        code.push_str(script);
+        let v: Value = ctx
+            .eval(code.as_bytes())
+            .catch(&ctx)
+            .map_err(|e| format_caught_err("loginCheckJs 失败", e))?;
+        // 若返回对象且含 body 字段（对齐 StrResponse），取 body
+        if v.is_object() {
+            if let Some(obj) = v.as_object() {
+                if let Ok(body_v) = obj.get::<_, Value>("body") {
+                    if !body_v.is_null() && !body_v.is_undefined() {
+                        return value_to_string(&ctx, body_v);
+                    }
+                }
+            }
+        }
+        value_to_string(&ctx, v)
+    })
+}
+
+/// 对齐 Jingshiro `WebBook.getChapterListAwait`：目录刷新前执行 `ruleToc.preUpdateJs`。
+/// 失败打日志，不阻断目录拉取。
+pub fn run_pre_update_js(source: &crate::model::book_source::BookSource, book_url: &str) {
+    let script = source.pre_update_js.trim();
+    if script.is_empty() {
+        return;
+    }
+    let base = if book_url.is_empty() {
+        source.book_source_url.as_str()
+    } else {
+        book_url
+    };
+    let rt = match Runtime::new() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("[preUpdateJs] Runtime 失败: {e}");
+            return;
+        }
+    };
+    let ctx = match Context::full(&rt) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[preUpdateJs] Context 失败: {e}");
+            return;
+        }
+    };
+    let result = ctx.with(|ctx| {
+        init_context(&ctx, &source.js_lib, base)?;
+        AJAX_SOURCE_JSON.with(|r| *r.borrow_mut() = source.raw_json.clone());
+        let book_inject = format!(
+            "var book = {{ bookUrl: {}, name: '', author: '' }};\nvar result = '';\n",
+            json_escape(book_url)
+        );
+        let mut code = book_inject;
+        code.push_str("var src = ");
+        code.push_str(&json_escape(&source.raw_json));
+        code.push_str(
+            ";\nif (typeof __legado_set_ajax_ctx === 'function') { __legado_set_ajax_ctx(src, ''); }\n",
+        );
+        code.push_str(script);
+        ctx.eval::<Value, _>(code.as_bytes())
+            .catch(&ctx)
+            .map_err(|e| format_caught_err("preUpdateJs 失败", e))?;
+        Ok::<(), String>(())
+    });
+    if let Err(e) = result {
+        eprintln!("[preUpdateJs] 执行失败（继续拉目录）: {e}");
+    }
+}
+
 /// 提取 `<js>...</js>` 内脚本
 pub fn extract_js_block(rule: &str) -> Option<String> {
     let start = rule.find("<js>")?;

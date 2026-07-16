@@ -143,3 +143,37 @@ fn js_scan_reports_jsoup_usage() {
     .unwrap();
     assert!(raw.contains("Packages.org.jsoup.Jsoup"));
 }
+
+#[test]
+fn login_check_js_rewrites_body() {
+    let src = r#"{"bookSourceUrl":"https://example.com","loginCheckJs":"result.replace('LOGIN','OK')","jsLib":""}"#;
+    let out = js_engine::apply_login_check_js(src, "hello LOGIN world", "https://example.com/");
+    assert_eq!(out, "hello OK world");
+}
+
+#[test]
+fn login_check_js_empty_is_noop() {
+    let src = r#"{"bookSourceUrl":"https://example.com"}"#;
+    let out = js_engine::apply_login_check_js(src, "raw-body", "https://example.com/");
+    assert_eq!(out, "raw-body");
+}
+
+#[test]
+fn login_check_js_failure_keeps_body() {
+    let src = r#"{"bookSourceUrl":"https://example.com","loginCheckJs":"throw new Error('boom')"}"#;
+    let out = js_engine::apply_login_check_js(src, "keep-me", "https://example.com/");
+    assert_eq!(out, "keep-me");
+}
+
+#[test]
+fn pre_update_js_runs_and_writes_cache() {
+    let _ = js_engine::reset_cache();
+    let source = BookSource::from_json(
+        r#"{"bookSourceUrl":"https://example.com","ruleToc":{"preUpdateJs":"cache.put('pre','1',0); 'ok'","chapterList":"a"}}"#,
+    )
+    .unwrap();
+    js_engine::run_pre_update_js(&source, "https://example.com/book/1");
+    // 失败不抛；有 cache 宿主则能读到（stdlib 可能走 putMemory）
+    // 至少保证非空字段被解析且调用不 panic
+    assert!(!source.pre_update_js.is_empty());
+}

@@ -15,6 +15,9 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
         return Err("书源含 JS 规则，需 Dart 引擎".to_string());
     }
 
+    // 对齐 Jingshiro getChapterListAwait：刷新目录前执行 preUpdateJs
+    js_engine::run_pre_update_js(&source, book_url);
+
     if let Some(rate) = &source.concurrent_rate {
         http::rate_limit::configure(&source.book_source_url, rate);
     }
