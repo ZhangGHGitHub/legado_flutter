@@ -2896,6 +2896,7 @@ class _ReaderPageState extends State<ReaderPage> {
             },
             hasChapterPrev: _currentIndex > 0,
             hasChapterNext: _currentIndex < widget.allChapters.length - 1,
+            backPageColor: theme.background,
             overlay: Positioned.fill(child: _buildClickZones()),
           ),
         ],

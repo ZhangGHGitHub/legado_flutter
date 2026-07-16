@@ -7,8 +7,11 @@ import '../page_direction.dart';
 import '../simulation_curl_math.dart';
 
 /// Jingshiro `SimulationPageDelegate` shadow color arrays (ARGB).
-const _folderShadowColors = [Color(0x33333333), Color(0xB0333333)];
+/// folder: intArrayOf(0x333333, -0x4fcccccd)
+const _folderShadowColors = [Color(0x00333333), Color(0xB0333333)];
+/// back: intArrayOf(-0xeeeeef, 0x111111)
 const _backShadowColors = [Color(0xFF111111), Color(0x00111111)];
+/// front: intArrayOf(-0x7feeeeef, 0x111111)
 const _frontShadowColors = [Color(0x80111111), Color(0x00111111)];
 
 /// Full Bezier page-curl painter ported from Jingshiro `SimulationPageDelegate`.

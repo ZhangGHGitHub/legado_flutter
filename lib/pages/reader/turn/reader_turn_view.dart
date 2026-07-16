@@ -297,19 +297,17 @@ class ReaderTurnViewState extends State<ReaderTurnView>
       return;
     }
 
-    // Chapter edge without overlay → instant page fill.
-    if (!_overlayVisible &&
-        dir != PageTurnDirection.none &&
-        !cancel &&
-        ((dir == PageTurnDirection.prev && !_captureHasPrev) ||
-            (dir == PageTurnDirection.next && !_captureHasNext))) {
-      _applyCompleted(dir);
+    // No overlay (cache miss or chapter edge): instant fill when not cancelled.
+    if (!_overlayVisible && dir != PageTurnDirection.none) {
+      if (!cancel) {
+        _applyCompleted(dir);
+      }
       _controller.resetGesture();
       _scheduleWarmSnapshots();
       return;
     }
 
-    if (dir == PageTurnDirection.none || !_overlayVisible) {
+    if (dir == PageTurnDirection.none) {
       setState(() => _overlayVisible = false);
       _controller.resetGesture();
       return;

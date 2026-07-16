@@ -64,6 +64,39 @@ void main() {
     });
   });
 
+  test('pageTurnSettleDurationMs 对齐 PageDelegate.startScroll', () {
+    expect(
+      pageTurnSettleDurationMs(
+        dx: 400,
+        dy: 0,
+        viewWidth: 400,
+        viewHeight: 800,
+        animationSpeed: 100,
+      ),
+      100,
+    );
+    expect(
+      pageTurnSettleDurationMs(
+        dx: 0,
+        dy: 200,
+        viewWidth: 400,
+        viewHeight: 800,
+        animationSpeed: 100,
+      ),
+      25,
+    );
+    expect(
+      pageTurnSettleDurationMs(
+        dx: 0,
+        dy: 0,
+        viewWidth: 400,
+        viewHeight: 800,
+        animationSpeed: 100,
+      ),
+      1,
+    );
+  });
+
   group('onPointerUp settle', () {
     testWidgets('完成翻页时 onCompleted 被调用', (tester) async {
       late PageTurnDirection completed;

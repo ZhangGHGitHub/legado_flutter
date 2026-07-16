@@ -742,7 +742,7 @@ Task UI-12:  RSS 文章列表 + 阅读  ✅ 复用 Jingshiro Rss/ParserByRule/De
 | 动效 | Jingshiro | Flutter | 差距 |
 |------|-----------|---------|------|
 | 顶/底栏显隐 | 点击中区切换 + ~3s 自动隐藏 | ✅ UI-1 | 缓动曲线可再抠 |
-| 翻页 | 覆盖/滑动/仿真卷曲/滚动/无 | 五档已有；仿真为 Jingshiro 贝塞尔截图卷曲 | 截图层+CustomPainter 引擎已落地，可继续打磨阴影/跟指 |
+| 翻页 | 覆盖/滑动/仿真卷曲/滚动/无 | 五档已有；仿真为 Jingshiro 贝塞尔截图卷曲 | 截图层+CustomPainter 已落地；2026-07-17 保真轮：idle 预截+双缓冲+Scroller 时长+阴影色对齐 |
 | 菜单面板 | BottomSheet / Dialog 滑入 | `showModalBottomSheet` | 圆角/时长/遮罩透明度可再对齐 |
 | 朗读/界面/设置面板 | 独立 Dialog XML | 内嵌 `reader_settings` | 分层面板切换动画未逐项对齐 |
 
@@ -770,7 +770,7 @@ Task UI-12:  RSS 文章列表 + 阅读  ✅ 复用 Jingshiro Rss/ParserByRule/De
 | ID | 领域 | 现状（简化版） | 后做目标（对齐 Jingshiro） |
 |----|------|----------------|----------------------------|
 | DS-01 | 朗读 | 系统 TTS + 句级导航 | HTTP TTS 引擎 / 编辑 / 全屏有声真流 + Lyric |
-| DS-02 | 翻页 | 仿真档已换 Jingshiro 贝塞尔卷曲引擎 | 阴影/中段 Y/跟指手感继续打磨 |
+| DS-02 | 翻页 | 仿真档 Jingshiro 贝塞尔+预截双缓冲保真轮 | 侧录对照继续微调 |
 | DS-03 | 简繁 | 字级对照表 | OpenCC / 词级 quick-transfer |
 | DS-04 | 主题 zip | 色/背景可导入；FontLoader 未接 | 自定义字体加载 + 每主题独立排版 |
 | DS-05 | 代码编辑 | 轻量高亮 / beautify | Sora TextMate / WebView js-beautify |

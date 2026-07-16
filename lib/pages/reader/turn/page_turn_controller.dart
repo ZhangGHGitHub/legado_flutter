@@ -7,6 +7,20 @@ import 'package:flutter/foundation.dart';
 import 'page_direction.dart';
 import 'simulation_curl_math.dart';
 
+/// Jingshiro `PageDelegate.startScroll` duration (milliseconds).
+int pageTurnSettleDurationMs({
+  required double dx,
+  required double dy,
+  required double viewWidth,
+  required double viewHeight,
+  required int animationSpeed,
+}) {
+  final durationMs = dx != 0
+      ? (animationSpeed * dx.abs()) ~/ viewWidth
+      : (animationSpeed * dy.abs()) ~/ viewHeight;
+  return math.max(durationMs, 1);
+}
+
 class PageTurnController extends ChangeNotifier {
   PageTurnDirection direction = PageTurnDirection.none;
   double touchX = 0;
@@ -264,12 +278,14 @@ class PageTurnController extends ChangeNotifier {
     final completedDirection = direction;
     final cancelled = isCancel;
 
-    final durationMs = delta.dx != 0
-        ? (animationSpeed * delta.dx.abs()) ~/ viewWidth
-        : (animationSpeed * delta.dy.abs()) ~/ viewHeight;
-    final duration = Duration(
-      milliseconds: math.max(durationMs, 1),
+    final durationMs = pageTurnSettleDurationMs(
+      dx: delta.dx,
+      dy: delta.dy,
+      viewWidth: viewWidth,
+      viewHeight: viewHeight,
+      animationSpeed: animationSpeed,
     );
+    final duration = Duration(milliseconds: durationMs);
 
     isDragging = false;
     isSettling = true;
