@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'app.dart';
 import 'bridge/legado_db_bridge.dart';
 import 'bridge/legado_engine_bridge.dart';
+import 'config/app_config.dart';
 import 'config/engine_config.dart';
 import 'services/web_api_service.dart';
 import 'services/network_prefs.dart';
@@ -20,6 +21,7 @@ void main() async {
   // 整站关闭语义曾与阅读器正文空白并存；AXTree 压制改到阅读器页内（见 reader_page）。
 
   await EngineConfig.load();
+  await AppConfig.instance.load();
   await LegadoEngineBridge.tryInit();
   if (LegadoEngineBridge.isAvailable) {
     await LegadoDbBridge.init();
@@ -34,6 +36,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: themeController),
+        ChangeNotifierProvider.value(value: AppConfig.instance),
         ChangeNotifierProvider(create: (_) => BookProvider()),
         ChangeNotifierProvider(create: (_) => SourceProvider()),
         ChangeNotifierProvider(create: (_) => ReplaceProvider()..loadRules()),

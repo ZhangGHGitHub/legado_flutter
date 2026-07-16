@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../config/app_config.dart';
 import '../../services/bookshelf_prefs.dart';
-import '../../services/web_api_service.dart';
 import '../../theme/legado_tokens.dart';
 import 'backup_config_page.dart';
 import 'other_settings_card.dart';
@@ -83,6 +84,30 @@ class _ConfigPageState extends State<ConfigPage>
                     if (mounted) setState(() => _bookGroupStyle = style);
                   },
                 ),
+              ),
+              const SizedBox(height: 12),
+              Consumer<AppConfig>(
+                builder: (context, cfg, _) {
+                  return Card(
+                    child: Column(
+                      children: [
+                        SwitchListTile(
+                          title: const Text('显示发现 Tab'),
+                          subtitle: const Text('底栏「发现」入口，关闭后立即隐藏'),
+                          value: cfg.showDiscovery,
+                          onChanged: (v) => cfg.setShowDiscovery(v),
+                        ),
+                        const Divider(height: 1),
+                        SwitchListTile(
+                          title: const Text('显示订阅 Tab'),
+                          subtitle: const Text('底栏「订阅」入口，关闭后立即隐藏'),
+                          value: cfg.showRSS,
+                          onChanged: (v) => cfg.setShowRSS(v),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               const OtherSettingsCard(),
