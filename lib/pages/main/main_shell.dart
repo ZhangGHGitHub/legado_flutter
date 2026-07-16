@@ -5,13 +5,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/database_helper.dart';
 import '../../providers/book_provider.dart';
+import '../../providers/replace_provider.dart';
 import '../../providers/rss_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/book_source_service.dart';
+import '../../services/rule_sub_import_service.dart';
 import '../bookshelf/bookshelf_page.dart';
 import '../explore/explore_tab_page.dart';
 import '../my/my_page.dart';
 import '../rss/rss_tab_page.dart';
+import '../rule_sub/rule_sub_page.dart';
 
 const _privacyAcceptedKey = 'legado_privacy_accepted';
 
@@ -67,6 +70,27 @@ class _MainShellState extends State<MainShell> {
     if (mounted) {
       setState(() => _initialized = true);
       WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowPrivacy());
+      // 对齐 Jingshiro MainActivity：启动约 1s 后检查规则订阅自动更新
+      Future<void>.delayed(const Duration(seconds: 1), _ruleSubsUp);
+    }
+  }
+
+  /// 对齐 MainViewModel.ruleSubsUp + RuleUpdate.cacheSource
+  Future<void> _ruleSubsUp() async {
+    if (!mounted) return;
+    try {
+      final needUi = await RuleSubImportService.checkAutoUpdates(
+        sourceProvider: context.read<SourceProvider>(),
+        rssProvider: context.read<RssProvider>(),
+        replaceProvider: context.read<ReplaceProvider>(),
+      );
+      if (!mounted || needUi.isEmpty) return;
+      for (final sub in needUi) {
+        if (!mounted) return;
+        await RuleSubPage.openImport(context, sub);
+      }
+    } catch (e) {
+      debugPrint('ruleSubsUp failed: $e');
     }
   }
 

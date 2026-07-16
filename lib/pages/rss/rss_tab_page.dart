@@ -5,6 +5,7 @@ import '../../models/rss_source.dart';
 import '../../providers/rss_provider.dart';
 import '../config/feature_placeholder_page.dart';
 import '../my/read_record_page.dart';
+import '../rule_sub/rule_sub_page.dart';
 import 'rss_source_manage_page.dart';
 import 'widgets/rss_source_tile.dart';
 
@@ -38,13 +39,7 @@ class RssTabPageState extends State<RssTabPage> {
   void _openRuleSubscription() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const FeaturePlaceholderPage(
-          title: '规则订阅',
-          subtitle: '将支持 Legado 规则订阅源市场',
-          icon: Icons.rule_folder_outlined,
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => const RuleSubPage()),
     );
   }
 
