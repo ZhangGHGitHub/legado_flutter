@@ -148,18 +148,23 @@ class ReadBook extends ChangeNotifier {
           await BookHelp.saveContent(bid, chapter.id, processed);
           if (_db != null) {
             // upsert：UPDATE 在章节行尚未落库时为 0 行，需 insert 才能打上 isDownloaded
-            await _db!.insertChapters([
-              Chapter(
-                id: chapter.id,
-                bookId: bid,
-                title: chapter.title,
-                index: chapter.index,
-                url: chapter.url,
-                isDownloaded: true,
-                content: processed,
-              ),
-            ]);
-            await _db!.saveChapterContent(chapter.id, processed);
+            // 搜索预览书未进 books 表时外键会失败——文件缓存仍可用，DB 标记可跳过
+            try {
+              await _db!.insertChapters([
+                Chapter(
+                  id: chapter.id,
+                  bookId: bid,
+                  title: chapter.title,
+                  index: chapter.index,
+                  url: chapter.url,
+                  isDownloaded: true,
+                  content: processed,
+                ),
+              ]);
+              await _db!.saveChapterContent(chapter.id, processed);
+            } catch (e) {
+              debugPrint('正文 DB 落库跳过（常见于未加入书架）: $e');
+            }
           }
         }
 

@@ -148,24 +148,40 @@ pub fn parse_url_config_with_page(raw_url: &str, keyword: &str, page: i32) -> Re
     }
 }
 
-/// 同步 HTTP GET（供 QuickJS `java.ajax`）。
+/// 同步 HTTP（供 QuickJS `java.ajax`）— 对齐 Jingshiro `JsExtensions.ajax` → AnalyzeUrl。
+///
+/// 支持：
+/// - 纯 URL GET
+/// - `url,{"method":"POST","body":"...","charset":"...","headers":{...}}`
+/// - 书源 `header` + 登录头合并
+///
 /// 在独立线程 + 独立 tokio Runtime 中执行，避免嵌套 `block_on` 死锁。
 pub fn fetch_url_blocking(url: &str, referer: Option<&str>) -> Result<String, String> {
-    let url = url.to_string();
+    ajax_blocking(url, referer, None, None)
+}
+
+/// `java.ajax` 完整路径（可带书源/登录头上下文）
+pub fn ajax_blocking(
+    url_raw: &str,
+    referer: Option<&str>,
+    source_json: Option<&str>,
+    login_header: Option<&str>,
+) -> Result<String, String> {
+    let url_raw = url_raw.to_string();
     let referer = referer.map(|s| s.to_string());
+    let source_json = source_json.map(|s| s.to_string());
+    let login_header = login_header.map(|s| s.to_string());
     let joined = std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|e| format!("创建 java.ajax runtime 失败: {e}"))?;
         rt.block_on(async move {
-            fetch_text(
-                &url,
-                "GET",
-                None,
-                "UTF-8",
+            ajax_fetch(
+                &url_raw,
                 referer.as_deref(),
-                "",
+                source_json.as_deref(),
+                login_header.as_deref(),
             )
             .await
         })
@@ -173,6 +189,170 @@ pub fn fetch_url_blocking(url: &str, referer: Option<&str>) -> Result<String, St
     .join()
     .map_err(|_| "java.ajax 线程异常".to_string())?;
     joined
+}
+
+fn parse_header_map_value(v: &serde_json::Value) -> std::collections::HashMap<String, String> {
+    let mut out = std::collections::HashMap::new();
+    match v {
+        serde_json::Value::Object(map) => {
+            for (k, val) in map {
+                let s = match val {
+                    serde_json::Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                };
+                if !s.is_empty() {
+                    out.insert(k.clone(), s);
+                }
+            }
+        }
+        serde_json::Value::String(s) => {
+            if let Ok(obj) = serde_json::from_str::<serde_json::Value>(s) {
+                return parse_header_map_value(&obj);
+            }
+        }
+        _ => {}
+    }
+    out
+}
+
+/// 解析 AnalyzeUrl JSON 段中的 headers
+fn analyze_url_extra_headers(raw: &str) -> std::collections::HashMap<String, String> {
+    let raw = raw.trim();
+    let json_part = if raw.starts_with('{') {
+        Some(raw)
+    } else if let Some(idx) = raw.find(",{") {
+        Some(&raw[idx + 1..])
+    } else {
+        None
+    };
+    let Some(jp) = json_part else {
+        return std::collections::HashMap::new();
+    };
+    let Ok(cfg) = serde_json::from_str::<serde_json::Value>(jp) else {
+        return std::collections::HashMap::new();
+    };
+    cfg.get("headers")
+        .map(parse_header_map_value)
+        .unwrap_or_default()
+}
+
+fn login_header_map(login_header: &str) -> std::collections::HashMap<String, String> {
+    let t = login_header.trim();
+    if t.is_empty() {
+        return std::collections::HashMap::new();
+    }
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(t) {
+        return parse_header_map_value(&v);
+    }
+    // 非 JSON：当作 Cookie 字符串
+    std::collections::HashMap::from([("Cookie".to_string(), t.to_string())])
+}
+
+async fn ajax_fetch(
+    url_raw: &str,
+    referer: Option<&str>,
+    source_json: Option<&str>,
+    login_header: Option<&str>,
+) -> Result<String, String> {
+    let raw = url_raw.trim();
+    // 无 AnalyzeUrl 选项、无书源/登录头上下文时，保持历史 java.ajax 行为：
+    // 纯 GET + GE-UA 重试。目录/正文 JS（如 kelexs 抽密钥）依赖这条路径。
+    let is_analyze = raw.starts_with('{') || raw.contains(",{");
+    if !is_analyze && source_json.is_none() && login_header.is_none() {
+        let mut url = raw.to_string();
+        if !url.starts_with("http://") && !url.starts_with("https://") {
+            if let Some(base) = referer {
+                url = resolve_url(&url, base);
+            }
+        }
+        return fetch_text(&url, "GET", None, "UTF-8", referer, "").await;
+    }
+
+    let cfg = parse_url_config(raw, "");
+    let mut url = cfg.url;
+    if url.is_empty() {
+        return Err("java.ajax URL 为空".into());
+    }
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        if let Some(base) = referer {
+            url = resolve_url(&url, base);
+        } else if let Some(sj) = source_json {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(sj) {
+                let base = v
+                    .get("bookSourceUrl")
+                    .or_else(|| v.get("sourceUrl"))
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("");
+                if !base.is_empty() {
+                    url = resolve_url(&url, base);
+                }
+            }
+        }
+    }
+
+    let mut headers = if let Some(sj) = source_json {
+        build_source_headers(&url, sj)
+    } else {
+        let mut h = default_headers();
+        let cookie_str = COOKIE_JAR.lock().unwrap().get_cookie(&url);
+        if !cookie_str.is_empty() {
+            if let Ok(v) = HeaderValue::from_str(&cookie_str) {
+                h.insert("Cookie", v);
+            }
+        }
+        h
+    };
+
+    if let Some(r) = referer {
+        if let Ok(v) = HeaderValue::from_str(r) {
+            headers.insert("Referer", v);
+        }
+    }
+
+    for (k, v) in analyze_url_extra_headers(raw) {
+        if let (Ok(name), Ok(val)) = (
+            HeaderName::from_bytes(k.as_bytes()),
+            HeaderValue::from_str(&v),
+        ) {
+            headers.insert(name, val);
+        }
+    }
+
+    if let Some(lh) = login_header {
+        for (k, v) in login_header_map(lh) {
+            if let (Ok(name), Ok(val)) = (
+                HeaderName::from_bytes(k.as_bytes()),
+                HeaderValue::from_str(&v),
+            ) {
+                headers.insert(name, val);
+            }
+        }
+    }
+
+    let response = send_request(
+        &url,
+        &cfg.method,
+        cfg.body.as_deref(),
+        &cfg.charset,
+        headers,
+    )
+    .await?;
+    save_cookies(&url, &response);
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("读取响应失败: {e}"))?;
+    let text = charset::decode_bytes(&bytes, &cfg.charset)?;
+    // 对齐 fetch_text：命中 WAF 时尝试 GE-UA 后重试
+    maybe_pass_ge_ua_and_retry(
+        &url,
+        &cfg.method,
+        cfg.body.as_deref(),
+        &cfg.charset,
+        source_json,
+        text,
+    )
+    .await
 }
 
 /// 发送 HTTP 请求并返回解码文本

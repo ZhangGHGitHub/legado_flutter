@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../models/book_source.dart';
 import '../../models/login_row_ui.dart';
@@ -52,13 +53,20 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
   }
 
   Future<void> _init() async {
+    setState(() => _loading = true);
     final saved = await SourceLoginPrefs.load(source.bookSourceUrl);
+    final header =
+        await SourceLoginPrefs.loadHeader(source.bookSourceUrl) ?? '';
     final loginUi = source.loginUi;
     _jsUi = LoginRowUi.isJsLoginUi(loginUi);
 
     if (_jsUi) {
       try {
-        final maps = SourceLoginService.evalLoginUi(source, saved);
+        final maps = SourceLoginService.evalLoginUi(
+          source,
+          saved,
+          loginHeader: header,
+        );
         _rows = maps
             .map(LoginRowUi.fromJson)
             .where((e) => e.name.isNotEmpty)
@@ -170,6 +178,85 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
     }
   }
 
+  Future<void> _handleJsResult(LoginJsResult r) async {
+    if (r.loginInfo.isNotEmpty) {
+      await SourceLoginPrefs.save(source.bookSourceUrl, r.loginInfo);
+      for (final e in r.loginInfo.entries) {
+        _values[e.key] = e.value;
+        if (_textCtrls.containsKey(e.key)) {
+          _textCtrls[e.key]!.text = e.value;
+        }
+      }
+    }
+    await SourceLoginService.applyCommands(
+      r.commands,
+      onShowBrowser: (url, html) async {
+        if (!mounted) return;
+        if (html.isNotEmpty) {
+          await AppWebViewPage.openHtml(
+            context,
+            title: '登录',
+            html: html,
+            baseUrl: url.isNotEmpty ? url : source.bookSourceUrl,
+          );
+        } else if (url.isNotEmpty) {
+          await AppWebViewPage.openUrl(context, title: '登录', url: url);
+        }
+      },
+      onUpLogin: (data) {
+        if (data == null) return;
+        setState(() {
+          data.forEach((k, v) {
+            final s = v?.toString() ?? '';
+            _values[k] = s;
+            if (_textCtrls.containsKey(k)) _textCtrls[k]!.text = s;
+          });
+        });
+      },
+      onReUi: () {
+        _init();
+      },
+      onPutHeader: (h) => SourceLoginPrefs.saveHeader(source.bookSourceUrl, h),
+      onDelHeader: () => SourceLoginPrefs.clearHeader(source.bookSourceUrl),
+    );
+  }
+
+  Future<void> _showLoginHeader() async {
+    final h = await SourceLoginPrefs.loadHeader(source.bookSourceUrl);
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('登录头'),
+        content: SelectableText(
+          (h == null || h.isEmpty) ? '（空）' : h,
+        ),
+        actions: [
+          if (h != null && h.isNotEmpty)
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: h));
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('复制'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _clearLoginHeader() async {
+    await SourceLoginPrefs.clearHeader(source.bookSourceUrl);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已删除登录头')),
+    );
+  }
+
   Future<void> _login() async {
     if (_busy) return;
     setState(() => _busy = true);
@@ -202,15 +289,20 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
       }
 
       if (SourceLoginService.isJsUrl(url)) {
-        final out = SourceLoginService.evalLoginScript(source, info);
+        final header =
+            await SourceLoginPrefs.loadHeader(source.bookSourceUrl) ?? '';
+        final r = SourceLoginService.evalLoginScript(
+          source,
+          info,
+          loginHeader: header,
+        );
+        await _handleJsResult(r);
         if (mounted) {
-          setState(() => _status = out.isEmpty ? '登录脚本已执行' : '脚本结果：$out');
+          setState(
+            () => _status = r.output.isEmpty ? '登录脚本已执行' : '脚本结果：${r.output}',
+          );
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                out.isEmpty ? '登录脚本已执行' : '登录脚本完成',
-              ),
-            ),
+            const SnackBar(content: Text('登录脚本完成')),
           );
         }
         return;
@@ -218,9 +310,6 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
 
       if (mounted) {
         setState(() => _status = '无法识别的 loginUrl 格式');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('loginUrl 既非 http(s) 也非 JS')),
-        );
       }
     } catch (e) {
       if (mounted) {
@@ -246,13 +335,17 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
     }
     try {
       await _save(snack: false);
-      final out = SourceLoginService.evalButtonAction(
+      final header =
+          await SourceLoginPrefs.loadHeader(source.bookSourceUrl) ?? '';
+      final r = SourceLoginService.evalButtonAction(
         source,
         _collect(),
         action,
+        loginHeader: header,
       );
+      await _handleJsResult(r);
       if (!mounted) return;
-      setState(() => _status = out.isEmpty ? '${row.label} 已执行' : out);
+      setState(() => _status = r.output.isEmpty ? '${row.label} 已执行' : r.output);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${row.label} 已执行')),
       );
@@ -271,6 +364,20 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
       appBar: AppBar(
         title: Text('登录 · ${source.bookSourceName}'),
         actions: [
+          PopupMenuButton<String>(
+            onSelected: (v) async {
+              switch (v) {
+                case 'header':
+                  await _showLoginHeader();
+                case 'del_header':
+                  await _clearLoginHeader();
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'header', child: Text('查看登录头')),
+              PopupMenuItem(value: 'del_header', child: Text('删除登录头')),
+            ],
+          ),
           TextButton(onPressed: _busy ? null : _clear, child: const Text('清除')),
           FilledButton(
             onPressed: _busy ? null : _login,

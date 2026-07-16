@@ -151,10 +151,15 @@ var java = {
     return new _SymmetricCrypto(transformation, key, iv);
   },
   // Jingshiro JsExtensions.ajax：同步拉页面。无宿主回调时返回空串（调用方常 try/catch）。
+  // 支持 AnalyzeUrl：url,{"method":"POST","body":"...","headers":{...}}
   ajax: function(url) {
     if (typeof __legado_java_ajax === 'function') {
       try {
-        return __legado_java_ajax(String(url == null ? '' : url)) || '';
+        var u = url;
+        if (u && typeof u === 'object' && typeof u.length === 'number' && u.length > 0) {
+          u = u[0];
+        }
+        return __legado_java_ajax(String(u == null ? '' : u)) || '';
       } catch (e) {
         return '';
       }

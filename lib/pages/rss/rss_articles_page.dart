@@ -4,7 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/rss_article.dart';
 import '../../models/rss_source.dart';
 import '../../services/rss_service.dart';
+import '../../services/rss_sort_urls.dart';
+import '../../services/rss_star_prefs.dart';
+import '../../services/source_login_service.dart';
+import '../sources/source_login_page.dart';
 import 'rss_read_page.dart';
+import 'rss_source_edit_page.dart';
 
 /// RSS 文章列表 — 对齐 Jingshiro RssSortActivity / RssArticlesFragment。
 class RssArticlesPage extends StatefulWidget {
@@ -16,9 +21,171 @@ class RssArticlesPage extends StatefulWidget {
   State<RssArticlesPage> createState() => _RssArticlesPageState();
 }
 
-class _RssArticlesPageState extends State<RssArticlesPage> {
+class _RssArticlesPageState extends State<RssArticlesPage>
+    with TickerProviderStateMixin {
+  List<(String name, String url)> _sorts = const [];
+  TabController? _tabController;
+  var _resolving = true;
+  String? _resolveError;
+
+  RssSource get source => widget.source;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveSorts();
+  }
+
+  @override
+  void dispose() {
+    _tabController?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _resolveSorts() async {
+    setState(() {
+      _resolving = true;
+      _resolveError = null;
+    });
+    try {
+      final sorts = await RssSortUrls.resolve(source);
+      if (!mounted) return;
+      _tabController?.dispose();
+      _tabController = sorts.length > 1
+          ? TabController(length: sorts.length, vsync: this)
+          : null;
+      setState(() {
+        _sorts = sorts;
+        _resolving = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _resolveError = e.toString();
+        _resolving = false;
+        _sorts = [('', source.sourceUrl)];
+      });
+    }
+  }
+
+  Future<void> _clearSortCacheAndReload() async {
+    await RssSortUrls.clearCache(source);
+    await _resolveSorts();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasTabs = _sorts.length > 1 && _tabController != null;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(source.sourceName),
+        bottom: hasTabs
+            ? TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                tabs: [
+                  for (final s in _sorts)
+                    Tab(text: s.$1.isEmpty ? '全部' : s.$1),
+                ],
+              )
+            : null,
+        actions: [
+          if (source.loginUrl != null && source.loginUrl!.trim().isNotEmpty)
+            IconButton(
+              tooltip: '登录',
+              icon: const Icon(Icons.login),
+              onPressed: () => SourceLoginPage.open(
+                context,
+                SourceLoginService.bookSourceForRss(source),
+              ),
+            ),
+          IconButton(
+            tooltip: '编辑源',
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => RssSourceEditPage(source: source),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: '刷新分类',
+            icon: const Icon(Icons.cached_outlined),
+            onPressed: _resolving ? null : _clearSortCacheAndReload,
+          ),
+        ],
+      ),
+      body: _buildBody(hasTabs),
+    );
+  }
+
+  Widget _buildBody(bool hasTabs) {
+    if (_resolving) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_resolveError != null && _sorts.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_resolveError!, textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: _resolveSorts,
+                child: const Text('重试'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (hasTabs) {
+      return TabBarView(
+        controller: _tabController,
+        children: [
+          for (final s in _sorts)
+            _RssArticlesList(
+              source: source,
+              sortName: s.$1.isEmpty ? source.sourceName : s.$1,
+              sortUrl: s.$2,
+            ),
+        ],
+      );
+    }
+    final s = _sorts.isNotEmpty ? _sorts.first : ('', source.sourceUrl);
+    return _RssArticlesList(
+      source: source,
+      sortName: s.$1.isEmpty ? source.sourceName : s.$1,
+      sortUrl: s.$2,
+    );
+  }
+}
+
+class _RssArticlesList extends StatefulWidget {
+  const _RssArticlesList({
+    required this.source,
+    required this.sortName,
+    required this.sortUrl,
+  });
+
+  final RssSource source;
+  final String sortName;
+  final String sortUrl;
+
+  @override
+  State<_RssArticlesList> createState() => _RssArticlesListState();
+}
+
+class _RssArticlesListState extends State<_RssArticlesList>
+    with AutomaticKeepAliveClientMixin {
   final _articles = <RssArticle>[];
   final _readLinks = <String>{};
+  final _starred = <String>{};
   var _loading = true;
   var _loadingMore = false;
   String? _error;
@@ -28,17 +195,35 @@ class _RssArticlesPageState extends State<RssArticlesPage> {
   RssSource get source => widget.source;
 
   @override
+  bool get wantKeepAlive => true;
+
+  String _starKey(RssArticle a) => '${a.origin}|${a.link}';
+
+  @override
   void initState() {
     super.initState();
-    _loadRead();
+    _loadMeta();
     _refresh();
   }
 
-  Future<void> _loadRead() async {
+  Future<void> _loadMeta() async {
     final p = await SharedPreferences.getInstance();
     final key = 'rss_read_${Uri.encodeComponent(source.sourceUrl)}';
     final list = p.getStringList(key) ?? const [];
-    if (mounted) setState(() => _readLinks.addAll(list));
+    final stars = await RssStarPrefs.loadAll();
+    if (!mounted) return;
+    setState(() {
+      _readLinks
+        ..clear()
+        ..addAll(list);
+      _starred
+        ..clear()
+        ..addAll(
+          stars
+              .where((a) => a.origin == source.sourceUrl)
+              .map(_starKey),
+        );
+    });
   }
 
   Future<void> _markRead(RssArticle a) async {
@@ -49,6 +234,21 @@ class _RssArticlesPageState extends State<RssArticlesPage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _toggleStar(RssArticle a) async {
+    final starred = await RssStarPrefs.toggle(a);
+    if (!mounted) return;
+    setState(() {
+      if (starred) {
+        _starred.add(_starKey(a));
+      } else {
+        _starred.remove(_starKey(a));
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(starred ? '已收藏' : '已取消收藏')),
+    );
+  }
+
   Future<void> _refresh() async {
     setState(() {
       _loading = true;
@@ -56,11 +256,10 @@ class _RssArticlesPageState extends State<RssArticlesPage> {
       _page = 1;
     });
     try {
-      final sortUrl = source.sortUrl.isNotEmpty ? source.sortUrl : source.sourceUrl;
       final r = await RssService.getArticles(
         source: source,
-        sortName: source.sourceName,
-        sortUrl: sortUrl,
+        sortName: widget.sortName,
+        sortUrl: widget.sortUrl,
         page: 1,
       );
       if (!mounted) return;
@@ -86,7 +285,7 @@ class _RssArticlesPageState extends State<RssArticlesPage> {
     try {
       final r = await RssService.getArticles(
         source: source,
-        sortName: source.sourceName,
+        sortName: widget.sortName,
         sortUrl: _nextUrl!,
         page: ++_page,
       );
@@ -113,26 +312,12 @@ class _RssArticlesPageState extends State<RssArticlesPage> {
         builder: (_) => RssReadPage(source: source, article: article),
       ),
     );
+    await _loadMeta();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(source.sourceName),
-        actions: [
-          IconButton(
-            tooltip: '刷新',
-            icon: const Icon(Icons.refresh),
-            onPressed: _loading ? null : _refresh,
-          ),
-        ],
-      ),
-      body: _buildBody(),
-    );
-  }
-
-  Widget _buildBody() {
+    super.build(context);
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -152,7 +337,15 @@ class _RssArticlesPageState extends State<RssArticlesPage> {
       );
     }
     if (_articles.isEmpty) {
-      return const Center(child: Text('暂无文章'));
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          children: const [
+            SizedBox(height: 120),
+            Center(child: Text('暂无文章')),
+          ],
+        ),
+      );
     }
     return RefreshIndicator(
       onRefresh: _refresh,
@@ -175,6 +368,7 @@ class _RssArticlesPageState extends State<RssArticlesPage> {
             }
             final a = _articles[i];
             final read = _readLinks.contains(a.link);
+            final starred = _starred.contains(_starKey(a));
             return ListTile(
               leading: a.image != null && a.image!.isNotEmpty
                   ? ClipRRect(
@@ -208,6 +402,14 @@ class _RssArticlesPageState extends State<RssArticlesPage> {
                 ].join(' · '),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
+              ),
+              trailing: IconButton(
+                tooltip: starred ? '取消收藏' : '收藏',
+                icon: Icon(
+                  starred ? Icons.star : Icons.star_border,
+                  color: starred ? Colors.amber : null,
+                ),
+                onPressed: () => _toggleStar(a),
               ),
               onTap: () => _openArticle(a),
             );

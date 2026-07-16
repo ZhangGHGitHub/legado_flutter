@@ -4,9 +4,9 @@ import 'package:provider/provider.dart';
 import '../../providers/rss_provider.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/legado_list_tile.dart';
-import '../config/feature_placeholder_page.dart';
+import 'rss_source_edit_page.dart';
 
-/// 订阅源管理 — 对齐 RssSourceActivity（管理入口；编辑/规则后续接入）
+/// 订阅源管理 — 对齐 RssSourceActivity
 class RssSourceManagePage extends StatelessWidget {
   const RssSourceManagePage({super.key});
 
@@ -18,6 +18,14 @@ class RssSourceManagePage extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
+            tooltip: '新建',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const RssSourceEditPage()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.upload_file_outlined),
             tooltip: '导入订阅源',
             onPressed: () => _showImportDialog(context),
           ),
@@ -30,15 +38,15 @@ class RssSourceManagePage extends StatelessWidget {
             return EmptyState(
               icon: Icons.subscriptions_outlined,
               title: '暂无订阅源',
-              subtitle: '点击右上角 + 粘贴 Legado RSS 源 JSON 导入',
+              subtitle: '点击 + 新建，或导入 Legado RSS 源 JSON',
               actionLabel: '导入订阅源',
               onAction: () => _showImportDialog(context),
             );
           }
           return ListView.separated(
             itemCount: sources.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) {
+            separatorBuilder: (_, i) => const Divider(height: 1),
+            itemBuilder: (ctx, i) {
               final s = sources[i];
               return LegadoListTile(
                 icon: Icons.rss_feed,
@@ -47,11 +55,7 @@ class RssSourceManagePage extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => FeaturePlaceholderPage(
-                      title: '编辑订阅源',
-                      subtitle: s.sourceName,
-                      icon: Icons.edit_outlined,
-                    ),
+                    builder: (_) => RssSourceEditPage(source: s),
                   ),
                 ),
               );

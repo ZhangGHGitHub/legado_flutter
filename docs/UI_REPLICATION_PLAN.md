@@ -487,7 +487,8 @@
 - [x] 登录信息 SharedPreferences 持久化；书源列表登录入口
 - [x] `loginUrl` 为 http(s) 时内嵌 WebView（桌面无 WebView 时外链回退）
 - [x] `@js:` / `<js>` 动态 loginUi（Rust `eval_js`）与按钮 JS、对齐 Jingshiro `login()` 调用
-- [ ] SourceLoginJsExtensions 全量 java.* / 登录头菜单（开放）
+- [x] SourceLoginJsExtensions 核心 `java.*`（copyText/showBrowser/upLoginData/reLoginView）+ 登录头查看/删除菜单
+- [x] `java.ajax` 真实现：AnalyzeUrl GET/POST + 书源 header/登录头；登录 prelude 复用引擎 ajax（不覆盖 stdlib）
 
 #### Task UI-12: RSS 文章列表 + 阅读 (`activity_rss_artivles.xml` + `activity_rss_read.xml`) — ✅ 基本完成（2026-07-16）
 
@@ -497,7 +498,9 @@
 - [x] RSS 文章阅读页（ruleContent / 内嵌 HTML / WebView 原文）
 - [x] 已读标记（按源本地持久化）
 - [x] `RssSource` 完整规则字段对齐 Jingshiro
-- [ ] 分类 sortUrl Tab / 收藏星标 / 阅读记录 Dialog（开放）
+- [x] 分类 sortUrl Tab（复用 `RssSourceExtensions.sortUrls`）+ 收藏星标（`RssStar`）+ 收藏列表
+- [x] 订阅源编辑页（核心字段，对齐 `RssSourceEditActivity`）
+- [ ] 阅读记录 Dialog / 源调试页（开放）
 
 #### Task UI-13: 缓存管理页面 (`activity_cache_book.xml`) — ✅ 基本完成（2026-07-15）
 
@@ -710,7 +713,7 @@ Task UI-12:  RSS 文章列表 + 阅读  ✅ 复用 Jingshiro Rss/ParserByRule/De
 | 目录 | 95% | UI-5：全页 AppBar+字数/云标+底栏；溢出菜单次级项仍可再抠 |
 | **阅读器** | **93%** | UI-1+UI-2：超时分档+翻页五档+沉浸+系统 TTS+全文搜索(缓存)+模拟追读+主题 zip；HTTP TTS/真仿真卷曲/词级简繁/全书联网搜仍开放 |
 | 书源管理 | 96% | UI-4+UI-28：编辑六 Tab 表单对齐；键盘条/ruleComplete/真 QR 仍开放 |
-| RSS | 50% | Tab+源管理已有；**文章/阅读延后 S4** |
+| RSS | 92% | UI-12：列表+阅读+sortUrl Tab+收藏+源编辑；调试仍开放 |
 | 新模块(有声/漫画/扫码等) | 40% | UI-17 扫码基本完成；UI-22/23/25 已 1:1 chrome 返工（MP3/真漫画源/店铺仍开放） |
 | **综合** | **~60%** | |
 

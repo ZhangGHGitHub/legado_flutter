@@ -566,40 +566,60 @@ class BookProvider extends ChangeNotifier {
 
       final local = await _dao.getChapters(book.id);
       final merged = _mergeTocWithLocal(remote, local);
-      // 只落目录元数据 + isDownloaded，不把正文再次塞进 upsert JSON
-      await _dao.insertChapters(
-        merged
-            .map(
-              (c) => Chapter(
-                id: c.id,
-                bookId: c.bookId,
-                title: c.title,
-                index: c.index,
-                url: c.url,
-                isDownloaded: c.isDownloaded,
-              ),
-            )
-            .toList(),
-      );
+
+      // 先写入内存，避免「已拉到目录但落库失败」时界面仍空白
       if (gen != _tocLoadGen) return;
-
-      final saved = await _dao.getChapters(book.id);
-      _currentChapters = _tocViewList(saved.isNotEmpty ? saved : merged);
-      unawaited(_enrichDownloadedFromFiles(book.id, gen));
-
+      _currentChapters = _tocViewList(merged);
       ReadBook.instance.open(
         currentBook: book,
         source: source,
         chapterList: _currentChapters,
       );
       notifyListeners();
+
+      // 仅书架内的书落库（chapters.bookId → books.id 外键）；搜索预览不写 books
+      final onShelf = _books.any((b) => b.id == book.id);
+      if (onShelf) {
+        // 防御元数据；不把正文再次塞进 upsert JSON
+        final meta = merged
+            .map(
+              (c) => Chapter(
+                id: c.id,
+                bookId: book.id,
+                title: c.title,
+                index: c.index,
+                url: c.url,
+                isDownloaded: c.isDownloaded,
+              ),
+            )
+            .toList();
+        try {
+          await _dao.insertChapters(meta);
+          if (gen != _tocLoadGen) return;
+          final saved = await _dao.getChapters(book.id);
+          if (saved.isNotEmpty) {
+            _currentChapters = _tocViewList(saved);
+            ReadBook.instance.open(
+              currentBook: book,
+              source: source,
+              chapterList: _currentChapters,
+            );
+            notifyListeners();
+          }
+        } catch (e, st) {
+          // 内存目录已可用；落库失败不吞掉预览
+          debugPrint('目录落库失败（已保留内存目录）: $e\n$st');
+        }
+      }
+
+      unawaited(_enrichDownloadedFromFiles(book.id, gen));
     } catch (e, st) {
       final friendly = SiteBusyGuard.friendlyMessage(e);
       debugPrint('目录刷新失败: $friendly\n$st');
       if (gen == _tocLoadGen && _currentChapters.isEmpty) {
         throw Exception(friendly);
       }
-      // 已有本地目录时后台刷新失败不打断阅读
+      // 已有本地/内存目录时后台刷新失败不打断阅读
     } finally {
       if (gen == _tocLoadGen) {
         _isRefreshingToc = false;

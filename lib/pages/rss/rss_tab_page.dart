@@ -3,10 +3,13 @@ import 'package:provider/provider.dart';
 
 import '../../models/rss_source.dart';
 import '../../providers/rss_provider.dart';
-import '../config/feature_placeholder_page.dart';
+import '../../services/source_login_service.dart';
 import '../my/read_record_page.dart';
 import '../rule_sub/rule_sub_page.dart';
+import '../sources/source_login_page.dart';
 import 'rss_articles_page.dart';
+import 'rss_favorites_page.dart';
+import 'rss_source_edit_page.dart';
 import 'rss_source_manage_page.dart';
 import 'widgets/rss_source_tile.dart';
 
@@ -78,25 +81,15 @@ class RssTabPageState extends State<RssTabPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => FeaturePlaceholderPage(
-                title: '编辑订阅源',
-                subtitle: source.sourceName,
-                icon: Icons.edit_outlined,
-              ),
+              builder: (_) => RssSourceEditPage(source: source),
             ),
           );
         case 'top':
           await provider.topSource(source);
         case 'login':
-          Navigator.push(
+          await SourceLoginPage.open(
             context,
-            MaterialPageRoute(
-              builder: (_) => FeaturePlaceholderPage(
-                title: '登录',
-                subtitle: source.sourceName,
-                icon: Icons.login,
-              ),
-            ),
+            SourceLoginService.bookSourceForRss(source),
           );
         case 'disable':
           await provider.disableSource(source);
@@ -209,11 +202,7 @@ class RssTabPageState extends State<RssTabPage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const FeaturePlaceholderPage(
-                            title: '收藏',
-                            subtitle: 'RSS 收藏文章列表',
-                            icon: Icons.star_outline,
-                          ),
+                          builder: (_) => const RssFavoritesPage(),
                         ),
                       );
                     case 'group':
