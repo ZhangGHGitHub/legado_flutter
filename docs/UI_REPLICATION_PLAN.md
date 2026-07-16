@@ -151,7 +151,7 @@
 | 3 | `activity_book_info.xml` | 书籍详情 | ✅ `book_info_page.dart` | 需核对布局：封面+信息+按钮+目录 |
 | 4 | `activity_book_search.xml` | 搜索 | ✅ `search_page.dart` | **需核对是否按书源分组（ExpansionTile）** |
 | 5 | `activity_book_source.xml` | 书源管理 | ✅ `sources_page.dart` | UI-4：分组/绿红灰校验点/批量/搜索排序；UI-17 扫码入口已接 |
-| 6 | `activity_book_source_edit.xml` | 书源编辑 | ✅ `source_editor_page.dart` | 需核对字段完整度 |
+| 6 | `activity_book_source_edit.xml` | 书源编辑 | ✅ `source_editor_page.dart` | UI-28：六 Tab 表单 + 顶栏开关 + source_edit 菜单；调试拆至独立页 |
 | 7 | `activity_chapter_list.xml` | 目录 | ✅ `toc_sheet.dart` | UI-5：全页 AppBar（返回/目录·书签 Tab/搜索/⋮）+ 缓存字数/云标 + 底栏进度 |
 | 8 | `activity_explore_show.xml` | 发现结果列表 | ✅ `explore_list_page.dart` | 需核对 |
 | 9 | `activity_config.xml` | 设置中心 | ✅ `config_page.dart` | **缺完整子页：备份/主题/其它** |
@@ -168,7 +168,7 @@
 | 20 | `activity_all_bookmark.xml` | 书签列表 | ✅ `bookmark_page.dart` | UI-8：书签/想法 Tab；跳转阅读器仍开放 |
 | 21 | `activity_arrange_book.xml` | 书架整理 | ❌ **缺失** | 需要新建 |
 | 22 | `activity_cache_book.xml` | 缓存管理 | ✅ `cache_service.dart` 有数据 | **缺 UI 页面** |
-| 23 | `activity_source_debug.xml` | 书源调试 | ✅ `source_debug_panel.dart` | 需核对 |
+| 23 | `activity_source_debug.xml` | 书源调试 | 🟡 `source_debug_page.dart` | 编辑页菜单进入；chrome/日志区未 1:1 |
 | 24 | `activity_source_login.xml` | 书源登录 | ❌ **缺失** | 需要新建（含动态表单） |
 | 25 | `activity_ai_chat.xml` | AI 聊天 | ✅ `ai_chat_page.dart` | **缺工具调用UI、配置入口** |
 | 26 | `activity_welcome.xml` | 欢迎页 | ✅ **1:1 闪屏** | UI-26：竖排品牌+icon_read_book+品读万千故事；500ms→主页；隐私在 MainShell Dialog |
@@ -619,6 +619,14 @@
 - [x] 键盘辅助条：对齐 `keyboardAssists.json` 片段 + 帮助/撤销/重做（非 PopupWindow 贴键盘）
 - [ ] 真 Sora TextMate 文法 / WebView js-beautify / KeyboardAssistsConfig 自定义（开放）
 
+#### Task UI-28: 书源编辑 (`activity_book_source_edit.xml`) — 🟡 大修（2026-07-16）
+
+- [x] 对齐 `BookSourceEditActivity`：TitleBar「编辑书源」+ 类型 Spinner + 启用/发现/CookieJar/事件监听/定制按钮
+- [x] 六 Tab：基本 / 搜索 / 发现 / 详情 / 目录 / 正文（字段顺序与 labels 对齐 values-zh）
+- [x] `menu_source_edit`：编辑内容（聚焦字段→`CodeEditPage`）/ 保存 / 调试源 + overflow（登录/搜索/Cookie/自动补全/拷贝粘贴/源变量/二维码/分享/日志/帮助）
+- [x] 未保存退出：`exit` / `exit_no_save`；调试拆至 `source_debug_page.dart`
+- [ ] 键盘辅助条 `KeyboardToolPop`、规则自动补全 `ruleComplete`、真二维码分享图、AppLogDialog、ruleHelp 资产、Cookie 清除、搜索带单源 scope（开放）
+
 ---
 
 ## 四、按开发阶段整理
@@ -662,6 +670,7 @@ Task UI-24: 模拟追读  🟡 对话框+章数解锁+Book/DB 同步；WebDAV/�
 Task UI-25: 捐赠页  🟡 1:1 返工（2026-07-16）；去掉 Flutter 免责声明；店铺/内嵌码仍开放
 Task UI-26: 欢迎引导页  ✅ 1:1 闪屏（2026-07-16）
 Task UI-27: 代码编辑器  ✅ 高亮/格式化/偏好/键盘条（2026-07-16）；Sora/WebView beautify 仍开放
+Task UI-28: 书源编辑  🟡 六 Tab 表单大修（2026-07-16）；键盘条/ruleComplete/真 QR 分享仍开放
 ```
 
 ### S4 — 延后（RSS 订阅阅读）
@@ -697,7 +706,7 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 | 书籍详情 | 96% | UI-6：截图布局（模糊头图/红芯片/删除+阅读底栏）；换源页后端仍占位；图标字形可再抠 |
 | 目录 | 95% | UI-5：全页 AppBar+字数/云标+底栏；溢出菜单次级项仍可再抠 |
 | **阅读器** | **93%** | UI-1+UI-2：超时分档+翻页五档+沉浸+系统 TTS+全文搜索(缓存)+模拟追读+主题 zip；HTTP TTS/真仿真卷曲/词级简繁/全书联网搜仍开放 |
-| 书源管理 | 95% | UI-4：分组/绿红灰校验点/批量/搜索排序；UI-17 扫码已接 |
+| 书源管理 | 96% | UI-4+UI-28：编辑六 Tab 表单对齐；键盘条/ruleComplete/真 QR 仍开放 |
 | RSS | 50% | Tab+源管理已有；**文章/阅读延后 S4** |
 | 新模块(有声/漫画/扫码等) | 40% | UI-17 扫码基本完成；UI-22/23/25 已 1:1 chrome 返工（MP3/真漫画源/店铺仍开放） |
 | **综合** | **~60%** | |

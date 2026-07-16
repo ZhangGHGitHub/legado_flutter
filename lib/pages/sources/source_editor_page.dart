@@ -1,17 +1,24 @@
 import 'dart:convert';
-import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../../bridge/legado_engine_bridge.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
-import '../../services/source_debug_formatter.dart';
-import '../../src/rust/api.dart' as rust_api;
-import '../../widgets/source_debug_panel.dart';
-import '../../widgets/source_validation_sheet.dart';
 import '../code_edit/code_edit_page.dart';
+import '../qrcode/qrcode_capture_page.dart';
+import '../search/search_page.dart';
+import 'source_debug_page.dart';
+import 'source_login_page.dart';
 
-/// 书源规则编辑器 + 调试面板（增强版）
+/// 书源规则编辑 — 1:1 对齐 Jingshiro [BookSourceEditActivity] /
+/// [activity_book_source_edit.xml] + [menu/source_edit.xml]。
+///
+/// Chrome：TitleBar「编辑书源」；类型/启用/发现/CookieJar/事件监听/定制按钮；
+/// Tab：基本 | 搜索 | 发现 | 详情 | 目录 | 正文；菜单：编辑内容/保存/调试源 + overflow。
 class SourceEditorPage extends StatefulWidget {
   final BookSource source;
 
@@ -21,681 +28,1053 @@ class SourceEditorPage extends StatefulWidget {
   State<SourceEditorPage> createState() => _SourceEditorPageState();
 }
 
+class _EditField {
+  _EditField(this.key, this.hint, [String? initial])
+    : controller = TextEditingController(text: initial ?? ''),
+      focus = FocusNode();
+
+  final String key;
+  final String hint;
+  final TextEditingController controller;
+  final FocusNode focus;
+
+  void dispose() {
+    controller.dispose();
+    focus.dispose();
+  }
+}
+
 class _SourceEditorPageState extends State<SourceEditorPage>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
+  static const _bookTypes = ['文本', '音频', '图片', '文件', '视频'];
+  static const _tabs = ['基本', '搜索', '发现', '详情', '目录', '正文'];
+  static const _varPrefsPrefix = 'source_variable:';
+
   late TabController _tabController;
-  late TabController _debugTabController;
-  late TextEditingController _jsonController;
-  String? _jsonError;
+  late String _originalJson;
+
+  int _bookTypeIndex = 0;
+  bool _enabled = true;
+  bool _enabledExplore = true;
+  bool _enabledCookieJar = true;
+  bool _eventListener = false;
+  bool _customButton = false;
+  bool _autoComplete = false;
   bool _isSaving = false;
 
-  // 调试状态
-  String _searchKeyword = '';
-  final _searchCtrl = TextEditingController();
-  final _urlCtrl = TextEditingController();
-  final _chapterUrlCtrl = TextEditingController();
-  String _debugLog = '';
-  bool _isDebugLoading = false;
-  bool _isValidating = false;
-  String? _rawResponse; // 原始响应预览
-  rust_api.DebugResult? _lastDebugResult;
+  late List<_EditField> _baseFields;
+  late List<_EditField> _searchFields;
+  late List<_EditField> _exploreFields;
+  late List<_EditField> _infoFields;
+  late List<_EditField> _tocFields;
+  late List<_EditField> _contentFields;
 
-  // 章节测试（来自调试结果）
-  List<rust_api.DebugItem> _testChapters = [];
+  List<_EditField> get _allFields => [
+    ..._baseFields,
+    ..._searchFields,
+    ..._exploreFields,
+    ..._infoFields,
+    ..._tocFields,
+    ..._contentFields,
+  ];
+
+  List<_EditField> get _currentFields {
+    switch (_tabController.index) {
+      case 1:
+        return _searchFields;
+      case 2:
+        return _exploreFields;
+      case 3:
+        return _infoFields;
+      case 4:
+        return _tocFields;
+      case 5:
+        return _contentFields;
+      default:
+        return _baseFields;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _debugTabController = TabController(length: 3, vsync: this);
-    _jsonController = TextEditingController(
-      text: _formatJson(
-        widget.source.rawSourceJson.isNotEmpty
-            ? widget.source.rawSourceJson
-            : _buildDefaultJson(),
+    _tabController = TabController(length: 6, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) setState(() {});
+    });
+    _initFromSource(widget.source);
+    _originalJson = _encodeCurrent();
+  }
+
+  void _initFromSource(BookSource source) {
+    final map = _parseMap(source);
+
+    _bookTypeIndex = _typeToIndex(map['bookSourceType']);
+    _enabled = map['enabled'] != false;
+    _enabledExplore = map['enabledExplore'] != false;
+    _enabledCookieJar = map['enabledCookieJar'] != false;
+    _eventListener = map['eventListener'] == true;
+    _customButton = map['customButton'] == true;
+
+    final sr = _asMap(map['ruleSearch']);
+    final er = _asMap(map['ruleExplore']);
+    final ir = _asMap(map['ruleBookInfo']);
+    final tr = _asMap(map['ruleToc']);
+    final cr = _asMap(map['ruleContent']);
+
+    _baseFields = [
+      _EditField('bookSourceUrl', '源 URL（sourceUrl）', _str(map, 'bookSourceUrl')),
+      _EditField('bookSourceName', '源名称（sourceName）', _str(map, 'bookSourceName')),
+      _EditField(
+        'bookSourceGroup',
+        '源分组（sourceGroup）',
+        _str(map, 'bookSourceGroup'),
       ),
-    );
+      _EditField(
+        'bookSourceComment',
+        '源注释（sourceComment）',
+        _str(map, 'bookSourceComment'),
+      ),
+      _EditField('loginUrl', '登录 URL(loginUrl)', _str(map, 'loginUrl')),
+      _EditField('loginUi', '登录 UI（loginUi）', _loginUiStr(map)),
+      _EditField(
+        'loginCheckJs',
+        '登录检查 JS（loginCheckJs）',
+        _str(map, 'loginCheckJs'),
+      ),
+      _EditField(
+        'coverDecodeJs',
+        '封面解密（coverDecodeJs）',
+        _str(map, 'coverDecodeJs'),
+      ),
+      _EditField(
+        'bookUrlPattern',
+        '书籍 URL 正则（bookUrlPattern）',
+        _str(map, 'bookUrlPattern').isNotEmpty
+            ? _str(map, 'bookUrlPattern')
+            : source.ruleBookUrlPattern,
+      ),
+      _EditField('header', '请求头（header）', _headerStr(map)),
+      _EditField(
+        'variableComment',
+        '变量说明(variableComment)',
+        _str(map, 'variableComment'),
+      ),
+      _EditField(
+        'concurrentRate',
+        '并发率（concurrentRate）',
+        _str(map, 'concurrentRate'),
+      ),
+      _EditField('jsLib', 'jsLib', _jsLibStr(map)),
+    ];
+
+    _searchFields = [
+      _EditField(
+        'searchUrl',
+        '搜索地址（url）',
+        _str(map, 'searchUrl').isNotEmpty
+            ? _str(map, 'searchUrl')
+            : source.ruleSearchUrl,
+      ),
+      _EditField('checkKeyWord', '校验关键字（checkKeyWord）', _str(sr, 'checkKeyWord')),
+      _EditField(
+        'bookList',
+        '书籍列表规则（bookList）',
+        _str(sr, 'bookList').isNotEmpty
+            ? _str(sr, 'bookList')
+            : source.ruleSearchList,
+      ),
+      _EditField(
+        'name',
+        '书名规则（name）',
+        _str(sr, 'name').isNotEmpty ? _str(sr, 'name') : source.ruleSearchName,
+      ),
+      _EditField(
+        'author',
+        '作者规则（author）',
+        _str(sr, 'author').isNotEmpty
+            ? _str(sr, 'author')
+            : source.ruleSearchAuthor,
+      ),
+      _EditField(
+        'kind',
+        '分类规则（kind）',
+        _str(sr, 'kind').isNotEmpty ? _str(sr, 'kind') : source.ruleSearchKind,
+      ),
+      _EditField('wordCount', '字数规则（wordCount）', _str(sr, 'wordCount')),
+      _EditField('lastChapter', '最新章节规则（lastChapter）', _str(sr, 'lastChapter')),
+      _EditField(
+        'intro',
+        '简介规则（intro）',
+        _str(sr, 'intro').isNotEmpty ? _str(sr, 'intro') : source.ruleSearchNote,
+      ),
+      _EditField(
+        'coverUrl',
+        '封面规则（coverUrl）',
+        _str(sr, 'coverUrl').isNotEmpty
+            ? _str(sr, 'coverUrl')
+            : source.ruleSearchCoverUrl,
+      ),
+      _EditField('bookUrl', '详情页 URL 规则（bookUrl）', _str(sr, 'bookUrl')),
+    ];
+
+    _exploreFields = [
+      _EditField('exploreUrl', '发现地址规则（url）', _str(map, 'exploreUrl')),
+      _EditField('bookList', '书籍列表规则（bookList）', _str(er, 'bookList')),
+      _EditField('name', '书名规则（name）', _str(er, 'name')),
+      _EditField('author', '作者规则（author）', _str(er, 'author')),
+      _EditField('kind', '分类规则（kind）', _str(er, 'kind')),
+      _EditField('wordCount', '字数规则（wordCount）', _str(er, 'wordCount')),
+      _EditField('lastChapter', '最新章节规则（lastChapter）', _str(er, 'lastChapter')),
+      _EditField('intro', '简介规则（intro）', _str(er, 'intro')),
+      _EditField('coverUrl', '封面规则（coverUrl）', _str(er, 'coverUrl')),
+      _EditField('bookUrl', '详情页 URL 规则（bookUrl）', _str(er, 'bookUrl')),
+    ];
+
+    _infoFields = [
+      _EditField('init', '预处理规则（bookInfoInit）', _str(ir, 'init')),
+      _EditField(
+        'name',
+        '书名规则（name）',
+        _str(ir, 'name').isNotEmpty ? _str(ir, 'name') : source.ruleBookName,
+      ),
+      _EditField(
+        'author',
+        '作者规则（author）',
+        _str(ir, 'author').isNotEmpty
+            ? _str(ir, 'author')
+            : source.ruleBookAuthor,
+      ),
+      _EditField('kind', '分类规则（kind）', _str(ir, 'kind')),
+      _EditField('wordCount', '字数规则（wordCount）', _str(ir, 'wordCount')),
+      _EditField(
+        'lastChapter',
+        '最新章节规则（lastChapter）',
+        _str(ir, 'lastChapter').isNotEmpty
+            ? _str(ir, 'lastChapter')
+            : source.ruleBookLastChapter,
+      ),
+      _EditField(
+        'intro',
+        '简介规则（intro）',
+        _str(ir, 'intro').isNotEmpty ? _str(ir, 'intro') : source.ruleBookNote,
+      ),
+      _EditField(
+        'coverUrl',
+        '封面规则（coverUrl）',
+        _str(ir, 'coverUrl').isNotEmpty
+            ? _str(ir, 'coverUrl')
+            : source.ruleBookCoverUrl,
+      ),
+      _EditField('tocUrl', '目录 URL 规则（tocUrl）', _str(ir, 'tocUrl')),
+      _EditField('canReName', '允许修改书名作者（canReName）', _str(ir, 'canReName')),
+      _EditField('downloadUrls', '下载URL规则(downloadUrls)', _str(ir, 'downloadUrls')),
+    ];
+
+    _tocFields = [
+      _EditField('preUpdateJs', '更新之前 JS（preUpdateJs）', _str(tr, 'preUpdateJs')),
+      _EditField(
+        'chapterList',
+        '目录列表规则（chapterList）',
+        _str(tr, 'chapterList').isNotEmpty
+            ? _str(tr, 'chapterList')
+            : source.ruleChapterList,
+      ),
+      _EditField(
+        'chapterName',
+        '章节名称规则（ChapterName）',
+        _str(tr, 'chapterName').isNotEmpty
+            ? _str(tr, 'chapterName')
+            : source.ruleChapterName,
+      ),
+      _EditField(
+        'chapterUrl',
+        '章节 URL 规则（chapterUrl）',
+        _str(tr, 'chapterUrl').isNotEmpty
+            ? _str(tr, 'chapterUrl')
+            : source.ruleChapterUrl,
+      ),
+      _EditField('formatJs', '格式化规则(formatJs)', _str(tr, 'formatJs')),
+      _EditField('isVolume', 'Volume 标识（isVolume）', _str(tr, 'isVolume')),
+      _EditField('updateTime', '章节信息（ChapterInfo）', _str(tr, 'updateTime')),
+      _EditField('isVip', 'VIP 标识（isVip）', _str(tr, 'isVip')),
+      _EditField('isPay', '购买标识（isPay）', _str(tr, 'isPay')),
+      _EditField('nextTocUrl', '目录下一页规则（nextTocUrl）', _str(tr, 'nextTocUrl')),
+    ];
+
+    // 字段顺序对齐 BookSourceEditActivity.contentEntities
+    _contentFields = [
+      _EditField(
+        'content',
+        '正文规则（content）',
+        _str(cr, 'content').isNotEmpty
+            ? _str(cr, 'content')
+            : source.ruleContent,
+      ),
+      _EditField(
+        'nextContentUrl',
+        '正文下一页 URL 规则（nextContentUrl）',
+        _str(cr, 'nextContentUrl'),
+      ),
+      _EditField('subContent', '副文规则（subContent）', _str(cr, 'subContent')),
+      _EditField(
+        'replaceRegex',
+        '替换规则（replaceRegex）',
+        _str(cr, 'replaceRegex').isNotEmpty
+            ? _str(cr, 'replaceRegex')
+            : source.ruleContentRemove,
+      ),
+      _EditField('title', '章节名称规则（ChapterName）', _str(cr, 'title')),
+      _EditField('sourceRegex', '资源正则（sourceRegex）', _str(cr, 'sourceRegex')),
+      _EditField('imageStyle', '图片样式（imageStyle）', _str(cr, 'imageStyle')),
+      _EditField('imageDecode', '图片解密（imageDecode）', _str(cr, 'imageDecode')),
+      _EditField('webJs', 'WebView JS（webJs）', _str(cr, 'webJs')),
+      _EditField('payAction', '购买操作（payAction）', _str(cr, 'payAction')),
+      _EditField('callBackJs', '回调操作（callBackJs）', _str(cr, 'callBackJs')),
+    ];
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _debugTabController.dispose();
-    _jsonController.dispose();
-    _searchCtrl.dispose();
-    _urlCtrl.dispose();
-    _chapterUrlCtrl.dispose();
+    for (final f in _allFields) {
+      f.dispose();
+    }
     super.dispose();
   }
 
-  String _formatJson(String raw) {
+  Map<String, dynamic> _parseMap(BookSource source) {
+    if (source.rawSourceJson.isNotEmpty) {
+      try {
+        final o = jsonDecode(source.rawSourceJson);
+        if (o is Map) {
+          return Map<String, dynamic>.from(o);
+        }
+      } catch (_) {}
+    }
+    return Map<String, dynamic>.from(source.toJson());
+  }
+
+  static Map<String, dynamic> _asMap(dynamic v) {
+    if (v is Map) {
+      return Map<String, dynamic>.from(v);
+    }
+    return {};
+  }
+
+  static String _str(Map<String, dynamic> map, String key) {
+    final v = map[key];
+    if (v == null) return '';
+    if (v is String) return v;
+    if (v is num || v is bool) return v.toString();
     try {
-      final obj = jsonDecode(raw);
-      return const JsonEncoder.withIndent('  ').convert(obj);
+      return const JsonEncoder().convert(v);
     } catch (_) {
-      return raw;
+      return v.toString();
     }
   }
 
-  String _buildDefaultJson() {
-    return const JsonEncoder.withIndent('  ').convert({
-      'bookSourceName': widget.source.bookSourceName,
-      'bookSourceUrl': widget.source.bookSourceUrl,
-      'bookSourceGroup': widget.source.bookSourceGroup,
-      'ruleSearchUrl': widget.source.ruleSearchUrl,
-      'ruleSearchList': widget.source.ruleSearchList,
-      'ruleSearchName': widget.source.ruleSearchName,
-      'ruleContent': widget.source.ruleContent,
-      'ruleChapterList': widget.source.ruleChapterList,
-    });
+  static String _loginUiStr(Map<String, dynamic> map) {
+    final v = map['loginUi'];
+    if (v is String) return v;
+    if (v is List || v is Map) {
+      try {
+        return const JsonEncoder.withIndent('  ').convert(v);
+      } catch (_) {}
+    }
+    return '';
   }
 
-  /// 对齐 Jingshiro `menu_fullscreen_edit` → [CodeEditActivity]。
+  static String _headerStr(Map<String, dynamic> map) {
+    final v = map['header'];
+    if (v is String) return v;
+    if (v is Map) {
+      try {
+        return const JsonEncoder.withIndent('  ').convert(v);
+      } catch (_) {}
+    }
+    return '';
+  }
+
+  static String _jsLibStr(Map<String, dynamic> map) {
+    final v = map['jsLib'];
+    if (v is String) return v;
+    if (v is Map) {
+      try {
+        return const JsonEncoder.withIndent('  ').convert(v);
+      } catch (_) {}
+    }
+    return '';
+  }
+
+  static int _typeToIndex(dynamic type) {
+    final n = type is int
+        ? type
+        : int.tryParse(type?.toString() ?? '') ?? 0;
+    if (n >= 0 && n <= 4) return n;
+    return 0;
+  }
+
+  String? _blankToNull(String s) {
+    final t = s.trim();
+    return t.isEmpty ? null : t;
+  }
+
+  Map<String, dynamic> _buildMap() {
+    final map = _parseMap(widget.source);
+
+    map['bookSourceType'] = _bookTypeIndex;
+    map['enabled'] = _enabled;
+    map['enabledExplore'] = _enabledExplore;
+    map['enabledCookieJar'] = _enabledCookieJar;
+    map['eventListener'] = _eventListener;
+    map['customButton'] = _customButton;
+
+    for (final f in _baseFields) {
+      final v = _blankToNull(f.controller.text);
+      switch (f.key) {
+        case 'bookSourceUrl':
+          map['bookSourceUrl'] = v ?? '';
+        case 'bookSourceName':
+          map['bookSourceName'] = v ?? '';
+        case 'bookSourceGroup':
+          map['bookSourceGroup'] = v;
+        case 'bookSourceComment':
+          map['bookSourceComment'] = v;
+        case 'loginUrl':
+          map['loginUrl'] = v;
+        case 'loginUi':
+          map['loginUi'] = v;
+        case 'loginCheckJs':
+          map['loginCheckJs'] = v;
+        case 'coverDecodeJs':
+          map['coverDecodeJs'] = v;
+        case 'bookUrlPattern':
+          map['bookUrlPattern'] = v;
+        case 'header':
+          map['header'] = v;
+        case 'variableComment':
+          map['variableComment'] = v;
+        case 'concurrentRate':
+          map['concurrentRate'] = v;
+        case 'jsLib':
+          map['jsLib'] = v;
+      }
+    }
+
+    String? searchUrl;
+    final searchRule = <String, dynamic>{};
+    for (final f in _searchFields) {
+      final v = _blankToNull(f.controller.text);
+      if (f.key == 'searchUrl') {
+        searchUrl = v;
+      } else if (v != null) {
+        searchRule[f.key] = v;
+      }
+    }
+    map['searchUrl'] = searchUrl;
+    map['ruleSearch'] = searchRule;
+
+    String? exploreUrl;
+    final exploreRule = <String, dynamic>{};
+    for (final f in _exploreFields) {
+      final v = _blankToNull(f.controller.text);
+      if (f.key == 'exploreUrl') {
+        exploreUrl = v;
+      } else if (v != null) {
+        exploreRule[f.key] = v;
+      }
+    }
+    map['exploreUrl'] = exploreUrl;
+    map['ruleExplore'] = exploreRule;
+
+    final infoRule = <String, dynamic>{};
+    for (final f in _infoFields) {
+      final v = _blankToNull(f.controller.text);
+      if (v != null) infoRule[f.key] = v;
+    }
+    map['ruleBookInfo'] = infoRule;
+
+    final tocRule = <String, dynamic>{};
+    for (final f in _tocFields) {
+      final v = _blankToNull(f.controller.text);
+      if (v != null) tocRule[f.key] = v;
+    }
+    map['ruleToc'] = tocRule;
+
+    final contentRule = <String, dynamic>{};
+    for (final f in _contentFields) {
+      final v = _blankToNull(f.controller.text);
+      if (v != null) contentRule[f.key] = v;
+    }
+    map['ruleContent'] = contentRule;
+
+    // 清理旧扁平字段，避免与嵌套规则冲突
+    for (final k in [
+      'ruleSearchUrl',
+      'ruleSearchList',
+      'ruleSearchName',
+      'ruleSearchAuthor',
+      'ruleSearchCoverUrl',
+      'ruleSearchKind',
+      'ruleSearchNote',
+      'ruleChapterList',
+      'ruleChapterName',
+      'ruleChapterUrl',
+      'ruleContentUrl',
+      'ruleContentRemove',
+      'ruleBookName',
+      'ruleBookAuthor',
+      'ruleBookCoverUrl',
+    ]) {
+      map.remove(k);
+    }
+
+    return map;
+  }
+
+  String _encodeCurrent() {
+    try {
+      return const JsonEncoder.withIndent('  ').convert(_buildMap());
+    } catch (_) {
+      return jsonEncode(_buildMap());
+    }
+  }
+
+  bool _isDirty() => _encodeCurrent() != _originalJson;
+
+  BookSource _toBookSource() {
+    final map = _buildMap();
+    final raw = const JsonEncoder().convert(map);
+    map['rawSourceJson'] = raw;
+    return BookSource.fromJson(map);
+  }
+
+  _EditField? _focusedField() {
+    for (final f in _allFields) {
+      if (f.focus.hasFocus) return f;
+    }
+    return null;
+  }
+
   Future<void> _openCodeEdit() async {
-    final sel = _jsonController.selection;
-    final cursor = sel.isValid ? sel.baseOffset : _jsonController.text.length;
+    final field = _focusedField();
+    if (field == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请将光标聚焦在文本框')));
+      return;
+    }
+    final sel = field.controller.selection;
+    final cursor = sel.isValid
+        ? sel.baseOffset
+        : field.controller.text.length;
     final result = await CodeEditPage.open(
       context,
-      text: _jsonController.text,
-      title: '书源 JSON',
-      cursorPosition: cursor.clamp(0, _jsonController.text.length),
+      text: field.controller.text,
+      title: field.hint,
+      cursorPosition: cursor.clamp(0, field.controller.text.length),
       languageName: 'source.js',
     );
     if (!mounted || result == null) return;
-    _jsonController.value = TextEditingValue(
+    field.controller.value = TextEditingValue(
       text: result.text,
       selection: TextSelection.collapsed(
         offset: result.cursorPosition.clamp(0, result.text.length),
       ),
     );
+    setState(() {});
   }
 
-  Future<void> _saveJson() async {
-    setState(() {
-      _isSaving = true;
-      _jsonError = null;
-    });
-
+  Future<BookSource?> _save({bool popOnSuccess = false}) async {
+    setState(() => _isSaving = true);
     try {
-      // 验证 JSON 格式
-      final jsonStr = _jsonController.text;
-      jsonDecode(jsonStr); // 格式校验
-
-      // 从 JSON 重建 BookSource
-      final parsed = jsonDecode(jsonStr) as Map<String, dynamic>;
-      final updated = BookSource(
-        bookSourceUrl:
-            parsed['bookSourceUrl'] as String? ?? widget.source.bookSourceUrl,
-        bookSourceName:
-            parsed['bookSourceName'] as String? ?? widget.source.bookSourceName,
-        bookSourceGroup:
-            parsed['bookSourceGroup'] as String? ??
-            widget.source.bookSourceGroup,
-        enabled: widget.source.enabled,
-        rawSourceJson: jsonStr,
-        ruleSearchUrl: parsed['ruleSearchUrl'] as String? ?? '',
-        ruleSearchList: parsed['ruleSearchList'] as String? ?? '',
-        ruleSearchName: parsed['ruleSearchName'] as String? ?? '',
-        ruleSearchAuthor: parsed['ruleSearchAuthor'] as String? ?? '',
-        ruleSearchCoverUrl: parsed['ruleSearchCoverUrl'] as String? ?? '',
-        ruleSearchKind: parsed['ruleSearchKind'] as String? ?? '',
-        ruleSearchNote: parsed['ruleSearchNote'] as String? ?? '',
-        ruleContent: parsed['ruleContent'] as String? ?? '',
-        ruleContentUrl: parsed['ruleContentUrl'] as String? ?? '',
-        ruleContentRemove: parsed['ruleContentRemove'] as String? ?? '',
-        ruleChapterList: parsed['ruleChapterList'] as String? ?? '',
-        ruleChapterName: parsed['ruleChapterName'] as String? ?? '',
-        ruleChapterUrl: parsed['ruleChapterUrl'] as String? ?? '',
-        ruleBookName: parsed['ruleBookName'] as String? ?? '',
-        ruleBookAuthor: parsed['ruleBookAuthor'] as String? ?? '',
-        ruleBookCoverUrl: parsed['ruleBookCoverUrl'] as String? ?? '',
-      );
-
+      final updated = _toBookSource();
+      if (updated.bookSourceUrl.trim().isEmpty ||
+          updated.bookSourceName.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('源 URL 与源名称不能为空')),
+          );
+        }
+        return null;
+      }
       await context.read<SourceProvider>().updateSource(updated);
+      _originalJson = _encodeCurrent();
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('书源已保存')));
+        if (popOnSuccess) Navigator.of(context).pop(true);
       }
+      return updated;
     } catch (e) {
-      setState(() => _jsonError = 'JSON 格式错误: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('保存失败: $e')));
+      }
+      return null;
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  Future<void> _runSearchDebug() async {
-    if (_searchKeyword.isEmpty) return;
-    setState(() {
-      _isDebugLoading = true;
-      _debugLog = '';
-      _lastDebugResult = null;
-    });
+  Future<void> _debugSource() async {
+    final saved = await _save();
+    if (!mounted || saved == null) return;
+    await SourceDebugPage.open(context, saved);
+  }
 
+  Future<void> _copySource() async {
+    final json = _encodeCurrent();
+    await Clipboard.setData(ClipboardData(text: json));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已拷贝源')));
+  }
+
+  Future<void> _pasteSource() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim() ?? '';
+    if (text.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('剪贴板为空')));
+      return;
+    }
     try {
-      if (!LegadoEngineBridge.isAvailable) {
-        _appendLog('❌ Rust 引擎不可用，请先编译 legado_engine');
-        return;
+      final decoded = jsonDecode(text);
+      Map<String, dynamic> map;
+      if (decoded is Map) {
+        map = Map<String, dynamic>.from(decoded);
+      } else if (decoded is List && decoded.isNotEmpty && decoded.first is Map) {
+        map = Map<String, dynamic>.from(decoded.first as Map);
+      } else {
+        throw FormatException('不是书源 JSON');
       }
-      _appendLog('🔍 搜索关键词: "$_searchKeyword"');
-      _appendLog('📡 书源: ${widget.source.bookSourceName}');
-      _appendLog('');
-
-      final result = await LegadoEngineBridge.debugSearch(
-        widget.source,
-        _searchKeyword,
-      );
+      final source = BookSource.fromJson(map);
+      for (final f in _allFields) {
+        f.dispose();
+      }
       setState(() {
-        _lastDebugResult = result;
-        _debugLog = formatDebugLog(result);
-        _rawResponse = result.responseBodyPreview.isNotEmpty
-            ? result.responseBodyPreview
-            : null;
+        _initFromSource(source);
       });
     } catch (e) {
-      _appendLog('❌ 搜索出错: $e');
-    } finally {
-      if (mounted) setState(() => _isDebugLoading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('粘贴失败: $e')));
     }
   }
 
-  void _appendLog(String line) {
-    setState(() => _debugLog += '$line\n');
+  Future<void> _importQr() async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const QrCodeCapturePage()),
+    );
+    if (!mounted || result == null || result.trim().isEmpty) return;
+    try {
+      final decoded = jsonDecode(result);
+      Map<String, dynamic> map;
+      if (decoded is Map) {
+        map = Map<String, dynamic>.from(decoded);
+      } else if (decoded is List && decoded.isNotEmpty && decoded.first is Map) {
+        map = Map<String, dynamic>.from(decoded.first as Map);
+      } else {
+        throw FormatException('二维码内容不是书源 JSON');
+      }
+      final source = BookSource.fromJson(map);
+      for (final f in _allFields) {
+        f.dispose();
+      }
+      setState(() => _initFromSource(source));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('导入失败: $e')));
+    }
   }
 
-  Future<void> _runFullValidation() async {
-    setState(() => _isValidating = true);
-    try {
-      final provider = context.read<SourceProvider>();
-      final result = await provider.validateSource(
-        widget.source,
-        keyword: _searchKeyword.isNotEmpty ? _searchKeyword : null,
-      );
-      if (!mounted || result == null) return;
-      await SourceValidationSheet.show(
-        context,
-        sourceName: widget.source.bookSourceName,
-        result: result,
-      );
-    } finally {
-      if (mounted) setState(() => _isValidating = false);
+  Future<void> _shareStr() async {
+    await Share.share(_encodeCurrent(), subject: '分享书源');
+  }
+
+  Future<void> _shareQr() async {
+    // 无 qr_flutter：回退为字符串分享（差距见 docs）
+    await Share.share(_encodeCurrent(), subject: '分享书源');
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('二维码分享暂以字符串分享回退')),
+    );
+  }
+
+  Future<void> _setSourceVariable() async {
+    final saved = await _save();
+    if (!mounted || saved == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final key = '$_varPrefsPrefix${saved.bookSourceUrl}';
+    final current = prefs.getString(key) ?? '';
+    final comment = _baseFields
+        .firstWhere(
+          (f) => f.key == 'variableComment',
+          orElse: () => _EditField('variableComment', ''),
+        )
+        .controller
+        .text
+        .trim();
+    final ctrl = TextEditingController(text: current);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('设置源变量'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              comment.isNotEmpty
+                  ? comment
+                  : '源变量可在js中通过source.getVariable()获取',
+              style: Theme.of(ctx).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: ctrl,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: '变量内容',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await prefs.setString(key, ctrl.text);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('源变量已保存')));
+      }
+    }
+    ctrl.dispose();
+  }
+
+  Future<void> _openLogin() async {
+    final saved = await _save();
+    if (!mounted || saved == null) return;
+    await SourceLoginPage.open(context, saved);
+  }
+
+  Future<void> _openSearch() async {
+    final saved = await _save();
+    if (!mounted || saved == null) return;
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SearchPage()));
+  }
+
+  Future<bool> _confirmExit() async {
+    if (!_isDirty()) return true;
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('退出'),
+        content: const Text('尚未保存，是否继续编辑'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('是'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('否'),
+          ),
+        ],
+      ),
+    );
+    // 「是」= 继续编辑 → 不退出；「否」= 放弃退出
+    return result == false;
+  }
+
+  void _showHelp() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('帮助'),
+        content: const SingleChildScrollView(
+          child: Text(
+            '书源规则编写说明：\n'
+            '• 基本：源 URL、名称、登录、请求头、jsLib 等\n'
+            '• 搜索/发现：列表与字段提取规则\n'
+            '• 详情/目录/正文：详情页、目录列表、正文内容规则\n'
+            '• 聚焦文本框后点「编辑内容」可全屏编辑\n'
+            '• 完整教程请参考 Legado 书源文档',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('日志'),
+        content: const Text('应用日志请在调试源页面查看运行日志。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _onMenuSelected(String value) async {
+    switch (value) {
+      case 'login':
+        await _openLogin();
+      case 'search':
+        await _openSearch();
+      case 'cookie':
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('清除 Cookie：当前无独立 Cookie 存储')),
+        );
+      case 'auto_complete':
+        setState(() => _autoComplete = !_autoComplete);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_autoComplete ? '已开启自动补全' : '已关闭自动补全'),
+            ),
+          );
+        }
+      case 'copy':
+        await _copySource();
+      case 'paste':
+        await _pasteSource();
+      case 'variable':
+        await _setSourceVariable();
+      case 'qr_import':
+        await _importQr();
+      case 'qr_share':
+        await _shareQr();
+      case 'str_share':
+        await _shareStr();
+      case 'log':
+        _showLog();
+      case 'help':
+        _showHelp();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('编辑: ${widget.source.bookSourceName}'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: '规则编辑', icon: Icon(Icons.code)),
-            Tab(text: '调试面板', icon: Icon(Icons.bug_report)),
-          ],
-        ),
-        actions: [
-          // 对齐 BookSourceEditActivity menu_fullscreen_edit → CodeEditActivity
-          if (_tabController.index == 0)
+    final loginUrl = _baseFields
+        .firstWhere((f) => f.key == 'loginUrl')
+        .controller
+        .text
+        .trim();
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final nav = Navigator.of(context);
+        if (await _confirmExit()) {
+          nav.pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('编辑书源'),
+          actions: [
             IconButton(
               icon: const Icon(Icons.code),
               tooltip: '编辑内容',
               onPressed: _openCodeEdit,
             ),
-          IconButton(
-            icon: _isValidating
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.fact_check_outlined),
-            tooltip: '一键校验',
-            onPressed: _isValidating ? null : _runFullValidation,
-          ),
-          if (_tabController.index == 0)
-            TextButton.icon(
-              onPressed: _isSaving ? null : _saveJson,
+            IconButton(
               icon: _isSaving
                   ? const SizedBox(
-                      width: 16,
-                      height: 16,
+                      width: 20,
+                      height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.save),
-              label: const Text('保存'),
+              tooltip: '保存',
+              onPressed: _isSaving ? null : () => _save(popOnSuccess: true),
             ),
-        ],
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [_buildEditorTab(theme), _buildEnhancedDebugTab(theme)],
-      ),
-    );
-  }
-
-  Widget _buildEditorTab(ThemeData theme) {
-    return Column(
-      children: [
-        if (_jsonError != null)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            color: Colors.red.shade50,
-            child: Row(
-              children: [
-                const Icon(Icons.error, color: Colors.red, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _jsonError!,
-                    style: const TextStyle(color: Colors.red, fontSize: 13),
-                  ),
+            IconButton(
+              icon: const Icon(Icons.bug_report),
+              tooltip: '调试源',
+              onPressed: _isSaving ? null : _debugSource,
+            ),
+            PopupMenuButton<String>(
+              onSelected: _onMenuSelected,
+              itemBuilder: (ctx) => [
+                if (loginUrl.isNotEmpty)
+                  const PopupMenuItem(value: 'login', child: Text('登录')),
+                const PopupMenuItem(value: 'search', child: Text('搜索')),
+                const PopupMenuItem(value: 'cookie', child: Text('清除 Cookie')),
+                CheckedPopupMenuItem(
+                  value: 'auto_complete',
+                  checked: _autoComplete,
+                  child: const Text('自动补全'),
                 ),
+                const PopupMenuItem(value: 'copy', child: Text('拷贝源')),
+                const PopupMenuItem(value: 'paste', child: Text('粘贴源')),
+                const PopupMenuItem(value: 'variable', child: Text('设置源变量')),
+                const PopupMenuItem(value: 'qr_import', child: Text('二维码导入')),
+                const PopupMenuItem(value: 'qr_share', child: Text('二维码分享')),
+                const PopupMenuItem(value: 'str_share', child: Text('字符串分享')),
+                const PopupMenuItem(value: 'log', child: Text('日志')),
+                const PopupMenuItem(value: 'help', child: Text('帮助')),
               ],
             ),
-          ),
-        Expanded(
-          child: TextField(
-            controller: _jsonController,
-            maxLines: null,
-            expands: true,
-            textAlignVertical: TextAlignVertical.top,
-            style: const TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 13,
-              height: 1.5,
-            ),
-            decoration: const InputDecoration(
-              contentPadding: EdgeInsets.all(12),
-              border: InputBorder.none,
-              hintText: '编辑书源 JSON...',
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Enhanced debug tab with sub-tabs for search, chapters, content, and URL testing
-  Widget _buildEnhancedDebugTab(ThemeData theme) {
-    return Column(
-      children: [
-        // Debug sub-tabs
-        Container(
-          color: theme.colorScheme.surfaceContainerLow,
-          child: TabBar(
-            controller: _debugTabController,
-            labelStyle: const TextStyle(fontSize: 12),
-            tabs: const [
-              Tab(text: '搜索', icon: Icon(Icons.search, size: 16)),
-              Tab(text: '章节', icon: Icon(Icons.list_alt, size: 16)),
-              Tab(text: 'URL测试', icon: Icon(Icons.link, size: 16)),
-            ],
-          ),
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _debugTabController,
-            children: [
-              _buildSearchDebugTab(theme),
-              _buildChapterDebugTab(theme),
-              _buildUrlDebugTab(theme),
-            ],
-          ),
-        ),
-        SourceDebugPanel(result: _lastDebugResult),
-        // Log output area
-        Expanded(
-          child: Container(
-            color: const Color(0xFF1E1E1E),
-            padding: const EdgeInsets.all(12),
-            child: SingleChildScrollView(
-              child: SelectableText(
-                _debugLog.isEmpty ? '操作日志会显示在这里...' : _debugLog,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 13,
-                  height: 1.5,
-                  color: Color(0xFFCCCCCC),
-                ),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(36),
+            child: Material(
+              color: theme.colorScheme.surface,
+              elevation: 1,
+              child: TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                tabs: [for (final t in _tabs) Tab(text: t, height: 36)],
               ),
             ),
           ),
         ),
-        // Bottom action bar
-        Container(
-          padding: const EdgeInsets.all(8),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.delete_outline, size: 18),
-                  label: const Text('清空日志'),
-                  onPressed: () => setState(() => _debugLog = ''),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.content_copy, size: 18),
-                  label: const Text('保存日志'),
-                  onPressed: () {
-                    if (_debugLog.isNotEmpty) {
-                      final tempFile =
-                          '${widget.source.bookSourceName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')}_debug.txt';
-                      try {
-                        File(tempFile).writeAsStringSync(_debugLog);
-                        _appendLog('\n📋 日志已保存到: $tempFile');
-                      } catch (_) {}
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Search debug tab
-  Widget _buildSearchDebugTab(ThemeData theme) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          color: theme.colorScheme.surfaceContainerLow,
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchCtrl,
-                  decoration: const InputDecoration(
-                    hintText: '输入搜索关键词...',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    isDense: true,
-                  ),
-                  onChanged: (v) => _searchKeyword = v,
-                  onSubmitted: (_) => _runSearchDebug(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.tonal(
-                onPressed: _isDebugLoading ? null : _runSearchDebug,
-                child: _isDebugLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('测试搜索'),
-              ),
-            ],
-          ),
-        ),
-        // Rule info
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(8),
-          color: Colors.blue.shade50,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '搜索规则',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue[800],
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'URL: ${widget.source.ruleSearchUrl}',
-                style: TextStyle(fontSize: 10, color: Colors.blue[700]),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                '列表: ${widget.source.ruleSearchList}',
-                style: TextStyle(fontSize: 10, color: Colors.blue[700]),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                '书名: ${widget.source.ruleSearchName}',
-                style: TextStyle(fontSize: 10, color: Colors.blue[700]),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-        const Expanded(child: SizedBox.shrink()),
-      ],
-    );
-  }
-
-  /// Chapter debug tab
-  Widget _buildChapterDebugTab(ThemeData theme) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          color: theme.colorScheme.surfaceContainerLow,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: _chapterUrlCtrl,
-                decoration: const InputDecoration(
-                  hintText: '输入书籍详情/目录页 URL...',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
                 children: [
-                  FilledButton.tonal(
-                    onPressed: _isDebugLoading ? null : _runChapterDebug,
-                    child: const Text('测试章节列表'),
+                  const Text('类型：'),
+                  DropdownButton<int>(
+                    value: _bookTypeIndex,
+                    underline: const SizedBox.shrink(),
+                    items: [
+                      for (var i = 0; i < _bookTypes.length; i++)
+                        DropdownMenuItem(value: i, child: Text(_bookTypes[i])),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) setState(() => _bookTypeIndex = v);
+                    },
                   ),
-                  const SizedBox(width: 8),
-                  if (_testChapters.isNotEmpty)
-                    Text(
-                      '${_testChapters.length} 章',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                    ),
+                  _check('启用', _enabled, (v) => setState(() => _enabled = v)),
+                  _check(
+                    '发现',
+                    _enabledExplore,
+                    (v) => setState(() => _enabledExplore = v),
+                  ),
+                  _check(
+                    'CookieJar',
+                    _enabledCookieJar,
+                    (v) => setState(() => _enabledCookieJar = v),
+                  ),
                 ],
               ),
-            ],
-          ),
-        ),
-        // Rule info
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(8),
-          color: Colors.teal.shade50,
-          child: Text(
-            '目录规则: ${widget.source.ruleChapterList}',
-            style: TextStyle(fontSize: 10, color: Colors.teal[700]),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        // Chapter list preview
-        if (_testChapters.isNotEmpty)
-          Expanded(
-            child: ListView.builder(
-              itemCount: _testChapters.length > 20 ? 20 : _testChapters.length,
-              itemBuilder: (_, i) => ListTile(
-                dense: true,
-                leading: Text(
-                  '${i + 1}',
-                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                ),
-                title: Text(
-                  _testChapters[i].name,
-                  style: const TextStyle(fontSize: 13),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  _testChapters[i].bookUrl,
-                  style: TextStyle(fontSize: 10, color: Colors.grey[500]),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+            ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  _check(
+                    '事件监听',
+                    _eventListener,
+                    (v) => setState(() => _eventListener = v),
+                  ),
+                  _check(
+                    '定制按钮',
+                    _customButton,
+                    (v) => setState(() => _customButton = v),
+                  ),
+                ],
               ),
             ),
-          )
-        else
-          const Expanded(child: SizedBox.shrink()),
-      ],
-    );
-  }
-
-  /// URL test tab - test any URL with this source
-  Widget _buildUrlDebugTab(ThemeData theme) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          color: theme.colorScheme.surfaceContainerLow,
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _urlCtrl,
-                  decoration: const InputDecoration(
-                    hintText: '输入任意 URL 测试...',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+                itemCount: _currentFields.length,
+                itemBuilder: (_, i) {
+                  final field = _currentFields[i];
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: TextField(
+                      controller: field.controller,
+                      focusNode: field.focus,
+                      maxLines: null,
+                      minLines: 1,
+                      keyboardType: TextInputType.multiline,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: field.hint,
+                        alignLabelWithHint: true,
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                      onChanged: (_) => setState(() {}),
                     ),
-                    isDense: true,
-                  ),
-                  onSubmitted: (_) => _runUrlTest(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.tonal(
-                onPressed: _isDebugLoading ? null : _runUrlTest,
-                child: const Text('请求'),
-              ),
-            ],
-          ),
-        ),
-        // Raw response (truncated)
-        if (_rawResponse != null)
-          Expanded(
-            child: Container(
-              color: const Color(0xFF1E1E1E),
-              padding: const EdgeInsets.all(8),
-              child: SingleChildScrollView(
-                child: SelectableText(
-                  _rawResponse!.length > 5000
-                      ? '${_rawResponse!.substring(0, 5000)}\n\n... (truncated, ${_rawResponse!.length} chars total)'
-                      : _rawResponse!,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 11,
-                    height: 1.4,
-                    color: Color(0xFFAAAAAA),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
-          )
-        else
-          const Expanded(child: SizedBox.shrink()),
-      ],
+          ],
+        ),
+      ),
     );
   }
 
-  // ── Debug operations ──
-
-  Future<void> _runChapterDebug() async {
-    final url = _chapterUrlCtrl.text.trim();
-    if (url.isEmpty) {
-      _appendLog('⚠️ 请先输入书籍 URL');
-      return;
-    }
-    setState(() {
-      _isDebugLoading = true;
-      _testChapters = [];
-      _debugLog = '';
-      _lastDebugResult = null;
-    });
-
-    try {
-      if (!LegadoEngineBridge.isAvailable) {
-        _appendLog('❌ Rust 引擎不可用');
-        return;
-      }
-      _appendLog('📖 获取章节列表...');
-      _appendLog('URL: $url');
-
-      final result = await LegadoEngineBridge.debugToc(widget.source, url);
-      setState(() {
-        _lastDebugResult = result;
-        _testChapters = result.results;
-        _debugLog = formatDebugLog(result);
-      });
-    } catch (e) {
-      _appendLog('❌ 出错: $e');
-    } finally {
-      if (mounted) setState(() => _isDebugLoading = false);
-    }
-  }
-
-  Future<void> _runUrlTest() async {
-    final url = _urlCtrl.text.trim();
-    if (url.isEmpty) return;
-
-    setState(() {
-      _isDebugLoading = true;
-      _debugLog = '';
-      _rawResponse = null;
-      _lastDebugResult = null;
-    });
-
-    try {
-      if (!LegadoEngineBridge.isAvailable) {
-        _appendLog('❌ Rust 引擎不可用');
-        return;
-      }
-      _appendLog('📡 请求: $url');
-
-      final body = await LegadoEngineBridge.httpFetch(
-        url,
-        referer: widget.source.bookSourceUrl,
-        source: widget.source,
-      );
-
-      _appendLog('✅ 完成');
-      _appendLog('📊 大小: ${body.length} chars');
-      _appendLog(
-        '🧪 内容预览: ${body.substring(0, body.length > 200 ? 200 : body.length)}',
-      );
-
-      setState(() => _rawResponse = body);
-    } catch (e) {
-      _appendLog('❌ 请求失败: $e');
-    } finally {
-      if (mounted) setState(() => _isDebugLoading = false);
-    }
+  Widget _check(String label, bool value, ValueChanged<bool> onChanged) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Checkbox(value: value, onChanged: (v) => onChanged(v ?? false)),
+        Text(label, style: const TextStyle(fontSize: 13)),
+        const SizedBox(width: 4),
+      ],
+    );
   }
 }
