@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../page_direction.dart';
 
+/// Jingshiro `SlidePageDelegate.onDraw` — current page underlay is drawn by
+/// [ReaderTurnView] when the painter early-returns (invalid offset / idle).
 class SlidePagePainter extends CustomPainter {
   SlidePagePainter({
     required this.cur,
@@ -28,25 +30,22 @@ class SlidePagePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (direction == PageTurnDirection.none) {
-      _drawPage(canvas, cur, size);
-      return;
-    }
-
-    if (!isRunning) {
-      _drawPage(canvas, cur, size);
       return;
     }
 
     final viewWidth = viewSize.width;
     final offsetX = touchX - startX;
 
+    // KT order: invalid offset return → then !isRunning return.
     if ((direction == PageTurnDirection.next && offsetX > 0) ||
         (direction == PageTurnDirection.prev && offsetX < 0)) {
-      _drawPage(canvas, cur, size);
       return;
     }
 
     final distanceX = offsetX > 0 ? offsetX - viewWidth : offsetX + viewWidth;
+    if (!isRunning) {
+      return;
+    }
 
     if (direction == PageTurnDirection.prev) {
       _drawPageTranslated(canvas, cur, distanceX + viewWidth, size);
@@ -78,7 +77,7 @@ void _drawPage(Canvas canvas, ui.Image? image, Size size) {
     image,
     Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
     Offset.zero & size,
-    Paint(),
+    Paint()..filterQuality = FilterQuality.medium,
   );
 }
 

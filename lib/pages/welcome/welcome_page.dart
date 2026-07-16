@@ -7,7 +7,8 @@ import '../../theme/legado_tokens.dart';
 /// 欢迎/启动页 — 1:1 对齐 Jingshiro [activity_welcome.xml] + [WelcomeActivity]
 ///
 /// 纯启动闪屏：竖排「阅读 / 享受美好时光」、[icon_read_book]、底栏「品读万千故事」。
-/// 默认 [welcomeShowTimeMs] 后进入主页（对齐 `PreferKey.welcomeShowTime` 默认 500）。
+/// 默认 [welcomeShowTimeMs] 后进入主页（对齐 `pref_config_welcome` SeekBar：0–800，取上限 800
+/// 作为冷启可见时长；Android 另有系统闪屏，纯 Welcome 默认虽为 500，桌面端无系统闪屏故用 800）。
 /// 无功能简介、无隐私按钮（隐私在 [MainShell] Dialog，对齐 MainActivity）。
 class WelcomePage extends StatefulWidget {
   const WelcomePage({
@@ -16,8 +17,9 @@ class WelcomePage extends StatefulWidget {
     this.showDuration = const Duration(milliseconds: welcomeShowTimeMs),
   });
 
-  /// 对齐 Android `getPrefInt(PreferKey.welcomeShowTime, 500)`。
-  static const welcomeShowTimeMs = 500;
+  /// Jingshiro `pref_config_welcome` SeekBar `MaxValue=800`（`MinValue=0`，XML default=500）。
+  /// 桌面/Flutter 无系统 Splash，用上限使封面可见时长更接近 Jingshiro 整段冷启观感。
+  static const welcomeShowTimeMs = 800;
 
   /// 历史 key：回访用户跳过曾写入的「只展一次」引导；启动闪屏每冷启均展示。
   static const welcomeCompletedKey = 'legado_welcome_completed';
@@ -44,7 +46,11 @@ class _WelcomePageState extends State<WelcomePage> {
     if (d <= Duration.zero) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _finish());
     } else {
-      _timer = Timer(d, _finish);
+      // Jingshiro: binding.root.postDelayed — 首帧绘制后再计时，保证封面完整可见。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _timer = Timer(d, _finish);
+      });
     }
   }
 

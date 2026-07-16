@@ -365,6 +365,7 @@ class ReaderTurnViewState extends State<ReaderTurnView>
           startX: c.startX,
           viewSize: size,
           isRunning: running,
+          devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
         );
       case PageAnimMode.simulation:
         return SimulationCurlPainter(
@@ -390,9 +391,24 @@ class ReaderTurnViewState extends State<ReaderTurnView>
     if (index == null || index < 0 || index >= widget.pageCount) {
       return const SizedBox.shrink();
     }
+    // Opaque page (bg + content) so Cover/Slide bitmaps fully occlude underlay —
+    // Jingshiro screenshots the full page view, not transparent text alone.
     return RepaintBoundary(
       key: key,
-      child: SizedBox.expand(child: widget.buildPage(index)),
+      child: ColoredBox(
+        color: widget.backPageColor,
+        child: SizedBox.expand(child: widget.buildPage(index)),
+      ),
+    );
+  }
+
+  Widget _livePage(int pageIndex) {
+    return ColoredBox(
+      color: widget.backPageColor,
+      child: KeyedSubtree(
+        key: ValueKey('live-$pageIndex'),
+        child: widget.buildPage(pageIndex),
+      ),
     );
   }
 
@@ -407,6 +423,9 @@ class ReaderTurnViewState extends State<ReaderTurnView>
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         final painter = _overlayVisible ? _buildPainter(size) : null;
+        // Jingshiro ReadView: live curPage stays under the horizontal canvas.
+        final keepLiveUnderlay = widget.mode == PageAnimMode.cover ||
+            widget.mode == PageAnimMode.slide;
 
         return Listener(
           behavior: HitTestBehavior.opaque,
@@ -431,13 +450,10 @@ class ReaderTurnViewState extends State<ReaderTurnView>
                   ),
                 ),
               ),
-              if (!_overlayVisible)
-                KeyedSubtree(
-                  key: ValueKey('live-$pageIndex'),
-                  child: widget.buildPage(pageIndex),
-                )
+              if (!_overlayVisible || keepLiveUnderlay)
+                _livePage(pageIndex)
               else
-                const ColoredBox(color: Colors.transparent),
+                ColoredBox(color: widget.backPageColor),
               if (widget.overlay != null) widget.overlay!,
               if (painter != null)
                 CustomPaint(

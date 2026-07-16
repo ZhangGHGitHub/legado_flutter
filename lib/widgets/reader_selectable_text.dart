@@ -1,6 +1,12 @@
+import 'dart:async';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 /// 阅读器正文：对齐 Jingshiro —— 平时不可选中，仅长按进入选区。
+///
+/// Long-press uses a [Listener]+Timer (not [GestureDetector]) so it does not
+/// enter the gesture arena and cannot block parent [ScrollView] drags.
 class ReaderSelectableText extends StatefulWidget {
   final String text;
   final TextStyle style;
@@ -23,6 +29,9 @@ class _ReaderSelectableTextState extends State<ReaderSelectableText> {
   late final TextEditingController _controller;
   final FocusNode _focusNode = FocusNode();
   bool _selectionEnabled = false;
+  Timer? _longPressTimer;
+  Offset? _downLocal;
+  int? _pointer;
 
   @override
   void initState() {
@@ -44,6 +53,7 @@ class _ReaderSelectableTextState extends State<ReaderSelectableText> {
 
   @override
   void dispose() {
+    _longPressTimer?.cancel();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -94,8 +104,8 @@ class _ReaderSelectableTextState extends State<ReaderSelectableText> {
         .clamp(0, widget.text.length);
   }
 
-  void _onLongPressStart(LongPressStartDetails details) {
-    final offset = _offsetForLocalPosition(details.localPosition);
+  void _enableSelectionAt(Offset local) {
+    final offset = _offsetForLocalPosition(local);
     final range = _wordRange(widget.text, offset);
     setState(() {
       _selectionEnabled = true;
@@ -112,6 +122,37 @@ class _ReaderSelectableTextState extends State<ReaderSelectableText> {
     });
   }
 
+  void _cancelLongPress() {
+    _longPressTimer?.cancel();
+    _longPressTimer = null;
+    _downLocal = null;
+    _pointer = null;
+  }
+
+  void _onPointerDown(PointerDownEvent e) {
+    if (_selectionEnabled) return;
+    _cancelLongPress();
+    _pointer = e.pointer;
+    _downLocal = e.localPosition;
+    _longPressTimer = Timer(kLongPressTimeout, () {
+      if (!mounted || _downLocal == null) return;
+      _enableSelectionAt(_downLocal!);
+      _cancelLongPress();
+    });
+  }
+
+  void _onPointerMove(PointerMoveEvent e) {
+    if (_pointer != e.pointer || _downLocal == null) return;
+    if ((e.localPosition - _downLocal!).distance > kTouchSlop) {
+      _cancelLongPress();
+    }
+  }
+
+  void _onPointerUpOrCancel(PointerEvent e) {
+    if (_pointer != null && e.pointer != _pointer) return;
+    _cancelLongPress();
+  }
+
   String get _selected {
     final sel = _controller.selection;
     if (!sel.isValid || sel.isCollapsed) return '';
@@ -125,9 +166,12 @@ class _ReaderSelectableTextState extends State<ReaderSelectableText> {
   Widget build(BuildContext context) {
     // Plain Text while reading: scroll/drag never selects (Jingshiro parity).
     if (!_selectionEnabled) {
-      return GestureDetector(
+      return Listener(
         behavior: HitTestBehavior.translucent,
-        onLongPressStart: _onLongPressStart,
+        onPointerDown: _onPointerDown,
+        onPointerMove: _onPointerMove,
+        onPointerUp: _onPointerUpOrCancel,
+        onPointerCancel: _onPointerUpOrCancel,
         child: Text(
           widget.text,
           style: widget.style,

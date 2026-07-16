@@ -11,6 +11,7 @@ import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/chapter.dart';
 import '../utils/site_busy_guard.dart';
+import '../utils/ssrf_guard.dart';
 
 /// 书源服务门面 — 全部书源操作走 Rust 引擎（Phase E-B：无 Dart 回退）
 class BookSourceService {
@@ -140,11 +141,16 @@ class BookSourceService {
 
   /// 从 URL 获取书源 JSON 并解析
   static Future<List<BookSource>> fetchSourcesFromUrl(String url) async {
+    SsrfGuard.assertPublicHttpUrl(url);
     try {
       final dio = Dio(
         BaseOptions(
           connectTimeout: const Duration(seconds: 15),
           receiveTimeout: const Duration(seconds: 30),
+          followRedirects: false,
+          maxRedirects: 0,
+          validateStatus: (status) =>
+              status != null && status >= 200 && status < 400,
           headers: {
             'User-Agent':
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
@@ -162,7 +168,29 @@ class BookSourceService {
         },
       );
 
-      final response = await dio.get(url);
+      // 手动跟随重定向并对每跳 Location 做 SSRF 校验（不做 DNS 解析）
+      var currentUrl = url;
+      late Response<dynamic> response;
+      for (var hop = 0; hop <= SsrfGuard.maxRedirects; hop++) {
+        SsrfGuard.assertPublicHttpUrl(currentUrl);
+        response = await dio.get<dynamic>(currentUrl);
+        final code = response.statusCode ?? 0;
+        if (code >= 300 && code < 400) {
+          final location = response.headers.value('location');
+          if (location == null || location.isEmpty) {
+            debugPrint('从 $url 获取书源: 重定向缺少 Location');
+            return [];
+          }
+          if (hop == SsrfGuard.maxRedirects) {
+            debugPrint('从 $url 获取书源: 重定向次数过多');
+            return [];
+          }
+          SsrfGuard.assertRedirectTarget(currentUrl, location);
+          currentUrl = Uri.parse(currentUrl).resolve(location).toString();
+          continue;
+        }
+        break;
+      }
       dynamic data = response.data;
 
       if (data is String) {

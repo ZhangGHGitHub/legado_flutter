@@ -75,11 +75,15 @@ class _ChangeSourcePageState extends State<ChangeSourcePage> {
     try {
       final bookProvider = context.read<BookProvider>();
       final sourceProvider = context.read<SourceProvider>();
-      final updated = await bookProvider.changeSource(widget.book, selected);
-      final source = sourceProvider.findSourceForBook(updated);
+      final source = sourceProvider.findSourceForBook(selected);
       if (source == null) {
         throw StateError('找不到对应书源，请确认书源已启用');
       }
+      final updated = await bookProvider.changeSource(
+        widget.book,
+        selected,
+        source: source,
+      );
       await bookProvider.loadChapters(
         updated,
         source: source,

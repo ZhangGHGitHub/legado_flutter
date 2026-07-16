@@ -7,6 +7,9 @@ import 'package:flutter/foundation.dart';
 import 'page_direction.dart';
 import 'simulation_curl_math.dart';
 
+/// Jingshiro `ReadView.defaultAnimationSpeed`.
+const int kDefaultPageAnimSpeed = 300;
+
 /// Jingshiro `PageDelegate.startScroll` duration (milliseconds).
 int pageTurnSettleDurationMs({
   required double dx,
@@ -168,7 +171,7 @@ class PageTurnController extends ChangeNotifier {
     required double viewHeight,
     required void Function(PageTurnDirection) onCompleted,
     PageTurnSettleStyle settleStyle = PageTurnSettleStyle.simulation,
-    int animationSpeed = 100,
+    int animationSpeed = kDefaultPageAnimSpeed,
   }) {
     if (!_isMoved || direction == PageTurnDirection.none) {
       _resetAfterGesture();
@@ -193,7 +196,7 @@ class PageTurnController extends ChangeNotifier {
     required bool hasPrev,
     required bool hasNext,
     PageTurnSettleStyle settleStyle = PageTurnSettleStyle.simulation,
-    int animationSpeed = 100,
+    int animationSpeed = kDefaultPageAnimSpeed,
   }) {
     _abortSettle(applyCompletion: false);
     if (dir == PageTurnDirection.next) {

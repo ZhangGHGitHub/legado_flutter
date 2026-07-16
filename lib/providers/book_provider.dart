@@ -303,8 +303,29 @@ class BookProvider extends ChangeNotifier {
     await _dao.insert(updated);
   }
 
+  /// 仅接受可网络加载的封面，避免相对/空 URL 被 resolve 成站点根路径后覆盖好封面。
+  static String? _usableCoverUrl(String? url) {
+    final u = url?.trim() ?? '';
+    if (u.isEmpty) return null;
+    final lower = u.toLowerCase();
+    if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
+      return null;
+    }
+    // 站点根路径等不是图片
+    final uri = Uri.tryParse(u);
+    if (uri == null || uri.host.isEmpty) return null;
+    final path = uri.path;
+    if (path.isEmpty || path == '/') return null;
+    return u;
+  }
+
   /// 换源：保留书架书 id/进度，更新 bookSourceUrl + sourceUrl；已在书架则落库。
-  Future<Book> changeSource(Book current, Book selected) async {
+  /// [source] 可选；传入时会拉详情页封面/简介，避免搜索结果封面为空或无效。
+  Future<Book> changeSource(
+    Book current,
+    Book selected, {
+    BookSource? source,
+  }) async {
     final shelf = findBookById(current.id) ?? findShelfBook(current);
     final base = shelf ?? current;
     final last = selected.lastChapter?.trim().isNotEmpty == true
@@ -312,17 +333,34 @@ class BookProvider extends ChangeNotifier {
         : (selected.description.trim().isNotEmpty
             ? selected.description
             : base.lastChapter);
-    final updated = base.copyWith(
+    var updated = base.copyWith(
       sourceUrl: selected.sourceUrl,
       bookSourceUrl: selected.bookSourceUrl,
-      coverUrl:
-          selected.coverUrl.isNotEmpty ? selected.coverUrl : base.coverUrl,
+      coverUrl: _usableCoverUrl(selected.coverUrl) ?? base.coverUrl,
       lastChapter: last,
       author: selected.author.isNotEmpty ? selected.author : base.author,
       description: selected.description.isNotEmpty
           ? selected.description
           : base.description,
     );
+
+    if (source != null && updated.sourceUrl.isNotEmpty) {
+      try {
+        final info =
+            await _sourceService.getBookInfo(source, updated.sourceUrl);
+        final infoCover = _usableCoverUrl(info['coverUrl']);
+        final intro = info['intro']?.trim() ?? '';
+        final lastFromInfo = info['lastChapter']?.trim() ?? '';
+        updated = updated.copyWith(
+          coverUrl: infoCover ?? updated.coverUrl,
+          description: intro.isNotEmpty ? intro : updated.description,
+          lastChapter: lastFromInfo.isNotEmpty ? lastFromInfo : updated.lastChapter,
+        );
+      } catch (e, st) {
+        debugPrint('换源后拉取详情封面失败: $e\n$st');
+      }
+    }
+
     if (shelf != null) {
       await _dao.insert(updated);
       _books = await _dao.getAll();

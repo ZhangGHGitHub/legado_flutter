@@ -686,8 +686,24 @@ fn save_cookies(url: &str, response: &reqwest::Response) {
 }
 
 pub fn resolve_url(url: &str, base_url: &str) -> String {
-    if url.starts_with("http") {
+    let url = url.trim();
+    if url.is_empty() {
+        return String::new();
+    }
+    // 协议相对 URL：//cdn.example.com/a.jpg → https://cdn.example.com/a.jpg
+    if url.starts_with("//") {
+        if let Ok(base) = url::Url::parse(base_url) {
+            return format!("{}:{}", base.scheme(), url);
+        }
+        return format!("https:{url}");
+    }
+    if url.starts_with("http://") || url.starts_with("https://") {
         return url.to_string();
+    }
+    if let Ok(base) = url::Url::parse(base_url) {
+        if let Ok(joined) = base.join(url) {
+            return joined.into();
+        }
     }
     let base = base_url.trim_end_matches('/');
     if url.starts_with('/') {

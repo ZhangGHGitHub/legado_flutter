@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../page_direction.dart';
 
-/// Edge shadow width aligned with Jingshiro `CoverPageDelegate.setViewSize`.
-const double kCoverShadowWidth = 30;
+/// Jingshiro `CoverPageDelegate.setViewSize` uses raw px `30` for shadow.
+/// Convert with [devicePixelRatio]: logical = 30 / dpr.
+const double kCoverShadowWidthPx = 30;
 
+/// Jingshiro `CoverPageDelegate.onDraw` — assumes a live/current page sits
+/// underneath the canvas (we draw that base in [ReaderTurnView]).
 class CoverPagePainter extends CustomPainter {
   CoverPagePainter({
     required this.cur,
@@ -17,6 +20,7 @@ class CoverPagePainter extends CustomPainter {
     required this.startX,
     required this.viewSize,
     required this.isRunning,
+    this.devicePixelRatio = 1,
   });
 
   final ui.Image? cur;
@@ -27,51 +31,46 @@ class CoverPagePainter extends CustomPainter {
   final double startX;
   final Size viewSize;
   final bool isRunning;
+  final double devicePixelRatio;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (direction == PageTurnDirection.none) {
-      _drawPage(canvas, cur, size);
-      return;
-    }
-
-    if (!isRunning) {
-      _drawPage(canvas, cur, size);
+    // KT: if (!isRunning) return — underlay (current page) already visible.
+    if (!isRunning || direction == PageTurnDirection.none) {
       return;
     }
 
     final viewWidth = viewSize.width;
     final offsetX = touchX - startX;
 
+    // KT: invalid drag direction → return (underlay shows).
     if ((direction == PageTurnDirection.next && offsetX > 0) ||
         (direction == PageTurnDirection.prev && offsetX < 0)) {
-      _drawPage(canvas, cur, size);
       return;
     }
 
     final distanceX = offsetX > 0 ? offsetX - viewWidth : offsetX + viewWidth;
 
     if (direction == PageTurnDirection.prev) {
-      // Base current page under the incoming prev cover (Jingshiro PREV
-      // only draws prevRecorder; without a base layer Flutter shows holes).
-      _drawPage(canvas, cur, size);
+      // Underlay = current page (Jingshiro live curPage). Only draw prev + shadow.
       if (offsetX <= viewWidth) {
-        // KT `withTranslation { prevRecorder.draw(canvas) }` uses outer
-        // canvas (likely typo); we draw on the translated canvas.
+        // withTranslation(distanceX) { prevRecorder.draw(canvas) } — same Canvas.
         _drawPageTranslated(canvas, prev, distanceX, size);
-        _addShadow(canvas, distanceX, size);
+        _addShadow(canvas, distanceX, size, devicePixelRatio);
       } else {
         _drawPage(canvas, prev, size);
       }
     } else if (direction == PageTurnDirection.next) {
       final width = viewSize.width;
       final height = viewSize.height;
+      // withClip(width + offsetX, 0, width, height) { next.draw }
       canvas.save();
       canvas.clipRect(Rect.fromLTRB(width + offsetX, 0, width, height));
       _drawPage(canvas, next, size);
       canvas.restore();
+      // withTranslation(distanceX - viewWidth) { cur.draw }
       _drawPageTranslated(canvas, cur, distanceX - viewWidth, size);
-      _addShadow(canvas, distanceX, size);
+      _addShadow(canvas, distanceX, size, devicePixelRatio);
     }
   }
 
@@ -84,7 +83,8 @@ class CoverPagePainter extends CustomPainter {
         oldDelegate.touchX != touchX ||
         oldDelegate.startX != startX ||
         oldDelegate.viewSize != viewSize ||
-        oldDelegate.isRunning != isRunning;
+        oldDelegate.isRunning != isRunning ||
+        oldDelegate.devicePixelRatio != devicePixelRatio;
   }
 }
 
@@ -96,7 +96,7 @@ void _drawPage(Canvas canvas, ui.Image? image, Size size) {
     image,
     Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
     Offset.zero & size,
-    Paint(),
+    Paint()..filterQuality = FilterQuality.medium,
   );
 }
 
@@ -115,12 +115,19 @@ void _drawPageTranslated(
   canvas.restore();
 }
 
-void _addShadow(Canvas canvas, double left, Size size) {
+void _addShadow(
+  Canvas canvas,
+  double left,
+  Size size,
+  double devicePixelRatio,
+) {
   if (left == 0) {
     return;
   }
+  final dpr = devicePixelRatio <= 0 ? 1.0 : devicePixelRatio;
+  final shadowW = kCoverShadowWidthPx / dpr;
   final dx = left < 0 ? left + size.width : left;
-  final shadowRect = Rect.fromLTWH(0, 0, kCoverShadowWidth, size.height);
+  final shadowRect = Rect.fromLTWH(0, 0, shadowW, size.height);
   canvas.save();
   canvas.translate(dx, 0);
   canvas.drawRect(

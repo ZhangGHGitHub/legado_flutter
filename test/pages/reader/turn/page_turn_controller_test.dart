@@ -64,6 +64,10 @@ void main() {
     });
   });
 
+  test('kDefaultPageAnimSpeed 对齐 ReadView.defaultAnimationSpeed', () {
+    expect(kDefaultPageAnimSpeed, 300);
+  });
+
   test('pageTurnSettleDurationMs 对齐 PageDelegate.startScroll', () {
     expect(
       pageTurnSettleDurationMs(

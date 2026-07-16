@@ -642,6 +642,8 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
   }
 
   Future<void> _pickFont() async {
+    final customFiles = await ReaderFontLoader.listCustomFontFiles();
+    if (!mounted) return;
     final picked = await showModalBottomSheet<String>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -650,11 +652,13 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
       builder: (ctx) {
         Widget tile(String family, String label) {
           final selected = _s.fontFamily == family;
+          final previewFamily = ReaderFontLoader.resolveFamilySync(family);
           return ListTile(
             title: Text(
               label,
               style: TextStyle(
-                fontFamily: family.isEmpty ? null : family,
+                fontFamily: previewFamily,
+                fontFamilyFallback: ReaderFontLoader.cjkFallbackFamilies(),
                 fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
@@ -679,16 +683,23 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
                   ),
                 ),
               ),
-              tile('', '系统默认'),
+              // 对齐 Jingshiro ChapterProvider：空 / SERIF / MONOSPACE
+              tile('', '系统默认（无衬线）'),
               tile('serif', '衬线（serif）'),
               tile('monospace', '等宽（monospace）'),
+              if (customFiles.isNotEmpty) ...[
+                const Divider(height: 1),
+                for (final f in customFiles)
+                  tile(f.path, ReaderFontLoader.displayName(f.path)),
+              ],
               ListTile(
                 leading: const Icon(Icons.upload_file_outlined),
                 title: const Text('导入自定义字体'),
-                subtitle: const Text('尚未实现 · 对齐 dialog_font_select'),
-                onTap: () {
+                subtitle: const Text('将 .ttf/.otf 放入应用字体目录后可选'),
+                onTap: () async {
                   Navigator.pop(ctx);
-                  _toast('自定义字体导入尚未实现');
+                  final dir = await ReaderFontLoader.fontDirectory();
+                  _toast('请将字体文件复制到：\n${dir.path}');
                 },
               ),
               const SizedBox(height: 8),
@@ -697,9 +708,12 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
         );
       },
     );
-    if (picked != null) {
-      _update(_s.copyWith(fontFamily: picked));
+    if (picked == null) return;
+    if (ReaderFontLoader.isFontFilePath(picked)) {
+      await ReaderFontLoader.ensureLoaded(picked);
     }
+    if (!mounted) return;
+    _update(_s.copyWith(fontFamily: picked));
   }
 
   @override

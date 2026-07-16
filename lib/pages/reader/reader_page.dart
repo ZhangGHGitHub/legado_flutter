@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -31,7 +32,9 @@ import '../../services/book_progress_sync.dart';
 import '../../services/book_reader_prefs.dart';
 import '../../services/click_action_prefs.dart';
 import '../../services/book_source_service.dart';
+import '../../services/read_book_config_prefs.dart';
 import '../../services/read_style_prefs.dart';
+import '../../services/reader_font_loader.dart';
 import '../../services/reader_session_prefs.dart';
 import '../../services/simulated_reading_prefs.dart';
 import 'auto_read_panel.dart';
@@ -261,18 +264,27 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _loadReadStylePrefs() async {
+    // 对齐 Jingshiro ReadBookConfig.initConfigs + initShareConfig
+    final saved = await ReadBookConfigPrefs.load();
     final share = await ReadStylePrefs.loadShareLayout();
     final overrides = await ReadStylePrefs.loadOverrides();
     final themeName = await ReadStylePrefs.loadThemeName();
     if (!mounted) return;
-    setState(() {
-      _settings = _settings.copyWith(
-        shareLayout: share,
-        themeOverrides: overrides,
-        themeName: themeName,
-      );
-    });
+    var next = saved.copyWith(
+      shareLayout: share,
+      themeOverrides: overrides,
+      themeName: themeName,
+    );
+    if (!share) {
+      final typo = await ReadStylePrefs.loadTypography(themeName);
+      if (typo != null) next = typo.applyTo(next);
+    }
+    if (!mounted) return;
+    setState(() => _settings = next);
+    _applyScreenOrientation(next.screenOrientation);
+    _applyScreenTimeout();
     _applySystemUi();
+    unawaited(_ensureReaderFontLoaded());
   }
 
   Future<void> _refreshBattery() async {
@@ -578,12 +590,25 @@ class _ReaderPageState extends State<ReaderPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
-        return GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTapUp: (details) {
-            _runClickAction(_clickActionAt(details.localPosition, size));
-          },
-          child: child,
+        return ScrollConfiguration(
+          // Windows/desktop: enable mouse/trackpad drag (Material default is touch-only).
+          behavior: ScrollConfiguration.of(context).copyWith(
+            scrollbars: false,
+            dragDevices: {
+              PointerDeviceKind.touch,
+              PointerDeviceKind.stylus,
+              PointerDeviceKind.invertedStylus,
+              PointerDeviceKind.mouse,
+              PointerDeviceKind.trackpad,
+            },
+          ),
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTapUp: (details) {
+              _runClickAction(_clickActionAt(details.localPosition, size));
+            },
+            child: child,
+          ),
         );
       },
     );
@@ -738,12 +763,13 @@ class _ReaderPageState extends State<ReaderPage> {
     _scheduleAutoHide();
   }
 
-  /// 对齐 legado ReadMenu.vwMenuBg：菜单展开时点正文区只收菜单，不穿透到九宫格翻页
+  /// 对齐 legado ReadMenu.vwMenuBg：菜单展开时点正文区只收菜单，不穿透到九宫格翻页。
+  /// 必须用 translucent：opaque 会抢走 ScrollView 的命中，滚动模式无法拖拽。
   Widget _chromeDismissScrim() {
     if (!_chromeVisible) return const SizedBox.shrink();
     return Positioned.fill(
       child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+        behavior: HitTestBehavior.translucent,
         onTap: _hideChrome,
       ),
     );
@@ -783,20 +809,21 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   TextStyle _readerTextStyle(Color color) {
-    // 勿用 inherit:false（须同时提供 textBaseline，否则红屏）：
-    // inherit false style must supply fontSize and textBaseline
-    return TextStyle(
-      fontSize: _settings.fontSize,
-      height: _settings.lineHeight,
+    return ReaderFontLoader.contentTextStyle(
+      settings: _settings,
       color: color,
-      fontFamily: _settings.fontFamily.isEmpty ? null : _settings.fontFamily,
-      fontWeight: _settings.fontWeight.flutterWeight,
-      letterSpacing: _settings.letterSpacing * _settings.fontSize,
     );
   }
 
   TextAlign get _readerTextAlign =>
       _settings.textFullJustify ? TextAlign.justify : TextAlign.start;
+
+  Future<void> _ensureReaderFontLoaded() async {
+    final family = _settings.fontFamily;
+    if (!ReaderFontLoader.isFontFilePath(family)) return;
+    await ReaderFontLoader.ensureLoaded(family);
+    if (mounted) setState(() {});
+  }
 
   bool get _isEmptyBody => ReadBook.isEmptyContentPlaceholder(_content);
 
@@ -1208,13 +1235,8 @@ class _ReaderPageState extends State<ReaderPage> {
       final tp = TextPainter(
         text: TextSpan(
           text: display,
-          style: TextStyle(
-            fontSize: _settings.fontSize,
-            height: _settings.lineHeight,
-            fontFamily:
-                _settings.fontFamily.isEmpty ? null : _settings.fontFamily,
-            fontWeight: _settings.fontWeight.flutterWeight,
-            letterSpacing: _settings.letterSpacing * _settings.fontSize,
+          style: ReaderFontLoader.contentTextStyle(
+            settings: _settings,
             color: Colors.black,
           ),
         ),
@@ -1297,15 +1319,25 @@ class _ReaderPageState extends State<ReaderPage> {
             newSettings.textFullJustify != _settings.textFullJustify ||
             newSettings.textBottomJustify != _settings.textBottomJustify);
 
+    // Jingshiro ReadStyleDialog：改全局翻页时 book.setPageAnim(-1)，dismiss 时 ReadBookConfig.save()
+    if (modeChanged) {
+      unawaited(BookReaderPrefs.setPageAnim(widget.book.id, -1));
+    }
+    unawaited(ReadBookConfigPrefs.save(newSettings));
+    unawaited(ReadStylePrefs.saveShareLayout(newSettings.shareLayout));
+    unawaited(ReadStylePrefs.saveThemeName(newSettings.themeName));
+
     if (modeChanged) {
       setState(() {
         _settings = newSettings;
+        _bookPageAnim = -1;
         _pages = [];
         _pageIndex = 0;
         _modeGeneration++;
       });
       _applyScreenTimeout();
       if (immersionChanged) _applySystemUi();
+      unawaited(_ensureReaderFontLoaded());
 
       // Phase 2：上一帧视图已 detach，再 dispose；slide 再重建分页
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1320,6 +1352,7 @@ class _ReaderPageState extends State<ReaderPage> {
     setState(() => _settings = newSettings);
     _applyScreenTimeout();
     if (immersionChanged) _applySystemUi();
+    unawaited(_ensureReaderFontLoaded());
     if (needRepaginate) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _isHorizontalPaged) _splitIntoPages();
@@ -2843,20 +2876,40 @@ class _ReaderPageState extends State<ReaderPage> {
       child: content,
     );
     // textBottomJustify：不足一页时贴底（legado 同名开关）
-    if (_settings.textBottomJustify) {
-      return SizedBox.expand(
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: padded,
-        ),
-      );
+    final body = _settings.textBottomJustify
+        ? SizedBox.expand(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: padded,
+            ),
+          )
+        : ScrollConfiguration(
+            behavior:
+                ScrollConfiguration.of(context).copyWith(scrollbars: false),
+            child: SingleChildScrollView(
+              primary: false,
+              child: padded,
+            ),
+          );
+    // Include bg in the page itself so Cover/Slide snapshots occlude (Jingshiro).
+    final path = theme.bgImagePath;
+    Widget? bgImage;
+    if (path != null && path.isNotEmpty) {
+      final file = File(path);
+      if (file.existsSync()) {
+        bgImage = Image.file(
+          file,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        );
+      }
     }
-    return ScrollConfiguration(
-      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-      child: SingleChildScrollView(
-        primary: false,
-        child: padded,
-      ),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (bgImage != null) Positioned.fill(child: bgImage),
+        body,
+      ],
     );
   }
 

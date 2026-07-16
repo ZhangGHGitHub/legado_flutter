@@ -305,6 +305,9 @@ class _BookInfoPageState extends State<BookInfoPage> {
         setState(() {
           _book = shelf;
           _isInShelf = true;
+          if (shelf.coverUrl.isNotEmpty) {
+            _coverUrl = shelf.coverUrl;
+          }
         });
       }
       return;
@@ -314,6 +317,9 @@ class _BookInfoPageState extends State<BookInfoPage> {
       setState(() {
         _book = shelf;
         _isInShelf = true;
+        if (shelf.coverUrl.isNotEmpty) {
+          _coverUrl = shelf.coverUrl;
+        }
       });
     }
   }

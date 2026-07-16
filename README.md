@@ -60,17 +60,17 @@ cargo build --release
 
 永久加入 PATH（可选）：系统环境变量中添加 `%USERPROFILE%\.cargo\bin`。
 
-## 引擎切换
+## 书源引擎
 
-设置 → **Rust 书源引擎** 开关，可在 Rust / Dart 双轨间切换（用于 A/B 对比）。
+书源解析统一由 **Rust**（`rust/legado_engine`）完成，经 FFI 暴露给 Flutter。`EngineConfig` 仅为启动兼容占位，**无** Dart/Rust 用户切换。
 
 ## 目录结构
 
 ```
 rust/legado_engine/     # Rust 书源引擎 crate
 lib/bridge/             # Dart FFI 桥接层
-lib/config/             # EngineConfig 引擎开关
-lib/services/           # BookSourceService（双轨搜索）
+lib/config/             # AppConfig / EngineConfig
+lib/services/           # BookSourceService（Rust 门面）
 ```
 
 ## Phase 进度

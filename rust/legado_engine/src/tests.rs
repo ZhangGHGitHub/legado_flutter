@@ -235,3 +235,41 @@ mod engine_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod resolve_url_tests {
+    use crate::http::client::resolve_url as client_resolve;
+    use crate::rule::engine::resolve_url as engine_resolve;
+
+    #[test]
+    fn empty_cover_stays_empty() {
+        assert_eq!(engine_resolve("", "https://site.com"), "");
+        assert_eq!(client_resolve("  ", "https://site.com/path"), "");
+    }
+
+    #[test]
+    fn protocol_relative_uses_base_scheme() {
+        assert_eq!(
+            engine_resolve("//cdn.example.com/a.jpg", "https://site.com/search"),
+            "https://cdn.example.com/a.jpg"
+        );
+        assert_eq!(
+            client_resolve("//cdn.example.com/a.jpg", "http://site.com/"),
+            "http://cdn.example.com/a.jpg"
+        );
+    }
+
+    #[test]
+    fn absolute_http_unchanged() {
+        assert_eq!(
+            engine_resolve("https://img.com/c.jpg", "https://site.com"),
+            "https://img.com/c.jpg"
+        );
+    }
+
+    #[test]
+    fn root_relative_joins_origin() {
+        let out = engine_resolve("/cover/1.jpg", "https://site.com/books/");
+        assert_eq!(out, "https://site.com/cover/1.jpg");
+    }
+}
