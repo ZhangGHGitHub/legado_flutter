@@ -52,7 +52,7 @@ import '../../widgets/bookplate_overlay.dart';
 import '../../widgets/note_editor_sheet.dart';
 import '../../widgets/reader_selectable_text.dart';
 
-/// ????? ? Phase F UI-1?chrome ???? / ????? / ????
+/// 阅读器页面 — Phase F UI-1：chrome 自动隐藏 / 底栏章进度 / 更多菜单
 class ReaderPage extends StatefulWidget {
   final Book book;
   final Chapter chapter;
@@ -70,67 +70,67 @@ class ReaderPage extends StatefulWidget {
 }
 
 class _ReaderPageState extends State<ReaderPage> {
-  String _content = '???...';
+  String _content = '加载中...';
   bool _isLoading = true;
   int _currentIndex = 0;
   int _pageIndex = 0;
-  int? _pendingTargetPage; // ??????????????
+  int? _pendingTargetPage; // 切换章节后要跳转到的页面索引
   List<String> _pages = [];
   late ReaderSettings _settings;
   late ScrollController _scrollController;
   final GlobalKey<ReaderTurnViewState> _turnKey = GlobalKey<ReaderTurnViewState>();
-  BookProvider? _bookProvider; // ??????? dispose ? context.read ??
+  BookProvider? _bookProvider; // 缓存引用，避免 dispose 时 context.read 崩溃
   DateTime? _sessionStart;
   int _sessionChars = 0;
   int _lastCountedChapterIndex = -1;
 
-  /// UI-1: ?/? chrome ??????????????????????
+  /// UI-1: 顶/底 chrome 可见性（点击正文切换；进入后短延迟自动收起）
   bool _chromeVisible = true;
   Timer? _autoHideTimer;
   static const _autoHideDelay = Duration(seconds: 3);
 
-  /// ??????????? Key ????? PageView/ScrollView
+  /// 翻页模式切换代数，配合 Key 强制拆掉旧 PageView/ScrollView
   int _modeGeneration = 0;
 
-  /// UI-2: ??????????/??????????????????
+  /// UI-2: 音量键翻页焦点（桌面/模拟器可用；真机因系统接管可能无效）
   final FocusNode _focusNode = FocusNode();
 
-  /// UI-2: ????????
+  /// UI-2: 自动阅读定时翻页
   Timer? _autoReadTimer;
   bool _autoReadRunning = false;
 
-  /// UI-2: ??????
+  /// UI-2: 底栏电量真值
   final Battery _battery = Battery();
   int? _batteryLevel;
   Timer? _batteryTimer;
 
-  /// UI-2: ?????legado screenOffTimerStart?
+  /// UI-2: 屏幕超时（legado screenOffTimerStart）
   Timer? _screenOffTimer;
 
-  /// UI-2: ??????????? searchMenu ?/?????
+  /// UI-2: 全文搜索结果导航（对齐 searchMenu 上/下个结果）
   List<SearchContentResult> _searchResults = [];
   int _searchResultIndex = -1;
   bool _searchMenuVisible = false;
-  int? _pendingSearchOccurrence; // ??? N ???
+  int? _pendingSearchOccurrence; // 章内第 N 次命中
 
-  /// UI-2: ????
+  /// UI-2: 模拟追读
   SimulatedReadingConfig _simRead = SimulatedReadingConfig(
     startDate: DateTime.now(),
   );
 
-  /// ?????????????????
+  /// 首次进入阅读页：点击区域九宫格提示
   bool _showClickRegionTip = false;
 
-  /// ???????????????? [ReaderSessionPrefs]?
+  /// 阅读会话：替换净化开关（持久化于 [ReaderSessionPrefs]）
   bool _enableReplace = true;
 
-  /// ???????null=????-1=?????0..4=????
+  /// 本书翻页动画：null=未加载；-1=跟随全局；0..4=本书覆盖
   int? _bookPageAnim;
 
-  /// ??????
+  /// 本书重新分段
   bool _reSegment = false;
 
-  /// ?????????????????
+  /// 有效翻页动画（本书优先，否则全局）
   PageAnimMode get _pageAnim {
     final o = _bookPageAnim;
     if (o == null || o < 0) return _settings.pageAnim;
@@ -280,7 +280,7 @@ class _ReaderPageState extends State<ReaderPage> {
       final level = await _battery.batteryLevel;
       if (mounted) setState(() => _batteryLevel = level);
     } catch (_) {
-      // ??/??????????
+      // 桌面/模拟器可能无电池信息
     }
   }
 
@@ -310,12 +310,12 @@ class _ReaderPageState extends State<ReaderPage> {
     try {
       await WakelockPlus.toggle(enable: on);
     } catch (_) {
-      // ??/??????? wakelock ??
+      // 桌面/部分环境可能无 wakelock 后端
     }
   }
 
-  /// ?? legado keepLight / screenOffTimerStart?
-  /// 0 ?????????????????-1 ?????????????
+  /// 对齐 legado keepLight / screenOffTimerStart：
+  /// 0 跟随系统；正秒数内保持亮屏后释放；-1 常亮；自动阅读时强制常亮。
   void _applyScreenTimeout({bool forceAlways = false}) {
     _screenOffTimer?.cancel();
     _screenOffTimer = null;
@@ -346,7 +346,7 @@ class _ReaderPageState extends State<ReaderPage> {
     }
   }
 
-  /// ????????? hideStatusBar / hideNavigationBar???????????
+  /// 沉浸式系统栏（对齐 hideStatusBar / hideNavigationBar；菜单可见时短暂恢复）
   void _applySystemUi() {
     final hideStatus = _settings.hideStatusBar && !_chromeVisible;
     final hideNav = _settings.hideNavigationBar && !_chromeVisible;
@@ -377,13 +377,13 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  /// ????? ? ??? ? ??????
+  /// 排版：简繁 → 段缩进 → 段距（空行）
   String _prepareDisplayText(String raw) {
     var text = ChineseConvert.apply(raw, _settings.chineseConvert.code);
     if (_isEmptyBody ||
-        text.startsWith('??') ||
-        text.contains('?????') ||
-        text == '???...') {
+        text.startsWith('⚠️') ||
+        text.contains('（加载失败') ||
+        text == '加载中...') {
       return text;
     }
     final indent = _settings.paragraphIndentText;
@@ -397,7 +397,7 @@ class _ReaderPageState extends State<ReaderPage> {
         out.writeln();
         continue;
       }
-      final body = p.replaceFirst(RegExp(r'^[\s?]+'), '');
+      final body = p.replaceFirst(RegExp(r'^[\s　]+'), '');
       out.write(indent);
       out.write(body);
       if (i < paragraphs.length - 1) {
@@ -441,7 +441,7 @@ class _ReaderPageState extends State<ReaderPage> {
     _autoReadTimer?.cancel();
     _autoReadTimer = null;
     setState(() => _autoReadRunning = running);
-    // ????? legado ?????????? keepLight ??
+    // 自动阅读时 legado 强制常亮；停止后恢复 keepLight 分档
     _applyScreenTimeout();
     if (!running) return;
     final interval = Duration(
@@ -461,7 +461,7 @@ class _ReaderPageState extends State<ReaderPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              _simRead.enabled ? '????????????????' : '??????????????',
+              _simRead.enabled ? '已到模拟追读上限，自动阅读已停止' : '已到全书末尾，自动阅读已停止',
             ),
           ),
         );
@@ -476,7 +476,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   void _runClickAction(ClickZoneAction action) {
-    // ??????????????????? legado vwMenuBg???????+???????
+    // 菜单已显示时点翻页区：只收起菜单（对齐 legado vwMenuBg），避免「翻页+出菜单」双动作
     if (_chromeVisible && action != ClickZoneAction.menu) {
       _hideChrome();
       return;
@@ -525,7 +525,7 @@ class _ReaderPageState extends State<ReaderPage> {
     await tts.togglePlay(text);
   }
 
-  /// ?????????? ReadView.setRect9x????? 1/3?
+  /// 九宫格点击热区（对齐 ReadView.setRect9x：宽高各约 1/3）
   Widget _buildClickZones() {
     Widget cell(ClickZoneAction action) {
       return Expanded(
@@ -575,7 +575,7 @@ class _ReaderPageState extends State<ReaderPage> {
     });
   }
 
-  /// UI-22????????? activity_audio_play?
+  /// UI-22：有声播放器（对齐 activity_audio_play）
   Future<void> _openAudioPlayPage() async {
     _autoHideTimer?.cancel();
     final chapters =
@@ -583,7 +583,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (chapters.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('??????????????')),
+          const SnackBar(content: Text('暂无章节，无法打开有声播放器')),
         );
       }
       return;
@@ -602,7 +602,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (mounted) _scheduleAutoHide();
   }
 
-  /// UI-23????????? activity_manga?
+  /// UI-23：漫画阅读器（对齐 activity_manga）
   Future<void> _openMangaReader() async {
     _autoHideTimer?.cancel();
     final chapters =
@@ -610,7 +610,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (chapters.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('??????????????')),
+          const SnackBar(content: Text('暂无章节，无法打开漫画阅读器')),
         );
       }
       return;
@@ -700,7 +700,7 @@ class _ReaderPageState extends State<ReaderPage> {
     _scheduleAutoHide();
   }
 
-  /// ?? legado ReadMenu.vwMenuBg????????????????????????
+  /// 对齐 legado ReadMenu.vwMenuBg：菜单展开时点正文区只收菜单，不穿透到九宫格翻页
   Widget _chromeDismissScrim() {
     if (!_chromeVisible) return const SizedBox.shrink();
     return Positioned.fill(
@@ -712,7 +712,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   void _countChapterChars(String content) {
-    if (content.startsWith('??') || content.contains('????????')) {
+    if (content.startsWith('⚠️') || content.contains('未找到匹配的书源')) {
       return;
     }
     if (_currentIndex == _lastCountedChapterIndex) return;
@@ -745,7 +745,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   TextStyle _readerTextStyle(Color color) {
-    // ?? inherit:false?????? textBaseline???????
+    // 勿用 inherit:false（须同时提供 textBaseline，否则红屏）：
     // inherit false style must supply fontSize and textBaseline
     return TextStyle(
       fontSize: _settings.fontSize,
@@ -762,14 +762,14 @@ class _ReaderPageState extends State<ReaderPage> {
 
   bool get _isEmptyBody => ReadBook.isEmptyContentPlaceholder(_content);
 
-  /// ????????????????? URL
+  /// 书源展示：优先书源名，其次书籍来源 URL
   String get _sourceSubtitle {
     final name = _sourceDisplayName;
     if (name.isNotEmpty) return name;
     return _chapterUrlLabel;
   }
 
-  /// ?????????????????? host?
+  /// 顶栏书源芯片文案（书源名；无名称时用 host）
   String get _sourceDisplayName {
     final source = context.read<SourceProvider>().findSourceForBook(widget.book);
     if (source != null && source.bookSourceName.isNotEmpty) {
@@ -783,7 +783,7 @@ class _ReaderPageState extends State<ReaderPage> {
     return (host != null && host.isNotEmpty) ? host : url;
   }
 
-  /// ????????????
+  /// 顶栏第三行：当前章源地址
   String get _chapterUrlLabel {
     final chUrl = widget.allChapters[_currentIndex].url;
     if (chUrl.isNotEmpty) return chUrl;
@@ -791,7 +791,7 @@ class _ReaderPageState extends State<ReaderPage> {
     return widget.book.sourceUrl;
   }
 
-  /// ?????????? legado ??
+  /// 阅读菜单强调色（对齐 legado 橙）
   static const Color _chromeAccent = Color(0xFFFF6D00);
 
   Future<void> _loadContent({bool forceRefresh = false}) async {
@@ -817,12 +817,12 @@ class _ReaderPageState extends State<ReaderPage> {
           bookId: widget.book.id,
         );
       } else {
-        content = '?? ????????';
+        content = '⚠️ 未找到匹配的书源';
       }
       if (mounted) {
         setState(() {
-          _content = content.contains('?????')
-              ? '?? ??????????\n\n$content'
+          _content = content.contains('（加载失败')
+              ? '⚠️ 加载失败，请检查网络\n\n$content'
               : content;
           _isLoading = false;
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -832,8 +832,8 @@ class _ReaderPageState extends State<ReaderPage> {
           });
         });
         final ok = !ReadBook.isEmptyContentPlaceholder(content) &&
-            !content.contains('?????') &&
-            !content.startsWith('??');
+            !content.contains('（加载失败') &&
+            !content.startsWith('⚠️');
         if (ok) {
           bookProvider.markChapterDownloaded(chapter.id);
         }
@@ -845,7 +845,7 @@ class _ReaderPageState extends State<ReaderPage> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _content = '?? ????????\n\n????????????????\n\n??: $e';
+          _content = '⚠️ 无法加载章节内容\n\n请检查网络连接，或尝试其他书源。\n\n错误: $e';
         });
       }
     }
@@ -897,7 +897,7 @@ class _ReaderPageState extends State<ReaderPage> {
           setState(() => _pageIndex = i);
           break;
         }
-        // ???????????????????????????
+        // 分页按段落拼接，页间可能无额外分隔；用页面字数累加即可
         offset = end;
       }
     } else if (_scrollController.hasClients && text.isNotEmpty) {
@@ -953,7 +953,7 @@ class _ReaderPageState extends State<ReaderPage> {
     }
     if (_simRead.enabled && r.chapterIndex > _maxReadableIndex) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('??????????')),
+        const SnackBar(content: Text('模拟追读未解锁该章节')),
       );
       return;
     }
@@ -970,7 +970,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (!_searchMenuVisible || _searchResults.isEmpty) return;
     if (_searchResultIndex <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('???????')),
+        const SnackBar(content: Text('已是第一个结果')),
       );
       return;
     }
@@ -981,7 +981,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (!_searchMenuVisible || _searchResults.isEmpty) return;
     if (_searchResultIndex >= _searchResults.length - 1) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('????????')),
+        const SnackBar(content: Text('已是最后一个结果')),
       );
       return;
     }
@@ -1029,7 +1029,7 @@ class _ReaderPageState extends State<ReaderPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            next.enabled ? '??????? ? ???? $unlocked ?' : '???????',
+            next.enabled ? '模拟追读已开启 · 今日可读 $unlocked 章' : '模拟追读已关闭',
           ),
         ),
       );
@@ -1052,7 +1052,7 @@ class _ReaderPageState extends State<ReaderPage> {
           child: Center(
             child: FloatingActionButton.small(
               heroTag: 'search_prev',
-              tooltip: '????',
+              tooltip: '上个结果',
               backgroundColor: theme.appBar.withValues(alpha: 0.92),
               onPressed: _searchPrev,
               child: Icon(Icons.chevron_left, color: theme.text),
@@ -1066,7 +1066,7 @@ class _ReaderPageState extends State<ReaderPage> {
           child: Center(
             child: FloatingActionButton.small(
               heroTag: 'search_next',
-              tooltip: '????',
+              tooltip: '下个结果',
               backgroundColor: theme.appBar.withValues(alpha: 0.92),
               onPressed: _searchNext,
               child: Icon(Icons.chevron_right, color: theme.text),
@@ -1087,7 +1087,7 @@ class _ReaderPageState extends State<ReaderPage> {
                 child: Row(
                   children: [
                     IconButton(
-                      tooltip: '????',
+                      tooltip: '结果列表',
                       icon: Icon(Icons.list_alt, color: theme.text),
                       onPressed: () => _openContentSearch(
                         results: _searchResults,
@@ -1096,13 +1096,13 @@ class _ReaderPageState extends State<ReaderPage> {
                     ),
                     Expanded(
                       child: Text(
-                        '???? $info',
+                        '全文搜索 $info',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: theme.text, fontSize: 13),
                       ),
                     ),
                     IconButton(
-                      tooltip: '??',
+                      tooltip: '退出',
                       icon: Icon(Icons.close, color: theme.text),
                       onPressed: _exitSearchMenu,
                     ),
@@ -1116,11 +1116,11 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  /// ????????????????? slide ???
+  /// 将正文按屏幕高度拆分为独立页面（仅 slide 模式）
   void _splitIntoPages() {
     if (_content.isEmpty || !mounted) return;
     if (!_isHorizontalPaged) return;
-    // ?????? PageView?? _buildBodyText ??????
+    // 空章占位不进 PageView，由 _buildBodyText 展示刷新引导
     if (ReadBook.isEmptyContentPlaceholder(_content)) {
       setState(() {
         _pages = [];
@@ -1131,7 +1131,7 @@ class _ReaderPageState extends State<ReaderPage> {
 
     final renderBox = context.findRenderObject() as RenderBox?;
     if (renderBox == null || !renderBox.hasSize) {
-      // ????????????????????
+      // 布局尚未就绪时再试一次（模式切换后常见）
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_isHorizontalPaged) return;
         final box = context.findRenderObject() as RenderBox?;
@@ -1149,9 +1149,9 @@ class _ReaderPageState extends State<ReaderPage> {
     final hPad = _settings.paddingHorizontal * 2;
     final pageWidth =
         renderBox.size.width - hPad - edgePadL - edgePadR;
-    // chrome ? overlay ????????????/?????????
+    // chrome 以 overlay 叠在正文上，分页按「无顶/底栏」可视高度估算
     final chapterTitleHeight = _settings.fontSize + 36.0;
-    // ?????? + ??/?????? legado?
+    // 页脚：分割线 + 章名/页码行（对齐 legado）
     const pageFooterHeight = 32.0;
     final pageHeight =
         renderBox.size.height -
@@ -1222,11 +1222,11 @@ class _ReaderPageState extends State<ReaderPage> {
       _pendingTargetPage = null;
     });
     debugPrint(
-      '?? ????: ${result.length} ? (??=$clampedPage, ???=$totalHeight, ??=$pageHeight)',
+      '📖 分页完成: ${result.length} 页 (目标=$clampedPage, 总高度=$totalHeight, 页高=$pageHeight)',
     );
   }
 
-  /// ??????????????????? post-frame dispose ???
+  /// 设置面板变更：翻页模式切换时先卸树，再 post-frame dispose 控制器
   void _onSettingsChanged(ReaderSettings newSettings) {
     if (newSettings.screenOrientation != _settings.screenOrientation) {
       _applyScreenOrientation(newSettings.screenOrientation);
@@ -1269,7 +1269,7 @@ class _ReaderPageState extends State<ReaderPage> {
       _applyScreenTimeout();
       if (immersionChanged) _applySystemUi();
 
-      // Phase 2??????? detach?? dispose?slide ?????
+      // Phase 2：上一帧视图已 detach，再 dispose；slide 再重建分页
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (PageAnimMode.fromId(newMode).isHorizontalPaged && needRepaginate) {
@@ -1309,7 +1309,7 @@ class _ReaderPageState extends State<ReaderPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '???????????? ${_maxReadableIndex + 1} ?',
+            '模拟追读：今日最多读到第 ${_maxReadableIndex + 1} 章',
           ),
         ),
       );
@@ -1325,7 +1325,7 @@ class _ReaderPageState extends State<ReaderPage> {
       _currentIndex = index;
     });
     _loadContent();
-    // ??? _keepChromeAlive???/????????????????????????
+    // 勿在此 _keepChromeAlive：翻页/点右侧下一页切章时会误弹出菜单（含「设置」入口）
   }
 
   void _syncPreload() {
@@ -1348,7 +1348,7 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Future<void> _showTocSheet() async {
     final provider = context.read<BookProvider>();
-    // ?? Legado????????????? / ??
+    // 对齐 Legado：目录秒开，不在此等待联网 / 扫盘
     final chapters = provider.currentChapters.isNotEmpty &&
             provider.currentChapters.first.bookId == widget.book.id
         ? provider.currentChapters
@@ -1376,11 +1376,11 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _showBookPageAnimConfig() async {
-    const labels = ['??', '??', '??', '??', '??', '?'];
+    const labels = ['默认', '覆盖', '滑动', '仿真', '滚动', '无'];
     final selected = await showDialog<int>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('????'),
+        title: const Text('翻页动画'),
         children: [
           for (var i = 0; i < labels.length; i++)
             RadioListTile<int>(
@@ -1428,7 +1428,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (!await BookProgressSync.isConfigured()) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('???? WebDAV')),
+        const SnackBar(content: Text('请先配置 WebDAV')),
       );
       return;
     }
@@ -1440,21 +1440,21 @@ class _ReaderPageState extends State<ReaderPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('????????: $e')),
+        SnackBar(content: Text('拉取阅读进度失败: $e')),
       );
       return;
     }
     if (!mounted) return;
     if (progress == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('??????')),
+        const SnackBar(content: Text('云端暂无进度')),
       );
       return;
     }
     if (progress.durChapterIndex == localIdx &&
         progress.durChapterPos == localPos) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('??????')),
+        const SnackBar(content: Text('已是最新进度')),
       );
       return;
     }
@@ -1462,16 +1462,16 @@ class _ReaderPageState extends State<ReaderPage> {
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('??????'),
-          content: const Text('????????????????'),
+          title: const Text('获取云端进度'),
+          content: const Text('当前进度超过云端进度，是否同步？'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('??'),
+              child: const Text('取消'),
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('??'),
+              child: const Text('确定'),
             ),
           ],
         ),
@@ -1487,7 +1487,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (progress.durChapterIndex > maxIdx) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('??????????')),
+          const SnackBar(content: Text('云端章节超出本地目录')),
         );
       }
       return;
@@ -1512,19 +1512,19 @@ class _ReaderPageState extends State<ReaderPage> {
       SnackBar(
         content: Text(
           title == null || title.isEmpty
-              ? '?????????'
-              : '??????????$title',
+              ? '已同步最新阅读进度'
+              : '已同步最新阅读进度：$title',
         ),
       ),
     );
   }
 
-  /// ?? ReadBook.syncProgress??????????????????
+  /// 对齐 ReadBook.syncProgress：本地更快则上传，云端更快则询问应用
   Future<void> _syncReadingProgress() async {
     if (!await BookProgressSync.isConfigured()) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('???? WebDAV')),
+        const SnackBar(content: Text('请先配置 WebDAV')),
       );
       return;
     }
@@ -1537,7 +1537,7 @@ class _ReaderPageState extends State<ReaderPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('????????: $e')),
+        SnackBar(content: Text('拉取阅读进度失败: $e')),
       );
       return;
     }
@@ -1555,12 +1555,12 @@ class _ReaderPageState extends State<ReaderPage> {
         );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('????')),
+          const SnackBar(content: Text('上传成功')),
         );
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('????: $e')),
+          SnackBar(content: Text('上传失败: $e')),
         );
       }
       return;
@@ -1569,18 +1569,18 @@ class _ReaderPageState extends State<ReaderPage> {
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('??????'),
+          title: const Text('获取云端进度'),
           content: Text(
-            '?????????${progress!.durChapterTitle ?? '?${progress.durChapterIndex + 1}?'}??????',
+            '发现云端更新进度：${progress!.durChapterTitle ?? '第${progress.durChapterIndex + 1}章'}，是否同步？',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('??'),
+              child: const Text('取消'),
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('??'),
+              child: const Text('确定'),
             ),
           ],
         ),
@@ -1590,7 +1590,7 @@ class _ReaderPageState extends State<ReaderPage> {
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('?????')),
+        const SnackBar(content: Text('进度已同步')),
       );
     }
   }
@@ -1599,7 +1599,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (!await BookProgressSync.isConfigured()) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('???? WebDAV')),
+        const SnackBar(content: Text('请先配置 WebDAV')),
       );
       return;
     }
@@ -1616,12 +1616,12 @@ class _ReaderPageState extends State<ReaderPage> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('????')),
+        const SnackBar(content: Text('上传成功')),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('????: $e')),
+        SnackBar(content: Text('上传失败: $e')),
       );
     }
   }
@@ -1635,14 +1635,14 @@ class _ReaderPageState extends State<ReaderPage> {
     if (!mounted) return;
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('????????????')),
+        const SnackBar(content: Text('当前章节无缓存，无法反转')),
       );
       return;
     }
     await _loadContent();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('???????')),
+        const SnackBar(content: Text('已反转本章内容')),
       );
     }
   }
@@ -1656,7 +1656,7 @@ class _ReaderPageState extends State<ReaderPage> {
     ReadBook.instance.invalidateMemoryCache(chapter.id);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(next ? '???????' : '???????')),
+      SnackBar(content: Text(next ? '已开启重新分段' : '已关闭重新分段')),
     );
     await _loadContent();
   }
@@ -1713,7 +1713,7 @@ class _ReaderPageState extends State<ReaderPage> {
     ReadBook.instance.invalidateMemoryCache(chapter.id);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(next ? '???????' : '???????')),
+      SnackBar(content: Text(next ? '已开启替换净化' : '已关闭替换净化')),
     );
     await _loadContent();
   }
@@ -1724,7 +1724,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (source == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('????????????')),
+          const SnackBar(content: Text('未找到书源，无法更新目录')),
         );
       }
       return;
@@ -1738,7 +1738,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('???????'),
+          content: Text('正在更新目录…'),
           duration: Duration(seconds: 1),
         ),
       );
@@ -1754,7 +1754,7 @@ class _ReaderPageState extends State<ReaderPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('??????: $e')),
+          SnackBar(content: Text('更新目录失败: $e')),
         );
       }
       return;
@@ -1764,7 +1764,7 @@ class _ReaderPageState extends State<ReaderPage> {
     final newChapters = provider.currentChapters;
     if (newChapters.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('????')),
+        const SnackBar(content: Text('目录为空')),
       );
       return;
     }
@@ -1778,7 +1778,7 @@ class _ReaderPageState extends State<ReaderPage> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('??????? ${newChapters.length} ?')),
+      SnackBar(content: Text('目录已更新，共 ${newChapters.length} 章')),
     );
 
     await Navigator.pushReplacement(
@@ -1800,12 +1800,12 @@ class _ReaderPageState extends State<ReaderPage> {
         provider.cancelDownload();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('?????')),
+            const SnackBar(content: Text('已停止缓存')),
           );
         }
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('????????')),
+          const SnackBar(content: Text('正在缓存其他书籍')),
         );
       }
       return;
@@ -1815,7 +1815,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (source == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('??????????')),
+          const SnackBar(content: Text('未找到书源，无法缓存')),
         );
       }
       return;
@@ -1830,7 +1830,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (chapters.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('????')),
+          const SnackBar(content: Text('目录为空')),
         );
       }
       return;
@@ -1862,13 +1862,13 @@ class _ReaderPageState extends State<ReaderPage> {
     );
     if (toDownload.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('?????????')),
+        const SnackBar(content: Text('没有需要缓存的章节')),
       );
       return;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('???? ${toDownload.length} ??')),
+      SnackBar(content: Text('开始缓存 ${toDownload.length} 章…')),
     );
     await provider.downloadAllChapters(
       widget.book.id,
@@ -1880,7 +1880,7 @@ class _ReaderPageState extends State<ReaderPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '???? ${provider.downloadCompleted}/${toDownload.length}',
+            '缓存完成 ${provider.downloadCompleted}/${toDownload.length}',
           ),
         ),
       );
@@ -1889,7 +1889,7 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Future<void> _refreshChapter() async {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('???????'), duration: Duration(seconds: 1)),
+      const SnackBar(content: Text('正在刷新本章…'), duration: Duration(seconds: 1)),
     );
     await _loadContent(forceRefresh: true);
   }
@@ -1897,7 +1897,7 @@ class _ReaderPageState extends State<ReaderPage> {
   Future<void> _addBookmark() async {
     if (!NoteService.isReady) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('????????????')),
+        const SnackBar(content: Text('引擎未就绪，无法添加书签')),
       );
       return;
     }
@@ -1905,21 +1905,21 @@ class _ReaderPageState extends State<ReaderPage> {
     final snippet = _isHorizontalPaged && _pages.isNotEmpty
         ? _pages[_pageIndex].trim()
         : _content.trim();
-    final preview = snippet.length > 80 ? '${snippet.substring(0, 80)}?' : snippet;
+    final preview = snippet.length > 80 ? '${snippet.substring(0, 80)}…' : snippet;
     final pageHint = _isHorizontalPaged && _pages.isNotEmpty
-        ? '?${_pageIndex + 1}/${_pages.length}?'
-        : '????';
+        ? '第${_pageIndex + 1}/${_pages.length}页'
+        : '滚动位置';
     NoteService.save(
       id: const Uuid().v4(),
       bookId: widget.book.id,
       chapterTitle: chapter.title,
       selectedText: preview.isEmpty ? chapter.title : preview,
-      noteContent: '?? ? $pageHint',
+      noteContent: '书签 · $pageHint',
       position: _currentIndex,
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('?????')),
+      const SnackBar(content: Text('已添加书签')),
     );
   }
 
@@ -1930,7 +1930,7 @@ class _ReaderPageState extends State<ReaderPage> {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('?????/????')),
+      const SnackBar(content: Text('已复制本章/本页内容')),
     );
   }
 
@@ -1945,7 +1945,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (chapters.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('?????????????????')),
+        const SnackBar(content: Text('已换源，但目录为空，请返回详情重试')),
       );
       return;
     }
@@ -2043,22 +2043,22 @@ class _ReaderPageState extends State<ReaderPage> {
     }
 
     return [
-      item('change_source', Icons.swap_horiz, '??'),
-      item('refresh', Icons.refresh, '??'),
-      item('cache', Icons.download_outlined, '????'),
+      item('change_source', Icons.swap_horiz, '换源'),
+      item('refresh', Icons.refresh, '刷新'),
+      item('cache', Icons.download_outlined, '离线缓存'),
       const PopupMenuDivider(),
-      item('toc', Icons.list_alt, '??'),
-      item('bookmark', Icons.bookmark_add_outlined, '??'),
-      item('search_content', Icons.find_in_page_outlined, '????'),
-      item('copy', Icons.copy_outlined, '????'),
-      item('settings', Icons.text_fields, '??'),
-      item('ai', Icons.smart_toy_outlined, 'AI ??'),
+      item('toc', Icons.list_alt, '目录'),
+      item('bookmark', Icons.bookmark_add_outlined, '书签'),
+      item('search_content', Icons.find_in_page_outlined, '全文搜索'),
+      item('copy', Icons.copy_outlined, '拷贝内容'),
+      item('settings', Icons.text_fields, '界面'),
+      item('ai', Icons.smart_toy_outlined, 'AI 助手'),
       const PopupMenuDivider(),
-      item('page_anim', Icons.animation, '????(??)'),
-      item('cloud_progress', Icons.cloud_download_outlined, '??????'),
-      item('cover_progress', Icons.cloud_upload_outlined, '??????'),
-      item('reverse', Icons.swap_vert, '????'),
-      item('replace', Icons.find_replace, '??????'),
+      item('page_anim', Icons.animation, '翻页动画(本书)'),
+      item('cloud_progress', Icons.cloud_download_outlined, '拉取云端进度'),
+      item('cover_progress', Icons.cloud_upload_outlined, '覆盖云端进度'),
+      item('reverse', Icons.swap_vert, '反转内容'),
+      item('replace', Icons.find_replace, '替换净化开关'),
       PopupMenuItem(
         value: 'resegment',
         child: ListTile(
@@ -2066,27 +2066,27 @@ class _ReaderPageState extends State<ReaderPage> {
             _reSegment ? Icons.check_box : Icons.check_box_outline_blank,
             size: 20,
           ),
-          title: const Text('????', style: TextStyle(fontSize: 14)),
+          title: const Text('重新分段', style: TextStyle(fontSize: 14)),
           dense: true,
           contentPadding: EdgeInsets.zero,
         ),
       ),
-      item('edit_content', Icons.edit_note_outlined, '????'),
-      item('update_toc', Icons.toc, '????'),
-      item('simulated_reading', Icons.calendar_today_outlined, '????'),
-      item('book_info', Icons.info_outline, '????'),
+      item('edit_content', Icons.edit_note_outlined, '编辑内容'),
+      item('update_toc', Icons.toc, '更新目录'),
+      item('simulated_reading', Icons.calendar_today_outlined, '模拟追读'),
+      item('book_info', Icons.info_outline, '书籍信息'),
       const PopupMenuDivider(),
-      item('tts', Icons.record_voice_over_outlined, '??'),
-      item('manga', Icons.auto_stories_outlined, '????'),
-      item('auto_read', Icons.speed, '????'),
-      item('click_zone', Icons.grid_on, '??????'),
-      item('more_settings', Icons.settings, '??'),
-      item('page_key', Icons.keyboard, '??????'),
+      item('tts', Icons.record_voice_over_outlined, '朗读'),
+      item('manga', Icons.auto_stories_outlined, '漫画阅读'),
+      item('auto_read', Icons.speed, '自动阅读'),
+      item('click_zone', Icons.grid_on, '点击区域设置'),
+      item('more_settings', Icons.settings, '设置'),
+      item('page_key', Icons.keyboard, '自定义翻页键'),
     ];
   }
 
-  /// ???????????????????? ExcludeSemantics?
-  /// ???????? chrome ????????????
+  /// 始终挂在树上，用透明度显隐；桌面端整页已 ExcludeSemantics，
+  /// 这里再包一层避免 chrome 切显隐时额外撕语义节点。
   Widget _chromeLayer({required Widget child}) {
     return ExcludeSemantics(
       child: IgnorePointer(
@@ -2122,7 +2122,7 @@ class _ReaderPageState extends State<ReaderPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Row1: ?? | ?? | ?? | ?? | ?? | ?
+              // Row1: 返回 | 书名 | 换源 | 刷新 | 缓存 | ⋮
               SizedBox(
                 height: 48,
                 child: Row(
@@ -2130,7 +2130,7 @@ class _ReaderPageState extends State<ReaderPage> {
                     IconButton(
                       style: iconBtnStyle,
                       icon: const Icon(Icons.arrow_back),
-                      tooltip: '??',
+                      tooltip: '返回',
                       onPressed: () {
                         _saveProgress();
                         Navigator.pop(context);
@@ -2155,31 +2155,31 @@ class _ReaderPageState extends State<ReaderPage> {
                     IconButton(
                       style: iconBtnStyle,
                       icon: const Icon(Icons.swap_horiz),
-                      tooltip: '??',
+                      tooltip: '换源',
                       onPressed: _openChangeSource,
                     ),
                     IconButton(
                       style: iconBtnStyle,
                       icon: const Icon(Icons.refresh),
-                      tooltip: '??',
+                      tooltip: '刷新',
                       onPressed: () => unawaited(_refreshChapter()),
                     ),
                     IconButton(
                       style: iconBtnStyle,
                       icon: const Icon(Icons.download_outlined),
-                      tooltip: '????',
+                      tooltip: '离线缓存',
                       onPressed: () => unawaited(_openOfflineCache()),
                     ),
                     PopupMenuButton<String>(
                       icon: Icon(Icons.more_vert, color: theme.text),
-                      tooltip: '??',
+                      tooltip: '更多',
                       onSelected: _onMenuSelected,
                       itemBuilder: (_) => _menuItems(),
                     ),
                   ],
                 ),
               ),
-              // Row2: ??? | ????
+              // Row2: 章节名 | 书源芯片
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 12, 4),
                 child: Row(
@@ -2225,7 +2225,7 @@ class _ReaderPageState extends State<ReaderPage> {
                   ],
                 ),
               ),
-              // Row3: ?? URL
+              // Row3: 章节 URL
               if (chapterUrl.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
@@ -2246,7 +2246,7 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  /// ??/??????????????????? prefs ??????
+  /// 章首/章尾书票（流式插入，不遮挡正文；无独立 prefs 时默认启用）
   Widget _buildBookplate({required bool isHeader, required Color textColor}) {
     return BookplateOverlay(
       book: widget.book,
@@ -2257,7 +2257,7 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  /// ?????? + ??????????????
+  /// 章头：章节名 + 书源（始终显示于正文区顶部）
   Widget _buildChapterHeader(Chapter chapter, ReaderTheme theme) {
     final source = _sourceSubtitle;
     return Padding(
@@ -2295,7 +2295,7 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  /// ?????? 0~1????????
+  /// 全书阅读进度 0~1（含章内页占比）
   double get _readingProgress {
     final total = widget.allChapters.length;
     if (total <= 0) return 0;
@@ -2305,7 +2305,7 @@ class _ReaderPageState extends State<ReaderPage> {
     return (_currentIndex + 1) / total;
   }
 
-  /// ????? legado???? | ??  ????%
+  /// 页脚（对齐 legado）：章名 | 页码  全书进度%
   Widget _buildPageFooter(Chapter chapter, ReaderTheme theme) {
     final muted = theme.text.withValues(alpha: 0.45);
     final style = TextStyle(fontSize: 11, color: muted);
@@ -2344,7 +2344,7 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  /// UI-1 ????? legado????? ? ???+?? ? ??/??/??/??
+  /// UI-1 底栏（对齐 legado）：圆钮行 · 上下章+进度 · 目录/朗读/界面/设置
   Widget _buildBottomChrome(ReaderTheme theme) {
     final hasPages = _isHorizontalPaged && _pages.length > 1;
     final sliderMax = hasPages
@@ -2368,7 +2368,7 @@ class _ReaderPageState extends State<ReaderPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ????? | ??? | ???? | ??
+              // 圆钮：搜索 | 原网页 | 自动翻页 | 亮度
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 2, 20, 6),
                 child: Row(
@@ -2377,31 +2377,31 @@ class _ReaderPageState extends State<ReaderPage> {
                     _chromeRoundButton(
                       theme,
                       Icons.search,
-                      '??',
+                      '搜索',
                       () => unawaited(_openContentSearch()),
                     ),
                     _chromeRoundButton(
                       theme,
                       Icons.open_in_new,
-                      '???',
+                      '原网页',
                       () => unawaited(_openChapterInBrowser()),
                     ),
                     _chromeRoundButton(
                       theme,
                       Icons.autorenew,
-                      '????',
+                      '自动翻页',
                       _openAutoReadPanel,
                     ),
                     _chromeRoundButton(
                       theme,
                       Icons.wb_sunny_outlined,
-                      '??',
+                      '亮度',
                       _showBrightnessSheet,
                     ),
                   ],
                 ),
               ),
-              // ??? | ???? | ???
+              // 上一章 | 进度滑块 | 下一章
               Row(
                 children: [
                   TextButton(
@@ -2417,7 +2417,7 @@ class _ReaderPageState extends State<ReaderPage> {
                       minimumSize: const Size(0, 36),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    child: const Text('???', style: TextStyle(fontSize: 14)),
+                    child: const Text('上一章', style: TextStyle(fontSize: 14)),
                   ),
                   Expanded(
                     child: SliderTheme(
@@ -2472,11 +2472,11 @@ class _ReaderPageState extends State<ReaderPage> {
                       minimumSize: const Size(0, 36),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    child: const Text('???', style: TextStyle(fontSize: 14)),
+                    child: const Text('下一章', style: TextStyle(fontSize: 14)),
                   ),
                 ],
               ),
-              // ???????? | ?? | ?? | ??
+              // 底栏主入口：目录 | 朗读 | 界面 | 设置
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
                 child: Row(
@@ -2485,26 +2485,26 @@ class _ReaderPageState extends State<ReaderPage> {
                     _chromeNavItem(
                       theme,
                       icon: Icons.format_list_bulleted,
-                      label: '??',
+                      label: '目录',
                       onTap: _showTocSheet,
                     ),
                     _chromeNavItem(
                       theme,
                       icon: Icons.headphones,
-                      label: '??',
+                      label: '朗读',
                       onTap: _openAudioPlayPage,
                       onLongPress: _openTtsPanel,
                     ),
                     _chromeNavItem(
                       theme,
-                      label: '??',
+                      label: '界面',
                       onTap: _showInterfacePanel,
                       aaLabel: true,
                     ),
                     _chromeNavItem(
                       theme,
                       icon: Icons.settings,
-                      label: '??',
+                      label: '设置',
                       onTap: _openMoreSettingsPanel,
                     ),
                   ],
@@ -2602,7 +2602,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (raw.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('?????????')),
+        const SnackBar(content: Text('当前章节无可用网址')),
       );
       return;
     }
@@ -2610,14 +2610,14 @@ class _ReaderPageState extends State<ReaderPage> {
     if (uri == null || !(uri.hasScheme && (uri.isScheme('http') || uri.isScheme('https')))) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('?????????????')),
+        const SnackBar(content: Text('章节地址不是有效的网页链接')),
       );
       return;
     }
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('???????')),
+        const SnackBar(content: Text('无法打开原网页')),
       );
     }
   }
@@ -2645,7 +2645,7 @@ class _ReaderPageState extends State<ReaderPage> {
                         const Icon(Icons.wb_sunny_outlined),
                         const SizedBox(width: 8),
                         const Text(
-                          '??',
+                          '亮度',
                           style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w600,
@@ -2660,7 +2660,7 @@ class _ReaderPageState extends State<ReaderPage> {
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('????', style: TextStyle(fontSize: 14)),
+                      title: const Text('跟随系统', style: TextStyle(fontSize: 14)),
                       value: s.brightnessFollowSystem,
                       onChanged: (v) {
                         _onSettingsChanged(
@@ -2700,7 +2700,7 @@ class _ReaderPageState extends State<ReaderPage> {
     });
   }
 
-  /// ?????????legado dialog_read_book_style?
+  /// 「界面」排版面板（legado dialog_read_book_style）
   void _showInterfacePanel() {
     _autoHideTimer?.cancel();
     showModalBottomSheet(
@@ -2720,7 +2720,7 @@ class _ReaderPageState extends State<ReaderPage> {
           onOpenClickZone: _openClickZonePanel,
           onOpenMoreSettings: _openMoreSettingsPanel,
         );
-        // ??????? ExcludeSemantics?????? AXTree
+        // 独立路由须单独 ExcludeSemantics，否则仍会撞 AXTree
         final isDesktop = switch (defaultTargetPlatform) {
           TargetPlatform.windows ||
           TargetPlatform.linux ||
@@ -2743,7 +2743,7 @@ class _ReaderPageState extends State<ReaderPage> {
     final chapter = widget.allChapters[_currentIndex];
     final theme = _currentTheme;
 
-    // Key ?????+????????? PageView/ScrollView ???????????
+    // Key 强制按模式+代数整树重建，避免 PageView/ScrollView 元素复用导致控制器双挂
     Widget page = KeyedSubtree(
       key: ValueKey('reader-mode-${_pageAnim.id}-$_modeGeneration'),
       child: _pageAnim.id == 'scroll'
@@ -2751,8 +2751,8 @@ class _ReaderPageState extends State<ReaderPage> {
           : _buildSlideMode(chapter, theme),
     );
 
-    // ????????? Windows accessibility_bridge
-    // Failed to update ui::AXTree ? will not be in the tree????????
+    // 整页排除语义：压制 Windows accessibility_bridge
+    // Failed to update ui::AXTree … will not be in the tree（引擎已知缺陷）
     final isDesktop = switch (defaultTargetPlatform) {
       TargetPlatform.windows ||
       TargetPlatform.linux ||
@@ -2764,7 +2764,7 @@ class _ReaderPageState extends State<ReaderPage> {
       page = ExcludeSemantics(child: page);
     }
 
-    // UI-2????????????????????????????
+    // UI-2：手动阅读亮度（黑遮罩叠在正文之上，不影响系统亮度权限）
     if (!_settings.brightnessFollowSystem) {
       final dim = (1.0 - _settings.brightness.clamp(0.15, 1.0));
       if (dim > 0.01) {
@@ -2804,7 +2804,7 @@ class _ReaderPageState extends State<ReaderPage> {
       ),
       child: content,
     );
-    // textBottomJustify?????????legado ?????
+    // textBottomJustify：不足一页时贴底（legado 同名开关）
     if (_settings.textBottomJustify) {
       return SizedBox.expand(
         child: Align(
@@ -2822,8 +2822,8 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  /// ????? PageView ????????????????????????????
-  /// ??????? PageView???????????????????+???
+  /// 覆盖：抵消 PageView 对下一页的位移，当前页滑走露出下层；仿真：透视旋转近似。
+  /// 正文内容：优先 PageView；否则可滚动全文。空章占位给出显式提示+刷新。
   Widget _buildBodyText(ReaderTheme theme, {required bool paged}) {
     if (_isEmptyBody && !_isLoading) {
       return GestureDetector(
@@ -2842,7 +2842,7 @@ class _ReaderPageState extends State<ReaderPage> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  '??????',
+                  '本章暂无正文',
                   style: TextStyle(
                     fontSize: 16,
                     color: theme.text.withValues(alpha: 0.75),
@@ -2850,7 +2850,7 @@ class _ReaderPageState extends State<ReaderPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '????????????????????????',
+                  '可能是书源规则未匹配或缓存了空结果，可点刷新重试',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12,
@@ -2860,7 +2860,7 @@ class _ReaderPageState extends State<ReaderPage> {
                 const SizedBox(height: 16),
                 FilledButton.tonal(
                   onPressed: _refreshChapter,
-                  child: const Text('????'),
+                  child: const Text('刷新本章'),
                 ),
               ],
             ),
@@ -2936,7 +2936,7 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  /// ??????
+  /// 滑动翻页模式
   Widget _buildSlideMode(Chapter chapter, ReaderTheme theme) {
     final cutout = _settings.expandIntoCutout;
     final bgImage = _bgImageLayer(theme);
@@ -2952,7 +2952,7 @@ class _ReaderPageState extends State<ReaderPage> {
             right: !cutout,
             child: Column(
               children: [
-                if (_isLoading && _content != '???...')
+                if (_isLoading && _content != '加载中...')
                   LinearProgressIndicator(
                     backgroundColor: theme.text.withValues(alpha: 0.1),
                     color: theme.progress,
@@ -2965,7 +2965,7 @@ class _ReaderPageState extends State<ReaderPage> {
                   _buildBookplate(isHeader: true, textColor: theme.text),
                 const Divider(height: 8),
                 Expanded(
-                  child: _isLoading && _content == '???...'
+                  child: _isLoading && _content == '加载中...'
                       ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -2973,7 +2973,7 @@ class _ReaderPageState extends State<ReaderPage> {
                               CircularProgressIndicator(color: theme.text),
                               const SizedBox(height: 16),
                               Text(
-                                '???...',
+                                '加载中...',
                                 style: TextStyle(
                                   color: theme.text.withValues(alpha: 0.6),
                                 ),
@@ -2984,13 +2984,13 @@ class _ReaderPageState extends State<ReaderPage> {
                       : _buildBodyText(theme, paged: true),
                 ),
                 if (!_isLoading &&
-                    _content != '???...' &&
+                    _content != '加载中...' &&
                     !_isEmptyBody &&
                     _isHorizontalPaged &&
                     _pages.isNotEmpty &&
                     _pageIndex == _pages.length - 1)
                   _buildBookplate(isHeader: false, textColor: theme.text),
-                if (!_isLoading && _content != '???...' && !_isEmptyBody)
+                if (!_isLoading && _content != '加载中...' && !_isEmptyBody)
                   _buildPageFooter(chapter, theme),
               ],
             ),
@@ -3002,14 +3002,14 @@ class _ReaderPageState extends State<ReaderPage> {
               child: _autoReadBadge(theme),
             ),
           _chromeDismissScrim(),
-          // ?? overlay???????? AXTree remount?
+          // 顶栏 overlay（始终挂树，避免 AXTree remount）
           Positioned(
             top: 0,
             left: 0,
             right: 0,
             child: _chromeLayer(child: _buildTopChrome(theme)),
           ),
-          // ?? overlay
+          // 底栏 overlay
           Positioned(
             left: 0,
             right: 0,
@@ -3112,7 +3112,7 @@ class _ReaderPageState extends State<ReaderPage> {
     return KeyEventResult.ignored;
   }
 
-  /// ??????
+  /// 滚动翻页模式
   Widget _buildScrollMode(Chapter chapter, ReaderTheme theme) {
     final cutout = _settings.expandIntoCutout;
     final bgImage = _bgImageLayer(theme);
@@ -3137,7 +3137,7 @@ class _ReaderPageState extends State<ReaderPage> {
                               CircularProgressIndicator(color: theme.text),
                               const SizedBox(height: 16),
                               Text(
-                                '???...',
+                                '加载中...',
                                 style: TextStyle(
                                   color: theme.text.withValues(alpha: 0.6),
                                 ),
@@ -3149,8 +3149,8 @@ class _ReaderPageState extends State<ReaderPage> {
                       ? _buildBodyText(theme, paged: false)
                       : Stack(
                           children: [
-                            // ?? AnimatedSwitcher?????? ScrollView ?????
-                            // ??? _scrollController??? dual ScrollPosition ??
+                            // 不用 AnimatedSwitcher：过渡时新旧 ScrollView 会同时挂上
+                            // 同一个 _scrollController，抛出 dual ScrollPosition 异常
                             NotificationListener<ScrollNotification>(
                               key: ValueKey('scroll_$_currentIndex'),
                               onNotification: (notification) {
@@ -3258,7 +3258,7 @@ class _ReaderPageState extends State<ReaderPage> {
               Icon(Icons.speed, size: 16, color: theme.text),
               const SizedBox(width: 4),
               Text(
-                '?? ${_settings.autoReadIntervalSec.toStringAsFixed(1)}s ? ??',
+                '自动 ${_settings.autoReadIntervalSec.toStringAsFixed(1)}s · 点停',
                 style: TextStyle(fontSize: 11, color: theme.text),
               ),
             ],
