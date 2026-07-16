@@ -25,6 +25,7 @@ class ReaderTurnView extends StatefulWidget {
     required this.onTurnChapterNext,
     required this.hasChapterPrev,
     required this.hasChapterNext,
+    this.overlay,
   });
 
   final PageAnimMode mode;
@@ -36,6 +37,8 @@ class ReaderTurnView extends StatefulWidget {
   final VoidCallback onTurnChapterNext;
   final bool hasChapterPrev;
   final bool hasChapterNext;
+  /// Drawn above the live page but under the turn overlay (e.g. click zones).
+  final Widget? overlay;
 
   @override
   State<ReaderTurnView> createState() => ReaderTurnViewState();
@@ -338,6 +341,7 @@ class ReaderTurnViewState extends State<ReaderTurnView>
                 )
               else
                 const ColoredBox(color: Colors.transparent),
+              if (widget.overlay != null) widget.overlay!,
               if (painter != null)
                 CustomPaint(
                   size: size,
