@@ -100,7 +100,7 @@
 - [x] 边距（左右/上下调节）
 - [x] 信息区开关（页码/时间/电量）
 - [x] 字号/字距/行距/段距（芯片顺序对齐 `dialog_read_book_style`）
-- [x] 翻页动画五档（覆盖/滑动/仿真/滚动/无）；仿真为透视近似（非真实书页卷曲）、主题色自定义仍偏预设
+- [x] 翻页动画五档（覆盖/滑动/仿真/滚动/无）；仿真为 Jingshiro 贝塞尔截图卷曲（ReaderTurnView）、主题色自定义仍偏预设
 - [x] 主题 zip 导入（取消共用布局 → 长按主题）— UI-2：共用布局开关 + 长按主题打开 `BgTextConfigPanel`；本地/网络 zip（`readConfig.json`）；导出 zip；槽位色覆盖持久化；背景图可显示；自定义字体 FontLoader / 每主题独立排版仍开放
 
 **设置面板**（阅读设置子页）
@@ -147,7 +147,7 @@
 | # | Jingshiro XML | 对应页面 | Flutter 状态 | 差距 |
 |---|---------------|---------|:---:|------|
 | 1 | `activity_main.xml` | 主框架 (BottomNav + ViewPager) | ✅ `main_shell.dart` | 需核对 Tab 文案/图标/行为 |
-| 2 | `activity_book_read.xml` | 阅读器 | ✅ `reader_page.dart` | UI-1/UI-2：更多设置+系统 TTS+电量+沉浸栏+字重/缩进/简繁字级+翻页五档+屏幕超时分档+全文搜索+模拟追读+主题 zip；HTTP TTS/真仿真卷曲/词级简繁/内嵌字体加载仍开放 |
+| 2 | `activity_book_read.xml` | 阅读器 | ✅ `reader_page.dart` | UI-1/UI-2：更多设置+系统 TTS+电量+沉浸栏+字重/缩进/简繁字级+翻页五档+屏幕超时分档+全文搜索+模拟追读+主题 zip；HTTP TTS/词级简繁/内嵌字体加载仍开放 |
 | 3 | `activity_book_info.xml` | 书籍详情 | ✅ `book_info_page.dart` | 需核对布局：封面+信息+按钮+目录 |
 | 4 | `activity_book_search.xml` | 搜索 | ✅ `search_page.dart` | **需核对是否按书源分组（ExpansionTile）** |
 | 5 | `activity_book_source.xml` | 书源管理 | ✅ `sources_page.dart` | UI-4：分组/绿红灰校验点/批量/搜索排序；UI-17 扫码入口已接 |
@@ -310,7 +310,7 @@
 | 对照项 | Jingshiro | Flutter 现状 | 差距 |
 |--------|-----------|-------------|------|
 | **顶栏** | 自动隐藏；返回/书名/更多(目录/设置/AI/书票) | ✅ UI-1 自动隐藏+书名+更多菜单 | 书票 overlay 已有；菜单部分项占位 |
-| **正文** | 左右翻页/滚动/仿真 | ✅ | 需核对仿真翻页手势 |
+| **正文** | 左右翻页/滚动/仿真 | ✅ | 已换 ReaderTurnView 截图+Painter；需真机手感核对 |
 | **阅读主题** | 米黄/白/暗/绿 + 自定义 | ✅ | 需核对预设值 |
 | **底栏** | 章节进度条 + 页码 + 时间(可选) | ✅ UI-1/UI-2 | 电量 `battery_plus` 真值 |
 | **设置面板** | 字号/行距/翻页/主题/字体/边距/TTS/更多 | ✅ UI-2 主路径 | 更多设置：方向/亮度/蓝牙·自定义键 |
@@ -393,7 +393,7 @@
 - [x] **屏幕超时** — 默认 / 1 / 5 / 10 分钟 / 常亮（`wakelock_plus` + 计时重置；对齐 keepLight）
 - [x] **状态栏/导航栏沉浸 + 扩展到刘海** — SystemChrome + SafeArea；菜单显时短暂恢复系统栏
 - [x] **排版** — 中/粗/细、缩进 0–4、字距/段距、简繁字级表、两端对齐、底部对齐；芯片顺序对齐 `dialog_read_book_style`
-- [x] **翻页动画** — 覆盖 / 滑动 / 仿真(透视近似) / 滚动 / 无
+- [x] **翻页动画** — 覆盖 / 滑动 / 仿真(贝塞尔卷曲) / 滚动 / 无
 - [x] **全文搜索**（`activity_search_content`）— 结果页 + 阅读内上/下结果；当前章与缓存章
 - [x] **模拟追读**（`dialog_simulated_reading`）— 开关/日期/起始章/日更；目录与后章裁剪；Book/DB `simRead*` 同步
 
@@ -402,7 +402,7 @@
 仍开放 / 缺口（勿误报完成）：
 
 - 简繁：**词级**词典（OpenCC / quick-transfer）未接入，仅字级表
-- 仿真翻页为透视近似，**非** legado 真·书页卷曲网格；HTTP TTS
+- 仿真翻页已换 Jingshiro 对齐贝塞尔卷曲引擎（lib/pages/reader/turn/）；HTTP TTS
 - 主题 zip：自定义字体文件已落盘但阅读器未 `FontLoader`；关闭共用布局后排版仍全局（未做每主题独立字号行距）；内置 assets 背景图库未做
 - 文字底部对齐为分页贴底，未做 legado 行距重分配式撑满
 - 全文搜索：未做全书联网扫章（净化/正则菜单已落地）
@@ -711,7 +711,7 @@ Task UI-12:  RSS 文章列表 + 阅读  ✅ 复用 Jingshiro Rss/ParserByRule/De
 | 发现 | 85% | 接近完成 |
 | 书籍详情 | 96% | UI-6：截图布局（模糊头图/红芯片/删除+阅读底栏）；换源页后端仍占位；图标字形可再抠 |
 | 目录 | 95% | UI-5：全页 AppBar+字数/云标+底栏；溢出菜单次级项仍可再抠 |
-| **阅读器** | **93%** | UI-1+UI-2：超时分档+翻页五档+沉浸+系统 TTS+全文搜索(缓存)+模拟追读+主题 zip；HTTP TTS/真仿真卷曲/词级简繁/全书联网搜仍开放 |
+| **阅读器** | **93%** | UI-1+UI-2：超时分档+翻页五档+沉浸+系统 TTS+全文搜索(缓存)+模拟追读+主题 zip；HTTP TTS/词级简繁/全书联网搜仍开放 |
 | 书源管理 | 96% | UI-4+UI-28：编辑六 Tab 表单对齐；键盘条/ruleComplete/真 QR 仍开放 |
 | RSS | 92% | UI-12：列表+阅读+sortUrl Tab+收藏+源编辑；调试仍开放 |
 | 新模块(有声/漫画/扫码等) | 40% | UI-17 扫码基本完成；UI-22/23/25 已 1:1 chrome 返工（MP3/真漫画源/店铺仍开放） |
@@ -742,7 +742,7 @@ Task UI-12:  RSS 文章列表 + 阅读  ✅ 复用 Jingshiro Rss/ParserByRule/De
 | 动效 | Jingshiro | Flutter | 差距 |
 |------|-----------|---------|------|
 | 顶/底栏显隐 | 点击中区切换 + ~3s 自动隐藏 | ✅ UI-1 | 缓动曲线可再抠 |
-| 翻页 | 覆盖/滑动/仿真卷曲/滚动/无 | 五档已有；仿真为透视近似 | 真·书页网格卷曲仍开放 |
+| 翻页 | 覆盖/滑动/仿真卷曲/滚动/无 | 五档已有；仿真为 Jingshiro 贝塞尔截图卷曲 | 截图层+CustomPainter 引擎已落地，可继续打磨阴影/跟指 |
 | 菜单面板 | BottomSheet / Dialog 滑入 | `showModalBottomSheet` | 圆角/时长/遮罩透明度可再对齐 |
 | 朗读/界面/设置面板 | 独立 Dialog XML | 内嵌 `reader_settings` | 分层面板切换动画未逐项对齐 |
 
@@ -770,7 +770,7 @@ Task UI-12:  RSS 文章列表 + 阅读  ✅ 复用 Jingshiro Rss/ParserByRule/De
 | ID | 领域 | 现状（简化版） | 后做目标（对齐 Jingshiro） |
 |----|------|----------------|----------------------------|
 | DS-01 | 朗读 | 系统 TTS + 句级导航 | HTTP TTS 引擎 / 编辑 / 全屏有声真流 + Lyric |
-| DS-02 | 翻页 | 仿真档为透视近似 | 真·书页网格卷曲 |
+| DS-02 | 翻页 | 仿真档已换 Jingshiro 贝塞尔卷曲引擎 | 阴影/中段 Y/跟指手感继续打磨 |
 | DS-03 | 简繁 | 字级对照表 | OpenCC / 词级 quick-transfer |
 | DS-04 | 主题 zip | 色/背景可导入；FontLoader 未接 | 自定义字体加载 + 每主题独立排版 |
 | DS-05 | 代码编辑 | 轻量高亮 / beautify | Sora TextMate / WebView js-beautify |

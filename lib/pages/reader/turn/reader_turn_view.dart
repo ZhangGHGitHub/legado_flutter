@@ -195,6 +195,23 @@ class ReaderTurnViewState extends State<ReaderTurnView>
       await _ensureSnapshotsFor(_controller.direction);
       if (mounted) setState(() => _overlayVisible = true);
     }
+
+    // Jingshiro SimulationPageDelegate.onTouch MOVE mid-band Y pin.
+    if (widget.mode == PageAnimMode.simulation &&
+        _controller.direction != PageTurnDirection.none) {
+      final h = size.height;
+      final startY = _controller.startY;
+      final dir = _controller.direction;
+      if ((startY > h / 3 && startY < h * 2 / 3) ||
+          dir == PageTurnDirection.prev) {
+        _controller.touchY = h;
+      }
+      if (startY > h / 3 &&
+          startY < h / 2 &&
+          dir == PageTurnDirection.next) {
+        _controller.touchY = 1;
+      }
+    }
   }
 
   Future<void> _onPointerUp(PointerUpEvent e) async {
