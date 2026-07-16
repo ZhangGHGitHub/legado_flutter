@@ -21,10 +21,17 @@ class PageTurnController extends ChangeNotifier {
   double _lastX = 0;
   int _cornerX = 1;
   int _cornerY = 1;
+
+  int get cornerX => _cornerX;
+  int get cornerY => _cornerY;
   AnimationController? _settleController;
   VoidCallback? _settleListener;
 
-  void onPointerDown(Offset p) {
+  void onPointerDown(
+    Offset p, {
+    double? viewWidth,
+    double? viewHeight,
+  }) {
     _abortSettle(applyCompletion: false);
     _isMoved = false;
     isDragging = false;
@@ -36,6 +43,16 @@ class PageTurnController extends ChangeNotifier {
     touchX = p.dx;
     touchY = p.dy;
     _lastX = p.dx;
+    if (viewWidth != null && viewHeight != null) {
+      final corner = calcCornerXY(
+        x: p.dx,
+        y: p.dy,
+        viewWidth: viewWidth,
+        viewHeight: viewHeight,
+      );
+      _cornerX = corner.cornerX;
+      _cornerY = corner.cornerY;
+    }
     notifyListeners();
   }
 
@@ -44,6 +61,8 @@ class PageTurnController extends ChangeNotifier {
     required bool hasPrev,
     required bool hasNext,
     required double slop,
+    double? viewWidth,
+    double? viewHeight,
   }) {
     final slopSquare = slop * slop;
     if (!_isMoved) {
@@ -67,6 +86,12 @@ class PageTurnController extends ChangeNotifier {
       }
       startX = p.dx;
       startY = p.dy;
+      if (viewWidth != null && viewHeight != null) {
+        _updateCornerForDirection(
+          viewWidth: viewWidth,
+          viewHeight: viewHeight,
+        );
+      }
     }
 
     if (_isMoved && direction != PageTurnDirection.none) {
@@ -299,6 +324,11 @@ class PageTurnController extends ChangeNotifier {
     _settleController = null;
     _settleListener = null;
     isSettling = false;
+  }
+
+  void resetGesture() {
+    _abortSettle(applyCompletion: false);
+    _resetAfterGesture();
   }
 
   void _resetAfterGesture() {
