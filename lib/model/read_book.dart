@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../database/database_helper.dart';
 import '../help/book_help.dart';
+import '../help/content_help.dart';
 import '../help/content_processor.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
@@ -27,6 +28,9 @@ class ReadBook extends ChangeNotifier {
   bool isLoadingContent = false;
   /// 阅读会话内是否对正文应用替换净化（对齐 legado enableReplace）
   bool enableReplace = true;
+
+  /// 本书是否重新分段（对齐 Book.getReSegment）
+  bool reSegment = false;
 
   final Set<int> _preloading = {};
   final Map<int, String> _memoryCache = {};
@@ -80,11 +84,16 @@ class ReadBook extends ChangeNotifier {
         t.startsWith('⚠️');
   }
 
-  String _applyReplace(String raw) {
-    if (!enableReplace) return raw;
+  /// 对齐 ContentProcessor：reSegment → replace
+  String _processContent(String raw, {String chapterTitle = ''}) {
+    var result = raw;
+    if (reSegment && result.isNotEmpty) {
+      result = ContentHelp.reSegment(result, chapterTitle);
+    }
+    if (!enableReplace) return result;
     final proc = _processor;
-    if (proc == null) return raw;
-    return proc.getContent(raw);
+    if (proc == null) return result;
+    return proc.getContent(result);
   }
 
   /// 加载章节正文（文件缓存 → DB → 网络 → 净化 → 写缓存）
@@ -119,7 +128,8 @@ class ReadBook extends ChangeNotifier {
         if (shouldSkipCache(fileCached)) {
           await BookHelp.deleteChapterContent(bid, chapter.id);
         } else {
-          final processed = _applyReplace(fileCached);
+          final processed =
+              _processContent(fileCached, chapterTitle: chapter.title);
           if (!shouldSkipCache(processed)) {
             _memoryCache[memKey] = processed;
             return processed;
@@ -135,7 +145,8 @@ class ReadBook extends ChangeNotifier {
         if (again != null &&
             again.isNotEmpty &&
             !shouldSkipCache(again)) {
-          final processed = _applyReplace(again);
+          final processed =
+              _processContent(again, chapterTitle: chapter.title);
           if (!shouldSkipCache(processed)) {
             _memoryCache[memKey] = processed;
             return processed;
@@ -146,7 +157,10 @@ class ReadBook extends ChangeNotifier {
       // 3. 网络拉取（失败转为可展示文案，绝不写缓存；预加载也不会变 unhandled）
       try {
         final raw = await svc.getChapterContent(chapter.url, source: source);
-        final processed = _applyReplace(raw);
+        if (shouldSkipCache(raw)) {
+          return _processContent(raw, chapterTitle: chapter.title);
+        }
+        final processed = _processContent(raw, chapterTitle: chapter.title);
         if (shouldSkipCache(processed)) {
           // 占位 / 失败文案：不进内存、不写库（旧引擎 Ok 占位兼容）
           return processed;
@@ -154,7 +168,8 @@ class ReadBook extends ChangeNotifier {
         _memoryCache[memKey] = processed;
 
         if (saveCache) {
-          await BookHelp.saveContent(bid, chapter.id, processed);
+          // 对齐 BookHelp：缓存原文，净化/重分段在读取时应用
+          await BookHelp.saveContent(bid, chapter.id, raw);
           if (_db != null) {
             // upsert：UPDATE 在章节行尚未落库时为 0 行，需 insert 才能打上 isDownloaded
             // 搜索预览书未进 books 表时外键会失败——文件缓存仍可用，DB 标记可跳过
@@ -167,10 +182,10 @@ class ReadBook extends ChangeNotifier {
                   index: chapter.index,
                   url: chapter.url,
                   isDownloaded: true,
-                  content: processed,
+                  content: raw,
                 ),
               ]);
-              await _db!.saveChapterContent(chapter.id, processed);
+              await _db!.saveChapterContent(chapter.id, raw);
             } catch (e) {
               debugPrint('正文 DB 落库跳过（常见于未加入书架）: $e');
             }
@@ -227,6 +242,42 @@ class ReadBook extends ChangeNotifier {
     if (bid != null && bid.isNotEmpty) {
       await BookHelp.deleteChapterContent(bid, chapterId);
     }
+  }
+
+  /// 仅清内存缓存（文件原文保留，供替换/重分段开关切换后重算）
+  void invalidateMemoryCache([String? chapterId]) {
+    if (chapterId == null) {
+      _memoryCache.clear();
+    } else {
+      _memoryCache.remove(chapterId.hashCode);
+    }
+  }
+
+  /// 反转当前章缓存原文 — 对齐 ReadBookViewModel.reverseContent
+  Future<bool> reverseChapterContent({
+    required Chapter chapter,
+    String? bookId,
+  }) async {
+    final bid = bookId ?? book?.id;
+    if (bid == null || bid.isEmpty) return false;
+    final raw = await BookHelp.getCachedContent(bid, chapter.id);
+    if (raw == null || raw.isEmpty || shouldSkipCache(raw)) return false;
+    final reversed = String.fromCharCodes(raw.runes.toList().reversed);
+    await BookHelp.saveContent(bid, chapter.id, reversed);
+    invalidateMemoryCache(chapter.id);
+    return true;
+  }
+
+  /// 写入编辑后的原文并清内存
+  Future<void> saveEditedContent({
+    required Chapter chapter,
+    required String content,
+    String? bookId,
+  }) async {
+    final bid = bookId ?? book?.id;
+    if (bid == null || bid.isEmpty) return;
+    await BookHelp.saveContent(bid, chapter.id, content);
+    invalidateMemoryCache(chapter.id);
   }
 
   void reset() {

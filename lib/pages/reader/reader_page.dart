@@ -26,13 +26,18 @@ import '../cache/download_choice_dialog.dart';
 import '../cache/download_helpers.dart';
 import '../reader/ai_chat_page.dart';
 import '../../help/book_help.dart';
+import '../../models/book_progress.dart';
+import '../../services/book_progress_sync.dart';
+import '../../services/book_reader_prefs.dart';
 import '../../services/click_action_prefs.dart';
+import '../../services/book_source_service.dart';
 import '../../services/read_style_prefs.dart';
 import '../../services/reader_session_prefs.dart';
 import '../../services/simulated_reading_prefs.dart';
 import 'auto_read_panel.dart';
 import 'click_action_panel.dart';
 import 'click_region_tip_overlay.dart';
+import 'content_edit_dialog.dart';
 import 'more_settings_panel.dart';
 import 'reader_settings.dart';
 import 'search_content_page.dart';
@@ -117,7 +122,23 @@ class _ReaderPageState extends State<ReaderPage> {
   /// 阅读会话：替换净化开关（持久化于 [ReaderSessionPrefs]）
   bool _enableReplace = true;
 
-  bool get _isHorizontalPaged => _settings.pageAnim.isHorizontalPaged;
+  /// 本书翻页动画：null=未加载；-1=跟随全局；0..4=本书覆盖
+  int? _bookPageAnim;
+
+  /// 本书重新分段
+  bool _reSegment = false;
+
+  /// 有效翻页动画（本书优先，否则全局）
+  PageAnimMode get _pageAnim {
+    final o = _bookPageAnim;
+    if (o == null || o < 0) return _settings.pageAnim;
+    if (o >= 0 && o < PageAnimMode.values.length) {
+      return PageAnimMode.values[o];
+    }
+    return _settings.pageAnim;
+  }
+
+  bool get _isHorizontalPaged => _pageAnim.isHorizontalPaged;
 
   int get _maxReadableIndex {
     if (!_simRead.enabled) return widget.allChapters.length - 1;
@@ -155,6 +176,18 @@ class _ReaderPageState extends State<ReaderPage> {
     unawaited(_loadReadStylePrefs());
     unawaited(_loadClickActionPrefs());
     unawaited(_loadReaderSessionPrefs());
+    unawaited(_loadBookReaderPrefs());
+  }
+
+  Future<void> _loadBookReaderPrefs() async {
+    final anim = await BookReaderPrefs.getPageAnim(widget.book.id);
+    final reSeg = await BookReaderPrefs.getReSegment(widget.book.id);
+    if (!mounted) return;
+    setState(() {
+      _bookPageAnim = anim ?? -1;
+      _reSegment = reSeg;
+    });
+    ReadBook.instance.reSegment = reSeg;
   }
 
   Future<void> _loadReaderSessionPrefs() async {
@@ -469,7 +502,7 @@ class _ReaderPageState extends State<ReaderPage> {
       case ClickZoneAction.addBookmark:
         unawaited(_addBookmark());
       case ClickZoneAction.editContent:
-        _showNotImplemented('编辑内容');
+        unawaited(_openContentEdit());
       case ClickZoneAction.replaceToggle:
         unawaited(_toggleReplacePurify());
       case ClickZoneAction.chapterList:
@@ -477,7 +510,7 @@ class _ReaderPageState extends State<ReaderPage> {
       case ClickZoneAction.searchContent:
         unawaited(_openContentSearch());
       case ClickZoneAction.syncProgress:
-        _showNotImplemented('同步阅读进度');
+        unawaited(_syncReadingProgress());
       case ClickZoneAction.aloudPauseResume:
         unawaited(_toggleAloudPauseResume());
     }
@@ -1366,9 +1399,336 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  void _showNotImplemented(String feature) {
+  Future<void> _showBookPageAnimConfig() async {
+    const labels = ['默认', '覆盖', '滑动', '仿真', '滚动', '无'];
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('翻页动画'),
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            RadioListTile<int>(
+              title: Text(labels[i]),
+              value: i,
+              groupValue: (_bookPageAnim ?? -1) + 1,
+              onChanged: (v) => Navigator.pop(ctx, v),
+            ),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    final anim = selected - 1;
+    final oldMode = _pageAnim.id;
+    await BookReaderPrefs.setPageAnim(widget.book.id, anim);
+    setState(() => _bookPageAnim = anim);
+    await _applyEffectivePageAnimChange(oldMode, _pageAnim.id);
+  }
+
+  Future<void> _applyEffectivePageAnimChange(
+    String oldMode,
+    String newMode,
+  ) async {
+    if (oldMode == newMode) {
+      if (mounted) setState(() {});
+      return;
+    }
+    final needRepaginate = PageAnimMode.fromId(newMode).isHorizontalPaged &&
+        !_isLoading &&
+        _content.isNotEmpty;
+    final dyingPage = _pageController;
+    _pageController = null;
+    setState(() {
+      _pages = [];
+      _pageIndex = 0;
+      _modeGeneration++;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      dyingPage?.dispose();
+      if (!mounted) return;
+      if (PageAnimMode.fromId(newMode).isHorizontalPaged && needRepaginate) {
+        _splitIntoPages();
+      }
+    });
+  }
+
+  Future<void> _pullCloudProgress() async {
+    if (!await BookProgressSync.isConfigured()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先配置 WebDAV')),
+      );
+      return;
+    }
+    final localIdx = _currentIndex;
+    final localPos = _isHorizontalPaged ? _pageIndex : 0;
+    BookProgress? progress;
+    try {
+      progress = await BookProgressSync.getBookProgress(widget.book);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('拉取阅读进度失败: $e')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    if (progress == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('云端暂无进度')),
+      );
+      return;
+    }
+    if (progress.durChapterIndex == localIdx &&
+        progress.durChapterPos == localPos) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已是最新进度')),
+      );
+      return;
+    }
+    if (progress.isBehind(chapterIndex: localIdx, chapterPos: localPos)) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('获取云端进度'),
+          content: const Text('当前进度超过云端进度，是否同步？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    await _applyCloudProgress(progress);
+  }
+
+  Future<void> _applyCloudProgress(BookProgress progress) async {
+    final maxIdx =
+        widget.allChapters.isEmpty ? 0 : widget.allChapters.length - 1;
+    if (progress.durChapterIndex > maxIdx) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('云端章节超出本地目录')),
+        );
+      }
+      return;
+    }
+    final idx = progress.durChapterIndex.clamp(0, maxIdx);
+    _pendingTargetPage = progress.durChapterPos;
+    if (idx != _currentIndex) {
+      _goToChapter(idx);
+    } else {
+      _saveProgress();
+      await _loadContent();
+      if (_isHorizontalPaged &&
+          _pages.isNotEmpty &&
+          progress.durChapterPos > 0) {
+        final p = progress.durChapterPos.clamp(0, _pages.length - 1);
+        _pageController?.jumpToPage(p);
+        setState(() => _pageIndex = p);
+      }
+    }
+    if (!mounted) return;
+    final title = progress.durChapterTitle;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature（开发中，后续版本接入）')),
+      SnackBar(
+        content: Text(
+          title == null || title.isEmpty
+              ? '已同步最新阅读进度'
+              : '已同步最新阅读进度：$title',
+        ),
+      ),
+    );
+  }
+
+  /// 对齐 ReadBook.syncProgress：本地更快则上传，云端更快则询问应用
+  Future<void> _syncReadingProgress() async {
+    if (!await BookProgressSync.isConfigured()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先配置 WebDAV')),
+      );
+      return;
+    }
+    final localIdx = _currentIndex;
+    final localPos = _isHorizontalPaged ? _pageIndex : 0;
+    final chapter = widget.allChapters[_currentIndex];
+    BookProgress? progress;
+    try {
+      progress = await BookProgressSync.getBookProgress(widget.book);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('拉取阅读进度失败: $e')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    if (progress == null ||
+        progress.isBehind(chapterIndex: localIdx, chapterPos: localPos)) {
+      try {
+        await BookProgressSync.uploadBookProgress(
+          BookProgress.fromBook(
+            widget.book,
+            durChapterIndex: localIdx,
+            durChapterPos: localPos,
+            durChapterTitle: chapter.title,
+          ),
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('上传成功')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('上传失败: $e')),
+        );
+      }
+      return;
+    }
+    if (progress.isAheadOf(chapterIndex: localIdx, chapterPos: localPos)) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('获取云端进度'),
+          content: Text(
+            '发现云端更新进度：${progress!.durChapterTitle ?? '第${progress.durChapterIndex + 1}章'}，是否同步？',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      );
+      if (ok == true && mounted) await _applyCloudProgress(progress);
+      return;
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('进度已同步')),
+      );
+    }
+  }
+
+  Future<void> _coverCloudProgress() async {
+    if (!await BookProgressSync.isConfigured()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先配置 WebDAV')),
+      );
+      return;
+    }
+    final chapter = widget.allChapters[_currentIndex];
+    try {
+      await BookProgressSync.uploadBookProgress(
+        BookProgress.fromBook(
+          widget.book,
+          durChapterIndex: _currentIndex,
+          durChapterPos: _isHorizontalPaged ? _pageIndex : 0,
+          durChapterTitle: chapter.title,
+        ),
+        toast: true,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('上传成功')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('上传失败: $e')),
+      );
+    }
+  }
+
+  Future<void> _reverseContent() async {
+    final chapter = widget.allChapters[_currentIndex];
+    final ok = await ReadBook.instance.reverseChapterContent(
+      chapter: chapter,
+      bookId: widget.book.id,
+    );
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('当前章节无缓存，无法反转')),
+      );
+      return;
+    }
+    await _loadContent();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已反转本章内容')),
+      );
+    }
+  }
+
+  Future<void> _toggleReSegment() async {
+    final next = !_reSegment;
+    setState(() => _reSegment = next);
+    ReadBook.instance.reSegment = next;
+    await BookReaderPrefs.setReSegment(widget.book.id, next);
+    final chapter = widget.allChapters[_currentIndex];
+    ReadBook.instance.invalidateMemoryCache(chapter.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(next ? '已开启重新分段' : '已关闭重新分段')),
+    );
+    await _loadContent();
+  }
+
+  Future<void> _openContentEdit() async {
+    final chapter = widget.allChapters[_currentIndex];
+    final bid = widget.book.id;
+    var initial = await BookHelp.getCachedContent(bid, chapter.id) ?? '';
+    if (initial.isEmpty) {
+      initial = _content;
+    }
+    if (!mounted) return;
+    final sourceProvider = context.read<SourceProvider>();
+    await ContentEditDialog.show(
+      context,
+      bookId: bid,
+      chapter: chapter,
+      initialContent: initial,
+      loadRawContent: ({bool reset = false}) async {
+        if (reset) {
+          await ReadBook.instance.invalidateChapterCache(
+            chapter.id,
+            bookId: bid,
+          );
+          final source = sourceProvider.findSourceForBook(widget.book);
+          if (source == null) return '';
+          final svc = BookSourceService();
+          final raw =
+              await svc.getChapterContent(chapter.url, source: source);
+          if (!ReadBook.shouldSkipCache(raw)) {
+            await BookHelp.saveContent(bid, chapter.id, raw);
+          }
+          return raw;
+        }
+        return await BookHelp.getCachedContent(bid, chapter.id) ?? '';
+      },
+      onSaved: (content) async {
+        await ReadBook.instance.saveEditedContent(
+          chapter: chapter,
+          content: content,
+          bookId: bid,
+        );
+        if (mounted) await _loadContent();
+      },
     );
   }
 
@@ -1378,16 +1738,14 @@ class _ReaderPageState extends State<ReaderPage> {
     ReadBook.instance.enableReplace = next;
     await ReaderSessionPrefs(enableReplace: next).save();
     final chapter = widget.allChapters[_currentIndex];
-    await ReadBook.instance.invalidateChapterCache(
-      chapter.id,
-      bookId: widget.book.id,
-    );
+    ReadBook.instance.invalidateMemoryCache(chapter.id);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(next ? '已开启替换净化' : '已关闭替换净化')),
     );
-    await _loadContent(forceRefresh: true);
+    await _loadContent();
   }
+
 
   Future<void> _updateToc() async {
     final source = context.read<SourceProvider>().findSourceForBook(widget.book);
@@ -1666,15 +2024,19 @@ class _ReaderPageState extends State<ReaderPage> {
       case 'cache':
         unawaited(_openOfflineCache());
       case 'page_anim':
-        _showNotImplemented('翻页动画(本书)');
+        unawaited(_showBookPageAnimConfig());
       case 'cloud_progress':
-        _showNotImplemented('拉取云端进度');
+        unawaited(_pullCloudProgress());
+      case 'cover_progress':
+        unawaited(_coverCloudProgress());
       case 'reverse':
-        _showNotImplemented('反转内容');
+        unawaited(_reverseContent());
       case 'replace':
         unawaited(_toggleReplacePurify());
       case 'resegment':
-        _showNotImplemented('重新分段');
+        unawaited(_toggleReSegment());
+      case 'edit_content':
+        unawaited(_openContentEdit());
       case 'update_toc':
         unawaited(_updateToc());
       case 'tts':
@@ -1722,9 +2084,22 @@ class _ReaderPageState extends State<ReaderPage> {
       const PopupMenuDivider(),
       item('page_anim', Icons.animation, '翻页动画(本书)'),
       item('cloud_progress', Icons.cloud_download_outlined, '拉取云端进度'),
+      item('cover_progress', Icons.cloud_upload_outlined, '覆盖云端进度'),
       item('reverse', Icons.swap_vert, '反转内容'),
       item('replace', Icons.find_replace, '替换净化开关'),
-      item('resegment', Icons.notes, '重新分段'),
+      PopupMenuItem(
+        value: 'resegment',
+        child: ListTile(
+          leading: Icon(
+            _reSegment ? Icons.check_box : Icons.check_box_outline_blank,
+            size: 20,
+          ),
+          title: const Text('重新分段', style: TextStyle(fontSize: 14)),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
+      ),
+      item('edit_content', Icons.edit_note_outlined, '编辑内容'),
       item('update_toc', Icons.toc, '更新目录'),
       item('simulated_reading', Icons.calendar_today_outlined, '模拟追读'),
       item('book_info', Icons.info_outline, '书籍信息'),
@@ -2400,8 +2775,8 @@ class _ReaderPageState extends State<ReaderPage> {
 
     // Key 强制按模式+代数整树重建，避免 PageView/ScrollView 元素复用导致控制器双挂
     Widget page = KeyedSubtree(
-      key: ValueKey('reader-mode-${_settings.pageMode}-$_modeGeneration'),
-      child: _settings.pageMode == 'scroll'
+      key: ValueKey('reader-mode-${_pageAnim.id}-$_modeGeneration'),
+      child: _pageAnim.id == 'scroll'
           ? _buildScrollMode(chapter, theme)
           : _buildSlideMode(chapter, theme),
     );
@@ -2558,7 +2933,7 @@ class _ReaderPageState extends State<ReaderPage> {
     }
 
     if (paged && _pages.isNotEmpty && _pageController != null) {
-      final anim = _settings.pageAnim;
+      final anim = _pageAnim;
       return Stack(
         children: [
           PageView.builder(
@@ -2729,7 +3104,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Duration get _pageAnimDuration {
-    switch (_settings.pageAnim) {
+    switch (_pageAnim) {
       case PageAnimMode.none:
         return Duration.zero;
       case PageAnimMode.cover:
@@ -2748,7 +3123,7 @@ class _ReaderPageState extends State<ReaderPage> {
         _pageController != null &&
         _pages.isNotEmpty) {
       if (_pageIndex > 0) {
-        if (_settings.pageAnim == PageAnimMode.none) {
+        if (_pageAnim == PageAnimMode.none) {
           _pageController!.jumpToPage(_pageIndex - 1);
         } else {
           _pageController!.previousPage(
@@ -2771,7 +3146,7 @@ class _ReaderPageState extends State<ReaderPage> {
         _pageController != null &&
         _pages.isNotEmpty) {
       if (_pageIndex < _pages.length - 1) {
-        if (_settings.pageAnim == PageAnimMode.none) {
+        if (_pageAnim == PageAnimMode.none) {
           _pageController!.jumpToPage(_pageIndex + 1);
         } else {
           _pageController!.nextPage(
