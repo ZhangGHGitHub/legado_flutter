@@ -619,13 +619,14 @@
 - [x] 键盘辅助条：对齐 `keyboardAssists.json` 片段 + 帮助/撤销/重做（非 PopupWindow 贴键盘）
 - [ ] 真 Sora TextMate 文法 / WebView js-beautify / KeyboardAssistsConfig 自定义（开放）
 
-#### Task UI-28: 书源编辑 (`activity_book_source_edit.xml`) — 🟡 大修（2026-07-16）
+#### Task UI-28: 书源编辑 (`activity_book_source_edit.xml`) — ✅ 基本完成（2026-07-16）
 
 - [x] 对齐 `BookSourceEditActivity`：TitleBar「编辑书源」+ 类型 Spinner + 启用/发现/CookieJar/事件监听/定制按钮
 - [x] 六 Tab：基本 / 搜索 / 发现 / 详情 / 目录 / 正文（字段顺序与 labels 对齐 values-zh）
 - [x] `menu_source_edit`：编辑内容（聚焦字段→`CodeEditPage`）/ 保存 / 调试源 + overflow（登录/搜索/Cookie/自动补全/拷贝粘贴/源变量/二维码/分享/日志/帮助）
 - [x] 未保存退出：`exit` / `exit_no_save`；调试拆至 `source_debug_page.dart`
-- [ ] 键盘辅助条 `KeyboardToolPop`、规则自动补全 `ruleComplete`、真二维码分享图、AppLogDialog、ruleHelp 资产、Cookie 清除、搜索带单源 scope（开放）
+- [x] 键盘辅助条 `KeyboardToolBar`、规则自动补全 `RuleComplete`、二维码 PNG 分享、会话日志、ruleHelp 文案、Cookie/JS 清除、搜索单源 scope
+- [ ] 真 PopupWindow 贴键盘 / 完整 ruleHelp 资产文件 / AppLog 全局管道（开放）
 
 ---
 
@@ -670,7 +671,7 @@ Task UI-24: 模拟追读  🟡 对话框+章数解锁+Book/DB 同步；WebDAV/�
 Task UI-25: 捐赠页  🟡 1:1 返工（2026-07-16）；去掉 Flutter 免责声明；店铺/内嵌码仍开放
 Task UI-26: 欢迎引导页  ✅ 1:1 闪屏（2026-07-16）
 Task UI-27: 代码编辑器  ✅ 高亮/格式化/偏好/键盘条（2026-07-16）；Sora/WebView beautify 仍开放
-Task UI-28: 书源编辑  🟡 六 Tab 表单大修（2026-07-16）；键盘条/ruleComplete/真 QR 分享仍开放
+Task UI-28: 书源编辑  ✅ 键盘条/ruleComplete/QR 分享/Cookie/单源搜索（2026-07-16）；贴键盘 Popup/ruleHelp 资产仍开放
 ```
 
 ### S4 — 延后（RSS 订阅阅读）

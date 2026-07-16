@@ -11,7 +11,13 @@ enum _ScopeMode { all, groups, sources }
 
 /// 搜索页面 — 按书源分组 + 精准搜索 + 搜索范围
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage({
+    super.key,
+    this.initialRestrictSourceUrls,
+  });
+
+  /// 非空时锁定为「按书源」并预选（书源编辑页「搜索」入口，对齐单源 scope）
+  final Set<String>? initialRestrictSourceUrls;
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -30,6 +36,11 @@ class _SearchPageState extends State<SearchPage> {
   @override
   void initState() {
     super.initState();
+    final locked = widget.initialRestrictSourceUrls;
+    if (locked != null && locked.isNotEmpty) {
+      _scopeMode = _ScopeMode.sources;
+      _scopeSourceUrls = Set<String>.from(locked);
+    }
     _loadHistory();
   }
 

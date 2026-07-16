@@ -1,17 +1,24 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
+import '../../services/cache_service.dart';
+import '../../services/qr_code_service.dart';
 import '../../theme/legado_tokens.dart';
 import '../code_edit/code_edit_page.dart';
+import '../code_edit/code_edit_prefs.dart';
+import '../code_edit/keyboard_tool_bar.dart';
 import '../qrcode/qrcode_capture_page.dart';
 import '../search/search_page.dart';
+import 'rule_complete.dart';
 import 'source_debug_page.dart';
 import 'source_login_page.dart';
 
@@ -60,8 +67,13 @@ class _SourceEditorPageState extends State<SourceEditorPage>
   bool _enabledCookieJar = true;
   bool _eventListener = false;
   bool _customButton = false;
-  bool _autoComplete = false;
+  bool _autoComplete = true;
   bool _isSaving = false;
+  bool _applyingHistory = false;
+
+  /// 每字段撤销栈（对齐 KeyboardToolPop 撤销/重做）
+  final Map<String, List<String>> _undoStacks = {};
+  final Map<String, List<String>> _redoStacks = {};
 
   late List<_EditField> _baseFields;
   late List<_EditField> _searchFields;
@@ -105,6 +117,38 @@ class _SourceEditorPageState extends State<SourceEditorPage>
     });
     _initFromSource(widget.source);
     _originalJson = _encodeCurrent();
+    _seedHistory();
+    _loadAutoComplete();
+  }
+
+  Future<void> _loadAutoComplete() async {
+    final s = await CodeEditPrefs.load();
+    if (!mounted) return;
+    setState(() => _autoComplete = s.autoComplete);
+  }
+
+  void _seedHistory() {
+    for (final f in _allFields) {
+      _undoStacks[f.key] = [f.controller.text];
+      _redoStacks[f.key] = [];
+      f.focus.removeListener(_onFieldFocusChange);
+      f.focus.addListener(_onFieldFocusChange);
+    }
+  }
+
+  void _onFieldFocusChange() {
+    if (mounted) setState(() {});
+  }
+
+  void _pushHistory(_EditField field) {
+    if (_applyingHistory) return;
+    final stack = _undoStacks.putIfAbsent(field.key, () => []);
+    final text = field.controller.text;
+    if (stack.isEmpty || stack.last != text) {
+      stack.add(text);
+      if (stack.length > 40) stack.removeAt(0);
+      _redoStacks[field.key]?.clear();
+    }
   }
 
   void _initFromSource(BookSource source) {
@@ -664,6 +708,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
       }
       setState(() {
         _initFromSource(source);
+        _seedHistory();
       });
     } catch (e) {
       if (!mounted) return;
@@ -692,7 +737,10 @@ class _SourceEditorPageState extends State<SourceEditorPage>
       for (final f in _allFields) {
         f.dispose();
       }
-      setState(() => _initFromSource(source));
+      setState(() {
+        _initFromSource(source);
+        _seedHistory();
+      });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -706,11 +754,55 @@ class _SourceEditorPageState extends State<SourceEditorPage>
   }
 
   Future<void> _shareQr() async {
-    // 无 qr_flutter：回退为字符串分享（差距见 docs）
-    await Share.share(_encodeCurrent(), subject: '分享书源');
+    final json = _encodeCurrent();
+    final png = QrCodeService.encodeToPngBytes(json);
+    if (png == null) {
+      await Share.share(json, subject: '分享书源');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('内容过长无法生成二维码，已改为字符串分享')),
+      );
+      return;
+    }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('二维码分享暂以字符串分享回退')),
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('二维码分享'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.memory(png, width: 240, height: 240, fit: BoxFit.contain),
+              const SizedBox(height: 8),
+              Text(
+                '扫描可导入书源',
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final dir = await getTemporaryDirectory();
+              final file = File(
+                '${dir.path}/legado_source_qr_${DateTime.now().millisecondsSinceEpoch}.png',
+              );
+              await file.writeAsBytes(png);
+              await Share.shareXFiles(
+                [XFile(file.path)],
+                subject: '分享书源二维码',
+              );
+            },
+            child: const Text('分享图片'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -787,9 +879,87 @@ class _SourceEditorPageState extends State<SourceEditorPage>
   Future<void> _openSearch() async {
     final saved = await _save();
     if (!mounted || saved == null) return;
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const SearchPage()));
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SearchPage(
+          initialRestrictSourceUrls: {saved.bookSourceUrl},
+        ),
+      ),
+    );
+  }
+
+  Future<void> _clearCookie() async {
+    try {
+      await CacheService().clearEngineCache();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已清除 Cookie / JS 缓存')),
+      );
+      await CodeEditPrefs.appendLog('清除 Cookie/JS 缓存');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('清除失败: $e')),
+      );
+    }
+  }
+
+  void _undo() {
+    final field = _focusedField();
+    if (field == null) return;
+    final stack = _undoStacks[field.key];
+    if (stack == null || stack.length < 2) return;
+    final current = stack.removeLast();
+    _redoStacks.putIfAbsent(field.key, () => []).add(current);
+    final prev = stack.last;
+    _applyingHistory = true;
+    field.controller.value = TextEditingValue(
+      text: prev,
+      selection: TextSelection.collapsed(offset: prev.length),
+    );
+    _applyingHistory = false;
+    setState(() {});
+  }
+
+  void _redo() {
+    final field = _focusedField();
+    if (field == null) return;
+    final redo = _redoStacks[field.key];
+    if (redo == null || redo.isEmpty) return;
+    final next = redo.removeLast();
+    _undoStacks.putIfAbsent(field.key, () => []).add(next);
+    _applyingHistory = true;
+    field.controller.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
+    );
+    _applyingHistory = false;
+    setState(() {});
+  }
+
+  void _sendText(String snippet) {
+    final field = _focusedField();
+    if (field == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请将光标聚焦在文本框')),
+      );
+      return;
+    }
+    final next = RuleComplete.applySnippet(field.controller.value, snippet);
+    _pushHistory(field);
+    field.controller.value = next;
+    _pushHistory(field);
+    setState(() {});
+  }
+
+  List<KeyboardAssistItem> _ruleSuggestions() {
+    if (!_autoComplete) return const [];
+    final field = _focusedField();
+    if (field == null) return const [];
+    final sel = field.controller.selection;
+    final cursor = sel.isValid ? sel.baseOffset : field.controller.text.length;
+    final token = RuleComplete.currentToken(field.controller.text, cursor);
+    return RuleComplete.suggestions(token);
   }
 
   Future<bool> _confirmExit() async {
@@ -822,12 +992,15 @@ class _SourceEditorPageState extends State<SourceEditorPage>
         title: const Text('帮助'),
         content: const SingleChildScrollView(
           child: Text(
-            '书源规则编写说明：\n'
-            '• 基本：源 URL、名称、登录、请求头、jsLib 等\n'
-            '• 搜索/发现：列表与字段提取规则\n'
-            '• 详情/目录/正文：详情页、目录列表、正文内容规则\n'
-            '• 聚焦文本框后点「编辑内容」可全屏编辑\n'
-            '• 完整教程请参考 Legado 书源文档',
+            '书源规则编写说明（对齐 Legado ruleHelp）：\n\n'
+            '• 基本：源 URL、名称、分组、登录、请求头、jsLib、并发率等\n'
+            '• 搜索/发现：searchUrl / exploreUrl 与列表字段规则\n'
+            '• 详情/目录/正文：bookInfo / toc / content 规则\n'
+            '• 常用前缀：@css: @XPath: @Json: @Regex: <js></js>\n'
+            '• 组合：|| 备选、&& 合并、%% 交错、## 正则替换\n'
+            '• 底栏键盘条可插入规则片段；开启「自动补全」时按输入前缀提示\n'
+            '• 聚焦文本框后点「编辑内容」可全屏代码编辑\n'
+            '• 完整教程请参考 Legado 书源文档 / 语雀 Wiki',
           ),
         ),
         actions: [
@@ -840,16 +1013,39 @@ class _SourceEditorPageState extends State<SourceEditorPage>
     );
   }
 
-  void _showLog() {
-    showDialog(
+  Future<void> _showLog() async {
+    final logs = await CodeEditPrefs.loadLog();
+    if (!mounted) return;
+    await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('日志'),
-        content: const Text('应用日志请在调试源页面查看运行日志。'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: logs.isEmpty
+              ? const Text('暂无编辑会话日志。调试运行日志请打开「调试源」。')
+              : SingleChildScrollView(
+                  child: SelectableText(
+                    logs.join('\n'),
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+        ),
         actions: [
+          if (logs.isNotEmpty)
+            TextButton(
+              onPressed: () async {
+                await CodeEditPrefs.clearLog();
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('清空'),
+            ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('确定'),
+            child: const Text('关闭'),
           ),
         ],
       ),
@@ -863,12 +1059,10 @@ class _SourceEditorPageState extends State<SourceEditorPage>
       case 'search':
         await _openSearch();
       case 'cookie':
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('清除 Cookie：当前无独立 Cookie 存储')),
-        );
+        await _clearCookie();
       case 'auto_complete':
         setState(() => _autoComplete = !_autoComplete);
+        await CodeEditPrefs.saveAutoComplete(_autoComplete);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -889,7 +1083,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
       case 'str_share':
         await _shareStr();
       case 'log':
-        _showLog();
+        await _showLog();
       case 'help':
         _showHelp();
     }
@@ -1123,11 +1317,51 @@ class _SourceEditorPageState extends State<SourceEditorPage>
                           borderSide: BorderSide(color: accent, width: 1.5),
                         ),
                       ),
-                      onChanged: (_) => setState(() {}),
+                      onTap: () => setState(() {}),
+                      onChanged: (_) {
+                        _pushHistory(field);
+                        setState(() {});
+                      },
                     ),
                   );
                 },
               ),
+            ),
+            if (_ruleSuggestions().isNotEmpty)
+              Material(
+                color: theme.colorScheme.surfaceContainerHighest,
+                child: SizedBox(
+                  height: 40,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    children: [
+                      for (final s in _ruleSuggestions())
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: ActionChip(
+                            label: Text(
+                              s.key,
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 12,
+                              ),
+                            ),
+                            onPressed: () => _sendText(s.value),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            KeyboardToolBar(
+              onSendText: _sendText,
+              onUndo: _undo,
+              onRedo: _redo,
+              onHelp: _showHelp,
             ),
           ],
         ),
