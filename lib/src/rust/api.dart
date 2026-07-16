@@ -6,7 +6,7 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 初始化 Rust 书源引擎
 void initEngine() => LegadoEngine.instance.api.crateApiInitEngine();
@@ -159,6 +159,39 @@ List<NoteDto> listNotes({required String bookId}) =>
 /// 导出 Obsidian 风格 Markdown
 String exportNotesMarkdown({required String bookId}) =>
     LegadoEngine.instance.api.crateApiExportNotesMarkdown(bookId: bookId);
+
+/// 执行裸 JS（登录 UI / loginUrl / 按钮脚本）
+String evalJs({
+  required String script,
+  required String jsLib,
+  required String baseUrl,
+}) => LegadoEngine.instance.api.crateApiEvalJs(
+  script: script,
+  jsLib: jsLib,
+  baseUrl: baseUrl,
+);
+
+/// 获取 RSS 文章列表 — 对齐 Jingshiro Rss.getArticlesAwait
+Future<RssArticlesResult> getRssArticles({
+  required String sourceJson,
+  required String sortUrl,
+  required String sortName,
+  required int page,
+}) => LegadoEngine.instance.api.crateApiGetRssArticles(
+  sourceJson: sourceJson,
+  sortUrl: sortUrl,
+  sortName: sortName,
+  page: page,
+);
+
+/// 获取 RSS 正文 — 对齐 Jingshiro Rss.getContentAwait
+Future<String> getRssContent({
+  required String sourceJson,
+  required String articleLink,
+}) => LegadoEngine.instance.api.crateApiGetRssContent(
+  sourceJson: sourceJson,
+  articleLink: articleLink,
+);
 
 /// HTTP 请求并返回解码后的文本（调试用）
 Future<String> httpFetch({
@@ -517,6 +550,73 @@ class ReadingStats {
           todayDurationSeconds == other.todayDurationSeconds &&
           weekChars == other.weekChars &&
           daily == other.daily;
+}
+
+/// RSS 文章 DTO
+class RssArticleDto {
+  final String title;
+  final String link;
+  final String pubDate;
+  final String description;
+  final String content;
+  final String image;
+  final String origin;
+  final String sort;
+
+  const RssArticleDto({
+    required this.title,
+    required this.link,
+    required this.pubDate,
+    required this.description,
+    required this.content,
+    required this.image,
+    required this.origin,
+    required this.sort,
+  });
+
+  @override
+  int get hashCode =>
+      title.hashCode ^
+      link.hashCode ^
+      pubDate.hashCode ^
+      description.hashCode ^
+      content.hashCode ^
+      image.hashCode ^
+      origin.hashCode ^
+      sort.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RssArticleDto &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          link == other.link &&
+          pubDate == other.pubDate &&
+          description == other.description &&
+          content == other.content &&
+          image == other.image &&
+          origin == other.origin &&
+          sort == other.sort;
+}
+
+/// RSS 列表结果
+class RssArticlesResult {
+  final List<RssArticleDto> articles;
+  final String? nextUrl;
+
+  const RssArticlesResult({required this.articles, this.nextUrl});
+
+  @override
+  int get hashCode => articles.hashCode ^ nextUrl.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RssArticlesResult &&
+          runtimeType == other.runtimeType &&
+          articles == other.articles &&
+          nextUrl == other.nextUrl;
 }
 
 /// 规则调试步骤

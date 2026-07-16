@@ -87,6 +87,9 @@ abstract class LegadoEngineApiImplPlatform
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<RssArticleDto> dco_decode_list_rss_article_dto(dynamic raw);
+
+  @protected
   List<RuleDebugStep> dco_decode_list_rule_debug_step(dynamic raw);
 
   @protected
@@ -112,6 +115,12 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   ReadingStats dco_decode_reading_stats(dynamic raw);
+
+  @protected
+  RssArticleDto dco_decode_rss_article_dto(dynamic raw);
+
+  @protected
+  RssArticlesResult dco_decode_rss_articles_result(dynamic raw);
 
   @protected
   RuleDebugStep dco_decode_rule_debug_step(dynamic raw);
@@ -196,6 +205,11 @@ abstract class LegadoEngineApiImplPlatform
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<RssArticleDto> sse_decode_list_rss_article_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<RuleDebugStep> sse_decode_list_rule_debug_step(
     SseDeserializer deserializer,
   );
@@ -223,6 +237,14 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   ReadingStats sse_decode_reading_stats(SseDeserializer deserializer);
+
+  @protected
+  RssArticleDto sse_decode_rss_article_dto(SseDeserializer deserializer);
+
+  @protected
+  RssArticlesResult sse_decode_rss_articles_result(
+    SseDeserializer deserializer,
+  );
 
   @protected
   RuleDebugStep sse_decode_rule_debug_step(SseDeserializer deserializer);
@@ -324,6 +346,12 @@ abstract class LegadoEngineApiImplPlatform
   );
 
   @protected
+  void sse_encode_list_rss_article_dto(
+    List<RssArticleDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_rule_debug_step(
     List<RuleDebugStep> self,
     SseSerializer serializer,
@@ -364,6 +392,15 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   void sse_encode_reading_stats(ReadingStats self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_rss_article_dto(RssArticleDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_rss_articles_result(
+    RssArticlesResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_rule_debug_step(RuleDebugStep self, SseSerializer serializer);

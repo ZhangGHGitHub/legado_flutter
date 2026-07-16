@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/book_source.dart';
 import '../../models/login_row_ui.dart';
 import '../../services/source_login_prefs.dart';
+import '../../services/source_login_service.dart';
+import '../common/app_webview_page.dart';
 
 /// 书源登录 — 对齐 Jingshiro `SourceLoginDialog` + `dialog_login.xml`
+///
+/// 支持：静态 JSON loginUi、JS 动态 loginUi、http WebView 登录、JS loginUrl 脚本。
 class SourceLoginPage extends StatefulWidget {
   final BookSource source;
 
@@ -29,6 +32,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
   List<LoginRowUi> _rows = [];
   bool _loading = true;
   bool _jsUi = false;
+  bool _busy = false;
   String? _status;
 
   BookSource get source => widget.source;
@@ -51,8 +55,45 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
     final saved = await SourceLoginPrefs.load(source.bookSourceUrl);
     final loginUi = source.loginUi;
     _jsUi = LoginRowUi.isJsLoginUi(loginUi);
-    _rows = LoginRowUi.parse(loginUi);
 
+    if (_jsUi) {
+      try {
+        final maps = SourceLoginService.evalLoginUi(source, saved);
+        _rows = maps
+            .map(LoginRowUi.fromJson)
+            .where((e) => e.name.isNotEmpty)
+            .toList();
+        if (_rows.isEmpty) {
+          _status = 'JS loginUi 未返回有效表单，已提供通用用户名/密码';
+        }
+      } catch (e) {
+        _status = 'JS loginUi 执行失败: $e';
+        debugPrint('[SourceLogin] loginUi JS: $e');
+      }
+    } else {
+      _rows = LoginRowUi.parse(loginUi);
+    }
+
+    _applyRows(saved);
+
+    // 无 loginUi 结果但有 loginUrl：通用用户名/密码
+    if (_rows.isEmpty && source.loginUrl.trim().isNotEmpty) {
+      _rows = const [
+        LoginRowUi(name: 'username', type: LoginRowType.text, viewName: '用户名'),
+        LoginRowUi(
+          name: 'password',
+          type: LoginRowType.password,
+          viewName: '密码',
+        ),
+      ];
+      _applyRows(saved);
+    }
+
+    if (!mounted) return;
+    setState(() => _loading = false);
+  }
+
+  void _applyRows(Map<String, String> saved) {
     for (final row in _rows) {
       final savedVal = saved[row.name];
       final def = savedVal ?? row.defaultValue ?? '';
@@ -64,7 +105,8 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
         case LoginRowType.toggle:
         case LoginRowType.select:
           final chars = row.chars.isNotEmpty ? row.chars : [def];
-          final initial = chars.contains(def) ? def : (chars.isEmpty ? '' : chars.first);
+          final initial =
+              chars.contains(def) ? def : (chars.isEmpty ? '' : chars.first);
           _values[row.name] = initial;
         case LoginRowType.checkbox:
           _checks[row.name] =
@@ -76,26 +118,6 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
           break;
       }
     }
-
-    // 无 loginUi 但有 loginUrl：提供用户名/密码通用两项
-    if (_rows.isEmpty && !_jsUi && source.loginUrl.trim().isNotEmpty) {
-      _rows = const [
-        LoginRowUi(name: 'username', type: LoginRowType.text, viewName: '用户名'),
-        LoginRowUi(
-          name: 'password',
-          type: LoginRowType.password,
-          viewName: '密码',
-        ),
-      ];
-      for (final row in _rows) {
-        final def = saved[row.name] ?? '';
-        _textCtrls[row.name] = TextEditingController(text: def);
-        _values[row.name] = def;
-      }
-    }
-
-    if (!mounted) return;
-    setState(() => _loading = false);
   }
 
   Map<String, String> _collect() {
@@ -149,37 +171,95 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
   }
 
   Future<void> _login() async {
-    await _save(snack: false);
-    final url = source.loginUrl.trim();
-    if (url.isEmpty) {
-      if (mounted) {
-        setState(() => _status = '已保存表单（无可执行 loginUrl）');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('登录信息已保存；本书源无 loginUrl')),
-        );
-      }
-      return;
-    }
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await _save(snack: false);
+      final info = _collect();
+      final url = source.loginUrl.trim();
 
-    // URL 登录：浏览器打开（对齐 WebView 登录的轻量路径）
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      final uri = Uri.tryParse(url);
-      if (uri != null && await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (url.isEmpty) {
+        if (mounted) {
+          setState(() => _status = '已保存表单（无可执行 loginUrl）');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('登录信息已保存；本书源无 loginUrl')),
+          );
+        }
+        return;
+      }
+
+      if (SourceLoginService.isHttpUrl(url)) {
+        if (!mounted) return;
+        await AppWebViewPage.openUrl(
+          context,
+          title: '登录 · ${source.bookSourceName}',
+          url: url,
+        );
         if (mounted) {
           setState(() => _status = '已打开登录页，完成后可返回');
         }
         return;
       }
-    }
 
-    // JS / 特殊 loginUrl：引擎侧登录尚未接通
-    if (mounted) {
-      setState(() => _status = 'JS 登录脚本暂未接通引擎');
+      if (SourceLoginService.isJsUrl(url)) {
+        final out = SourceLoginService.evalLoginScript(source, info);
+        if (mounted) {
+          setState(() => _status = out.isEmpty ? '登录脚本已执行' : '脚本结果：$out');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                out.isEmpty ? '登录脚本已执行' : '登录脚本完成',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() => _status = '无法识别的 loginUrl 格式');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('loginUrl 既非 http(s) 也非 JS')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _status = '登录失败: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('登录失败: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _runButton(LoginRowUi row) async {
+    final action = row.name.trim().isNotEmpty
+        ? row.name
+        : (row.defaultValue ?? '');
+    if (action.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('表单已保存；JS 登录执行尚需引擎接口（后续接入）'),
-        ),
+        SnackBar(content: Text('${row.label}：无动作脚本')),
+      );
+      return;
+    }
+    try {
+      await _save(snack: false);
+      final out = SourceLoginService.evalButtonAction(
+        source,
+        _collect(),
+        action,
+      );
+      if (!mounted) return;
+      setState(() => _status = out.isEmpty ? '${row.label} 已执行' : out);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${row.label} 已执行')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${row.label} 失败: $e')),
       );
     }
   }
@@ -191,10 +271,16 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
       appBar: AppBar(
         title: Text('登录 · ${source.bookSourceName}'),
         actions: [
-          TextButton(onPressed: _clear, child: const Text('清除')),
+          TextButton(onPressed: _busy ? null : _clear, child: const Text('清除')),
           FilledButton(
-            onPressed: _login,
-            child: const Text('登录'),
+            onPressed: _busy ? null : _login,
+            child: _busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('登录'),
           ),
           const SizedBox(width: 8),
         ],
@@ -210,18 +296,17 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
                     child: const Padding(
                       padding: EdgeInsets.all(12),
                       child: Text(
-                        '本书源 loginUi 为 JS 动态表单，当前版本暂以通用表单/URL 登录代替；'
-                        '静态 JSON loginUi 可完整渲染。',
+                        '本书源 loginUi 为 JS 动态表单，已尝试执行并渲染返回的字段。',
                       ),
                     ),
                   ),
-                if (_rows.isEmpty && !_jsUi)
+                if (_rows.isEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16),
                     child: Text(
                       source.loginUrl.isEmpty
                           ? '本书源未配置 loginUi / loginUrl'
-                          : '无 loginUi，已提供用户名/密码输入',
+                          : '无可用表单字段，可直接点登录打开 loginUrl',
                       style: theme.textTheme.bodyMedium,
                     ),
                   ),
@@ -277,7 +362,9 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 isExpanded: true,
-                value: chars.contains(current) ? current : (chars.isEmpty ? null : chars.first),
+                value: chars.contains(current)
+                    ? current
+                    : (chars.isEmpty ? null : chars.first),
                 items: chars
                     .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                     .toList(),
@@ -324,11 +411,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: OutlinedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('${row.label}：自定义按钮 JS 尚未接入')),
-              );
-            },
+            onPressed: () => _runButton(row),
             child: Text(row.label),
           ),
         );

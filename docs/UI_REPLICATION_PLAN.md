@@ -481,21 +481,23 @@
 - [x] 列表/网格整理切换；自定义顺序 prefs 持久化
 - [ ] 换源批量/更新开关/区间滑选等待 legado 次级菜单项
 
-#### Task UI-11: 书源登录 (`activity_source_login.xml` + `dialog_login.xml`) — 🟡 表单+URL（2026-07-15）
+#### Task UI-11: 书源登录 (`activity_source_login.xml` + `dialog_login.xml`) — ✅ 基本完成（2026-07-16）
 
 - [x] 根据书源 `loginUi` JSON 渲染动态表单（text/password/button/toggle/select/checkbox）
 - [x] 登录信息 SharedPreferences 持久化；书源列表登录入口
-- [x] `loginUrl` 为 http(s) 时外链打开
-- [ ] `@js:` / `<js>` 动态 loginUi 与按钮 JS、引擎 `login()` 脚本执行
-- [ ] WebView 内嵌登录（当前外链）
+- [x] `loginUrl` 为 http(s) 时内嵌 WebView（桌面无 WebView 时外链回退）
+- [x] `@js:` / `<js>` 动态 loginUi（Rust `eval_js`）与按钮 JS、对齐 Jingshiro `login()` 调用
+- [ ] SourceLoginJsExtensions 全量 java.* / 登录头菜单（开放）
 
-#### Task UI-12: RSS 文章列表 + 阅读 (`activity_rss_artivles.xml` + `activity_rss_read.xml`) — ⏸ 延后
+#### Task UI-12: RSS 文章列表 + 阅读 (`activity_rss_artivles.xml` + `activity_rss_read.xml`) — ✅ 基本完成（2026-07-16）
 
-> 优先级放后：订阅 Tab 与源管理已有骨架；文章列表/阅读/WebView 方案待 S3 末再定。
+> 复用 Jingshiro `Rss` / `RssParserByRule` / `RssParserDefault` 流程（Rust 引擎）。
 
-- [ ] RSS 订阅源 → 文章列表页
-- [ ] RSS 文章阅读页（WebView 或纯文本 / 外链，方案待定）
-- [ ] 收藏/已读标记
+- [x] RSS 订阅源 → 文章列表页（`RssArticlesPage`）
+- [x] RSS 文章阅读页（ruleContent / 内嵌 HTML / WebView 原文）
+- [x] 已读标记（按源本地持久化）
+- [x] `RssSource` 完整规则字段对齐 Jingshiro
+- [ ] 分类 sortUrl Tab / 收藏星标 / 阅读记录 Dialog（开放）
 
 #### Task UI-13: 缓存管理页面 (`activity_cache_book.xml`) — ✅ 基本完成（2026-07-15）
 
@@ -649,8 +651,8 @@ Task UI-8:  我的页菜单补齐 + 快捷四格行为  ✅ 基本完成（2026-
 
 ```
 Task UI-9:  阅读器正文搜索  🟡 当前章+缓存+上/下结果
-Task UI-10: 书架整理
-Task UI-11: 书源登录（动态表单 + JS）  🟡 表单+URL；JS/WebView 仍开放
+Task UI-10: 书架整理  ✅ 基本完成（2026-07-15）
+Task UI-11: 书源登录（动态表单 + JS）  ✅ WebView+JS loginUi/login()（2026-07-16）
 Task UI-13: 缓存管理页面  ✅ 基本完成（2026-07-15）
 Task UI-16: 下载选项 Dialog  ✅ 基本完成（HTML 导出延后）
 Task UI-14: AI 配置 Dialog  ✅ 基本完成（2026-07-15）
@@ -674,11 +676,11 @@ Task UI-27: 代码编辑器  ✅ 高亮/格式化/偏好/键盘条（2026-07-16�
 Task UI-28: 书源编辑  ✅ 键盘条/ruleComplete/QR 分享/Cookie/单源搜索（2026-07-16）；贴键盘 Popup/ruleHelp 资产仍开放
 ```
 
-### S4 — 延后（RSS 订阅阅读）
+### S4 — RSS 订阅阅读
 
 ```
-Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
-             activity_rss_source_edit / rss_source_debug（若与 UI-12 一并交付）
+Task UI-12:  RSS 文章列表 + 阅读  ✅ 复用 Jingshiro Rss/ParserByRule/Default（2026-07-16）
+             activity_rss_source_edit / rss_source_debug（仍开放）
 ```
 
 ---

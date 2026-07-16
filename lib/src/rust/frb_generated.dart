@@ -81,7 +81,7 @@ class LegadoEngine
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 449304204;
+  int get rustContentHash => -258696694;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -175,6 +175,12 @@ abstract class LegadoEngineApi extends BaseApi {
 
   String crateApiEngineVersion();
 
+  String crateApiEvalJs({
+    required String script,
+    required String jsLib,
+    required String baseUrl,
+  });
+
   Future<List<SearchItem>> crateApiExplore({
     required String sourceJson,
     required String exploreUrl,
@@ -229,6 +235,18 @@ abstract class LegadoEngineApi extends BaseApi {
 
   Future<ReadingStats> crateApiReadRecordGetReadingStats({
     required String range,
+  });
+
+  Future<RssArticlesResult> crateApiGetRssArticles({
+    required String sourceJson,
+    required String sortUrl,
+    required String sortName,
+    required int page,
+  });
+
+  Future<String> crateApiGetRssContent({
+    required String sourceJson,
+    required String articleLink,
   });
 
   Future<List<ChapterItem>> crateApiGetToc({
@@ -1087,6 +1105,37 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       const TaskConstMeta(debugName: "engine_version", argNames: []);
 
   @override
+  String crateApiEvalJs({
+    required String script,
+    required String jsLib,
+    required String baseUrl,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(script, serializer);
+          sse_encode_String(jsLib, serializer);
+          sse_encode_String(baseUrl, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEvalJsConstMeta,
+        argValues: [script, jsLib, baseUrl],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEvalJsConstMeta => const TaskConstMeta(
+    debugName: "eval_js",
+    argNames: ["script", "jsLib", "baseUrl"],
+  );
+
+  @override
   Future<List<SearchItem>> crateApiExplore({
     required String sourceJson,
     required String exploreUrl,
@@ -1102,7 +1151,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1138,7 +1187,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1164,7 +1213,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1187,7 +1236,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(bookId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1213,7 +1262,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(format, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1244,7 +1293,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 34,
             port: port_,
           );
         },
@@ -1279,7 +1328,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 34,
+            funcId: 35,
             port: port_,
           );
         },
@@ -1313,7 +1362,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 35,
+            funcId: 36,
             port: port_,
           );
         },
@@ -1341,7 +1390,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(bookId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_book_reading_stats,
@@ -1372,7 +1421,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 37,
+            funcId: 38,
             port: port_,
           );
         },
@@ -1407,7 +1456,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 38,
+            funcId: 39,
             port: port_,
           );
         },
@@ -1441,7 +1490,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 39,
+            funcId: 40,
             port: port_,
           );
         },
@@ -1467,7 +1516,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 40)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 41)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_network_config_dto,
@@ -1490,7 +1539,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(range, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 41)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 42)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_reading_stats,
@@ -1518,7 +1567,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 42,
+            funcId: 43,
             port: port_,
           );
         },
@@ -1537,6 +1586,78 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       const TaskConstMeta(debugName: "get_reading_stats", argNames: ["range"]);
 
   @override
+  Future<RssArticlesResult> crateApiGetRssArticles({
+    required String sourceJson,
+    required String sortUrl,
+    required String sortName,
+    required int page,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(sourceJson, serializer);
+          sse_encode_String(sortUrl, serializer);
+          sse_encode_String(sortName, serializer);
+          sse_encode_i_32(page, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 44,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_rss_articles_result,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiGetRssArticlesConstMeta,
+        argValues: [sourceJson, sortUrl, sortName, page],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiGetRssArticlesConstMeta => const TaskConstMeta(
+    debugName: "get_rss_articles",
+    argNames: ["sourceJson", "sortUrl", "sortName", "page"],
+  );
+
+  @override
+  Future<String> crateApiGetRssContent({
+    required String sourceJson,
+    required String articleLink,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(sourceJson, serializer);
+          sse_encode_String(articleLink, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 45,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiGetRssContentConstMeta,
+        argValues: [sourceJson, articleLink],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiGetRssContentConstMeta => const TaskConstMeta(
+    debugName: "get_rss_content",
+    argNames: ["sourceJson", "articleLink"],
+  );
+
+  @override
   Future<List<ChapterItem>> crateApiGetToc({
     required String sourceJson,
     required String bookUrl,
@@ -1550,7 +1671,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 43,
+            funcId: 46,
             port: port_,
           );
         },
@@ -1584,7 +1705,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 44,
+            funcId: 47,
             port: port_,
           );
         },
@@ -1628,7 +1749,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 45,
+            funcId: 48,
             port: port_,
           );
         },
@@ -1673,7 +1794,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 46,
+            funcId: 49,
             port: port_,
           );
         },
@@ -1697,7 +1818,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 47)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 50)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1720,7 +1841,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(bookId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 48)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 51)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_note_dto,
@@ -1743,7 +1864,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(data, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 49)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 52)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_local_book_info,
@@ -1769,7 +1890,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 50,
+            funcId: 53,
             port: port_,
           );
         },
@@ -1794,7 +1915,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 51)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 54)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_local_chapter_item,
@@ -1824,7 +1945,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 52,
+            funcId: 55,
             port: port_,
           );
         },
@@ -1860,7 +1981,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           sse_encode_String(bookName, serializer);
           sse_encode_i_32(chars, serializer);
           sse_encode_i_32(durationSeconds, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 53)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 56)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1896,7 +2017,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 54,
+            funcId: 57,
             port: port_,
           );
         },
@@ -1928,7 +2049,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(json, serializer);
           sse_encode_bool(replace, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 55)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 58)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1961,7 +2082,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 56,
+            funcId: 59,
             port: port_,
           );
         },
@@ -1995,7 +2116,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 57,
+            funcId: 60,
             port: port_,
           );
         },
@@ -2036,7 +2157,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           sse_encode_String(proxyUsername, serializer);
           sse_encode_String(proxyPassword, serializer);
           sse_encode_String(dnsServers, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 58)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 61)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -2085,7 +2206,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 59,
+            funcId: 62,
             port: port_,
           );
         },
@@ -2114,7 +2235,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 60,
+            funcId: 63,
             port: port_,
           );
         },
@@ -2151,7 +2272,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           sse_encode_String(selectedText, serializer);
           sse_encode_String(noteContent, serializer);
           sse_encode_i_32(position, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 61)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 64)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -2197,7 +2318,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 62,
+            funcId: 65,
             port: port_,
           );
         },
@@ -2231,7 +2352,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 63,
+            funcId: 66,
             port: port_,
           );
         },
@@ -2258,7 +2379,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 64)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 67)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_web_api_status,
@@ -2292,7 +2413,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 65,
+            funcId: 68,
             port: port_,
           );
         },
@@ -2330,7 +2451,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 66,
+            funcId: 69,
             port: port_,
           );
         },
@@ -2369,7 +2490,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 67,
+            funcId: 70,
             port: port_,
           );
         },
@@ -2409,7 +2530,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 68,
+            funcId: 71,
             port: port_,
           );
         },
@@ -2593,6 +2714,12 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
   }
 
   @protected
+  List<RssArticleDto> dco_decode_list_rss_article_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_rss_article_dto).toList();
+  }
+
+  @protected
   List<RuleDebugStep> dco_decode_list_rule_debug_step(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_rule_debug_step).toList();
@@ -2688,6 +2815,36 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       todayDurationSeconds: dco_decode_i_32(arr[3]),
       weekChars: dco_decode_i_32(arr[4]),
       daily: dco_decode_list_daily_reading_stat(arr[5]),
+    );
+  }
+
+  @protected
+  RssArticleDto dco_decode_rss_article_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return RssArticleDto(
+      title: dco_decode_String(arr[0]),
+      link: dco_decode_String(arr[1]),
+      pubDate: dco_decode_String(arr[2]),
+      description: dco_decode_String(arr[3]),
+      content: dco_decode_String(arr[4]),
+      image: dco_decode_String(arr[5]),
+      origin: dco_decode_String(arr[6]),
+      sort: dco_decode_String(arr[7]),
+    );
+  }
+
+  @protected
+  RssArticlesResult dco_decode_rss_articles_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return RssArticlesResult(
+      articles: dco_decode_list_rss_article_dto(arr[0]),
+      nextUrl: dco_decode_opt_String(arr[1]),
     );
   }
 
@@ -3000,6 +3157,20 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
   }
 
   @protected
+  List<RssArticleDto> sse_decode_list_rss_article_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <RssArticleDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_rss_article_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<RuleDebugStep> sse_decode_list_rule_debug_step(
     SseDeserializer deserializer,
   ) {
@@ -3130,6 +3301,39 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       weekChars: var_weekChars,
       daily: var_daily,
     );
+  }
+
+  @protected
+  RssArticleDto sse_decode_rss_article_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_title = sse_decode_String(deserializer);
+    var var_link = sse_decode_String(deserializer);
+    var var_pubDate = sse_decode_String(deserializer);
+    var var_description = sse_decode_String(deserializer);
+    var var_content = sse_decode_String(deserializer);
+    var var_image = sse_decode_String(deserializer);
+    var var_origin = sse_decode_String(deserializer);
+    var var_sort = sse_decode_String(deserializer);
+    return RssArticleDto(
+      title: var_title,
+      link: var_link,
+      pubDate: var_pubDate,
+      description: var_description,
+      content: var_content,
+      image: var_image,
+      origin: var_origin,
+      sort: var_sort,
+    );
+  }
+
+  @protected
+  RssArticlesResult sse_decode_rss_articles_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_articles = sse_decode_list_rss_article_dto(deserializer);
+    var var_nextUrl = sse_decode_opt_String(deserializer);
+    return RssArticlesResult(articles: var_articles, nextUrl: var_nextUrl);
   }
 
   @protected
@@ -3412,6 +3616,18 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
   }
 
   @protected
+  void sse_encode_list_rss_article_dto(
+    List<RssArticleDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_rss_article_dto(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_rule_debug_step(
     List<RuleDebugStep> self,
     SseSerializer serializer,
@@ -3514,6 +3730,32 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
     sse_encode_i_32(self.todayDurationSeconds, serializer);
     sse_encode_i_32(self.weekChars, serializer);
     sse_encode_list_daily_reading_stat(self.daily, serializer);
+  }
+
+  @protected
+  void sse_encode_rss_article_dto(
+    RssArticleDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.title, serializer);
+    sse_encode_String(self.link, serializer);
+    sse_encode_String(self.pubDate, serializer);
+    sse_encode_String(self.description, serializer);
+    sse_encode_String(self.content, serializer);
+    sse_encode_String(self.image, serializer);
+    sse_encode_String(self.origin, serializer);
+    sse_encode_String(self.sort, serializer);
+  }
+
+  @protected
+  void sse_encode_rss_articles_result(
+    RssArticlesResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_rss_article_dto(self.articles, serializer);
+    sse_encode_opt_String(self.nextUrl, serializer);
   }
 
   @protected

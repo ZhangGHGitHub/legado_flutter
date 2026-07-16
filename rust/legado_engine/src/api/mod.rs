@@ -7,6 +7,7 @@ pub mod explore;
 pub mod local_book;
 pub mod network;
 pub mod read_record;
+pub mod rss;
 pub mod search;
 pub mod toc;
 pub mod validate;
@@ -324,6 +325,66 @@ pub fn list_notes(book_id: String) -> Result<Vec<NoteDto>, String> {
 #[frb(sync)]
 pub fn export_notes_markdown(book_id: String) -> Result<String, String> {
     crate::notes_store::export_notes_markdown(book_id)
+}
+
+/// 执行裸 JS（登录 UI / loginUrl / 按钮脚本）
+#[frb(sync)]
+pub fn eval_js(script: String, js_lib: String, base_url: String) -> Result<String, String> {
+    crate::rule::js_engine::run_eval_script(&script, &js_lib, &base_url)
+}
+
+/// RSS 文章 DTO
+#[derive(Debug, Clone)]
+pub struct RssArticleDto {
+    pub title: String,
+    pub link: String,
+    pub pub_date: String,
+    pub description: String,
+    pub content: String,
+    pub image: String,
+    pub origin: String,
+    pub sort: String,
+}
+
+/// RSS 列表结果
+#[derive(Debug, Clone)]
+pub struct RssArticlesResult {
+    pub articles: Vec<RssArticleDto>,
+    pub next_url: Option<String>,
+}
+
+/// 获取 RSS 文章列表 — 对齐 Jingshiro Rss.getArticlesAwait
+#[frb]
+pub async fn get_rss_articles(
+    source_json: String,
+    sort_url: String,
+    sort_name: String,
+    page: i32,
+) -> Result<RssArticlesResult, String> {
+    let (articles, next_url) =
+        rss::get_rss_articles(&source_json, &sort_url, &sort_name, page).await?;
+    Ok(RssArticlesResult {
+        articles: articles
+            .into_iter()
+            .map(|a| RssArticleDto {
+                title: a.title,
+                link: a.link,
+                pub_date: a.pub_date,
+                description: a.description,
+                content: a.content,
+                image: a.image,
+                origin: a.origin,
+                sort: a.sort,
+            })
+            .collect(),
+        next_url,
+    })
+}
+
+/// 获取 RSS 正文 — 对齐 Jingshiro Rss.getContentAwait
+#[frb]
+pub async fn get_rss_content(source_json: String, article_link: String) -> Result<String, String> {
+    rss::get_rss_content(&source_json, &article_link).await
 }
 
 pub use db::{

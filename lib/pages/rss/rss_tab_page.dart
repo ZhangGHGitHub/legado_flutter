@@ -6,6 +6,7 @@ import '../../providers/rss_provider.dart';
 import '../config/feature_placeholder_page.dart';
 import '../my/read_record_page.dart';
 import '../rule_sub/rule_sub_page.dart';
+import 'rss_articles_page.dart';
 import 'rss_source_manage_page.dart';
 import 'widgets/rss_source_tile.dart';
 
@@ -47,11 +48,7 @@ class RssTabPageState extends State<RssTabPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => FeaturePlaceholderPage(
-          title: source.sourceName,
-          subtitle: 'RSS 文章列表与阅读（规则引擎后续接入）',
-          icon: Icons.article_outlined,
-        ),
+        builder: (_) => RssArticlesPage(source: source),
       ),
     );
   }

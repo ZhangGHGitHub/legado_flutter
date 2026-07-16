@@ -7,7 +7,7 @@ import '../api.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `parse_html_toc_items`, `resolve_toc_fetch_url`
+// These functions are ignored because they are not marked as `pub`: `parse_html_toc_items`, `resolve_toc_fetch_url`, `split_analyze_url`, `upstream_toc_failure_message`
 
 /// 获取目录
 Future<List<ChapterItem>> getToc({
