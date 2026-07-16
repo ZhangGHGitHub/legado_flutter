@@ -551,6 +551,44 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
+  /// Map a local offset to the 9-grid click action (same thirds as overlay zones).
+  ClickZoneAction _clickActionAt(Offset local, Size size) {
+    final col = local.dx < size.width / 3
+        ? 0
+        : (local.dx < size.width * 2 / 3 ? 1 : 2);
+    final row = local.dy < size.height / 3
+        ? 0
+        : (local.dy < size.height * 2 / 3 ? 1 : 2);
+    return switch ((row, col)) {
+      (0, 0) => _settings.clickTL,
+      (0, 1) => _settings.clickTC,
+      (0, 2) => _settings.clickTR,
+      (1, 0) => _settings.clickML,
+      (1, 1) => _settings.clickMC,
+      (1, 2) => _settings.clickMR,
+      (2, 0) => _settings.clickBL,
+      (2, 1) => _settings.clickBC,
+      _ => _settings.clickBR,
+    };
+  }
+
+  /// Parent of [ScrollView]: taps go to click actions; vertical drag stays scrollable.
+  /// Do NOT use a Stack overlay of GestureDetectors — that steals hit tests from ScrollView.
+  Widget _wrapScrollWithClickZones(Widget child) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = Size(constraints.maxWidth, constraints.maxHeight);
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTapUp: (details) {
+            _runClickAction(_clickActionAt(details.localPosition, size));
+          },
+          child: child,
+        );
+      },
+    );
+  }
+
   void _openTtsPanel() {
     _autoHideTimer?.cancel();
     final text = _pages.isNotEmpty
@@ -2903,23 +2941,20 @@ class _ReaderPageState extends State<ReaderPage> {
       );
     }
 
-    return Stack(
-      children: [
-        SingleChildScrollView(
-          primary: false,
-          padding: EdgeInsets.symmetric(
-            horizontal: _settings.paddingHorizontal,
-            vertical: _settings.paddingVertical,
-          ),
-          child: ReaderSelectableText(
-            text: _displayContent,
-            style: _readerTextStyle(theme.text),
-            textAlign: _readerTextAlign,
-            onWriteNote: _openNoteEditor,
-          ),
+    return _wrapScrollWithClickZones(
+      SingleChildScrollView(
+        primary: false,
+        padding: EdgeInsets.symmetric(
+          horizontal: _settings.paddingHorizontal,
+          vertical: _settings.paddingVertical,
         ),
-        Positioned.fill(child: _buildClickZones()),
-      ],
+        child: ReaderSelectableText(
+          text: _displayContent,
+          style: _readerTextStyle(theme.text),
+          textAlign: _readerTextAlign,
+          onWriteNote: _openNoteEditor,
+        ),
+      ),
     );
   }
 
@@ -3148,11 +3183,8 @@ class _ReaderPageState extends State<ReaderPage> {
                         )
                       : _isEmptyBody
                       ? _buildBodyText(theme, paged: false)
-                      : Stack(
-                          children: [
-                            // 不用 AnimatedSwitcher：过渡时新旧 ScrollView 会同时挂上
-                            // 同一个 _scrollController，抛出 dual ScrollPosition 异常
-                            NotificationListener<ScrollNotification>(
+                      : _wrapScrollWithClickZones(
+                          NotificationListener<ScrollNotification>(
                               key: ValueKey('scroll_$_currentIndex'),
                               onNotification: (notification) {
                                 if (notification is ScrollEndNotification) {
@@ -3202,8 +3234,6 @@ class _ReaderPageState extends State<ReaderPage> {
                                 ),
                               ),
                             ),
-                            Positioned.fill(child: _buildClickZones()),
-                          ],
                         ),
                 ),
                 if (!_isLoading && !_isEmptyBody)
