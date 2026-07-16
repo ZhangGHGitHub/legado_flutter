@@ -9,6 +9,7 @@ import '../../services/source_debug_formatter.dart';
 import '../../src/rust/api.dart' as rust_api;
 import '../../widgets/source_debug_panel.dart';
 import '../../widgets/source_validation_sheet.dart';
+import '../code_edit/code_edit_page.dart';
 
 /// 书源规则编辑器 + 调试面板（增强版）
 class SourceEditorPage extends StatefulWidget {
@@ -87,6 +88,26 @@ class _SourceEditorPageState extends State<SourceEditorPage>
       'ruleContent': widget.source.ruleContent,
       'ruleChapterList': widget.source.ruleChapterList,
     });
+  }
+
+  /// 对齐 Jingshiro `menu_fullscreen_edit` → [CodeEditActivity]。
+  Future<void> _openCodeEdit() async {
+    final sel = _jsonController.selection;
+    final cursor = sel.isValid ? sel.baseOffset : _jsonController.text.length;
+    final result = await CodeEditPage.open(
+      context,
+      text: _jsonController.text,
+      title: '书源 JSON',
+      cursorPosition: cursor.clamp(0, _jsonController.text.length),
+      languageName: 'source.js',
+    );
+    if (!mounted || result == null) return;
+    _jsonController.value = TextEditingValue(
+      text: result.text,
+      selection: TextSelection.collapsed(
+        offset: result.cursorPosition.clamp(0, result.text.length),
+      ),
+    );
   }
 
   Future<void> _saveJson() async {
@@ -215,6 +236,13 @@ class _SourceEditorPageState extends State<SourceEditorPage>
           ],
         ),
         actions: [
+          // 对齐 BookSourceEditActivity menu_fullscreen_edit → CodeEditActivity
+          if (_tabController.index == 0)
+            IconButton(
+              icon: const Icon(Icons.code),
+              tooltip: '编辑内容',
+              onPressed: _openCodeEdit,
+            ),
           IconButton(
             icon: _isValidating
                 ? const SizedBox(

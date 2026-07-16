@@ -173,7 +173,7 @@
 | 25 | `activity_ai_chat.xml` | AI 聊天 | ✅ `ai_chat_page.dart` | **缺工具调用UI、配置入口** |
 | 26 | `activity_welcome.xml` | 欢迎页 | ✅ **1:1 闪屏** | UI-26：竖排品牌+icon_read_book+品读万千故事；500ms→主页；隐私在 MainShell Dialog |
 | 27 | `activity_web_view.xml` | WebView | ⚠️ `webview_flutter` 已引入 | 需核对 |
-| 28 | `activity_code_edit.xml` | 代码编辑器 | ❌ **缺失**（低优） | |
+| 28 | `activity_code_edit.xml` | 代码编辑器 | ✅ **基本完成** | UI-27：TitleBar+搜索/保存+底栏查找替换；Sora 语法高亮 stub |
 | 29 | `activity_file_manage.xml` | 文件管理 | ✅ `file_manage_page.dart` | UI-8：数据目录基础浏览 |
 | 30 | `activity_donate.xml` | 捐赠 | 🟡 **1:1 返工** | UI-25：去掉 Flutter 免责声明；渠道文案对齐 values-zh |
 | 31 | `activity_dict_rule.xml` | 字典规则 | ✅ 基本完成（2026-07-15） | UI-21 |
@@ -603,7 +603,11 @@
 
 #### Task UI-27: 代码编辑器 (`activity_code_edit.xml`)
 
-- [ ] JSON/JS 语法高亮（低优，已有 `source_editor_page.dart` 覆盖）
+- [x] 1:1 chrome：`TitleBar`「编辑代码」+ 搜索/保存 + 溢出（选择主题/格式化/设置/自动换行/日志）
+- [x] 底栏 `search_group`：搜索结果、正则、查找/替换、上个/下个/替换/全部
+- [x] 未保存退出对话框（`exit` / `exit_no_save`）；保存回传 text+cursorPosition
+- [x] 书源编辑入口：`menu_fullscreen_edit`（编辑内容）→ `CodeEditPage`
+- [ ] Sora TextMate 语法高亮（stub：monospace + 主题底色；完整高亮后续）
 
 ---
 
@@ -647,7 +651,7 @@ Task UI-23: 漫画阅读器  🟡 1:1 chrome 返工（2026-07-16）；真漫画�
 Task UI-24: 模拟追读  🟡 对话框+章数解锁+Book/DB 同步；WebDAV/书架未读数仍开放
 Task UI-25: 捐赠页  🟡 1:1 返工（2026-07-16）；去掉 Flutter 免责声明；店铺/内嵌码仍开放
 Task UI-26: 欢迎引导页  ✅ 1:1 闪屏（2026-07-16）
-Task UI-27: 代码编辑器（低优）
+Task UI-27: 代码编辑器  ✅ chrome 基本完成（2026-07-16）；Sora 语法高亮仍开放
 ```
 
 ### S4 — 延后（RSS 订阅阅读）
