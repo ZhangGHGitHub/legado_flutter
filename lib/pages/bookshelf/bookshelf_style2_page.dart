@@ -7,10 +7,13 @@ import '../../models/book.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/bookshelf_prefs.dart';
+import '../../services/local_book_service.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_cover.dart';
+import '../../widgets/error_view.dart';
 import '../../widgets/legado_refresh_indicator.dart';
 import '../../widgets/read_badge.dart';
+import '../../widgets/shelf_unread_badge.dart';
 import '../book/book_info_page.dart';
 import '../search/search_page.dart';
 import 'bookshelf_arrange_page.dart';
@@ -73,11 +76,25 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
   }
 
   void _addLocalBook() async {
-    final b = await context.read<BookProvider>().importLocalBook();
-    if (b != null && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已导入: ${b.name}')));
+    try {
+      final b = await context.read<BookProvider>().importLocalBook();
+      if (b != null && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('已导入: ${b.name}')));
+      }
+    } on LocalBookImportException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导入失败: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -196,14 +213,24 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
           if (provider.isLoading && provider.books.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
+          if (provider.loadError != null && provider.books.isEmpty) {
+            return ErrorView(
+              message: provider.loadError!,
+              onRetry: () => provider.loadBooks(),
+            );
+          }
           if (provider.books.isEmpty) {
-            return const Center(
+            return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.menu_book_outlined, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('书架空空如也'),
+                  Icon(
+                    Icons.menu_book_outlined,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                  const SizedBox(height: LegadoTokens.spacingMd),
+                  const Text('书架空空如也'),
                 ],
               ),
             );
@@ -237,10 +264,10 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
               child: GridView.builder(
                 controller: widget.scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(LegadoDimens.pageVertical),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: LegadoTokens.bookshelfGridCols,
-                  mainAxisSpacing: 12,
+                  mainAxisSpacing: LegadoDimens.pageVertical,
                   crossAxisSpacing: 10,
                   childAspectRatio: 0.52,
                 ),
@@ -251,7 +278,7 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
                   return InkWell(
                     onTap: () => _openBook(book),
                     onLongPress: () => _confirmRemove(book),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: LegadoTokens.coverRadius,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -267,8 +294,17 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
                               ),
                               if (updating)
                                 const Padding(
-                                  padding: EdgeInsets.all(4),
+                                  padding: EdgeInsets.all(
+                                    LegadoTokens.spacingXs,
+                                  ),
                                   child: LegadoShelfUpdatingIndicator(size: 22),
+                                )
+                              else
+                                Padding(
+                                  padding: const EdgeInsets.all(
+                                    LegadoTokens.spacingXs,
+                                  ),
+                                  child: ShelfUnreadBadge(book: book),
                                 ),
                             ],
                           ),

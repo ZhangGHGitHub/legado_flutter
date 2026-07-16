@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../config/app_config.dart';
 import '../../database/database_helper.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/replace_provider.dart';
@@ -19,6 +20,8 @@ import '../rule_sub/rule_sub_page.dart';
 const _privacyAcceptedKey = 'legado_privacy_accepted';
 
 /// 主框架 — 对齐 Jingshiro [MainActivity](https://github.com/Jingshiro/legado/blob/main/app/src/main/java/io/legado/app/ui/main/MainActivity.kt)
+///
+/// 页面槽位固定：0=书架 1=发现 2=订阅 3=我的；底栏按 [AppConfig] 动态显隐。
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
@@ -27,7 +30,8 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  int _currentIndex = 0;
+  /// 固定槽位索引（与 IndexedStack 子项一致）
+  int _pageIndex = 0;
   bool _initialized = false;
   int _lastBookshelfTapMs = 0;
   int _lastExploreTapMs = 0;
@@ -131,23 +135,37 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  void _onTabSelected(int index) {
+  /// 当前可见底栏对应的页面槽位（0/1/2/3）
+  List<int> _visiblePageSlots(AppConfig cfg) {
+    return [
+      0,
+      if (cfg.showDiscovery) 1,
+      if (cfg.showRSS) 2,
+      3,
+    ];
+  }
+
+  void _onDestinationSelected(int destIndex, List<int> slots) {
+    if (destIndex < 0 || destIndex >= slots.length) return;
+    final pageIndex = slots[destIndex];
     final now = DateTime.now().millisecondsSinceEpoch;
-    if (index == _currentIndex) {
-      if (index == 0 && now - _lastBookshelfTapMs < 300) {
+    if (pageIndex == _pageIndex) {
+      if (pageIndex == 0 && now - _lastBookshelfTapMs < 300) {
         _scrollBookshelfToTop();
       }
-      if (index == 1 && now - _lastExploreTapMs < 300) {
+      if (pageIndex == 1 && now - _lastExploreTapMs < 300) {
         _exploreKey.currentState?.compressExplore();
       }
-      if (index == 0) _lastBookshelfTapMs = now;
-      if (index == 1) _lastExploreTapMs = now;
+      if (pageIndex == 0) _lastBookshelfTapMs = now;
+      if (pageIndex == 1) _lastExploreTapMs = now;
       return;
     }
-    if (index == 0) _lastBookshelfTapMs = now;
-    if (index == 1) _lastExploreTapMs = now;
-    if (index == 0) _bookshelfKey.currentState?.reloadLayout();
-    setState(() => _currentIndex = index);
+    if (pageIndex == 0) {
+      _lastBookshelfTapMs = now;
+      _bookshelfKey.currentState?.reloadLayout();
+    }
+    if (pageIndex == 1) _lastExploreTapMs = now;
+    setState(() => _pageIndex = pageIndex);
   }
 
   void _scrollBookshelfToTop() {
@@ -161,8 +179,8 @@ class _MainShellState extends State<MainShell> {
   }
 
   Future<bool> _onWillPop() async {
-    if (_currentIndex != 0) {
-      setState(() => _currentIndex = 0);
+    if (_pageIndex != 0) {
+      setState(() => _pageIndex = 0);
       return false;
     }
     final now = DateTime.now();
@@ -181,6 +199,40 @@ class _MainShellState extends State<MainShell> {
     return true;
   }
 
+  static NavigationDestination _destination(
+    int slot, {
+    int shelfUpdateBadge = 0,
+  }) {
+    Widget icon(IconData data) {
+      if (shelfUpdateBadge <= 0 || slot != 0) return Icon(data);
+      final label = shelfUpdateBadge > 99 ? '99+' : '$shelfUpdateBadge';
+      return Badge(label: Text(label), child: Icon(data));
+    }
+
+    return switch (slot) {
+      0 => NavigationDestination(
+          icon: icon(Icons.library_books_outlined),
+          selectedIcon: icon(Icons.library_books),
+          label: '书架',
+        ),
+      1 => const NavigationDestination(
+          icon: Icon(Icons.explore_outlined),
+          selectedIcon: Icon(Icons.explore),
+          label: '发现',
+        ),
+      2 => const NavigationDestination(
+          icon: Icon(Icons.subscriptions_outlined),
+          selectedIcon: Icon(Icons.subscriptions),
+          label: '订阅',
+        ),
+      _ => const NavigationDestination(
+          icon: Icon(Icons.person_outline),
+          selectedIcon: Icon(Icons.person),
+          label: '我的',
+        ),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_initialized) {
@@ -197,43 +249,54 @@ class _MainShellState extends State<MainShell> {
       const MyPage(),
     ];
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-        if (await _onWillPop()) {
-          await SystemNavigator.pop();
-        }
+    return ListenableBuilder(
+      listenable: AppConfig.instance,
+      builder: (context, _) {
+        return Consumer<BookProvider>(
+          builder: (context, bookProvider, _) {
+            final slots = _visiblePageSlots(AppConfig.instance);
+            var pageIndex = _pageIndex;
+            if (!slots.contains(pageIndex)) {
+              pageIndex = 0;
+              if (_pageIndex != 0) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && !slots.contains(_pageIndex)) {
+                    setState(() => _pageIndex = 0);
+                  }
+                });
+              }
+            }
+            final selectedDest =
+                slots.indexOf(pageIndex).clamp(0, slots.length - 1);
+            final shelfBadge = bookProvider.shelfUpdateActiveCount;
+
+            return PopScope(
+              canPop: false,
+              onPopInvokedWithResult: (didPop, result) async {
+                if (didPop) return;
+                if (await _onWillPop()) {
+                  await SystemNavigator.pop();
+                }
+              },
+              child: Scaffold(
+                body: IndexedStack(index: pageIndex, children: pages),
+                bottomNavigationBar: NavigationBar(
+                  selectedIndex: selectedDest,
+                  onDestinationSelected: (i) =>
+                      _onDestinationSelected(i, slots),
+                  destinations: [
+                    for (final s in slots)
+                      _destination(
+                        s,
+                        shelfUpdateBadge: shelfBadge,
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
       },
-      child: Scaffold(
-        body: IndexedStack(index: _currentIndex, children: pages),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: _onTabSelected,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.library_books_outlined),
-              selectedIcon: Icon(Icons.library_books),
-              label: '书架',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.explore_outlined),
-              selectedIcon: Icon(Icons.explore),
-              label: '发现',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.subscriptions_outlined),
-              selectedIcon: Icon(Icons.subscriptions),
-              label: '订阅',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
-              label: '我的',
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

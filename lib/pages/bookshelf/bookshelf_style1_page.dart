@@ -12,6 +12,7 @@ import '../../theme/legado_tokens.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/legado_refresh_indicator.dart';
+import '../../widgets/shelf_unread_badge.dart';
 import '../book/book_info_page.dart';
 import '../cache/cache_book_page.dart';
 import '../search/search_page.dart';
@@ -722,7 +723,7 @@ class _BookItem extends StatelessWidget {
             const SizedBox(width: LegadoTokens.spacingSm),
             isUpdating
                 ? const LegadoShelfUpdatingIndicator()
-                : _UnreadBadge(book: book),
+                : ShelfUnreadBadge(book: book),
           ],
         ),
       ),
@@ -743,76 +744,6 @@ class _BookItem extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// 未读/更新角标 — 结构对齐 legado BadgeView；数量在无章节索引字段时尽力从章节名推算
-class _UnreadBadge extends StatelessWidget {
-  final Book book;
-  const _UnreadBadge({required this.book});
-
-  static final _numRe = RegExp(r'(\d{1,6})');
-
-  static int? _chapterNum(String? s) {
-    if (s == null || s.isEmpty) return null;
-    final m = _numRe.firstMatch(s);
-    return m != null ? int.tryParse(m.group(1)!) : null;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final last = book.lastChapter;
-    final current = book.currentChapter;
-    final lastNum = _chapterNum(last);
-    final curNum = _chapterNum(current);
-    final hasUpdate = last != null &&
-        last.isNotEmpty &&
-        last != current &&
-        current != null &&
-        current.isNotEmpty;
-
-    int? unread;
-    if (lastNum != null && curNum != null && lastNum > curNum) {
-      unread = lastNum - curNum;
-    } else if (hasUpdate) {
-      unread = null; // 有更新但无法解析章节号时仍显示强调角标
-    } else {
-      return const SizedBox.shrink();
-    }
-
-    if (unread != null && unread <= 0 && !hasUpdate) {
-      return const SizedBox.shrink();
-    }
-
-    final scheme = Theme.of(context).colorScheme;
-    final highlight = hasUpdate;
-    final bg = highlight
-        ? scheme.primary
-        : scheme.onSurface.withValues(alpha: 0.28);
-    final fg = highlight ? scheme.onPrimary : scheme.onSurface;
-
-    final label = unread != null && unread > 0
-        ? (unread > 999 ? '999+' : '$unread')
-        : '更新';
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 2),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(LegadoTokens.radiusSmall),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: fg,
-          ),
-        ),
-      ),
     );
   }
 }

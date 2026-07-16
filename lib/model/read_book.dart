@@ -25,6 +25,8 @@ class ReadBook extends ChangeNotifier {
   List<Chapter> chapters = [];
   int durChapterIndex = 0;
   bool isLoadingContent = false;
+  /// 阅读会话内是否对正文应用替换净化（对齐 legado enableReplace）
+  bool enableReplace = true;
 
   final Set<int> _preloading = {};
   final Map<int, String> _memoryCache = {};
@@ -78,6 +80,13 @@ class ReadBook extends ChangeNotifier {
         t.startsWith('⚠️');
   }
 
+  String _applyReplace(String raw) {
+    if (!enableReplace) return raw;
+    final proc = _processor;
+    if (proc == null) return raw;
+    return proc.getContent(raw);
+  }
+
   /// 加载章节正文（文件缓存 → DB → 网络 → 净化 → 写缓存）
   Future<String> loadChapterContent({
     required Chapter chapter,
@@ -110,7 +119,7 @@ class ReadBook extends ChangeNotifier {
         if (shouldSkipCache(fileCached)) {
           await BookHelp.deleteChapterContent(bid, chapter.id);
         } else {
-          final processed = proc.getContent(fileCached);
+          final processed = _applyReplace(fileCached);
           if (!shouldSkipCache(processed)) {
             _memoryCache[memKey] = processed;
             return processed;
@@ -126,7 +135,7 @@ class ReadBook extends ChangeNotifier {
         if (again != null &&
             again.isNotEmpty &&
             !shouldSkipCache(again)) {
-          final processed = proc.getContent(again);
+          final processed = _applyReplace(again);
           if (!shouldSkipCache(processed)) {
             _memoryCache[memKey] = processed;
             return processed;
@@ -137,7 +146,7 @@ class ReadBook extends ChangeNotifier {
       // 3. 网络拉取（失败转为可展示文案，绝不写缓存；预加载也不会变 unhandled）
       try {
         final raw = await svc.getChapterContent(chapter.url, source: source);
-        final processed = proc.getContent(raw);
+        final processed = _applyReplace(raw);
         if (shouldSkipCache(processed)) {
           // 占位 / 失败文案：不进内存、不写库（旧引擎 Ok 占位兼容）
           return processed;

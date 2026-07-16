@@ -28,6 +28,7 @@ import '../reader/ai_chat_page.dart';
 import '../../help/book_help.dart';
 import '../../services/click_action_prefs.dart';
 import '../../services/read_style_prefs.dart';
+import '../../services/reader_session_prefs.dart';
 import '../../services/simulated_reading_prefs.dart';
 import 'auto_read_panel.dart';
 import 'click_action_panel.dart';
@@ -113,6 +114,9 @@ class _ReaderPageState extends State<ReaderPage> {
   /// 首次进入阅读页：点击区域九宫格提示
   bool _showClickRegionTip = false;
 
+  /// 阅读会话：替换净化开关（持久化于 [ReaderSessionPrefs]）
+  bool _enableReplace = true;
+
   bool get _isHorizontalPaged => _settings.pageAnim.isHorizontalPaged;
 
   int get _maxReadableIndex {
@@ -150,6 +154,14 @@ class _ReaderPageState extends State<ReaderPage> {
     unawaited(_loadSimulatedReading());
     unawaited(_loadReadStylePrefs());
     unawaited(_loadClickActionPrefs());
+    unawaited(_loadReaderSessionPrefs());
+  }
+
+  Future<void> _loadReaderSessionPrefs() async {
+    final prefs = await ReaderSessionPrefs.load();
+    if (!mounted) return;
+    setState(() => _enableReplace = prefs.enableReplace);
+    ReadBook.instance.enableReplace = prefs.enableReplace;
   }
 
   Future<void> _loadClickActionPrefs() async {
@@ -459,7 +471,7 @@ class _ReaderPageState extends State<ReaderPage> {
       case ClickZoneAction.editContent:
         _showNotImplemented('编辑内容');
       case ClickZoneAction.replaceToggle:
-        _showNotImplemented('替换净化开关');
+        unawaited(_toggleReplacePurify());
       case ClickZoneAction.chapterList:
         unawaited(_showTocSheet());
       case ClickZoneAction.searchContent:
@@ -1360,6 +1372,97 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
+  Future<void> _toggleReplacePurify() async {
+    final next = !_enableReplace;
+    setState(() => _enableReplace = next);
+    ReadBook.instance.enableReplace = next;
+    await ReaderSessionPrefs(enableReplace: next).save();
+    final chapter = widget.allChapters[_currentIndex];
+    await ReadBook.instance.invalidateChapterCache(
+      chapter.id,
+      bookId: widget.book.id,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(next ? '已开启替换净化' : '已关闭替换净化')),
+    );
+    await _loadContent(forceRefresh: true);
+  }
+
+  Future<void> _updateToc() async {
+    final source = context.read<SourceProvider>().findSourceForBook(widget.book);
+    if (source == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('未找到书源，无法更新目录')),
+        );
+      }
+      return;
+    }
+
+    final currentChapter = widget.allChapters[_currentIndex];
+    final currentId = currentChapter.id;
+    final currentTitle = currentChapter.title;
+    _saveProgress();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('正在更新目录…'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
+
+    final provider = context.read<BookProvider>();
+    try {
+      await provider.loadChapters(
+        widget.book,
+        source: source,
+        forceRefresh: true,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('更新目录失败: $e')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    final newChapters = provider.currentChapters;
+    if (newChapters.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('目录为空')),
+      );
+      return;
+    }
+
+    var newIndex = newChapters.indexWhere((c) => c.id == currentId);
+    if (newIndex < 0) {
+      newIndex = newChapters.indexWhere((c) => c.title == currentTitle);
+    }
+    if (newIndex < 0) {
+      newIndex = _currentIndex.clamp(0, newChapters.length - 1);
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('目录已更新，共 ${newChapters.length} 章')),
+    );
+
+    await Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReaderPage(
+          book: widget.book,
+          chapter: newChapters[newIndex],
+          allChapters: List<Chapter>.from(newChapters),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openOfflineCache() async {
     final provider = context.read<BookProvider>();
     if (provider.isDownloading) {
@@ -1569,11 +1672,11 @@ class _ReaderPageState extends State<ReaderPage> {
       case 'reverse':
         _showNotImplemented('反转内容');
       case 'replace':
-        _showNotImplemented('替换净化开关');
+        unawaited(_toggleReplacePurify());
       case 'resegment':
         _showNotImplemented('重新分段');
       case 'update_toc':
-        _showNotImplemented('更新目录');
+        unawaited(_updateToc());
       case 'tts':
         unawaited(_openAudioPlayPage());
       case 'manga':

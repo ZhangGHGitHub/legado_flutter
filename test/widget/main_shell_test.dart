@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:legado_flutter/bridge/legado_db_bridge.dart';
 import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
+import 'package:legado_flutter/config/app_config.dart';
 import 'package:legado_flutter/pages/main/main_shell.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/replace_provider.dart';
@@ -31,6 +32,15 @@ void main() {
     }
   });
 
+  setUp(() async {
+    AppConfig.resetForTest();
+    await AppConfig.instance.load();
+  });
+
+  tearDown(() {
+    AppConfig.resetForTest();
+  });
+
   testWidgets('MainShell shows four bottom tabs', (WidgetTester tester) async {
     if (!rustReady) {
       // 无 Rust DLL 时跳过（CI/无引擎环境）
@@ -44,6 +54,7 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider.value(value: themeController),
+          ChangeNotifierProvider.value(value: AppConfig.instance),
           ChangeNotifierProvider(create: (_) => BookProvider()),
           ChangeNotifierProvider(create: (_) => SourceProvider()),
           ChangeNotifierProvider(create: (_) => RssProvider()),
@@ -64,5 +75,37 @@ void main() {
         findsOneWidget,
       );
     }
+  });
+
+  testWidgets('MainShell hides explore/RSS when disabled', (WidgetTester tester) async {
+    if (!rustReady) return;
+
+    final themeController = ThemeModeController();
+    await themeController.load();
+    await AppConfig.instance.setShowDiscovery(false);
+    await AppConfig.instance.setShowRSS(false);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: themeController),
+          ChangeNotifierProvider.value(value: AppConfig.instance),
+          ChangeNotifierProvider(create: (_) => BookProvider()),
+          ChangeNotifierProvider(create: (_) => SourceProvider()),
+          ChangeNotifierProvider(create: (_) => RssProvider()),
+          ChangeNotifierProvider(create: (_) => ReplaceProvider()),
+        ],
+        child: const MaterialApp(home: MainShell()),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+
+    final bar = find.byType(NavigationBar);
+    expect(find.descendant(of: bar, matching: find.text('书架')), findsOneWidget);
+    expect(find.descendant(of: bar, matching: find.text('我的')), findsOneWidget);
+    expect(find.descendant(of: bar, matching: find.text('发现')), findsNothing);
+    expect(find.descendant(of: bar, matching: find.text('订阅')), findsNothing);
   });
 }

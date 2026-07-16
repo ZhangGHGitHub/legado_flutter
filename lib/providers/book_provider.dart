@@ -8,6 +8,7 @@ import '../database/dao/book_dao.dart';
 import '../database/database_helper.dart';
 import '../help/book_help.dart';
 import '../help/content_processor.dart';
+import '../help/shelf_unread.dart';
 import '../model/read_book.dart';
 import '../services/book_source_service.dart';
 import '../services/local_book_service.dart';
@@ -52,11 +53,17 @@ class BookProvider extends ChangeNotifier {
   final Set<String> _shelfUpdatingBookIds = {};
   int _shelfUpdateQueued = 0;
 
+  /// 本地目录章数 + 当前读到章索引（0-based），供未读角标精确计算
+  final Map<String, ({int count, int? durIndex})> _shelfChapterMeta = {};
+
   bool isBookShelfUpdating(String bookId) => _shelfUpdatingBookIds.contains(bookId);
 
   /// 待更新 + 更新中数量（对齐 `postUpBooksLiveData` / 主框架角标，后续可接）
   int get shelfUpdateActiveCount =>
       _shelfUpdatingBookIds.length + _shelfUpdateQueued;
+
+  ({int count, int? durIndex})? shelfChapterMeta(String bookId) =>
+      _shelfChapterMeta[bookId];
 
   List<Book> get books => _books;
   List<Chapter> get currentChapters => _currentChapters;
@@ -111,6 +118,7 @@ class BookProvider extends ChangeNotifier {
     }).toList();
     await _dao.insertChapters(list);
     _currentChapters = list;
+    await _refreshShelfChapterMetaFor(book.id);
     notifyListeners();
   }
 
@@ -121,6 +129,7 @@ class BookProvider extends ChangeNotifier {
     notifyListeners();
     try {
       _books = await _dao.getAll();
+      await _refreshShelfChapterMeta();
       _loadError = null;
     } catch (e) {
       _loadError = '加载书架失败: $e';
@@ -139,6 +148,7 @@ class BookProvider extends ChangeNotifier {
       final book = await _localService.importFromFile();
       if (book != null) {
         _books = await _dao.getAll();
+        await _refreshShelfChapterMetaFor(book.id);
         notifyListeners();
       }
       return book;
@@ -191,6 +201,7 @@ class BookProvider extends ChangeNotifier {
           debugPrint('书架目录更新失败 ${book.name}: $e\n$st');
         } finally {
           _shelfUpdatingBookIds.remove(book.id);
+          await _refreshShelfChapterMetaFor(book.id);
           notifyListeners();
         }
       }
@@ -203,26 +214,50 @@ class BookProvider extends ChangeNotifier {
     await Future.wait(workers);
     _shelfUpdateQueued = 0;
     _books = await _dao.getAll();
+    await _refreshShelfChapterMeta();
     notifyListeners();
   }
 
-  static final _chapterNumRe = RegExp(r'(\d{1,6})');
+  Future<void> _refreshShelfChapterMeta() async {
+    _shelfChapterMeta.clear();
+    for (final book in _books) {
+      await _refreshShelfChapterMetaFor(book.id);
+    }
+  }
+
+  Future<void> _refreshShelfChapterMetaFor(String bookId) async {
+    Book? book;
+    for (final b in _books) {
+      if (b.id == bookId) {
+        book = b;
+        break;
+      }
+    }
+    if (book == null) {
+      _shelfChapterMeta.remove(bookId);
+      return;
+    }
+    final chapters = await _dao.getChapters(bookId);
+    if (chapters.isEmpty) {
+      _shelfChapterMeta.remove(bookId);
+      return;
+    }
+    int? durIdx;
+    final cur = book.currentChapter;
+    if (cur != null && cur.isNotEmpty) {
+      durIdx = chapters.indexWhere((c) => c.title == cur);
+      if (durIdx < 0) durIdx = null;
+    }
+    _shelfChapterMeta[bookId] = (count: chapters.length, durIndex: durIdx);
+  }
 
   bool _hasUnreadChapters(Book book) {
-    final last = _chapterNumRe.firstMatch(book.lastChapter ?? '')?.group(1);
-    final cur = _chapterNumRe.firstMatch(book.currentChapter ?? '')?.group(1);
-    if (last != null && cur != null) {
-      final ln = int.tryParse(last);
-      final cn = int.tryParse(cur);
-      if (ln != null && cn != null && ln > cn) return true;
-    }
-    final lastTitle = book.lastChapter;
-    final curTitle = book.currentChapter;
-    return lastTitle != null &&
-        lastTitle.isNotEmpty &&
-        curTitle != null &&
-        curTitle.isNotEmpty &&
-        lastTitle != curTitle;
+    final meta = _shelfChapterMeta[book.id];
+    return ShelfUnread.evaluate(
+      book: book,
+      totalChapters: meta?.count,
+      durChapterIndex: meta?.durIndex,
+    ).visible;
   }
 
   Future<void> _refreshBookTocOnShelf(Book book, BookSource source) async {
@@ -304,6 +339,7 @@ class BookProvider extends ChangeNotifier {
   Future<void> addBook(Book book) async {
     await _dao.insert(book);
     _books = await _dao.getAll();
+    await _refreshShelfChapterMetaFor(book.id);
     notifyListeners();
   }
 
@@ -311,6 +347,7 @@ class BookProvider extends ChangeNotifier {
   Future<void> removeBook(String bookId) async {
     await _dao.delete(bookId);
     await BookHelp.clearBookCache(bookId);
+    _shelfChapterMeta.remove(bookId);
     _books = await _dao.getAll();
     notifyListeners();
   }
@@ -320,6 +357,7 @@ class BookProvider extends ChangeNotifier {
     for (final id in bookIds) {
       await _dao.delete(id);
       await BookHelp.clearBookCache(id);
+      _shelfChapterMeta.remove(id);
     }
     _books = await _dao.getAll();
     notifyListeners();
@@ -348,6 +386,7 @@ class BookProvider extends ChangeNotifier {
       pageIndex: pageIndex,
     );
     _books = await _dao.getAll();
+    await _refreshShelfChapterMetaFor(bookId);
     notifyListeners();
   }
 
@@ -766,7 +805,10 @@ class BookProvider extends ChangeNotifier {
       );
     }
     final raw = await _sourceService.getChapterContent(url, source: source);
-    return ContentProcessor.instance.getContent(raw);
+    if (ReadBook.instance.enableReplace) {
+      return ContentProcessor.instance.getContent(raw);
+    }
+    return raw;
   }
 
   Future<List<Chapter>> getLocalChapters(String bookId) async {
