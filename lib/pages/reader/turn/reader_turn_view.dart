@@ -1,12 +1,10 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../reader_settings.dart';
 import 'page_direction.dart';
-import 'page_snapshot.dart';
+import 'page_snapshot_cache.dart';
 import 'page_turn_controller.dart';
 import 'painters/cover_page_painter.dart';
 import 'painters/simulation_curl_painter.dart';
@@ -26,6 +24,7 @@ class ReaderTurnView extends StatefulWidget {
     required this.hasChapterPrev,
     required this.hasChapterNext,
     this.overlay,
+    this.backPageColor = const Color(0xFFECECEC),
   });
 
   final PageAnimMode mode;
@@ -39,6 +38,8 @@ class ReaderTurnView extends StatefulWidget {
   final bool hasChapterNext;
   /// Drawn above the live page but under the turn overlay (e.g. click zones).
   final Widget? overlay;
+  /// Simulation back-of-page fill (Jingshiro bgMeanColor).
+  final Color backPageColor;
 
   @override
   State<ReaderTurnView> createState() => ReaderTurnViewState();
@@ -47,32 +48,46 @@ class ReaderTurnView extends StatefulWidget {
 class ReaderTurnViewState extends State<ReaderTurnView>
     with TickerProviderStateMixin {
   final PageTurnController _controller = PageTurnController();
+  final PageSnapshotCache _cache = PageSnapshotCache();
   final GlobalKey _prevBoundaryKey = GlobalKey();
   final GlobalKey _curBoundaryKey = GlobalKey();
   final GlobalKey _nextBoundaryKey = GlobalKey();
 
-  ui.Image? _curImage;
-  ui.Image? _prevImage;
-  ui.Image? _nextImage;
   bool _overlayVisible = false;
-  bool _capturing = false;
+  int _warmGeneration = 0;
 
-  bool get _hasPrev =>
+  /// Gesture may cross chapter; bitmap exists only for in-chapter neighbors.
+  bool get _gestureHasPrev =>
       widget.pageIndex > 0 || widget.hasChapterPrev;
-  bool get _hasNext =>
+  bool get _gestureHasNext =>
       widget.pageIndex < widget.pageCount - 1 || widget.hasChapterNext;
+
+  bool get _captureHasPrev => widget.pageIndex > 0;
+  bool get _captureHasNext => widget.pageIndex < widget.pageCount - 1;
 
   @override
   void initState() {
     super.initState();
     _controller.addListener(_onControllerTick);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scheduleWarmSnapshots());
+  }
+
+  @override
+  void didUpdateWidget(covariant ReaderTurnView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pageIndex != widget.pageIndex ||
+        oldWidget.pageCount != widget.pageCount ||
+        oldWidget.mode != widget.mode ||
+        oldWidget.backPageColor != widget.backPageColor) {
+      _scheduleWarmSnapshots();
+    }
   }
 
   @override
   void dispose() {
     _controller.removeListener(_onControllerTick);
     _controller.dispose();
-    _disposeImages();
+    _cache.invalidate();
     super.dispose();
   }
 
@@ -80,13 +95,44 @@ class ReaderTurnViewState extends State<ReaderTurnView>
     if (mounted) setState(() {});
   }
 
-  void _disposeImages() {
-    _curImage?.dispose();
-    _prevImage?.dispose();
-    _nextImage?.dispose();
-    _curImage = null;
-    _prevImage = null;
-    _nextImage = null;
+  void _scheduleWarmSnapshots() {
+    if (widget.mode == PageAnimMode.none || widget.mode == PageAnimMode.scroll) {
+      return;
+    }
+    if (widget.pageCount <= 0) return;
+    final gen = ++_warmGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || gen != _warmGeneration) return;
+      await SchedulerBinding.instance.endOfFrame;
+      if (!mounted || gen != _warmGeneration) return;
+      final dpr = MediaQuery.devicePixelRatioOf(context);
+      final ok = await _cache.refresh(
+        prevKey: _prevBoundaryKey,
+        curKey: _curBoundaryKey,
+        nextKey: _nextBoundaryKey,
+        pixelRatio: dpr,
+        hasPrev: _captureHasPrev,
+        hasNext: _captureHasNext,
+      );
+      if (mounted && ok && gen == _warmGeneration) {
+        setState(() {});
+      }
+    });
+  }
+
+  Future<bool> _ensureCacheReady() async {
+    if (_cache.hasCur) return true;
+    await SchedulerBinding.instance.endOfFrame;
+    if (!mounted) return false;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    return _cache.refresh(
+      prevKey: _prevBoundaryKey,
+      curKey: _curBoundaryKey,
+      nextKey: _nextBoundaryKey,
+      pixelRatio: dpr,
+      hasPrev: _captureHasPrev,
+      hasNext: _captureHasNext,
+    );
   }
 
   /// Programmatic turn used by tap zones / volume keys / auto-read.
@@ -100,8 +146,23 @@ class ReaderTurnViewState extends State<ReaderTurnView>
       return;
     }
 
-    await _ensureSnapshotsFor(dir);
+    // Chapter edge without neighbor bitmap → instant fill (no empty overlay).
+    if (dir == PageTurnDirection.prev && !_captureHasPrev) {
+      _applyCompleted(dir);
+      return;
+    }
+    if (dir == PageTurnDirection.next && !_captureHasNext) {
+      _applyCompleted(dir);
+      return;
+    }
+
+    final ready = await _ensureCacheReady();
     if (!mounted) return;
+    if (!ready || !_cache.hasCur) {
+      _applyCompleted(dir);
+      return;
+    }
+
     setState(() => _overlayVisible = true);
 
     await _controller.turnByAnim(
@@ -109,15 +170,13 @@ class ReaderTurnViewState extends State<ReaderTurnView>
       vsync: this,
       viewWidth: size.width,
       viewHeight: size.height,
-      hasPrev: _hasPrev,
-      hasNext: _hasNext,
+      hasPrev: _gestureHasPrev,
+      hasNext: _gestureHasNext,
       onCompleted: _applyCompleted,
     );
     if (mounted) {
-      setState(() {
-        _overlayVisible = false;
-        _disposeImages();
-      });
+      setState(() => _overlayVisible = false);
+      _scheduleWarmSnapshots();
     }
   }
 
@@ -137,32 +196,6 @@ class ReaderTurnViewState extends State<ReaderTurnView>
     }
   }
 
-  Future<void> _ensureSnapshotsFor(PageTurnDirection dir) async {
-    if (_capturing) return;
-    _capturing = true;
-    try {
-      // Let Offstage boundaries paint one frame.
-      await SchedulerBinding.instance.endOfFrame;
-      if (!mounted) return;
-      final dpr = MediaQuery.devicePixelRatioOf(context);
-      final cur = await captureBoundary(_curBoundaryKey, pixelRatio: dpr);
-      ui.Image? prev;
-      ui.Image? next;
-      if (dir == PageTurnDirection.prev && _hasPrev) {
-        prev = await captureBoundary(_prevBoundaryKey, pixelRatio: dpr);
-      }
-      if (dir == PageTurnDirection.next && _hasNext) {
-        next = await captureBoundary(_nextBoundaryKey, pixelRatio: dpr);
-      }
-      _disposeImages();
-      _curImage = cur;
-      _prevImage = prev;
-      _nextImage = next;
-    } finally {
-      _capturing = false;
-    }
-  }
-
   void _onPointerDown(PointerDownEvent e) {
     final size = context.size;
     _controller.onPointerDown(
@@ -172,7 +205,7 @@ class ReaderTurnViewState extends State<ReaderTurnView>
     );
   }
 
-  Future<void> _onPointerMove(PointerMoveEvent e) async {
+  void _onPointerMove(PointerMoveEvent e) {
     final size = context.size;
     if (size == null) return;
     final slop =
@@ -181,19 +214,45 @@ class ReaderTurnViewState extends State<ReaderTurnView>
     final wasNone = _controller.direction == PageTurnDirection.none;
     final locked = _controller.onPointerMove(
       e.localPosition,
-      hasPrev: _hasPrev,
-      hasNext: _hasNext,
+      hasPrev: _gestureHasPrev,
+      hasNext: _gestureHasNext,
       slop: slop,
       viewWidth: size.width,
       viewHeight: size.height,
     );
 
+    // Jingshiro: bitmaps already ready at setDirection — never capture here.
     if (locked &&
         wasNone &&
         _controller.direction != PageTurnDirection.none &&
         widget.mode != PageAnimMode.none) {
-      await _ensureSnapshotsFor(_controller.direction);
-      if (mounted) setState(() => _overlayVisible = true);
+      final dir = _controller.direction;
+      final canAnimate = _cache.hasCur &&
+          (dir != PageTurnDirection.prev ||
+              _captureHasPrev ||
+              widget.hasChapterPrev) &&
+          (dir != PageTurnDirection.next ||
+              _captureHasNext ||
+              widget.hasChapterNext);
+
+      // Neighbor page bitmap required for in-chapter anim; chapter edge → instant.
+      final needsPrevBmp =
+          dir == PageTurnDirection.prev && _captureHasPrev;
+      final needsNextBmp =
+          dir == PageTurnDirection.next && _captureHasNext;
+      final bmpOk = _cache.hasCur &&
+          (!needsPrevBmp || _cache.display?.prev != null) &&
+          (!needsNextBmp || _cache.display?.next != null);
+
+      if (canAnimate && bmpOk) {
+        setState(() => _overlayVisible = true);
+      } else if (dir == PageTurnDirection.prev && !_captureHasPrev) {
+        // Chapter prev: no overlay, complete on up.
+      } else if (dir == PageTurnDirection.next && !_captureHasNext) {
+        // Chapter next: no overlay, complete on up.
+      } else if (!_cache.hasCur) {
+        // Missing cache — treat as none on up.
+      }
     }
 
     // Jingshiro SimulationPageDelegate.onTouch MOVE mid-band Y pin.
@@ -227,9 +286,10 @@ class ReaderTurnViewState extends State<ReaderTurnView>
     final size = context.size;
     if (size == null) return;
 
+    final dir = _controller.direction;
+    final cancel = _controller.isCancel;
+
     if (widget.mode == PageAnimMode.none) {
-      final dir = _controller.direction;
-      final cancel = _controller.isCancel;
       if (dir != PageTurnDirection.none && !cancel) {
         _applyCompleted(dir);
       }
@@ -237,11 +297,20 @@ class ReaderTurnViewState extends State<ReaderTurnView>
       return;
     }
 
-    if (_controller.direction == PageTurnDirection.none) {
-      setState(() {
-        _overlayVisible = false;
-        _disposeImages();
-      });
+    // Chapter edge without overlay → instant page fill.
+    if (!_overlayVisible &&
+        dir != PageTurnDirection.none &&
+        !cancel &&
+        ((dir == PageTurnDirection.prev && !_captureHasPrev) ||
+            (dir == PageTurnDirection.next && !_captureHasNext))) {
+      _applyCompleted(dir);
+      _controller.resetGesture();
+      _scheduleWarmSnapshots();
+      return;
+    }
+
+    if (dir == PageTurnDirection.none || !_overlayVisible) {
+      setState(() => _overlayVisible = false);
       _controller.resetGesture();
       return;
     }
@@ -253,22 +322,21 @@ class ReaderTurnViewState extends State<ReaderTurnView>
       onCompleted: _applyCompleted,
     );
     if (mounted) {
-      setState(() {
-        _overlayVisible = false;
-        _disposeImages();
-      });
+      setState(() => _overlayVisible = false);
+      _scheduleWarmSnapshots();
     }
   }
 
   CustomPainter? _buildPainter(Size size) {
     final c = _controller;
+    final snap = _cache.display;
     final running = c.isDragging || c.isSettling;
     switch (widget.mode) {
       case PageAnimMode.slide:
         return SlidePagePainter(
-          cur: _curImage,
-          prev: _prevImage,
-          next: _nextImage,
+          cur: snap?.cur,
+          prev: snap?.prev,
+          next: snap?.next,
           direction: c.direction,
           touchX: c.touchX,
           startX: c.startX,
@@ -277,9 +345,9 @@ class ReaderTurnViewState extends State<ReaderTurnView>
         );
       case PageAnimMode.cover:
         return CoverPagePainter(
-          cur: _curImage,
-          prev: _prevImage,
-          next: _nextImage,
+          cur: snap?.cur,
+          prev: snap?.prev,
+          next: snap?.next,
           direction: c.direction,
           touchX: c.touchX,
           startX: c.startX,
@@ -288,9 +356,9 @@ class ReaderTurnViewState extends State<ReaderTurnView>
         );
       case PageAnimMode.simulation:
         return SimulationCurlPainter(
-          cur: _curImage,
-          prev: _prevImage,
-          next: _nextImage,
+          cur: snap?.cur,
+          prev: snap?.prev,
+          next: snap?.next,
           direction: c.direction,
           touchX: c.touchX,
           touchY: c.touchY,
@@ -298,6 +366,7 @@ class ReaderTurnViewState extends State<ReaderTurnView>
           cornerY: c.cornerY,
           viewSize: size,
           isRunning: running,
+          backPageColor: widget.backPageColor,
         );
       case PageAnimMode.none:
       case PageAnimMode.scroll:
@@ -330,15 +399,15 @@ class ReaderTurnViewState extends State<ReaderTurnView>
         return Listener(
           behavior: HitTestBehavior.opaque,
           onPointerDown: _onPointerDown,
-          onPointerMove: (e) => _onPointerMove(e),
+          onPointerMove: _onPointerMove,
           onPointerUp: (e) => _onPointerUp(e),
           onPointerCancel: (e) => _onPointerCancel(e),
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Snapshot sources (laid out, invisible).
+              // Slight opacity so RepaintBoundary.toImage still paints.
               Opacity(
-                opacity: 0,
+                opacity: 0.01,
                 child: IgnorePointer(
                   child: Stack(
                     fit: StackFit.expand,
@@ -350,7 +419,6 @@ class ReaderTurnViewState extends State<ReaderTurnView>
                   ),
                 ),
               ),
-              // Live current page (hidden under overlay while animating).
               if (!_overlayVisible)
                 KeyedSubtree(
                   key: ValueKey('live-$pageIndex'),
