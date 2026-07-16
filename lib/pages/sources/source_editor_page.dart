@@ -8,17 +8,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
+import '../../theme/legado_tokens.dart';
 import '../code_edit/code_edit_page.dart';
 import '../qrcode/qrcode_capture_page.dart';
 import '../search/search_page.dart';
 import 'source_debug_page.dart';
 import 'source_login_page.dart';
 
-/// 书源规则编辑 — 1:1 对齐 Jingshiro [BookSourceEditActivity] /
-/// [activity_book_source_edit.xml] + [menu/source_edit.xml]。
+/// 书源规则编辑 — 1:1 对齐 Jingshiro 截图 + [BookSourceEditActivity] /
+/// [activity_book_source_edit.xml] + [item_source_edit.xml] + [menu/source_edit.xml]。
 ///
-/// Chrome：TitleBar「编辑书源」；类型/启用/发现/CookieJar/事件监听/定制按钮；
-/// Tab：基本 | 搜索 | 发现 | 详情 | 目录 | 正文；菜单：编辑内容/保存/调试源 + overflow。
+/// Chrome：TitleBar「编辑书源」；类型/启用/发现/CookieJar/事件监听/定制按钮在 Tab 上方；
+/// Tab：基本 | 搜索 | 发现 | 详情 | 目录 | 正文；红标签+底线输入；菜单对齐 source_edit。
 class SourceEditorPage extends StatefulWidget {
   final BookSource source;
 
@@ -112,7 +113,8 @@ class _SourceEditorPageState extends State<SourceEditorPage>
     _bookTypeIndex = _typeToIndex(map['bookSourceType']);
     _enabled = map['enabled'] != false;
     _enabledExplore = map['enabledExplore'] != false;
-    _enabledCookieJar = map['enabledCookieJar'] != false;
+    // Jingshiro: enabledCookieJar ?: false
+    _enabledCookieJar = map['enabledCookieJar'] == true;
     _eventListener = map['eventListener'] == true;
     _customButton = map['customButton'] == true;
 
@@ -896,6 +898,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final accent = LegadoTokens.sourceDotRed;
     final loginUrl = _baseFields
         .firstWhere((f) => f.key == 'loginUrl')
         .controller
@@ -913,6 +916,9 @@ class _SourceEditorPageState extends State<SourceEditorPage>
       },
       child: Scaffold(
         appBar: AppBar(
+          // 截图：棕褐/栗色 TitleBar，跟随主题 primary
+          backgroundColor: theme.colorScheme.primary,
+          foregroundColor: theme.colorScheme.onPrimary,
           title: const Text('编辑书源'),
           actions: [
             IconButton(
@@ -922,10 +928,13 @@ class _SourceEditorPageState extends State<SourceEditorPage>
             ),
             IconButton(
               icon: _isSaving
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: theme.colorScheme.onPrimary,
+                      ),
                     )
                   : const Icon(Icons.save),
               tooltip: '保存',
@@ -959,76 +968,114 @@ class _SourceEditorPageState extends State<SourceEditorPage>
               ],
             ),
           ],
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(36),
-            child: Material(
-              color: theme.colorScheme.surface,
-              elevation: 1,
-              child: TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                tabs: [for (final t in _tabs) Tab(text: t, height: 36)],
-              ),
-            ),
-          ),
         ),
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
+            // Sticky header above tabs（activity_book_source_edit.xml）
+            Material(
+              color: theme.colorScheme.surface,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('类型：'),
-                  DropdownButton<int>(
-                    value: _bookTypeIndex,
-                    underline: const SizedBox.shrink(),
-                    items: [
-                      for (var i = 0; i < _bookTypes.length; i++)
-                        DropdownMenuItem(value: i, child: Text(_bookTypes[i])),
-                    ],
-                    onChanged: (v) {
-                      if (v != null) setState(() => _bookTypeIndex = v);
-                    },
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+                    child: Row(
+                      children: [
+                        Text(
+                          '类型：',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        DropdownButton<int>(
+                          value: _bookTypeIndex,
+                          underline: const SizedBox.shrink(),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                          items: [
+                            for (var i = 0; i < _bookTypes.length; i++)
+                              DropdownMenuItem(
+                                value: i,
+                                child: Text(_bookTypes[i]),
+                              ),
+                          ],
+                          onChanged: (v) {
+                            if (v != null) {
+                              setState(() => _bookTypeIndex = v);
+                            }
+                          },
+                        ),
+                        _check(
+                          '启用',
+                          _enabled,
+                          accent,
+                          (v) => setState(() => _enabled = v),
+                        ),
+                        _check(
+                          '发现',
+                          _enabledExplore,
+                          accent,
+                          (v) => setState(() => _enabledExplore = v),
+                        ),
+                        _check(
+                          'CookieJar',
+                          _enabledCookieJar,
+                          accent,
+                          (v) => setState(() => _enabledCookieJar = v),
+                        ),
+                      ],
+                    ),
                   ),
-                  _check('启用', _enabled, (v) => setState(() => _enabled = v)),
-                  _check(
-                    '发现',
-                    _enabledExplore,
-                    (v) => setState(() => _enabledExplore = v),
-                  ),
-                  _check(
-                    'CookieJar',
-                    _enabledCookieJar,
-                    (v) => setState(() => _enabledCookieJar = v),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                    child: Row(
+                      children: [
+                        _check(
+                          '事件监听',
+                          _eventListener,
+                          accent,
+                          (v) => setState(() => _eventListener = v),
+                        ),
+                        _check(
+                          '定制按钮',
+                          _customButton,
+                          accent,
+                          (v) => setState(() => _customButton = v),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                children: [
-                  _check(
-                    '事件监听',
-                    _eventListener,
-                    (v) => setState(() => _eventListener = v),
-                  ),
-                  _check(
-                    '定制按钮',
-                    _customButton,
-                    (v) => setState(() => _customButton = v),
-                  ),
-                ],
+            Material(
+              color: theme.colorScheme.surface,
+              elevation: 3,
+              child: TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                labelColor: accent,
+                unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+                indicatorColor: accent,
+                indicatorSize: TabBarIndicatorSize.label,
+                labelStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+                unselectedLabelStyle: const TextStyle(fontSize: 14),
+                tabs: [for (final t in _tabs) Tab(text: t, height: 36)],
               ),
             ),
-            const Divider(height: 1),
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                 itemCount: _currentFields.length,
                 itemBuilder: (_, i) {
                   final field = _currentFields[i];
@@ -1040,19 +1087,40 @@ class _SourceEditorPageState extends State<SourceEditorPage>
                       maxLines: null,
                       minLines: 1,
                       keyboardType: TextInputType.multiline,
-                      style: const TextStyle(
+                      cursorColor: accent,
+                      style: TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 13,
-                        height: 1.4,
+                        height: 1.35,
+                        color: theme.colorScheme.onSurface,
                       ),
                       decoration: InputDecoration(
                         labelText: field.hint,
-                        alignLabelWithHint: true,
-                        border: const OutlineInputBorder(),
+                        floatingLabelBehavior: FloatingLabelBehavior.always,
+                        labelStyle: TextStyle(
+                          color: accent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        floatingLabelStyle: TextStyle(
+                          color: accent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
+                        contentPadding: const EdgeInsets.fromLTRB(0, 18, 0, 6),
+                        border: UnderlineInputBorder(
+                          borderSide: BorderSide(
+                            color: theme.colorScheme.outlineVariant,
+                          ),
+                        ),
+                        enabledBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(
+                            color: theme.colorScheme.outlineVariant,
+                          ),
+                        ),
+                        focusedBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(color: accent, width: 1.5),
                         ),
                       ),
                       onChanged: (_) => setState(() {}),
@@ -1067,12 +1135,35 @@ class _SourceEditorPageState extends State<SourceEditorPage>
     );
   }
 
-  Widget _check(String label, bool value, ValueChanged<bool> onChanged) {
+  Widget _check(
+    String label,
+    bool value,
+    Color accent,
+    ValueChanged<bool> onChanged,
+  ) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Checkbox(value: value, onChanged: (v) => onChanged(v ?? false)),
-        Text(label, style: const TextStyle(fontSize: 13)),
+        SizedBox(
+          height: 36,
+          width: 36,
+          child: Checkbox(
+            value: value,
+            activeColor: accent,
+            checkColor: Colors.white,
+            side: BorderSide(
+              color: value ? accent : Theme.of(context).colorScheme.outline,
+            ),
+            onChanged: (v) => onChanged(v ?? false),
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            color: value ? accent : Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
         const SizedBox(width: 4),
       ],
     );
