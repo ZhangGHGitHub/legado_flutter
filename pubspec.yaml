@@ -63,3 +63,7 @@ flutter:
     - assets/builtin_sources/7497.json
     - assets/builtin_sources/7565.json
     - assets/welcome/icon_read_book.png
+    - assets/file_picker/file.png
+    - assets/file_picker/folder.png
+    - assets/file_picker/updir.png
+    - assets/file_picker/arrow.png

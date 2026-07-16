@@ -456,7 +456,7 @@ class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
                 LegadoListTile(
                   icon: Icons.folder_open,
                   title: '文件管理',
-                  subtitle: '浏览数据目录与本地备份',
+                  subtitle: '管理私有文件夹中的文件',
                   onTap: () => _openPage(const FileManagePage()),
                 ),
                 const LegadoListDivider(),

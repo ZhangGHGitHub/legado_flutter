@@ -174,7 +174,7 @@
 | 26 | `activity_welcome.xml` | 欢迎页 | ✅ **1:1 闪屏** | UI-26：竖排品牌+icon_read_book+品读万千故事；500ms→主页；隐私在 MainShell Dialog |
 | 27 | `activity_web_view.xml` | WebView | ⚠️ `webview_flutter` 已引入 | 需核对 |
 | 28 | `activity_code_edit.xml` | 代码编辑器 | ✅ **基本完成** | UI-27：TitleBar+搜索/保存+底栏查找替换；Sora 语法高亮 stub |
-| 29 | `activity_file_manage.xml` | 文件管理 | ✅ `file_manage_page.dart` | UI-8：数据目录基础浏览 |
+| 29 | `activity_file_manage.xml` | 文件管理 | ✅ **1:1 基本完成** | UI-18：TitleBar 筛选+路径条+列表；长按删除；桌面打开回退 |
 | 30 | `activity_donate.xml` | 捐赠 | 🟡 **1:1 返工** | UI-25：去掉 Flutter 免责声明；渠道文案对齐 values-zh |
 | 31 | `activity_dict_rule.xml` | 字典规则 | ✅ 基本完成（2026-07-15） | UI-21 |
 | 32 | `activity_manga.xml` | 漫画阅读 | 🟡 **1:1 chrome 返工** | UI-23：MangaMenu+InfoBar+book_manga 菜单；真源引擎后续 |
@@ -268,7 +268,7 @@
 | 7. 主题设置 | → ConfigPage(theme) | ✅ | |
 | 8. 其它设置 | → ConfigPage(other) | ✅ `other_settings_card.dart` | |
 | 9. 书签与想法 | → AllBookmarkActivity | ✅ UI-8 Tab | 点击跳转阅读仍开放 |
-| 10. 文件管理 | → FileManageActivity | ✅ UI-8 基础浏览 | |
+| 10. 文件管理 | → FileManageActivity | ✅ UI-18 1:1 | |
 | 11. 阅读 Skill | → ReadingSkillActivity | ⚠️ 有空页 | 需核对 |
 | 12. AI 助手 | → AiChatActivity | ✅ | 需核对入口 |
 | 13. 关于 | → AboutActivity | ✅ 内嵌 | |
@@ -456,7 +456,7 @@
 
 - [x] TXT 目录规则 → 占位页
 - [x] 字典规则 → 占位页
-- [x] 文件管理 → 基础文件浏览器（`file_manage_page.dart`：数据目录浏览/删除/分享）
+- [x] 文件管理 → UI-18 已 1:1 返工（`file_manage_page.dart`）
 - [x] 书签与想法 → 数据连接 + 书签/想法分 Tab（`NoteService`；书签=`noteContent` 以「书签」开头）
 - [x] 快捷四格长按行为（备份→本地备份，Web服务→复制地址/浏览器打开）
 - [x] Web 服务状态刷新（启停后 + 从子页返回 + App resume）
@@ -535,10 +535,14 @@
 - [x] 对齐 Jingshiro：TitleBar「扫描二维码」+ 菜单「图库」；书源菜单「二维码导入」
 - [x] Windows/Linux：相机不可用时图库 + 粘贴回退（有相机时不伪装 Android 主 UI）
 
-#### Task UI-18: 文件管理 (`activity_file_manage.xml`)
+#### Task UI-18: 文件管理 (`activity_file_manage.xml`) — ✅ 基本完成（2026-07-16）
 
-- [ ] 基础文件浏览器
-- [ ] 支持查看/删除/分享
+- [x] **1:1 chrome**：TitleBar 内嵌搜索（hint「筛选 • 文件管理」）+ 24dp 路径条（root + 分段）+ 文件列表（FilePickerIcon + 名称）
+- [x] 目录进入 / `..` 返回；系统返回键逐级上退；根目录退出
+- [x] 点击文件：`launchUrl(Uri.file)`，失败再 Share / 提示（对齐 openFileUri）
+- [x] 长按 PopupMenu 仅「删除」（`menu/file_long_click.xml`）；无额外分享项
+- [x] 空目录展示「空」（对齐布局 `tv_empty_msg`）
+- [x] 我的页入口副标题对齐 `file_manage_summary`
 
 #### Task UI-19: 规则订阅 (`activity_rule_sub.xml` + `dialog_rule_sub_edit.xml`)
 
@@ -644,7 +648,7 @@ Task UI-21: 字典规则  ✅ 基本完成（2026-07-15）
 
 ```
 Task UI-17: 扫码导入  ✅ 基本完成（2026-07-16）
-Task UI-18: 文件管理
+Task UI-18: 文件管理  ✅ 基本完成（2026-07-16）
 Task UI-19: 规则订阅
 Task UI-22: 有声播放器 (TTS)  🟡 1:1 布局返工（2026-07-16）；MP3/LyricViewX 仍开放
 Task UI-23: 漫画阅读器  🟡 1:1 chrome 返工（2026-07-16）；真漫画源引擎仍开放
@@ -681,7 +685,7 @@ Task UI-12:  RSS 文章列表 + 阅读（含 WebView/外链方案选型）
 |------|:---:|------|
 | 主框架 + 导航 | 85% | 四 Tab 就位，缺角标/默认首页/可配置隐藏 |
 | 书架 | 92% | UI-7：长按菜单 + 列表布局对齐截图（顶栏 Tab/四行元数据/角标）；精确未读章数与整理拖拽仍开放 |
-| 我的页 | 96% | UI-8：快捷四格长按+Web 状态；文件管理基础浏览；书签/想法 Tab；TXT 目录规则+字典规则已落地 |
+| 我的页 | 97% | UI-8：快捷四格长按+Web 状态；UI-18 文件管理 1:1；书签/想法 Tab；TXT 目录规则+字典规则已落地 |
 | 搜索 | 90% | UI-3：按书源分组 + 精准搜索 + Scope |
 | 发现 | 85% | 接近完成 |
 | 书籍详情 | 96% | UI-6：截图布局（模糊头图/红芯片/删除+阅读底栏）；换源页后端仍占位；图标字形可再抠 |
