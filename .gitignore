@@ -12,6 +12,11 @@
 .swiftpm/
 migrate_working_dir/
 
+# Local secrets / env (never commit)
+.env
+.env.*
+!.env.example
+
 # IntelliJ related
 *.iml
 *.ipr
@@ -46,7 +51,6 @@ app.*.map.json
 
 # Rust build artifacts
 /rust/target/
-/lib/src/rust/frb_generated*.dart
 
 # Local reference clone of Jingshiro/legado (for UI layout lookup)
 /reference/

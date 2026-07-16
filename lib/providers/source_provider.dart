@@ -6,12 +6,12 @@ import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/source_validation_result.dart';
 import '../bridge/legado_engine_bridge.dart';
-import '../database/database_helper.dart';
+import '../database/dao/source_dao.dart';
 import '../services/book_source_service.dart';
 
 /// 书源管理 Provider — 书源 CRUD、搜索
 class SourceProvider extends ChangeNotifier {
-  final DatabaseHelper _db = DatabaseHelper();
+  final SourceDao _dao = SourceDao();
   final BookSourceService _sourceService = BookSourceService();
 
   List<BookSource> _sources = [];
@@ -21,6 +21,7 @@ class SourceProvider extends ChangeNotifier {
   bool _isValidating = false;
   String _statusMessage = '';
   String? _validatingSourceUrl;
+  String? _loadError;
 
   List<BookSource> get sources => _sources;
   Map<String, List<Book>> get searchResults => _searchResults;
@@ -30,20 +31,32 @@ class SourceProvider extends ChangeNotifier {
   bool get isValidating => _isValidating;
   String? get validatingSourceUrl => _validatingSourceUrl;
   String get statusMessage => _statusMessage;
+  String? get loadError => _loadError;
 
   SourceValidationResult? validationOf(String sourceUrl) =>
       _validationResults[sourceUrl];
 
   /// 加载书源
   Future<void> loadSources() async {
-    _sources = await _db.getBookSources();
+    _isLoading = true;
+    _loadError = null;
     notifyListeners();
+    try {
+      _sources = await _dao.getAll();
+      _loadError = null;
+    } catch (e) {
+      _loadError = '加载书源失败: $e';
+      debugPrint(_loadError);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   /// 添加单个书源
   Future<void> addSource(BookSource source) async {
-    await _db.insertBookSource(source);
-    _sources = await _db.getBookSources();
+    await _dao.upsert(source);
+    _sources = await _dao.getAll();
     notifyListeners();
   }
 
@@ -75,8 +88,8 @@ class SourceProvider extends ChangeNotifier {
         _statusMessage = '书源格式无效';
         return false;
       }
-      await _db.insertBookSources(sources);
-      _sources = await _db.getBookSources();
+      await _dao.upsertAll(sources);
+      _sources = await _dao.getAll();
       _statusMessage = '已导入 ${sources.length} 个书源';
       return true;
     } catch (e) {
@@ -165,8 +178,8 @@ class SourceProvider extends ChangeNotifier {
         _statusMessage = 'URL 未返回有效书源，请检查链接或网络';
         return false;
       }
-      await _db.insertBookSources(sources);
-      _sources = await _db.getBookSources();
+      await _dao.upsertAll(sources);
+      _sources = await _dao.getAll();
       _statusMessage = '已从 URL 导入 ${sources.length} 个书源';
       notifyListeners();
       return true;
@@ -182,16 +195,16 @@ class SourceProvider extends ChangeNotifier {
 
   /// 启用/禁用书源
   Future<void> toggleSource(String sourceUrl, bool enabled) async {
-    await _db.toggleSource(sourceUrl, enabled);
-    _sources = await _db.getBookSources();
+    await _dao.toggle(sourceUrl, enabled);
+    _sources = await _dao.getAll();
     notifyListeners();
   }
 
   /// 删除书源
   Future<void> deleteSource(String sourceUrl) async {
-    await _db.deleteSource(sourceUrl);
+    await _dao.delete(sourceUrl);
     _validationResults.remove(sourceUrl);
-    _sources = await _db.getBookSources();
+    _sources = await _dao.getAll();
     notifyListeners();
   }
 
@@ -203,9 +216,9 @@ class SourceProvider extends ChangeNotifier {
     final urls = sourceUrls.toSet();
     if (urls.isEmpty) return;
     for (final url in urls) {
-      await _db.toggleSource(url, enabled);
+      await _dao.toggle(url, enabled);
     }
-    _sources = await _db.getBookSources();
+    _sources = await _dao.getAll();
     notifyListeners();
   }
 
@@ -214,10 +227,10 @@ class SourceProvider extends ChangeNotifier {
     final urls = sourceUrls.toSet();
     if (urls.isEmpty) return;
     for (final url in urls) {
-      await _db.deleteSource(url);
+      await _dao.delete(url);
       _validationResults.remove(url);
     }
-    _sources = await _db.getBookSources();
+    _sources = await _dao.getAll();
     notifyListeners();
   }
 
@@ -237,16 +250,16 @@ class SourceProvider extends ChangeNotifier {
         }
       }
       if (src == null) continue;
-      await _db.updateBookSource(src.copyWith(bookSourceGroup: group));
+      await _dao.update(src.copyWith(bookSourceGroup: group));
     }
-    _sources = await _db.getBookSources();
+    _sources = await _dao.getAll();
     notifyListeners();
   }
 
   /// 更新单个书源
   Future<void> updateSource(BookSource source) async {
-    await _db.updateBookSource(source);
-    _sources = await _db.getBookSources();
+    await _dao.update(source);
+    _sources = await _dao.getAll();
     notifyListeners();
   }
 
@@ -269,7 +282,7 @@ class SourceProvider extends ChangeNotifier {
     _statusMessage = '正在搜索 "$keyword"...';
     notifyListeners();
 
-    var enabledSources = await _db.getEnabledSources();
+    var enabledSources = await _dao.getEnabled();
     if (restrictSourceUrls != null && restrictSourceUrls.isNotEmpty) {
       enabledSources = enabledSources
           .where((s) => restrictSourceUrls.contains(s.bookSourceUrl))
