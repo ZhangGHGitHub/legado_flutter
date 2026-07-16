@@ -46,10 +46,10 @@ jobs:
           name: macos-build-log
           path: build_macos.log
 
-      - name: Build iOS (no codesign)
+      - name: Build iOS (simulator, no codesign)
         run: |
           set -o pipefail
-          flutter build ios --release --no-codesign 2>&1 | tee build_ios.log
+          flutter build ios --release --simulator --no-codesign 2>&1 | tee build_ios.log
 
       - name: Upload iOS build log
         if: failure()
