@@ -49,7 +49,10 @@ jobs:
       - name: Build iOS (simulator, no codesign)
         run: |
           set -o pipefail
+          # rquickjs has no prebuilt bindings for aarch64-apple-ios-sim; compile via bindgen.
+          sed -i.bak 's/rquickjs = "0.12.1"/rquickjs = { version = "0.12.1", features = ["bindgen"] }/' rust/legado_engine/Cargo.toml
           flutter build ios --simulator --no-codesign 2>&1 | tee build_ios.log
+          mv rust/legado_engine/Cargo.toml.bak rust/legado_engine/Cargo.toml
 
       - name: Upload iOS build log
         if: failure()
