@@ -40,6 +40,16 @@ abstract final class LegadoTokens {
   static const double sourceChipHeight = 20;
   static const int bookshelfGridCols = 3;
 
+  /// 全局顶栏默认高度（手机竖屏 Material `actionBarSize`）。
+  /// 运行时请用 [LegadoChrome.toolbarHeightOf]，勿直接当全端定值。
+  static const double toolbarHeight = 56;
+
+  /// 弹窗标题栏默认高度（与 [toolbarHeight] 同源基准）
+  static const double dialogTitleBarHeight = 56;
+
+  /// 弹窗圆角（顶栏与 Dialog 共用）
+  static const double dialogRadius = 16;
+
   /// 欢迎/启动页 — 对齐 `activity_welcome.xml`
   static const double welcomeTitleFontSize = 49;
   static const double welcomeSubtitleFontSize = 16;

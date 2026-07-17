@@ -1,12 +1,19 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/book.dart';
+import '../../models/book_group.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
+import '../../services/book_group_store.dart';
 import '../../services/bookshelf_prefs.dart';
-import '../../theme/legado_tokens.dart';
-import '../../widgets/book_cover.dart';
+import '../../widgets/book_group_manage_dialog.dart';
+import '../../widgets/book_group_select_dialog.dart';
+import '../book/book_info_page.dart';
 
 /// 书架整理 — 对齐 legado [BookshelfManageActivity] + `activity_arrange_book.xml`
 class BookshelfArrangePage extends StatefulWidget {
@@ -17,11 +24,11 @@ class BookshelfArrangePage extends StatefulWidget {
     this.gridLayout = false,
   });
 
-  /// 空 = 全部书籍；否则仅显示该分组
+  /// `null` = 全部；`''` = 未分组；其它 = 分组名
   final String? groupFilter;
   final String groupLabel;
 
-  /// 与当前书架布局一致：false=列表整理，true=网格整理
+  /// 保留入参兼容；管理页固定列表（对齐 Jingshiro LinearLayoutManager）
   final bool gridLayout;
 
   @override
@@ -29,18 +36,30 @@ class BookshelfArrangePage extends StatefulWidget {
 }
 
 class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
+  static const _prefOpenInfoByTitle = 'openBookInfoByClickTitle';
+  static const _filterAll = '__all__';
+  static const _filterLocal = '__local__';
+  static const _filterUngrouped = '__ungrouped__';
+
   final _searchCtrl = TextEditingController();
   final _selected = <String>{};
   List<Book> _books = [];
-  bool _gridLayout = false;
+  List<String> _cachedOrder = [];
   bool _dragEnabled = true;
   bool _dirty = false;
+  bool _openInfoByTitle = false;
+
+  /// 当前筛选：全部 / 本地 / 未分组 / 自定义分组名
+  late String _filterKey;
+  late String _groupLabel;
 
   @override
   void initState() {
     super.initState();
-    _gridLayout = widget.gridLayout;
+    _filterKey = _filterKeyFromWidget(widget.groupFilter);
+    _groupLabel = widget.groupLabel;
     _loadSortMode();
+    _loadOpenInfoPref();
     _loadOrderAndBooks();
     _searchCtrl.addListener(() => setState(() {}));
   }
@@ -51,31 +70,77 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
     super.dispose();
   }
 
+  String _filterKeyFromWidget(String? groupFilter) {
+    if (groupFilter == null) return _filterAll;
+    if (groupFilter.isEmpty) return _filterUngrouped;
+    return groupFilter;
+  }
+
   Future<void> _loadSortMode() async {
     final mode = await BookshelfPrefs.loadSortMode();
     if (!mounted) return;
     setState(() => _dragEnabled = mode == 3);
   }
 
-  void _initBooks() {
-    var all = context.read<BookProvider>().books;
-    if (widget.groupFilter != null && widget.groupFilter!.isNotEmpty) {
-      all = all.where((b) => b.group == widget.groupFilter).toList();
-    } else if (widget.groupFilter == '') {
-      all = all.where((b) => b.group.isEmpty).toList();
-    }
-    _books = BookshelfPrefs.applyBookOrder(all, _cachedOrder, (b) => b.id);
-    _selected
-      ..clear()
-      ..addAll(_books.map((b) => b.id));
+  Future<void> _loadOpenInfoPref() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _openInfoByTitle = prefs.getBool(_prefOpenInfoByTitle) ?? false;
+    });
   }
 
-  List<String> _cachedOrder = [];
+  Future<void> _setOpenInfoByTitle(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefOpenInfoByTitle, v);
+    if (!mounted) return;
+    setState(() => _openInfoByTitle = v);
+  }
+
+  void _reloadBooks() {
+    var all = context.read<BookProvider>().books;
+    all = _applyGroupFilter(all);
+    _books = BookshelfPrefs.applyBookOrder(all, _cachedOrder, (b) => b.id);
+    _selected.removeWhere((id) => !_books.any((b) => b.id == id));
+  }
+
+  List<Book> _applyGroupFilter(List<Book> all) {
+    switch (_filterKey) {
+      case _filterAll:
+      case '${BookGroup.idAll}':
+        return all;
+      case _filterLocal:
+      case '${BookGroup.idLocal}':
+        return all.where((b) => b.type == 'local').toList();
+      case _filterUngrouped:
+        return all.where((b) => b.group.isEmpty).toList();
+      case '${BookGroup.idNetNone}':
+        return all
+            .where((b) => b.type != 'local' && b.group.isEmpty)
+            .toList();
+      case '${BookGroup.idLocalNone}':
+        return all
+            .where((b) => b.type == 'local' && b.group.isEmpty)
+            .toList();
+      case '${BookGroup.idAudio}':
+      case '${BookGroup.idVideo}':
+      case '${BookGroup.idError}':
+        // 音频/视频/更新失败：Flutter 暂无对应类型标记，显示空列表
+        return const [];
+      default:
+        return all.where((b) => b.group == _filterKey).toList();
+    }
+  }
 
   Future<void> _loadOrderAndBooks() async {
     _cachedOrder = await BookshelfPrefs.loadBookOrder();
     if (!mounted) return;
-    setState(_initBooks);
+    final books = context.read<BookProvider>().books;
+    await BookGroupStore.syncNamesFromBooks(
+      books.map((b) => b.group).where((g) => g.isNotEmpty),
+    );
+    if (!mounted) return;
+    setState(_reloadBooks);
   }
 
   List<Book> get _visibleBooks {
@@ -84,7 +149,8 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
     return _books.where((b) {
       return b.name.toLowerCase().contains(q) ||
           b.author.toLowerCase().contains(q) ||
-          b.group.toLowerCase().contains(q);
+          b.group.toLowerCase().contains(q) ||
+          _originLabel(b).toLowerCase().contains(q);
     }).toList();
   }
 
@@ -105,6 +171,15 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
   Future<bool> _onWillPop() async {
     if (_dirty) await _persistOrder();
     return true;
+  }
+
+  void _setGroupFilter(String key, String label) {
+    setState(() {
+      _filterKey = key;
+      _groupLabel = label;
+      _reloadBooks();
+      _selected.clear();
+    });
   }
 
   void _toggleAll(bool selectAll) {
@@ -166,68 +241,84 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
     });
   }
 
+  /// 移入分组 — 对齐 [BookshelfManageActivity.onClickSelectBarMainAction]
   Future<void> _moveSelectedToGroup() async {
     final ids = _selected.toList();
     if (ids.isEmpty) return;
     final chosen = await _pickGroup();
     if (chosen == null || !mounted) return;
     await context.read<BookProvider>().updateBooksGroup(ids, chosen);
-    setState(_initBooks);
+    if (!mounted) return;
+    setState(() {
+      _reloadBooks();
+      _selected.clear();
+    });
   }
 
+  /// 行内「分组」— 对齐 adapter 单本 [GroupSelectDialog]
   Future<void> _moveOneToGroup(Book book) async {
     final chosen = await _pickGroup(current: book.group);
     if (chosen == null || !mounted) return;
     await context.read<BookProvider>().updateBookGroup(book.id, chosen);
-    setState(_initBooks);
+    if (!mounted) return;
+    setState(_reloadBooks);
   }
 
+  /// 加入分组（字符串模型下等同设为目标分组）
+  Future<void> _addSelectedToGroup() async {
+    final ids = _selected.toList();
+    if (ids.isEmpty) return;
+    final chosen = await _pickGroup();
+    if (chosen == null || !mounted) return;
+    await context.read<BookProvider>().updateBooksGroup(ids, chosen);
+    if (!mounted) return;
+    setState(() {
+      _reloadBooks();
+      _selected.clear();
+    });
+  }
+
+  /// 移除分组：选中目标分组后，匹配该书分组则清空
+  Future<void> _removeSelectedFromGroup() async {
+    final ids = _selected.toList();
+    if (ids.isEmpty) return;
+    final chosen = await _pickGroup();
+    if (chosen == null || !mounted) return;
+    final provider = context.read<BookProvider>();
+    for (final id in ids) {
+      Book? book;
+      for (final b in provider.books) {
+        if (b.id == id) {
+          book = b;
+          break;
+        }
+      }
+      if (book == null) continue;
+      if (chosen.isEmpty || book.group == chosen) {
+        await provider.updateBookGroup(id, '');
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _reloadBooks();
+      _selected.clear();
+    });
+  }
+
+  /// 对齐 [GroupSelectDialog]；返回目标分组名（空=未分组）
   Future<String?> _pickGroup({String? current}) async {
-    final books = context.read<BookProvider>().books;
-    final groups = books
-        .map((b) => b.group)
-        .where((g) => g.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-    return showModalBottomSheet<String>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 14, 16, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '选择分组',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-            ListTile(
-              dense: true,
-              title: const Text('未分组'),
-              selected: current == null || current.isEmpty,
-              onTap: () => Navigator.pop(ctx, ''),
-            ),
-            ...groups.map(
-              (g) => ListTile(
-                dense: true,
-                title: Text(g),
-                selected: current == g,
-                onTap: () => Navigator.pop(ctx, g),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+    final result = await showBookGroupSelectDialog(
+      context,
+      currentGroupName: current,
     );
+    if (result == null) return null;
+    return result.primaryName;
+  }
+
+  Future<void> _showGroupManage() async {
+    await showBookGroupManageDialog(context);
+    if (!mounted) return;
+    setState(_reloadBooks);
   }
 
   Future<void> _deleteSelected() async {
@@ -290,10 +381,253 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
     await _persistOrder();
   }
 
+  Future<void> _exportAllUseBookSource() async {
+    final sources = context.read<SourceProvider>();
+    final used = <String, dynamic>{};
+    for (final book in context.read<BookProvider>().books) {
+      final src = sources.findSourceForBook(book);
+      if (src == null) continue;
+      used[src.bookSourceUrl] = src.toJson();
+    }
+    if (used.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('书架书籍没有可用书源')),
+      );
+      return;
+    }
+    final json = const JsonEncoder.withIndent('  ').convert(used.values.toList());
+    await Share.share(json, subject: 'bookSource.json');
+  }
+
+  void _openBookInfo(Book book) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => BookInfoPage(book: book)),
+    );
+  }
+
+  void _onGroupMenu(String value) {
+    switch (value) {
+      case 'manage':
+        _showGroupManage();
+      default:
+        if (value.startsWith('gid:')) {
+          final id = int.tryParse(value.substring(4));
+          if (id == null) return;
+          BookGroup? g;
+          for (final x in BookGroupStore.cached) {
+            if (x.groupId == id) {
+              g = x;
+              break;
+            }
+          }
+          if (g == null) return;
+          if (g.groupId == BookGroup.idAll) {
+            _setGroupFilter(_filterAll, g.groupName);
+          } else if (g.groupId == BookGroup.idLocal) {
+            _setGroupFilter(_filterLocal, g.groupName);
+          } else if (g.isCustom) {
+            _setGroupFilter(g.groupName, g.groupName);
+          } else {
+            _setGroupFilter('${g.groupId}', g.groupName);
+          }
+        }
+    }
+  }
+
+  void _onOverflow(String value) {
+    switch (value) {
+      case 'export_sources':
+        _exportAllUseBookSource();
+      case 'open_info':
+        _setOpenInfoByTitle(!_openInfoByTitle);
+    }
+  }
+
+  void _onBottomMore(String value) {
+    switch (value) {
+      case 'delete':
+        _deleteSelected();
+      case 'add_group':
+        _addSelectedToGroup();
+      case 'remove_group':
+        _removeSelectedFromGroup();
+      case 'interval':
+        _selectInterval();
+      case 'update_enable':
+      case 'update_disable':
+      case 'change_source':
+      case 'clear_cache':
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('该功能尚未接入')),
+        );
+    }
+  }
+
+  Widget _buildSearchField(ColorScheme scheme) {
+    final onBar = scheme.onPrimary;
+    return SizedBox(
+      height: 36,
+      child: TextField(
+        controller: _searchCtrl,
+        style: TextStyle(color: onBar, fontSize: 15),
+        cursorColor: onBar,
+        decoration: InputDecoration(
+          hintText: '筛选 • $_groupLabel',
+          hintStyle: TextStyle(color: onBar.withValues(alpha: 0.72), fontSize: 15),
+          isDense: true,
+          filled: true,
+          fillColor: onBar.withValues(alpha: 0.10),
+          contentPadding: EdgeInsets.zero,
+          prefixIcon: Icon(
+            Icons.search,
+            size: 20,
+            color: onBar.withValues(alpha: 0.85),
+          ),
+          prefixIconConstraints:
+              const BoxConstraints(minWidth: 36, minHeight: 36),
+          suffixIcon: _searchCtrl.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: Icon(
+                    Icons.close,
+                    size: 18,
+                    color: onBar.withValues(alpha: 0.85),
+                  ),
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    setState(() {});
+                  },
+                ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide(
+              color: onBar.withValues(alpha: 0.10),
+              width: 0.5,
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide(
+              color: onBar.withValues(alpha: 0.22),
+              width: 0.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  ButtonStyle _selectBarButtonStyle(ColorScheme scheme) {
+    return OutlinedButton.styleFrom(
+      foregroundColor: scheme.onSurface,
+      side: BorderSide(color: scheme.outline.withValues(alpha: 0.55)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      minimumSize: const Size(0, 36),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+  }
+
+  /// 对齐 `view_select_action_bar.xml`：全选 / 反选 / 移入分组 / 更多
+  Widget _buildSelectActionBar(ColorScheme scheme, List<Book> visible) {
+    final total = visible.length;
+    final selectedCount = visible.where((b) => _selected.contains(b.id)).length;
+    final allSelected = total > 0 && selectedCount == total;
+    final hasSelection = selectedCount > 0;
+    final bottomBg =
+        Theme.of(context).bottomAppBarTheme.color ?? scheme.surface;
+
+    return Material(
+      elevation: 2,
+      color: bottomBg,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Row(
+            children: [
+              Checkbox(
+                value: allSelected
+                    ? true
+                    : (selectedCount > 0 ? null : false),
+                tristate: true,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+                onChanged: total == 0
+                    ? null
+                    : (_) => _toggleAll(!allSelected),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: total == 0 ? null : () => _toggleAll(!allSelected),
+                  child: Text(
+                    '全选 ($selectedCount/$total)',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, color: scheme.onSurface),
+                  ),
+                ),
+              ),
+              OutlinedButton(
+                style: _selectBarButtonStyle(scheme),
+                onPressed: total == 0 ? null : _invertSelection,
+                child: Text('反选', style: TextStyle(color: scheme.onSurface)),
+              ),
+              const SizedBox(width: 6),
+              OutlinedButton(
+                style: _selectBarButtonStyle(scheme),
+                onPressed: hasSelection ? _moveSelectedToGroup : null,
+                child: Text(
+                  '移入分组',
+                  style: TextStyle(
+                    color: hasSelection
+                        ? scheme.onSurface
+                        : scheme.onSurface.withValues(alpha: 0.38),
+                  ),
+                ),
+              ),
+              PopupMenuButton<String>(
+                tooltip: '更多',
+                padding: EdgeInsets.zero,
+                enabled: hasSelection,
+                icon: Icon(
+                  Icons.more_vert,
+                  color: hasSelection
+                      ? scheme.onSurface
+                      : scheme.onSurface.withValues(alpha: 0.38),
+                  size: 22,
+                ),
+                onSelected: _onBottomMore,
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'delete', child: Text('删除')),
+                  PopupMenuItem(value: 'update_enable', child: Text('允许更新')),
+                  PopupMenuItem(value: 'update_disable', child: Text('禁用更新')),
+                  PopupMenuItem(value: 'add_group', child: Text('加入分组')),
+                  PopupMenuItem(value: 'remove_group', child: Text('移除分组')),
+                  PopupMenuItem(value: 'change_source', child: Text('批量换源')),
+                  PopupMenuItem(value: 'clear_cache', child: Text('清除缓存')),
+                  PopupMenuItem(value: 'interval', child: Text('选中所选区间')),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final visible = _visibleBooks;
     final scheme = Theme.of(context).colorScheme;
+    final menuGroups = BookGroupStore.cached.where((g) => g.show).toList()
+      ..sort((a, b) => a.order.compareTo(b.order));
 
     return PopScope(
       canPop: false,
@@ -305,38 +639,40 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: TextField(
-            controller: _searchCtrl,
-            decoration: InputDecoration(
-              hintText: '筛选 • ${widget.groupLabel}',
-              border: InputBorder.none,
-              hintStyle: TextStyle(
-                color: scheme.onSurface.withValues(alpha: 0.55),
-                fontSize: 16,
-              ),
-              isDense: true,
-            ),
-            style: TextStyle(color: scheme.onSurface, fontSize: 16),
+          titleSpacing: 0,
+          title: Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: _buildSearchField(scheme),
           ),
           actions: [
-            IconButton(
-              tooltip: _gridLayout ? '列表整理' : '网格整理',
-              icon: Icon(_gridLayout ? Icons.view_list : Icons.grid_view),
-              onPressed: () => setState(() => _gridLayout = !_gridLayout),
+            PopupMenuButton<String>(
+              tooltip: '分组',
+              icon: const Icon(Icons.account_tree_outlined),
+              onSelected: _onGroupMenu,
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'manage', child: Text('分组管理')),
+                ...menuGroups.map(
+                  (g) => PopupMenuItem(
+                    value: 'gid:${g.groupId}',
+                    child: Text(g.groupName),
+                  ),
+                ),
+              ],
             ),
             PopupMenuButton<String>(
-              tooltip: '选择',
-              onSelected: (a) {
-                if (a == 'all') _toggleAll(true);
-                if (a == 'none') _toggleAll(false);
-                if (a == 'invert') _invertSelection();
-                if (a == 'interval') _selectInterval();
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'all', child: Text('全选')),
-                PopupMenuItem(value: 'none', child: Text('取消全选')),
-                PopupMenuItem(value: 'invert', child: Text('反选')),
-                PopupMenuItem(value: 'interval', child: Text('选择区间')),
+              tooltip: '更多',
+              icon: const Icon(Icons.more_vert),
+              onSelected: _onOverflow,
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'export_sources',
+                  child: Text('导出所有书的书源'),
+                ),
+                CheckedPopupMenuItem(
+                  value: 'open_info',
+                  checked: _openInfoByTitle,
+                  child: const Text('点击书名打开详情'),
+                ),
               ],
             ),
           ],
@@ -348,15 +684,8 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
                   style: TextStyle(color: scheme.onSurfaceVariant),
                 ),
               )
-            : _gridLayout
-            ? _buildGridBody(visible)
             : _buildListBody(visible),
-        bottomNavigationBar: _ArrangeActionBar(
-          selectedCount: _selected.length,
-          totalCount: visible.length,
-          onMoveToGroup: _moveSelectedToGroup,
-          onDelete: _deleteSelected,
-        ),
+        bottomNavigationBar: _buildSelectActionBar(scheme, visible),
       ),
     );
   }
@@ -364,9 +693,10 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
   Widget _buildListBody(List<Book> visible) {
     final filtering = _searchCtrl.text.trim().isNotEmpty;
     if (filtering) {
-      return ListView.builder(
+      return ListView.separated(
         padding: const EdgeInsets.only(bottom: 8),
         itemCount: visible.length,
+        separatorBuilder: (_, _) => const Divider(height: 1, thickness: 0.5),
         itemBuilder: (context, index) {
           final book = visible[index];
           return _ArrangeListTile(
@@ -375,7 +705,9 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
             origin: _originLabel(book),
             checked: _selected.contains(book.id),
             dragEnabled: false,
+            openInfoByTitle: _openInfoByTitle,
             onToggle: () => _toggleBook(book.id),
+            onTitleTap: () => _openBookInfo(book),
             onDelete: () => _deleteOne(book),
             onGroup: () => _moveOneToGroup(book),
           );
@@ -388,107 +720,40 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
       buildDefaultDragHandles: false,
       onReorder: _reorder,
       itemCount: _books.length,
+      proxyDecorator: (child, index, animation) => Material(
+        elevation: 2,
+        child: child,
+      ),
       itemBuilder: (context, index) {
         final book = _books[index];
-        return _ArrangeListTile(
+        return Column(
           key: ValueKey(book.id),
-          book: book,
-          origin: _originLabel(book),
-          checked: _selected.contains(book.id),
-          dragEnabled: _dragEnabled,
-          onToggle: () => _toggleBook(book.id),
-          onDelete: () => _deleteOne(book),
-          onGroup: () => _moveOneToGroup(book),
-          onReorder: _dragEnabled
-              ? ReorderableDragStartListener(
-                  index: index,
-                  child: Icon(
-                    Icons.drag_handle,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                )
-              : null,
-        );
-      },
-    );
-  }
-
-  Widget _buildGridBody(List<Book> visible) {
-    return GridView.builder(
-      padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: LegadoTokens.bookshelfGridCols,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 8,
-        childAspectRatio: 0.58,
-      ),
-      itemCount: visible.length,
-      itemBuilder: (_, index) {
-        final book = visible[index];
-        return _ArrangeGridTile(
-          key: ValueKey(book.id),
-          book: book,
-          checked: _selected.contains(book.id),
-          onToggle: () => _toggleBook(book.id),
-          onLongPress: _dragEnabled
-              ? () => _showGridMoveSheet(book)
-              : null,
-        );
-      },
-    );
-  }
-
-  void _showGridMoveSheet(Book book) {
-    final idx = _books.indexWhere((b) => b.id == book.id);
-    if (idx < 0) return;
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              title: Text(book.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: const Text('调整位置'),
+            _ArrangeListTile(
+              book: book,
+              origin: _originLabel(book),
+              checked: _selected.contains(book.id),
+              dragEnabled: _dragEnabled,
+              openInfoByTitle: _openInfoByTitle,
+              onToggle: () => _toggleBook(book.id),
+              onTitleTap: () => _openBookInfo(book),
+              onDelete: () => _deleteOne(book),
+              onGroup: () => _moveOneToGroup(book),
+              onReorder: _dragEnabled
+                  ? ReorderableDragStartListener(
+                      index: index,
+                      child: Icon(
+                        Icons.drag_handle,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    )
+                  : null,
             ),
-            ListTile(
-              leading: const Icon(Icons.vertical_align_top),
-              title: const Text('移到最前'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _reorder(idx, 0);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.arrow_upward),
-              title: const Text('上移'),
-              enabled: idx > 0,
-              onTap: () {
-                Navigator.pop(ctx);
-                if (idx > 0) _reorder(idx, idx - 1);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.arrow_downward),
-              title: const Text('下移'),
-              enabled: idx < _books.length - 1,
-              onTap: () {
-                Navigator.pop(ctx);
-                if (idx < _books.length - 1) _reorder(idx, idx + 2);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.vertical_align_bottom),
-              title: const Text('移到最后'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _reorder(idx, _books.length);
-              },
-            ),
-            const SizedBox(height: 8),
+            const Divider(height: 1, thickness: 0.5),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -501,7 +766,9 @@ class _ArrangeListTile extends StatelessWidget {
     required this.origin,
     required this.checked,
     required this.dragEnabled,
+    required this.openInfoByTitle,
     required this.onToggle,
+    required this.onTitleTap,
     required this.onDelete,
     required this.onGroup,
     this.onReorder,
@@ -511,7 +778,9 @@ class _ArrangeListTile extends StatelessWidget {
   final String origin;
   final bool checked;
   final bool dragEnabled;
+  final bool openInfoByTitle;
   final VoidCallback onToggle;
+  final VoidCallback onTitleTap;
   final VoidCallback onDelete;
   final VoidCallback onGroup;
   final Widget? onReorder;
@@ -528,7 +797,7 @@ class _ArrangeListTile extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Checkbox(value: checked, onChanged: (_) => onToggle()),
               Expanded(
@@ -538,14 +807,21 @@ class _ArrangeListTile extends StatelessWidget {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(
-                            book.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              color: scheme.onSurface,
+                          child: GestureDetector(
+                            onTap: openInfoByTitle
+                                ? () {
+                                    onTitleTap();
+                                  }
+                                : onToggle,
+                            child: Text(
+                              book.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                color: scheme.onSurface,
+                              ),
                             ),
                           ),
                         ),
@@ -569,7 +845,7 @@ class _ArrangeListTile extends StatelessWidget {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            book.group.isNotEmpty ? book.group : '无分组',
+                            book.group.isNotEmpty ? book.group : '未分组',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontSize: 12, color: muted),
@@ -582,136 +858,27 @@ class _ArrangeListTile extends StatelessWidget {
               ),
               TextButton(
                 onPressed: onGroup,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 child: Text('分组', style: TextStyle(color: muted, fontSize: 13)),
               ),
               TextButton(
                 onPressed: onDelete,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 child: Text('删除', style: TextStyle(color: muted, fontSize: 13)),
               ),
               if (dragEnabled && onReorder != null)
                 Padding(
-                  padding: const EdgeInsets.only(left: 4, top: 8),
+                  padding: const EdgeInsets.only(left: 4),
                   child: onReorder,
                 ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ArrangeGridTile extends StatelessWidget {
-  const _ArrangeGridTile({
-    super.key,
-    required this.book,
-    required this.checked,
-    required this.onToggle,
-    this.onLongPress,
-  });
-
-  final Book book;
-  final bool checked;
-  final VoidCallback onToggle;
-  final VoidCallback? onLongPress;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onToggle,
-      onLongPress: onLongPress,
-      borderRadius: BorderRadius.circular(8),
-      child: Stack(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: BookCover(
-                  coverUrl: book.coverUrl,
-                  author: book.author,
-                  width: double.infinity,
-                  radius: LegadoTokens.radiusCover,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                book.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-          Positioned(
-            left: 2,
-            top: 2,
-            child: Material(
-              color: Colors.black26,
-              borderRadius: BorderRadius.circular(4),
-              child: Checkbox(
-                value: checked,
-                onChanged: (_) => onToggle(),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 底栏 — 对齐 legado [SelectActionBar]
-class _ArrangeActionBar extends StatelessWidget {
-  const _ArrangeActionBar({
-    required this.selectedCount,
-    required this.totalCount,
-    required this.onMoveToGroup,
-    required this.onDelete,
-  });
-
-  final int selectedCount;
-  final int totalCount;
-  final VoidCallback onMoveToGroup;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final enabled = selectedCount > 0;
-
-    return Material(
-      elevation: 8,
-      color: theme.colorScheme.surfaceContainerHigh,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-          child: Row(
-            children: [
-              Text(
-                '$selectedCount / $totalCount',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const Spacer(),
-              FilledButton.tonal(
-                onPressed: enabled ? onMoveToGroup : null,
-                child: const Text('移动到分组'),
-              ),
-              PopupMenuButton<String>(
-                enabled: enabled,
-                onSelected: (a) {
-                  if (a == 'delete') onDelete();
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'delete', child: Text('删除')),
-                ],
-              ),
             ],
           ),
         ),

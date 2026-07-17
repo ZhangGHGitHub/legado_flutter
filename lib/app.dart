@@ -8,6 +8,7 @@ import 'pages/search/search_page.dart';
 import 'pages/sources/sources_page.dart';
 import 'pages/welcome/welcome_page.dart';
 import 'theme/app_theme.dart';
+import 'theme/legado_chrome.dart';
 
 /// App 根组件 — MD3 主题 + Dynamic Color + 路由
 class LegadoApp extends StatelessWidget {
@@ -35,6 +36,11 @@ class LegadoApp extends StatelessWidget {
             dynamicDark: darkDynamic,
           ),
           themeMode: themeCtrl.materialThemeMode,
+          // 按 MediaQuery 断点覆盖顶/底栏高度（DPI 自动缩放，非屏高百分比）
+          builder: (context, child) {
+            final themed = LegadoChrome.applyTo(context, Theme.of(context));
+            return Theme(data: themed, child: child ?? const SizedBox.shrink());
+          },
           home: const _StartupHome(),
           routes: {
             '/search': (context) => const SearchPage(),
