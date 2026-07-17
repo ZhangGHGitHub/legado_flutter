@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use std::sync::Mutex;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i32 = 11;
+const SCHEMA_VERSION: i32 = 12;
 
 static DB: OnceCell<Mutex<EngineDb>> = OnceCell::new();
 
@@ -46,6 +46,8 @@ impl EngineDb {
                progress REAL DEFAULT 0.0,
                currentChapter TEXT,
                lastChapter TEXT DEFAULT '',
+               totalChapterNum INTEGER DEFAULT 0,
+               durChapterIndex INTEGER DEFAULT 0,
                currentPageIndex INTEGER DEFAULT 0,
                isFavorite INTEGER DEFAULT 0,
                sourceUrl TEXT DEFAULT '',
@@ -165,6 +167,17 @@ impl EngineDb {
                 [],
             );
         }
+        if current < 12 {
+            // 书架未读角标：总章数 / 当前章索引（旧库 ALTER；新库 CREATE 已含）
+            let _ = conn.execute(
+                "ALTER TABLE books ADD COLUMN totalChapterNum INTEGER DEFAULT 0",
+                [],
+            );
+            let _ = conn.execute(
+                "ALTER TABLE books ADD COLUMN durChapterIndex INTEGER DEFAULT 0",
+                [],
+            );
+        }
         if current < SCHEMA_VERSION {
             conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
         }
@@ -181,14 +194,15 @@ impl EngineDb {
         let id = str_field(&v, "id")?;
         self.conn.execute(
             "INSERT INTO books (id, name, author, coverUrl, type, progress, currentChapter,
-              lastChapter, currentPageIndex, isFavorite, sourceUrl, description, bookSourceUrl,
-              bookGroup, readIteration, simReadEnabled, simReadStartDate, simReadStartChapter,
-              simReadDailyChapters)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)
+              lastChapter, totalChapterNum, durChapterIndex, currentPageIndex, isFavorite,
+              sourceUrl, description, bookSourceUrl, bookGroup, readIteration, simReadEnabled,
+              simReadStartDate, simReadStartChapter, simReadDailyChapters)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)
              ON CONFLICT(id) DO UPDATE SET
                name=excluded.name, author=excluded.author, coverUrl=excluded.coverUrl,
                type=excluded.type, progress=excluded.progress, currentChapter=excluded.currentChapter,
-               lastChapter=excluded.lastChapter, currentPageIndex=excluded.currentPageIndex,
+               lastChapter=excluded.lastChapter, totalChapterNum=excluded.totalChapterNum,
+               durChapterIndex=excluded.durChapterIndex, currentPageIndex=excluded.currentPageIndex,
                isFavorite=excluded.isFavorite, sourceUrl=excluded.sourceUrl,
                description=excluded.description, bookSourceUrl=excluded.bookSourceUrl,
                bookGroup=excluded.bookGroup, readIteration=excluded.readIteration,
@@ -205,6 +219,8 @@ impl EngineDb {
                 f64_field(&v, "progress"),
                 opt_str_field(&v, "currentChapter"),
                 str_field(&v, "lastChapter").unwrap_or_default(),
+                i64_field(&v, "totalChapterNum").max(0),
+                i64_field(&v, "durChapterIndex").max(0),
                 i64_field(&v, "currentPageIndex"),
                 bool_field(&v, "isFavorite") as i64,
                 str_field(&v, "sourceUrl").unwrap_or_default(),
@@ -236,13 +252,13 @@ impl EngineDb {
     pub fn get_books_json(&self) -> Result<Vec<String>, DbError> {
         let mut stmt = self.conn.prepare(
             "SELECT id, name, author, coverUrl, type, progress, currentChapter, lastChapter,
-                    currentPageIndex, isFavorite, sourceUrl, description, bookSourceUrl, bookGroup,
-                    readIteration, simReadEnabled, simReadStartDate, simReadStartChapter,
-                    simReadDailyChapters
+                    totalChapterNum, durChapterIndex, currentPageIndex, isFavorite, sourceUrl,
+                    description, bookSourceUrl, bookGroup, readIteration, simReadEnabled,
+                    simReadStartDate, simReadStartChapter, simReadDailyChapters, updatedAt
              FROM books ORDER BY updatedAt DESC",
         )?;
         let rows = stmt.query_map([], |row| {
-            let daily_raw = row.get::<_, Option<i64>>(18)?.unwrap_or(3);
+            let daily_raw = row.get::<_, Option<i64>>(20)?.unwrap_or(3);
             let daily = if daily_raw < 1 {
                 3
             } else {
@@ -257,17 +273,20 @@ impl EngineDb {
                 "progress": row.get::<_, f64>(5)?,
                 "currentChapter": row.get::<_, Option<String>>(6)?,
                 "lastChapter": row.get::<_, String>(7)?,
-                "currentPageIndex": row.get::<_, i64>(8)?,
-                "isFavorite": row.get::<_, i64>(9)? == 1,
-                "sourceUrl": row.get::<_, String>(10)?,
-                "description": row.get::<_, String>(11)?,
-                "bookSourceUrl": row.get::<_, String>(12)?,
-                "group": row.get::<_, String>(13)?,
-                "readIteration": row.get::<_, Option<i64>>(14)?.unwrap_or(0),
-                "simReadEnabled": row.get::<_, Option<i64>>(15)?.unwrap_or(0) == 1,
-                "simReadStartDate": row.get::<_, Option<String>>(16)?.unwrap_or_default(),
-                "simReadStartChapter": row.get::<_, Option<i64>>(17)?.unwrap_or(0).max(0),
+                "totalChapterNum": row.get::<_, Option<i64>>(8)?.unwrap_or(0).max(0),
+                "durChapterIndex": row.get::<_, Option<i64>>(9)?.unwrap_or(0).max(0),
+                "currentPageIndex": row.get::<_, i64>(10)?,
+                "isFavorite": row.get::<_, i64>(11)? == 1,
+                "sourceUrl": row.get::<_, String>(12)?,
+                "description": row.get::<_, String>(13)?,
+                "bookSourceUrl": row.get::<_, String>(14)?,
+                "group": row.get::<_, String>(15)?,
+                "readIteration": row.get::<_, Option<i64>>(16)?.unwrap_or(0),
+                "simReadEnabled": row.get::<_, Option<i64>>(17)?.unwrap_or(0) == 1,
+                "simReadStartDate": row.get::<_, Option<String>>(18)?.unwrap_or_default(),
+                "simReadStartChapter": row.get::<_, Option<i64>>(19)?.unwrap_or(0).max(0),
                 "simReadDailyChapters": daily,
+                "updatedAt": row.get::<_, Option<String>>(21)?.unwrap_or_default(),
             }))
         })?;
         rows.map(|r| {
@@ -283,12 +302,21 @@ impl EngineDb {
         progress: f64,
         chapter: Option<&str>,
         page_index: i64,
+        dur_chapter_index: Option<i64>,
     ) -> Result<(), DbError> {
-        self.conn.execute(
-            "UPDATE books SET progress=?1, currentChapter=?2, currentPageIndex=?3,
-             updatedAt=datetime('now') WHERE id=?4",
-            params![progress, chapter, page_index, book_id],
-        )?;
+        if let Some(dur) = dur_chapter_index {
+            self.conn.execute(
+                "UPDATE books SET progress=?1, currentChapter=?2, currentPageIndex=?3,
+                 durChapterIndex=?4, updatedAt=datetime('now') WHERE id=?5",
+                params![progress, chapter, page_index, dur.max(0), book_id],
+            )?;
+        } else {
+            self.conn.execute(
+                "UPDATE books SET progress=?1, currentChapter=?2, currentPageIndex=?3,
+                 updatedAt=datetime('now') WHERE id=?4",
+                params![progress, chapter, page_index, book_id],
+            )?;
+        }
         Ok(())
     }
 
@@ -1043,7 +1071,13 @@ pub fn db_update_book_progress(
     page_index: i32,
 ) -> Result<(), String> {
     with_db(|db| {
-        db.update_book_progress(&book_id, progress, chapter.as_deref(), page_index as i64)
+        db.update_book_progress(
+            &book_id,
+            progress,
+            chapter.as_deref(),
+            page_index as i64,
+            None,
+        )
     })
 }
 
@@ -1278,6 +1312,30 @@ mod tests {
         assert_eq!(
             book2.get("simReadDailyChapters").and_then(|x| x.as_i64()),
             Some(5)
+        );
+    }
+
+    #[test]
+    fn book_total_and_dur_chapter_roundtrip() {
+        let db = EngineDb::open_in_memory().unwrap();
+        db.insert_book_json(
+            r#"{"id":"b2","name":"角标","totalChapterNum":120,"durChapterIndex":49,
+                "currentChapter":"第50章","lastChapter":"第120章"}"#,
+        )
+        .unwrap();
+        let books = db.get_books_json().unwrap();
+        let book: Value = serde_json::from_str(&books[0]).unwrap();
+        assert_eq!(book.get("totalChapterNum").and_then(|x| x.as_i64()), Some(120));
+        assert_eq!(book.get("durChapterIndex").and_then(|x| x.as_i64()), Some(49));
+
+        db.update_book_progress("b2", 0.5, Some("第60章"), 0, Some(59))
+            .unwrap();
+        let books2 = db.get_books_json().unwrap();
+        let book2: Value = serde_json::from_str(&books2[0]).unwrap();
+        assert_eq!(book2.get("durChapterIndex").and_then(|x| x.as_i64()), Some(59));
+        assert_eq!(
+            book2.get("currentChapter").and_then(|x| x.as_str()),
+            Some("第60章")
         );
     }
 

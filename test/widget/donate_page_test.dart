@@ -16,6 +16,6 @@ void main() {
     expect(find.text('QQ'), findsOneWidget);
     expect(find.text('微信赞赏码'), findsOneWidget);
     expect(find.text('支付宝收款二维码'), findsOneWidget);
-    expect(find.text('QQ收款二维码'), findsOneWidget);
+    expect(find.text('QQ 收款二维码'), findsOneWidget);
   });
 }

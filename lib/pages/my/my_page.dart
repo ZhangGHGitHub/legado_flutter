@@ -8,10 +8,7 @@ import '../../bridge/legado_engine_bridge.dart';
 import '../../services/backup_service.dart';
 import '../../services/web_api_prefs.dart';
 import '../../services/web_api_service.dart';
-import '../../services/webdav_prefs.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/legado_tokens.dart';
-import '../../widgets/legado_card.dart';
 import '../../widgets/legado_list_tile.dart';
 import '../../widgets/quick_action_button.dart';
 import '../ai/ai_config_dialog.dart';
@@ -28,6 +25,7 @@ import '../txt_toc/txt_toc_rule_page.dart';
 import 'file_manage_page.dart';
 import 'read_record_page.dart';
 import 'reading_skill_page.dart';
+import 'webdav_config_dialog.dart';
 
 /// 我的 Tab — 对齐 Jingshiro [MyFragment](https://github.com/Jingshiro/legado/blob/main/app/src/main/java/io/legado/app/ui/main/my/MyFragment.kt)
 class MyPage extends StatefulWidget {
@@ -156,85 +154,12 @@ class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
   }
 
   Future<void> _showWebDavDialog() async {
-    final config = await WebDavPrefs.load();
-    final urlCtl = TextEditingController(text: config.url);
-    final accountCtl = TextEditingController(text: config.account);
-    final passwordCtl = TextEditingController(text: config.password);
-    final dirCtl = TextEditingController(text: config.dir);
-    final deviceCtl = TextEditingController(text: config.device);
-
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('WebDAV 配置'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: urlCtl,
-                decoration: const InputDecoration(
-                  labelText: '服务器 URL',
-                  hintText: 'https://dav.example.com',
-                ),
-              ),
-              TextField(
-                controller: accountCtl,
-                decoration: const InputDecoration(labelText: '账号'),
-              ),
-              TextField(
-                controller: passwordCtl,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '密码'),
-              ),
-              TextField(
-                controller: dirCtl,
-                decoration: const InputDecoration(labelText: '目录'),
-              ),
-              TextField(
-                controller: deviceCtl,
-                decoration: const InputDecoration(labelText: '设备名'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              await WebDavPrefs.save(
-                WebDavConfig(
-                  url: urlCtl.text.trim(),
-                  account: accountCtl.text.trim(),
-                  password: passwordCtl.text,
-                  dir: dirCtl.text.trim().isEmpty ? '/legado' : dirCtl.text.trim(),
-                  device: deviceCtl.text.trim().isEmpty
-                      ? 'Legado Flutter'
-                      : deviceCtl.text.trim(),
-                ),
-              );
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('WebDAV 配置已保存')),
-                );
-              }
-            },
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-
-    urlCtl.dispose();
-    accountCtl.dispose();
-    passwordCtl.dispose();
-    dirCtl.dispose();
-    deviceCtl.dispose();
+    final saved = await WebDavConfigDialog.show(context);
+    if (saved != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('WebDAV 配置已保存')),
+      );
+    }
   }
 
   void _snack(String msg) {
@@ -309,78 +234,95 @@ class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
       body: ListView(
-        padding: const EdgeInsets.symmetric(
-          horizontal: LegadoTokens.spacingSm,
-          vertical: LegadoTokens.spacingSm,
-        ),
+        padding: const EdgeInsets.only(bottom: 16),
         children: [
-          LegadoCard(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            child: Column(
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Icon(
+          // 顶部品牌卡 — fragment_my_config：logo 64 / 标题 22sp bold / 副标 14sp
+          Card(
+            margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            elevation: 0,
+            color: theme.colorScheme.surfaceContainerLow,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Icon(
                     Icons.auto_stories,
-                    size: 36,
+                    size: 64,
                     color: theme.colorScheme.primary,
                   ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Legado Flutter',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '对齐 Jingshiro Legado',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.onSurfaceVariant,
+                  const SizedBox(height: 12),
+                  Text(
+                    'legado',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      height: 1.2,
+                      color: theme.colorScheme.onSurface,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    '开源阅读',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.2,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          LegadoCard(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                QuickActionButton(
-                  icon: Icons.backup_outlined,
-                  label: '备份恢复',
-                  onTap: () => _openConfig(0),
-                  // 对齐 MyFragment：短按云端备份页，长按一键本地备份
-                  onLongPress: _localBackupBusy ? null : _localBackup,
-                ),
-                QuickActionButton(
-                  icon: Icons.cloud_outlined,
-                  label: 'WebDAV',
-                  onTap: _showWebDavDialog,
-                ),
-                QuickActionButton(
-                  icon: Icons.wifi,
-                  label: webLabel,
-                  onTap: _toggleWebService,
-                  // 对齐 MyFragment：运行中长按 → 复制地址 / 浏览器打开
-                  onLongPress: _webServiceLongPress,
-                ),
-                QuickActionButton(
-                  icon: Icons.history,
-                  label: '阅读记录',
-                  onTap: () => _openPage(const ReadRecordPage()),
-                ),
-              ],
+          // 快捷四格 — padding 12 / 标签 12sp
+          Card(
+            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            elevation: 0,
+            color: theme.colorScheme.surfaceContainerLow,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  QuickActionButton(
+                    icon: Icons.backup_outlined,
+                    label: '备份管理',
+                    onTap: () => _openConfig(0),
+                    onLongPress: _localBackupBusy ? null : _localBackup,
+                  ),
+                  QuickActionButton(
+                    icon: Icons.cloud_outlined,
+                    label: 'WebDAV',
+                    onTap: _showWebDavDialog,
+                  ),
+                  QuickActionButton(
+                    icon: Icons.wifi,
+                    label: webLabel,
+                    onTap: _toggleWebService,
+                    onLongPress: _webServiceLongPress,
+                  ),
+                  QuickActionButton(
+                    icon: Icons.history,
+                    label: '阅读记录',
+                    onTap: () => _openPage(const ReadRecordPage()),
+                  ),
+                ],
+              ),
             ),
           ),
-          LegadoCard(
-            padding: EdgeInsets.zero,
+          // 设置列表 — 行高 56 / 标题 16sp / 副标 12sp
+          Card(
+            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            elevation: 0,
+            color: theme.colorScheme.surfaceContainerLow,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
                 LegadoListTile(
@@ -389,91 +331,78 @@ class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
                   subtitle: '新建、导入、编辑或管理书源',
                   onTap: () => _openPage(const SourcesPage()),
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.article_outlined,
                   title: 'TXT 目录规则',
                   subtitle: '配置 TXT 目录规则',
                   onTap: () => _openPage(const TxtTocRulePage()),
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.download_for_offline_outlined,
                   title: '离线缓存',
                   subtitle: '按书管理缓存并下载章节',
                   onTap: () => _openPage(const CacheBookPage()),
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.cleaning_services_outlined,
                   title: '替换净化',
                   subtitle: '配置替换净化规则',
                   onTap: () => _openPage(const ReplacePage()),
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.menu_book_outlined,
                   title: '字典规则',
                   subtitle: '配置字典规则',
                   onTap: () => _openPage(const DictRulePage()),
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.palette_outlined,
                   title: '主题模式',
                   subtitle: themeLabel,
                   onTap: _showThemeModeDialog,
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.backup_outlined,
                   title: '备份与恢复',
                   subtitle: '备份书源、书架、设置',
                   onTap: () => _openConfig(0),
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.color_lens_outlined,
                   title: '主题设置',
                   subtitle: '配色：$presetLabel',
                   onTap: () => _openConfig(1),
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.tune,
                   title: '其它设置',
                   subtitle: '更多偏好与行为',
                   onTap: () => _openConfig(2),
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.bookmark_outline,
                   title: '书签与想法',
                   subtitle: '阅读批注与书签',
                   onTap: () => _openPage(const BookmarkPage()),
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.folder_open,
                   title: '文件管理',
                   subtitle: '管理私有文件夹中的文件',
                   onTap: () => _openPage(const FileManagePage()),
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.terminal,
                   title: '阅读 Skill',
                   subtitle: '安装社区技能扩展',
                   onTap: () => _openPage(const ReadingSkillPage()),
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.smart_toy_outlined,
                   title: 'AI 助手',
                   subtitle: '大模型智能辅助',
                   onTap: () => _openPage(const AiChatPage(isStandalone: true)),
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.tune_outlined,
                   title: 'AI 配置',
@@ -482,32 +411,26 @@ class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
                     await AiConfigDialog.show(context);
                   },
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.outbox_outlined,
                   title: '导出到 Obsidian',
                   subtitle: 'REST API 或本地仓库',
                   onTap: () => ObsidianExportDialog.show(context),
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.volunteer_activism_outlined,
                   title: '捐赠',
                   subtitle: '您的支持是我更新的动力',
                   onTap: () => _openPage(const DonatePage()),
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.info_outline,
                   title: '关于',
-                  subtitle: '版本与引擎信息',
                   onTap: _showAbout,
                 ),
-                const LegadoListDivider(),
                 LegadoListTile(
                   icon: Icons.logout,
                   title: '退出',
-                  subtitle: '关闭应用',
                   onTap: () => SystemNavigator.pop(),
                 ),
               ],

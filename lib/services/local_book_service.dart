@@ -43,13 +43,21 @@ class LocalBookService {
 
     await _assertWithinSizeLimit(filePath, pickerSize: file.size);
 
+    return importFromPath(filePath, displayName: file.name);
+  }
+
+  /// 从已有本地路径导入（远程书籍下载后复用）
+  Future<Book> importFromPath(String filePath, {String? displayName}) async {
+    await _assertWithinSizeLimit(filePath);
+    final name = displayName ?? p.basename(filePath);
     final ext = p.extension(filePath).toLowerCase();
     if (ext == '.txt') {
-      return await _importTxt(filePath, file.name);
-    } else if (ext == '.epub') {
-      return await _importEpub(filePath, file.name);
+      return await _importTxt(filePath, name);
     }
-    return null;
+    if (ext == '.epub') {
+      return await _importEpub(filePath, name);
+    }
+    throw LocalBookImportException('仅支持 txt / epub 文件');
   }
 
   Future<void> _assertWithinSizeLimit(

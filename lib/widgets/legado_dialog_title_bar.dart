@@ -38,8 +38,8 @@ class LegadoDialogTitleBar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: onBar,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w500,
+                    fontSize: LegadoChrome.appBarTitleFontOf(context),
+                    fontWeight: FontWeight.w400,
                     height: 1.25,
                   ),
                 ),

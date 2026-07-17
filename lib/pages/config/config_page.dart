@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../config/app_config.dart';
 import '../../services/bookshelf_prefs.dart';
 import '../../theme/legado_tokens.dart';
+import '../bookshelf/bookshelf_config_dialog.dart';
 import 'backup_config_page.dart';
 import 'other_settings_card.dart';
 import 'theme_config_page.dart';
@@ -72,16 +73,22 @@ class _ConfigPageState extends State<ConfigPage>
               const WebApiSettingsCard(),
               const SizedBox(height: 12),
               Card(
-                child: SwitchListTile(
-                  title: const Text('书架网格布局'),
+                child: ListTile(
+                  title: const Text('书架分组样式'),
                   subtitle: Text(
-                    _bookGroupStyle == 1 ? 'style2 封面墙' : 'style1 列表',
+                    _bookGroupStyle == 1 ? 'Folder（侧栏）' : 'Tab（顶栏）',
                   ),
-                  value: _bookGroupStyle == 1,
-                  onChanged: (v) async {
-                    final style = v ? 1 : 0;
-                    await BookshelfPrefs.saveGroupStyle(style);
-                    if (mounted) setState(() => _bookGroupStyle = style);
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () async {
+                    final cur = await BookshelfPrefs.load();
+                    if (!context.mounted) return;
+                    final next = await BookshelfConfigDialog.show(
+                      context,
+                      initial: cur,
+                    );
+                    if (next != null && mounted) {
+                      setState(() => _bookGroupStyle = next.bookGroupStyle);
+                    }
                   },
                 ),
               ),

@@ -1371,6 +1371,7 @@ class _ReaderPageState extends State<ReaderPage> {
       progress,
       currentChapter,
       pageIndex: pageIdx,
+      durChapterIndex: _currentIndex,
     );
   }
 

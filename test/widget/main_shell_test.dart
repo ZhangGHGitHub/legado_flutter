@@ -14,6 +14,7 @@ import 'package:legado_flutter/providers/replace_provider.dart';
 import 'package:legado_flutter/providers/rss_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
 import 'package:legado_flutter/theme/app_theme.dart';
+import 'package:legado_flutter/widgets/legado_bottom_nav.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -67,7 +68,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 2));
 
-    final bar = find.byType(NavigationBar);
+    final bar = find.byType(LegadoBottomNav);
     expect(bar, findsOneWidget);
     for (final label in ['书架', '发现', '订阅', '我的']) {
       expect(
@@ -102,7 +103,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 2));
 
-    final bar = find.byType(NavigationBar);
+    final bar = find.byType(LegadoBottomNav);
     expect(find.descendant(of: bar, matching: find.text('书架')), findsOneWidget);
     expect(find.descendant(of: bar, matching: find.text('我的')), findsOneWidget);
     expect(find.descendant(of: bar, matching: find.text('发现')), findsNothing);

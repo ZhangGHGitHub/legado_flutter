@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import '../models/book.dart';
@@ -118,6 +119,13 @@ class BookProvider extends ChangeNotifier {
     }).toList();
     await _dao.insertChapters(list);
     _currentChapters = list;
+    final onShelf = findBookById(book.id);
+    if (onShelf != null && onShelf.totalChapterNum != list.length) {
+      final next = onShelf.copyWith(totalChapterNum: list.length);
+      await _dao.insert(next);
+      final i = _books.indexWhere((b) => b.id == book.id);
+      if (i >= 0) _books[i] = next;
+    }
     await _refreshShelfChapterMetaFor(book.id);
     notifyListeners();
   }
@@ -156,6 +164,395 @@ class BookProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// 从本地路径导入（WebDAV 远程书籍下载后）
+  Future<Book?> importLocalBookFromPath(
+    String path, {
+    String? displayName,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final book = await _localService.importFromPath(
+        path,
+        displayName: displayName,
+      );
+      _books = await _dao.getAll();
+      await _refreshShelfChapterMetaFor(book.id);
+      notifyListeners();
+      return book;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// 导入书单条目（仅 name/author/intro）— 对齐 Jingshiro：
+  /// 已有同名同作者则跳过，否则对各启用书源做精准搜索后入库。
+  Future<({int added, int skipped, int failed})> importBookshelfEntries(
+    List<({String name, String author, String intro})> entries, {
+    required List<BookSource> sources,
+    void Function(int index, int total, String status)? onProgress,
+  }) async {
+    var added = 0;
+    var skipped = 0;
+    var failed = 0;
+    final enabled = sources.where((s) => s.enabled).toList(growable: false);
+    for (var i = 0; i < entries.length; i++) {
+      final e = entries[i];
+      final name = e.name.trim();
+      final author = e.author.trim();
+      if (name.isEmpty) {
+        failed++;
+        continue;
+      }
+      onProgress?.call(i + 1, entries.length, '搜索 $name');
+      if (_hasNameAuthor(name, author)) {
+        skipped++;
+        continue;
+      }
+      try {
+        final hit = await _preciseSearchBook(
+          name: name,
+          author: author,
+          sources: enabled,
+        );
+        if (hit == null) {
+          failed++;
+          continue;
+        }
+        final book = hit.copyWith(
+          description: hit.description.isNotEmpty
+              ? hit.description
+              : e.intro.trim(),
+          isFavorite: true,
+        );
+        await _dao.insert(book);
+        added++;
+      } catch (err) {
+        debugPrint('导入书单失败 $name/$author: $err');
+        failed++;
+      }
+    }
+    if (added > 0) {
+      _books = await _dao.getAll();
+      await _refreshShelfChapterMeta();
+      notifyListeners();
+    }
+    return (added: added, skipped: skipped, failed: failed);
+  }
+
+  /// 兼容旧调用：直接插入完整 Book（非 Jingshiro 书单路径）
+  Future<int> importBooksFromList(List<Book> incoming) async {
+    var added = 0;
+    for (final raw in incoming) {
+      final exists = _books.any(
+        (b) =>
+            b.sourceUrl == raw.sourceUrl &&
+            b.bookSourceUrl == raw.bookSourceUrl &&
+            raw.sourceUrl.isNotEmpty,
+      );
+      if (exists) continue;
+      final idTaken = _books.any((b) => b.id == raw.id);
+      final book = idTaken
+          ? raw.copyWith(
+              id:
+                  '${raw.bookSourceUrl}_${raw.sourceUrl.hashCode}_${DateTime.now().microsecondsSinceEpoch}',
+            )
+          : raw;
+      await _dao.insert(book);
+      added++;
+    }
+    if (added > 0) {
+      _books = await _dao.getAll();
+      await _refreshShelfChapterMeta();
+      notifyListeners();
+    }
+    return added;
+  }
+
+  /// 添加网址 — 对齐 Jingshiro [BookshelfViewModel.addBookByUrl] /
+  /// [AddToBookshelfDialog]：匹配书源 → getBookInfo → **直接入库**。
+  ///
+  /// 匹配顺序：
+  /// 1. UrlOption 中的 origin
+  /// 2. 启用书源中按域名/baseUrl 匹配（getBookSourceAddBook）
+  /// 3. 启用书源中 bookUrlPattern 全匹配
+  ///
+  /// 无匹配书源则跳过该 URL（不回退到「试遍全部书源」）。
+  Future<({int success, int fail})> addBooksByUrls(
+    String rawText, {
+    required List<BookSource> sources,
+    void Function(int index, int total, String url)? onProgress,
+  }) async {
+    final urls = rawText
+        .split(RegExp(r'[\r\n]+'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+    var success = 0;
+    var fail = 0;
+    for (var i = 0; i < urls.length; i++) {
+      final line = urls[i];
+      onProgress?.call(i + 1, urls.length, line);
+      try {
+        final ok = await _addOneBookByUrl(line, sources: sources);
+        if (ok) {
+          success++;
+        } else {
+          fail++;
+        }
+      } catch (e) {
+        debugPrint('添加网址失败 $line: $e');
+        fail++;
+      }
+    }
+    if (success > 0) {
+      _books = await _dao.getAll();
+      await _refreshShelfChapterMeta();
+      notifyListeners();
+    }
+    return (success: success, fail: fail);
+  }
+
+  /// 解析单条网址为 Book（不入库）；供需要预览的场景复用。
+  Future<Book> resolveBookFromUrl(
+    String bookUrl, {
+    required List<BookSource> sources,
+  }) async {
+    final resolved = await _resolveBookFromUrl(bookUrl, sources: sources);
+    if (resolved == null) {
+      throw Exception('未找到匹配书源');
+    }
+    return resolved;
+  }
+
+  Future<bool> _addOneBookByUrl(
+    String bookUrl, {
+    required List<BookSource> sources,
+  }) async {
+    final pureUrl = _stripUrlOption(bookUrl.trim());
+    if (pureUrl.isEmpty) return false;
+
+    // 已按详情页 URL 在书架
+    if (_books.any((b) => b.sourceUrl == pureUrl)) return true;
+
+    final book = await _resolveBookFromUrl(bookUrl, sources: sources);
+    if (book == null) return false;
+
+    final same = _findByNameAuthor(book.name, book.author);
+    if (same != null) {
+      // 同名同作者：迁移书源信息（对齐 upToc / migrate）
+      final migrated = same.copyWith(
+        sourceUrl: book.sourceUrl.isNotEmpty ? book.sourceUrl : same.sourceUrl,
+        bookSourceUrl: book.bookSourceUrl.isNotEmpty
+            ? book.bookSourceUrl
+            : same.bookSourceUrl,
+        coverUrl: book.coverUrl.isNotEmpty ? book.coverUrl : same.coverUrl,
+        description:
+            book.description.isNotEmpty ? book.description : same.description,
+        lastChapter: book.lastChapter ?? same.lastChapter,
+        type: 'online',
+      );
+      await _dao.insert(migrated);
+      return true;
+    }
+
+    await _dao.insert(book.copyWith(isFavorite: true));
+    return true;
+  }
+
+  Future<Book?> _resolveBookFromUrl(
+    String bookUrl, {
+    required List<BookSource> sources,
+  }) async {
+    final enabled = sources.where((s) => s.enabled).toList(growable: false);
+    final pureUrl = _stripUrlOption(bookUrl.trim());
+    if (pureUrl.isEmpty) return null;
+
+    final candidates = <BookSource>[];
+    final seen = <String>{};
+
+    void addCandidate(BookSource? s) {
+      if (s == null) return;
+      if (!seen.add(s.bookSourceUrl)) return;
+      candidates.add(s);
+    }
+
+    // 1) UrlOption.origin
+    final originOpt = _parseUrlOptionOrigin(bookUrl);
+    if (originOpt != null && originOpt.isNotEmpty) {
+      BookSource? byOrigin;
+      for (final s in enabled) {
+        if (s.bookSourceUrl == originOpt) {
+          byOrigin = s;
+          break;
+        }
+      }
+      addCandidate(byOrigin);
+    }
+
+    // 2) getBookSourceAddBook(baseUrl / host)
+    addCandidate(_getBookSourceAddBook(pureUrl, enabled));
+
+    // 3) bookUrlPattern 全匹配（仅有正则的源）
+    for (final s in enabled) {
+      if (_bookUrlPatternMatches(s, pureUrl)) addCandidate(s);
+    }
+
+    if (candidates.isEmpty) return null;
+
+    Object? lastError;
+    for (final source in candidates) {
+      try {
+        final info = await _sourceService.getBookInfo(source, pureUrl);
+        final name = (info['name'] ?? info['bookName'] ?? '').trim();
+        if (name.isEmpty) {
+          lastError = Exception('书源「${source.bookSourceName}」未解析到书名');
+          continue;
+        }
+        final cover = _usableCoverUrl(info['coverUrl']) ?? '';
+        final intro = (info['intro'] ?? info['description'] ?? '').trim();
+        final last = (info['lastChapter'] ?? '').trim();
+        final tocUrl = (info['tocUrl'] ?? '').trim();
+        final sourceUrl = tocUrl.isNotEmpty ? tocUrl : pureUrl;
+        return Book(
+          id: '${source.bookSourceUrl}_${pureUrl.hashCode}',
+          name: name,
+          author: (info['author'] ?? '').trim().isEmpty
+              ? '未知作者'
+              : info['author']!.trim(),
+          coverUrl: cover,
+          type: 'online',
+          sourceUrl: sourceUrl,
+          description: intro,
+          lastChapter: last.isEmpty ? null : last,
+          bookSourceUrl: source.bookSourceUrl,
+          isFavorite: true,
+        );
+      } catch (e) {
+        lastError = e;
+        debugPrint('添加网址尝试 ${source.bookSourceName}: $e');
+      }
+    }
+    if (lastError != null) {
+      debugPrint('添加网址全部失败: $lastError');
+    }
+    return null;
+  }
+
+  Future<Book?> _preciseSearchBook({
+    required String name,
+    required String author,
+    required List<BookSource> sources,
+  }) async {
+    final nameLower = name.toLowerCase();
+    final authorLower = author.toLowerCase();
+    for (final source in sources) {
+      try {
+        final results = await _sourceService
+            .search(source, name)
+            .timeout(const Duration(seconds: 20), onTimeout: () => []);
+        if (results.isEmpty) continue;
+        final books = _sourceService.resultsToBooks(
+          results,
+          source.bookSourceUrl,
+        );
+        for (final b in books) {
+          final nOk = b.name.trim().toLowerCase() == nameLower;
+          final aOk = authorLower.isEmpty ||
+              b.author.trim().toLowerCase() == authorLower;
+          if (nOk && aOk) {
+            return b.copyWith(
+              author: b.author.trim().isEmpty ? '未知作者' : b.author.trim(),
+              isFavorite: true,
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('精准搜索 ${source.bookSourceName}: $e');
+      }
+    }
+    return null;
+  }
+
+  bool _hasNameAuthor(String name, String author) =>
+      _findByNameAuthor(name, author) != null;
+
+  Book? _findByNameAuthor(String name, String author) {
+    final n = name.trim();
+    final a = author.trim();
+    for (final b in _books) {
+      if (b.name.trim() != n) continue;
+      if (a.isEmpty || b.author.trim() == a) return b;
+    }
+    return null;
+  }
+
+  /// 对齐 getBookSourceAddBook：按详情页 host 与书源 URL host 匹配
+  static BookSource? _getBookSourceAddBook(
+    String bookUrl,
+    List<BookSource> enabled,
+  ) {
+    final host = Uri.tryParse(bookUrl)?.host.toLowerCase() ?? '';
+    if (host.isEmpty) return null;
+    for (final s in enabled) {
+      final origin = Uri.tryParse(s.bookSourceUrl)?.host.toLowerCase() ?? '';
+      if (origin.isEmpty) continue;
+      if (host == origin ||
+          host.endsWith('.$origin') ||
+          origin.endsWith('.$host') ||
+          host.contains(origin) ||
+          origin.contains(host)) {
+        return s;
+      }
+    }
+    return null;
+  }
+
+  static bool _bookUrlPatternMatches(BookSource source, String bookUrl) {
+    final pattern = _bookUrlPatternOf(source);
+    if (pattern.isEmpty) return false;
+    try {
+      final m = RegExp(pattern).firstMatch(bookUrl);
+      return m != null && m.start == 0 && m.end == bookUrl.length;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static String _bookUrlPatternOf(BookSource source) {
+    final direct = source.ruleBookUrlPattern.trim();
+    if (direct.isNotEmpty) return direct;
+    final raw = source.rawSourceJson;
+    if (raw.isEmpty) return '';
+    try {
+      final obj = raw.startsWith('{')
+          ? (jsonDecode(raw) as Map<String, dynamic>?)
+          : null;
+      final p = obj?['bookUrlPattern'];
+      if (p is String) return p.trim();
+    } catch (_) {}
+    return '';
+  }
+
+  /// `https://site/book,{"origin":"https://source"}`
+  static String? _parseUrlOptionOrigin(String bookUrl) {
+    final i = bookUrl.indexOf(',{');
+    if (i < 0) return null;
+    try {
+      final obj = jsonDecode(bookUrl.substring(i + 1));
+      if (obj is Map && obj['origin'] != null) {
+        return obj['origin'].toString();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static String _stripUrlOption(String bookUrl) {
+    final i = bookUrl.indexOf(',{');
+    return i < 0 ? bookUrl : bookUrl.substring(0, i).trim();
   }
 
   /// 书架下拉刷新 — 对齐 legado `MainViewModel.upToc` + `BooksFragment` listener：
@@ -248,7 +645,26 @@ class BookProvider extends ChangeNotifier {
       durIdx = chapters.indexWhere((c) => c.title == cur);
       if (durIdx < 0) durIdx = null;
     }
-    _shelfChapterMeta[bookId] = (count: chapters.length, durIndex: durIdx);
+    final total = chapters.length;
+    final metaDur = durIdx ?? book.durChapterIndex;
+    _shelfChapterMeta[bookId] = (count: total, durIndex: metaDur);
+
+    // 升级/TOC 后回填持久化字段，重启后仍可精确算未读
+    var next = book;
+    var dirty = false;
+    if (book.totalChapterNum != total) {
+      next = next.copyWith(totalChapterNum: total);
+      dirty = true;
+    }
+    if (durIdx != null && book.durChapterIndex != durIdx) {
+      next = next.copyWith(durChapterIndex: durIdx);
+      dirty = true;
+    }
+    if (dirty) {
+      await _dao.insert(next);
+      final i = _books.indexWhere((b) => b.id == bookId);
+      if (i >= 0) _books[i] = next;
+    }
   }
 
   bool _hasUnreadChapters(Book book) {
@@ -288,6 +704,7 @@ class BookProvider extends ChangeNotifier {
         lastChapter: (lastFromInfo != null && lastFromInfo.isNotEmpty)
             ? lastFromInfo
             : lastFromToc,
+        totalChapterNum: merged.length,
         coverUrl: info['coverUrl']?.isNotEmpty == true
             ? info['coverUrl']!
             : book.coverUrl,
@@ -297,7 +714,10 @@ class BookProvider extends ChangeNotifier {
       );
     } catch (_) {
       if (merged.isNotEmpty) {
-        updated = book.copyWith(lastChapter: merged.last.title);
+        updated = book.copyWith(
+          lastChapter: merged.last.title,
+          totalChapterNum: merged.length,
+        );
       }
     }
     await _dao.insert(updated);
@@ -410,13 +830,32 @@ class BookProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 更新阅读进度
+  /// 更新阅读进度（[durChapterIndex] 有值时 upsert 整书以持久化章索引）
   Future<void> updateProgress(
     String bookId,
     double progress,
     String? chapter, {
     int pageIndex = 0,
+    int? durChapterIndex,
   }) async {
+    // 有章索引时走整书 upsert（FRB updateProgress 尚未带 durChapterIndex）
+    if (durChapterIndex != null) {
+      final existing = findBookById(bookId);
+      if (existing != null) {
+        await _dao.insert(
+          existing.copyWith(
+            progress: progress,
+            currentChapter: chapter,
+            currentPageIndex: pageIndex,
+            durChapterIndex: durChapterIndex,
+          ),
+        );
+        _books = await _dao.getAll();
+        await _refreshShelfChapterMetaFor(bookId);
+        notifyListeners();
+        return;
+      }
+    }
     await _dao.updateProgress(
       bookId,
       progress,
@@ -705,6 +1144,15 @@ class BookProvider extends ChangeNotifier {
         try {
           await _dao.insertChapters(meta);
           if (gen != _tocLoadGen) return;
+          final shelfBook = findBookById(book.id);
+          if (shelfBook != null &&
+              shelfBook.totalChapterNum != merged.length) {
+            final next =
+                shelfBook.copyWith(totalChapterNum: merged.length);
+            await _dao.insert(next);
+            final i = _books.indexWhere((b) => b.id == book.id);
+            if (i >= 0) _books[i] = next;
+          }
           final saved = await _dao.getChapters(book.id);
           if (saved.isNotEmpty) {
             _currentChapters = _tocViewList(saved);
@@ -713,6 +1161,7 @@ class BookProvider extends ChangeNotifier {
               source: source,
               chapterList: _currentChapters,
             );
+            await _refreshShelfChapterMetaFor(book.id);
             notifyListeners();
           }
         } catch (e, st) {

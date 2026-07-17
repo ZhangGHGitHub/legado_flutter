@@ -10,7 +10,10 @@ import '../../providers/replace_provider.dart';
 import '../../providers/rss_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/book_source_service.dart';
+import '../../services/bookshelf_prefs.dart';
 import '../../services/rule_sub_import_service.dart';
+import '../../theme/legado_chrome.dart';
+import '../../widgets/legado_bottom_nav.dart';
 import '../bookshelf/bookshelf_page.dart';
 import '../explore/explore_tab_page.dart';
 import '../my/my_page.dart';
@@ -61,6 +64,7 @@ class _MainShellState extends State<MainShell> {
     final sourceProvider = context.read<SourceProvider>();
     final rssProvider = context.read<RssProvider>();
 
+    await BookshelfPrefs.load();
     await bookProvider.loadBooks();
     await rssProvider.loadSources();
 
@@ -199,35 +203,37 @@ class _MainShellState extends State<MainShell> {
     return true;
   }
 
-  static NavigationDestination _destination(
+  static LegadoBottomNavItem _destination(
     int slot, {
     int shelfUpdateBadge = 0,
   }) {
-    Widget icon(IconData data) {
-      if (shelfUpdateBadge <= 0 || slot != 0) return Icon(data);
+    Widget? badge;
+    if (shelfUpdateBadge > 0 && slot == 0) {
       final label = shelfUpdateBadge > 99 ? '99+' : '$shelfUpdateBadge';
-      return Badge(label: Text(label), child: Icon(data));
+      badge = Badge(label: Text(label));
     }
 
     return switch (slot) {
-      0 => NavigationDestination(
-          icon: icon(Icons.library_books_outlined),
-          selectedIcon: icon(Icons.library_books),
+      0 => LegadoBottomNavItem(
+          // 实心 library_books 字形偏左，选中只变色保持居中观感
+          icon: Icons.library_books_outlined,
+          selectedIcon: Icons.library_books_outlined,
           label: '书架',
+          badge: badge,
         ),
-      1 => const NavigationDestination(
-          icon: Icon(Icons.explore_outlined),
-          selectedIcon: Icon(Icons.explore),
+      1 => const LegadoBottomNavItem(
+          icon: Icons.explore_outlined,
+          selectedIcon: Icons.explore,
           label: '发现',
         ),
-      2 => const NavigationDestination(
-          icon: Icon(Icons.subscriptions_outlined),
-          selectedIcon: Icon(Icons.subscriptions),
+      2 => const LegadoBottomNavItem(
+          icon: Icons.rss_feed_outlined,
+          selectedIcon: Icons.rss_feed,
           label: '订阅',
         ),
-      _ => const NavigationDestination(
-          icon: Icon(Icons.person_outline),
-          selectedIcon: Icon(Icons.person),
+      _ => const LegadoBottomNavItem(
+          icon: Icons.person_outline,
+          selectedIcon: Icons.person,
           label: '我的',
         ),
     };
@@ -243,6 +249,9 @@ class _MainShellState extends State<MainShell> {
       BookshelfPage(
         key: _bookshelfKey,
         scrollController: _bookshelfScrollController,
+        onConfigChanged: (_) {
+          if (mounted) setState(() {});
+        },
       ),
       ExploreTabPage(key: _exploreKey),
       const RssTabPage(),
@@ -268,7 +277,9 @@ class _MainShellState extends State<MainShell> {
             }
             final selectedDest =
                 slots.indexOf(pageIndex).clamp(0, slots.length - 1);
-            final shelfBadge = bookProvider.shelfUpdateActiveCount;
+            final shelfBadge = BookshelfPrefs.cached.showWaitUpCount
+                ? bookProvider.shelfUpdateActiveCount
+                : 0;
 
             return PopScope(
               canPop: false,
@@ -280,8 +291,9 @@ class _MainShellState extends State<MainShell> {
               },
               child: Scaffold(
                 body: IndexedStack(index: pageIndex, children: pages),
-                bottomNavigationBar: NavigationBar(
+                bottomNavigationBar: LegadoBottomNav(
                   selectedIndex: selectedDest,
+                  height: LegadoChrome.navigationBarHeightOf(context),
                   onDestinationSelected: (i) =>
                       _onDestinationSelected(i, slots),
                   destinations: [

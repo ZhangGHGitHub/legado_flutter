@@ -8,6 +8,10 @@ class Book {
   final double progress; // 阅读进度 0.0 ~ 1.0
   final String? currentChapter; // 已读到章节名
   final String? lastChapter; // 最新章节名（从书源获取的最新更新）
+  /// 目录总章数（对齐 legado `totalChapterNum`）
+  final int totalChapterNum;
+  /// 当前阅读章 0-based 索引（对齐 legado `durChapterIndex`）
+  final int durChapterIndex;
   final int currentPageIndex; // 当前章节内阅读到的页面索引
   final bool isFavorite;
   final String sourceUrl; // 书籍来源链接（如章节列表 URL）
@@ -25,6 +29,8 @@ class Book {
   final int simReadStartChapter;
   /// 模拟追读：每日解锁章数
   final int simReadDailyChapters;
+  /// SQLite `updatedAt`（阅读/更新时间排序用）
+  final String? updatedAt;
 
   Book({
     required this.id,
@@ -35,6 +41,8 @@ class Book {
     this.progress = 0.0,
     this.currentChapter,
     this.lastChapter,
+    this.totalChapterNum = 0,
+    this.durChapterIndex = 0,
     this.currentPageIndex = 0,
     this.isFavorite = false,
     this.sourceUrl = '',
@@ -46,6 +54,7 @@ class Book {
     this.simReadStartDate = '',
     this.simReadStartChapter = 0,
     this.simReadDailyChapters = 3,
+    this.updatedAt,
   });
 
   /// 「读完」「N刷」「N刷完」标签文案；无标记时返回 null
@@ -71,6 +80,8 @@ class Book {
     double? progress,
     String? currentChapter,
     String? lastChapter,
+    int? totalChapterNum,
+    int? durChapterIndex,
     int? currentPageIndex,
     bool? isFavorite,
     String? sourceUrl,
@@ -82,6 +93,7 @@ class Book {
     String? simReadStartDate,
     int? simReadStartChapter,
     int? simReadDailyChapters,
+    String? updatedAt,
   }) {
     return Book(
       id: id ?? this.id,
@@ -92,6 +104,8 @@ class Book {
       progress: progress ?? this.progress,
       currentChapter: currentChapter ?? this.currentChapter,
       lastChapter: lastChapter ?? this.lastChapter,
+      totalChapterNum: totalChapterNum ?? this.totalChapterNum,
+      durChapterIndex: durChapterIndex ?? this.durChapterIndex,
       currentPageIndex: currentPageIndex ?? this.currentPageIndex,
       isFavorite: isFavorite ?? this.isFavorite,
       sourceUrl: sourceUrl ?? this.sourceUrl,
@@ -103,6 +117,7 @@ class Book {
       simReadStartDate: simReadStartDate ?? this.simReadStartDate,
       simReadStartChapter: simReadStartChapter ?? this.simReadStartChapter,
       simReadDailyChapters: simReadDailyChapters ?? this.simReadDailyChapters,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -117,6 +132,8 @@ class Book {
       progress: (json['progress'] as num?)?.toDouble() ?? 0.0,
       currentChapter: json['currentChapter'] as String?,
       lastChapter: json['lastChapter'] as String?,
+      totalChapterNum: (json['totalChapterNum'] as num?)?.toInt() ?? 0,
+      durChapterIndex: (json['durChapterIndex'] as num?)?.toInt() ?? 0,
       currentPageIndex: (json['currentPageIndex'] as num?)?.toInt() ?? 0,
       isFavorite: json['isFavorite'] as bool? ?? false,
       sourceUrl: json['sourceUrl'] as String? ?? '',
@@ -129,6 +146,7 @@ class Book {
       simReadStartChapter: (json['simReadStartChapter'] as num?)?.toInt() ?? 0,
       simReadDailyChapters:
           ((json['simReadDailyChapters'] as num?)?.toInt() ?? 3).clamp(1, 999),
+      updatedAt: json['updatedAt'] as String?,
     );
   }
 
@@ -143,6 +161,8 @@ class Book {
       'progress': progress,
       'currentChapter': currentChapter,
       'lastChapter': lastChapter,
+      'totalChapterNum': totalChapterNum,
+      'durChapterIndex': durChapterIndex,
       'currentPageIndex': currentPageIndex,
       'isFavorite': isFavorite,
       'sourceUrl': sourceUrl,
@@ -154,6 +174,7 @@ class Book {
       'simReadStartDate': simReadStartDate,
       'simReadStartChapter': simReadStartChapter,
       'simReadDailyChapters': simReadDailyChapters,
+      if (updatedAt != null) 'updatedAt': updatedAt,
     };
   }
 

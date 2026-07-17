@@ -218,6 +218,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
           progress,
           ch.title,
           pageIndex: _pageIndex,
+          durChapterIndex: _chapterIndex,
         );
   }
 

@@ -9,25 +9,29 @@ import '../../providers/source_provider.dart';
 import '../../services/bookshelf_prefs.dart';
 import '../../services/local_book_service.dart';
 import '../../theme/legado_tokens.dart';
-import '../../widgets/book_cover.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/legado_refresh_indicator.dart';
-import '../../widgets/read_badge.dart';
-import '../../widgets/shelf_unread_badge.dart';
 import '../book/book_info_page.dart';
+import '../cache/cache_book_page.dart';
 import '../search/search_page.dart';
 import 'bookshelf_arrange_page.dart';
+import 'bookshelf_books_view.dart';
+import 'bookshelf_config_dialog.dart';
+import 'bookshelf_menu_actions.dart';
+import 'bookshelf_overflow_menu.dart';
 
-/// 书架 style2 — 3 列网格 + 分组 Drawer
+/// 书架 style2 — Folder（Drawer）chrome；body 随 bookshelfLayout 变化
 class BookshelfStyle2Page extends StatefulWidget {
   const BookshelfStyle2Page({
     super.key,
     this.scrollController,
-    this.onSwitchToList,
+    required this.config,
+    this.onConfigChanged,
   });
 
   final ScrollController? scrollController;
-  final VoidCallback? onSwitchToList;
+  final BookshelfConfig config;
+  final ValueChanged<BookshelfConfig>? onConfigChanged;
 
   @override
   State<BookshelfStyle2Page> createState() => _BookshelfStyle2PageState();
@@ -51,9 +55,16 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
   }
 
   List<Book> _processBooks(List<Book> books) {
-    var result = BookshelfPrefs.applyBookOrder(books, _shelfOrder, (b) => b.id);
-    if (_selectedGroup == '__all__') return result;
-    return result.where((b) => b.group == _selectedGroup).toList();
+    var result = books;
+    if (_selectedGroup != '__all__') {
+      result = result.where((b) => b.group == _selectedGroup).toList();
+    }
+    return BookshelfPrefs.sortBooks(
+      result,
+      sortMode: widget.config.bookshelfSort,
+      orderIds: _shelfOrder,
+      pinnedIds: const {},
+    );
   }
 
   Set<String> _getAllGroups(List<Book> books) =>
@@ -68,7 +79,7 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
         builder: (_) => BookshelfArrangePage(
           groupFilter: group,
           groupLabel: label,
-          gridLayout: true,
+          gridLayout: widget.config.isGrid,
         ),
       ),
     );
@@ -96,6 +107,66 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
         );
       }
     }
+  }
+
+  void _updateToc() {
+    final provider = context.read<BookProvider>();
+    final sources = context.read<SourceProvider>();
+    final books = _processBooks(provider.books);
+    if (books.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('没有可更新的书籍')));
+      return;
+    }
+    unawaited(
+      provider.refreshShelfToc(
+        books,
+        resolveSource: sources.findSourceForBook,
+      ),
+    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('正在更新目录…')));
+  }
+
+  void _showStub(String action) {
+    final label = BookshelfOverflowMenu.stubLabel(action);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('「$label」暂未实现')));
+  }
+
+  void _onOverflowSelected(String a) async {
+    if (await BookshelfMenuActions.handle(context, a)) return;
+    if (!mounted) return;
+    switch (a) {
+      case BookshelfOverflowMenu.updateToc:
+        _updateToc();
+      case BookshelfOverflowMenu.addLocal:
+        _addLocalBook();
+      case BookshelfOverflowMenu.arrange:
+        _openArrange();
+      case BookshelfOverflowMenu.cacheExport:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const CacheBookPage()),
+        );
+      case BookshelfOverflowMenu.groupMgmt:
+        _scaffoldKey.currentState?.openDrawer();
+      case BookshelfOverflowMenu.layout:
+        _openLayoutConfig();
+      default:
+        _showStub(a);
+    }
+  }
+
+  Future<void> _openLayoutConfig() async {
+    final next = await BookshelfConfigDialog.show(
+      context,
+      initial: widget.config,
+    );
+    if (next != null) widget.onConfigChanged?.call(next);
   }
 
   void _openBook(Book book) => Navigator.push(
@@ -178,6 +249,11 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
         title: Text(_selectedGroup == '__all__' ? '书架' : _selectedGroup),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: '刷新',
+            onPressed: _updateToc,
+          ),
+          IconButton(
             icon: const Icon(Icons.search),
             tooltip: '联合搜索',
             onPressed: () => Navigator.push(
@@ -186,25 +262,9 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
             ),
           ),
           PopupMenuButton<String>(
-            onSelected: (a) {
-              if (a == 'add_local') _addLocalBook();
-              if (a == 'arrange') _openArrange();
-              if (a == 'list_layout') widget.onSwitchToList?.call();
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: 'add_local',
-                child: _MenuRow(Icons.file_open, '添加本地'),
-              ),
-              const PopupMenuItem(
-                value: 'arrange',
-                child: _MenuRow(Icons.tune, '书架管理'),
-              ),
-              const PopupMenuItem(
-                value: 'list_layout',
-                child: _MenuRow(Icons.view_list, '列表布局'),
-              ),
-            ],
+            icon: const Icon(Icons.more_vert),
+            onSelected: _onOverflowSelected,
+            itemBuilder: (ctx) => BookshelfOverflowMenu.items(ctx),
           ),
         ],
       ),
@@ -260,100 +320,20 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
             child: ScrollConfiguration(
               behavior: LegadoScrollBehavior(
                 overscrollColor: Theme.of(context).colorScheme.primary,
-              ).copyWith(scrollbars: true),
-              child: GridView.builder(
-                controller: widget.scrollController,
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(LegadoDimens.pageVertical),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: LegadoTokens.bookshelfGridCols,
-                  mainAxisSpacing: LegadoDimens.pageVertical,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 0.52,
-                ),
-                itemCount: books.length,
-                itemBuilder: (_, i) {
-                  final book = books[i];
-                  final updating = provider.isBookShelfUpdating(book.id);
-                  return InkWell(
-                    onTap: () => _openBook(book),
-                    onLongPress: () => _confirmRemove(book),
-                    borderRadius: LegadoTokens.coverRadius,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          child: Stack(
-                            alignment: Alignment.topRight,
-                            children: [
-                              BookCover(
-                                coverUrl: book.coverUrl,
-                                author: book.author,
-                                width: double.infinity,
-                                radius: LegadoTokens.radiusCover,
-                              ),
-                              if (updating)
-                                const Padding(
-                                  padding: EdgeInsets.all(
-                                    LegadoTokens.spacingXs,
-                                  ),
-                                  child: LegadoShelfUpdatingIndicator(size: 22),
-                                )
-                              else
-                                Padding(
-                                  padding: const EdgeInsets.all(
-                                    LegadoTokens.spacingXs,
-                                  ),
-                                  child: ShelfUnreadBadge(book: book),
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          book.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        if (book.author.isNotEmpty)
-                          Text(
-                            book.author,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        if (!updating) ReadBadge.fromBook(book),
-                      ],
-                    ),
-                  );
-                },
+              ).copyWith(scrollbars: false),
+              child: BookshelfBooksView(
+                config: widget.config,
+                books: books,
+                pinnedIds: const {},
+                scrollController: widget.scrollController,
+                isUpdating: provider.isBookShelfUpdating,
+                onTap: _openBook,
+                onLongPress: _confirmRemove,
               ),
             ),
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.small(
-        onPressed: _addLocalBook,
-        child: const Icon(Icons.add),
-      ),
     );
   }
-}
-
-class _MenuRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  const _MenuRow(this.icon, this.title);
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [Icon(icon, size: 20), const SizedBox(width: 12), Text(title)],
-  );
 }

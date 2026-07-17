@@ -17,6 +17,35 @@ class WebDavConfig {
   });
 
   bool get isConfigured => url.trim().isNotEmpty;
+
+  /// 对齐 Jingshiro [AppWebDav.upConfig]：需账号+密码才真正可用。
+  bool get hasCredentials =>
+      account.trim().isNotEmpty && password.isNotEmpty;
+
+  /// 远程书籍 / 同步就绪（URL + 凭证）。
+  bool get isReady => isConfigured && hasCredentials;
+
+  /// WebDAV 根目录（备份/进度用），如 `/legado`
+  String get rootDir {
+    final d = dir.trim();
+    if (d.isEmpty) return '/';
+    return d.startsWith('/') ? d : '/$d';
+  }
+
+  /// 远程书籍根 — 对齐 Jingshiro [AppWebDav] `{rootWebDavUrl}books/`
+  String get booksDir {
+    final root = rootDir.replaceAll(RegExp(r'/+$'), '');
+    if (root.isEmpty || root == '/') return '/books';
+    return '$root/books';
+  }
+
+  static String joinPath(String base, String child) {
+    final left = base.replaceAll(RegExp(r'/+$'), '');
+    final right = child.replaceAll(RegExp(r'^/+'), '');
+    if (right.isEmpty) return left.isEmpty ? '/' : left;
+    if (left.isEmpty || left == '/') return '/$right';
+    return '$left/$right';
+  }
 }
 
 abstract final class WebDavPrefs {

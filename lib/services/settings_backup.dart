@@ -12,6 +12,14 @@ abstract final class SettingsBackup {
     'legado_color_preset',
     'legado_theme_custom_colors',
     BookshelfPrefs.bookGroupStyleKey,
+    BookshelfPrefs.bookshelfLayoutKey,
+    BookshelfPrefs.bookshelfSortKey,
+    BookshelfPrefs.showUnreadKey,
+    BookshelfPrefs.showLastUpdateTimeKey,
+    BookshelfPrefs.showWaitUpCountKey,
+    BookshelfPrefs.showBookshelfFastScrollerKey,
+    BookshelfPrefs.showBooknameKey,
+    BookshelfPrefs.bookshelfMarginKey,
     WebApiPrefs.enabledKey,
     WebApiPrefs.portKey,
     WebApiPrefs.tokenKey,
@@ -32,11 +40,22 @@ abstract final class SettingsBackup {
 
   static const _intKeys = {
     BookshelfPrefs.bookGroupStyleKey,
+    BookshelfPrefs.bookshelfLayoutKey,
+    BookshelfPrefs.bookshelfSortKey,
+    BookshelfPrefs.showBooknameKey,
+    BookshelfPrefs.bookshelfMarginKey,
     WebApiPrefs.portKey,
     NetworkPrefs.portKey,
   };
 
-  static const _boolKeys = {WebApiPrefs.enabledKey, NetworkPrefs.enabledKey};
+  static const _boolKeys = {
+    WebApiPrefs.enabledKey,
+    NetworkPrefs.enabledKey,
+    BookshelfPrefs.showUnreadKey,
+    BookshelfPrefs.showLastUpdateTimeKey,
+    BookshelfPrefs.showWaitUpCountKey,
+    BookshelfPrefs.showBookshelfFastScrollerKey,
+  };
 
   static Future<Map<String, Object?>> collect() async {
     final prefs = await SharedPreferences.getInstance();

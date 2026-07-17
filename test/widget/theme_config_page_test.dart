@@ -85,8 +85,8 @@ void main() {
     expect(find.text('导入'), findsOneWidget);
     expect(find.text('主题市场'), findsOneWidget);
 
-    await scrollTo(tester, find.text('主色'));
-    expect(find.text('主色'), findsOneWidget);
+    await scrollTo(tester, find.text('主色（顶栏）'));
+    expect(find.text('主色（顶栏）'), findsOneWidget);
   });
 
   testWidgets('import dialog applies theme from JSON', (tester) async {
