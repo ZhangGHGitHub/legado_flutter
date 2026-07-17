@@ -121,6 +121,24 @@ pub fn query_all<'a>(_html: &'a Html, body: &ElementRef<'a>, rule: &str) -> Vec<
         processed = processed[1..].trim().to_string();
     }
 
+    // Jingshiro 列表规则：`||` 取首个非空；`&&` 取并集
+    if processed.contains("||") {
+        for part in split_top_level(&processed, "||") {
+            let items = query_all(_html, body, part.trim());
+            if !items.is_empty() {
+                return items;
+            }
+        }
+        return vec![];
+    }
+    if processed.contains("&&") {
+        let mut all = Vec::new();
+        for part in split_top_level(&processed, "&&") {
+            all.extend(query_all(_html, body, part.trim()));
+        }
+        return all;
+    }
+
     if xpath::is_xpath_rule(&processed) {
         return xpath::query_all(body, &processed);
     }

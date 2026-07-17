@@ -146,6 +146,13 @@ _SymmetricCrypto.prototype.decrypt = function(data) {
   return this.decryptStr(data);
 };
 
+/** CookieStore 子集 — 对齐 Legado `cookie.removeCookie`（AnalyzeUrl `{{cookie.*}}`） */
+var cookie = {
+  removeCookie: function(_url) { return ''; },
+  getCookie: function(_url) { return ''; },
+  setCookie: function(_url, _val) {}
+};
+
 var java = {
   createSymmetricCrypto: function(transformation, key, iv) {
     return new _SymmetricCrypto(transformation, key, iv);

@@ -224,6 +224,12 @@ fn split_analyze_url(raw: &str) -> (String, String, Option<String>) {
 
 /// 解析目录页 URL：支持 ruleBookInfo.tocUrl 为 `<js>`（可乐小说：/book/→/chapter/）
 async fn resolve_toc_fetch_url(source: &BookSource, book_url: &str) -> Result<String, String> {
+    // 调用方（校验/调试/getChapters）常已传入详情解析后的目录 URL。
+    // 若再以空 result 重跑 tocUrl JS，番茄源会丢失 articleid → `/api/chapter/list/?lang=`。
+    if is_already_resolved_toc_url(book_url) {
+        return Ok(book_url.to_string());
+    }
+
     let flat_rule = source.rule_book_info_toc_url.trim();
     let obj_toc = source
         .rule_book_info_obj
@@ -243,15 +249,17 @@ async fn resolve_toc_fetch_url(source: &BookSource, book_url: &str) -> Result<St
             let book_for_ajax = book_url
                 .replace("/chapter/", "/book/")
                 .replace("/read/", "/book/");
+            // 尽量把详情 JSON 传给 tocUrl JS（番茄：J(result).data.articleid）
+            let result_json = toc_js_result_payload(book_url);
             if let Ok(out) = js_engine::run_with_result_opts(
                 &script,
-                "",
+                &result_json,
                 &source.js_lib,
                 book_url,
                 Some(&book_for_ajax),
             ) {
                 let out = out.trim().to_string();
-                if !out.is_empty() && out != "null" {
+                if is_usable_toc_url(&out) {
                     return Ok(if out.starts_with("http") {
                         out
                     } else {
@@ -264,7 +272,7 @@ async fn resolve_toc_fetch_url(source: &BookSource, book_url: &str) -> Result<St
 
     if source.is_json_api() && (flat_rule.contains("<js>") || obj_toc.contains("<js>")) {
         let info = book_info::get_book_info(&source.raw_json, book_url).await?;
-        if !info.toc_url.is_empty() {
+        if is_usable_toc_url(&info.toc_url) {
             return Ok(info.toc_url);
         }
     }
@@ -277,11 +285,62 @@ async fn resolve_toc_fetch_url(source: &BookSource, book_url: &str) -> Result<St
         });
     }
 
-    // 已是目录页，或调用方已传入 tocUrl
-    if book_url.contains("/chapter/") {
-        return Ok(book_url.to_string());
-    }
     Ok(book_url.to_string())
+}
+
+/// 详情/调试已解析出的目录页（勿再跑 tocUrl JS）
+fn is_already_resolved_toc_url(url: &str) -> bool {
+    let u = url.to_ascii_lowercase();
+    // 番茄 JSON：/api/chapter/list/{id}
+    if u.contains("/api/chapter/list/") {
+        return u
+            .split("/api/chapter/list/")
+            .nth(1)
+            .map(|rest| rest.chars().next().is_some_and(|c| c.is_ascii_digit()))
+            .unwrap_or(false);
+    }
+    // 可乐等：/chapter/{bookId}（非 /book/）
+    if u.contains("/chapter/") && !u.contains("/book/") {
+        return true;
+    }
+    false
+}
+
+fn is_usable_toc_url(url: &str) -> bool {
+    let t = url.trim();
+    if t.is_empty() || t == "null" || t == "undefined" {
+        return false;
+    }
+    // 拒绝空 id：.../list/?lang= 或 .../list/
+    if t.contains("/list/?") || t.ends_with("/list/") || t.contains("/list/?lang") {
+        return false;
+    }
+    true
+}
+
+/// 无详情 body 时，从 detail URL 合成最小 JSON，供 tocUrl JS 取 articleid
+fn toc_js_result_payload(book_url: &str) -> String {
+    if let Some(id) = extract_tomato_article_id(book_url) {
+        return format!(r#"{{"data":{{"articleid":"{id}"}}}}"#);
+    }
+    String::new()
+}
+
+fn extract_tomato_article_id(url: &str) -> Option<String> {
+    // .../api/novel/detail/12345?... 或 .../api/chapter/list/12345?...
+    for marker in ["/api/novel/detail/", "/api/chapter/list/"] {
+        if let Some(pos) = url.find(marker) {
+            let rest = &url[pos + marker.len()..];
+            let id: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            if !id.is_empty() {
+                return Some(id);
+            }
+        }
+    }
+    None
 }
 
 fn parse_html_toc_items(
@@ -321,5 +380,73 @@ mod tests {
             r#"<html><body><ul class="chapList chapListBody"><li><a href="/r/1">一</a></li></ul></body></html>"#
         )
         .is_none());
+    }
+}
+
+#[cfg(test)]
+mod tomato_toc_resolve_tests {
+    use super::*;
+    use crate::rule::js_engine;
+
+    fn load_7497() -> BookSource {
+        let raw = include_str!("../../../../assets/builtin_sources/7497.json");
+        let json = raw.trim_start_matches('\u{feff}');
+        if json.starts_with('[') {
+            let arr: Vec<serde_json::Value> = serde_json::from_str(json).unwrap();
+            BookSource::from_json(&arr[0].to_string()).unwrap()
+        } else {
+            BookSource::from_json(json).unwrap()
+        }
+    }
+
+    #[tokio::test]
+    async fn already_resolved_list_url_not_rewritten_to_empty_id() {
+        let source = load_7497();
+        let list_url = "https://novel.cooks.tw/api/chapter/list/81571?lang=zh-CN";
+        let out = resolve_toc_fetch_url(&source, list_url).await.unwrap();
+        assert!(
+            out.contains("/api/chapter/list/81571"),
+            "已解析目录 URL 不应被空 result 重写，got {out}"
+        );
+        assert!(!out.contains("/list/?"), "got {out}");
+    }
+
+    #[tokio::test]
+    async fn detail_url_resolves_via_toc_js() {
+        let source = load_7497();
+        let detail = "https://novel.cooks.tw/api/novel/detail/81571?lang=zh-CN";
+        let out = resolve_toc_fetch_url(&source, detail).await.unwrap();
+        assert!(
+            out.contains("/api/chapter/list/81571"),
+            "详情 URL 应解析出目录，got {out}"
+        );
+    }
+
+    #[test]
+    fn toc_js_empty_result_on_list_url_loses_id() {
+        // 记录 JS 本身在空 result + list baseUrl 时会丢 id；resolve 层须短路
+        let source = load_7497();
+        let toc_rule = source
+            .rule_book_info_obj
+            .as_ref()
+            .unwrap()
+            .get("tocUrl")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        let script = js_engine::extract_js_block(toc_rule).unwrap();
+        let list_url = "https://novel.cooks.tw/api/chapter/list/81571?lang=zh-CN";
+        let out = js_engine::run_with_result_opts(
+            &script,
+            "",
+            &source.js_lib,
+            list_url,
+            Some(list_url),
+        )
+        .unwrap_or_default();
+        assert!(
+            out.contains("/list/?") || !out.contains("81571"),
+            "期望空 result 在 list URL 上无法得到正确 id，got {out}"
+        );
     }
 }

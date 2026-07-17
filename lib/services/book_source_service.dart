@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 
 import '../bridge/legado_engine_bridge.dart';
@@ -143,61 +141,92 @@ class BookSourceService {
   static Future<List<BookSource>> fetchSourcesFromUrl(String url) async {
     SsrfGuard.assertPublicHttpUrl(url);
     try {
-      final dio = Dio(
-        BaseOptions(
-          connectTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 30),
-          followRedirects: false,
-          maxRedirects: 0,
-          validateStatus: (status) =>
-              status != null && status >= 200 && status < 400,
-          headers: {
-            'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                'AppleWebKit/537.36 (KHTML, like Gecko) '
-                'Chrome/131.0.0.0 Safari/537.36',
-            'Accept': 'application/json, text/plain, */*',
-          },
-        ),
-      );
-      dio.httpClientAdapter = IOHttpClientAdapter(
-        createHttpClient: () {
-          final client = HttpClient();
-          client.badCertificateCallback = (cert, host, port) => true;
-          return client;
-        },
-      );
+      final client = HttpClient();
+      client.badCertificateCallback = (cert, host, port) => true;
+      client.connectionTimeout = const Duration(seconds: 15);
+      client.userAgent =
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+          'AppleWebKit/537.36 (KHTML, like Gecko) '
+          'Chrome/131.0.0.0 Safari/537.36';
+      client.autoUncompress = true;
 
-      // 手动跟随重定向并对每跳 Location 做 SSRF 校验（不做 DNS 解析）
+      // 手动跟随重定向 + Cookie（yckceo `/d/` → `/jsons?id=`）
       var currentUrl = url;
-      late Response<dynamic> response;
-      for (var hop = 0; hop <= SsrfGuard.maxRedirects; hop++) {
-        SsrfGuard.assertPublicHttpUrl(currentUrl);
-        response = await dio.get<dynamic>(currentUrl);
-        final code = response.statusCode ?? 0;
-        if (code >= 300 && code < 400) {
-          final location = response.headers.value('location');
-          if (location == null || location.isEmpty) {
-            debugPrint('从 $url 获取书源: 重定向缺少 Location');
+      final cookieJar = <String, String>{};
+      String? body;
+      try {
+        for (var hop = 0; hop <= SsrfGuard.maxRedirects; hop++) {
+          SsrfGuard.assertPublicHttpUrl(currentUrl);
+          final uri = Uri.parse(currentUrl);
+          final req = await client.getUrl(uri);
+          req.followRedirects = false;
+          req.maxRedirects = 0;
+          // 部分站点对 GET + Content-Length: 0 返回 400
+          req.contentLength = -1;
+          req.headers.removeAll(HttpHeaders.contentLengthHeader);
+          req.headers.set(HttpHeaders.acceptHeader, '*/*');
+          if (cookieJar.isNotEmpty) {
+            req.headers.set(
+              HttpHeaders.cookieHeader,
+              cookieJar.entries.map((e) => '${e.key}=${e.value}').join('; '),
+            );
+          }
+          final response =
+              await req.close().timeout(const Duration(seconds: 30));
+          for (final raw in response.headers[HttpHeaders.setCookieHeader] ??
+              const <String>[]) {
+            final part = raw.split(';').first;
+            final eq = part.indexOf('=');
+            if (eq > 0) {
+              cookieJar[part.substring(0, eq).trim()] =
+                  part.substring(eq + 1).trim();
+            }
+          }
+          final code = response.statusCode;
+          if (code >= 300 && code < 400) {
+            final location = response.headers.value(HttpHeaders.locationHeader);
+            await response.drain<void>();
+            if (location == null || location.isEmpty) {
+              debugPrint('从 $url 获取书源: 重定向缺少 Location');
+              return [];
+            }
+            if (hop == SsrfGuard.maxRedirects) {
+              debugPrint('从 $url 获取书源: 重定向次数过多');
+              return [];
+            }
+            SsrfGuard.assertRedirectTarget(currentUrl, location);
+            currentUrl = uri.resolve(location).toString();
+            continue;
+          }
+          if (code < 200 || code >= 300) {
+            await response.drain<void>();
+            debugPrint('从 $url 获取书源: HTTP $code @ $currentUrl');
             return [];
           }
-          if (hop == SsrfGuard.maxRedirects) {
-            debugPrint('从 $url 获取书源: 重定向次数过多');
-            return [];
-          }
-          SsrfGuard.assertRedirectTarget(currentUrl, location);
-          currentUrl = Uri.parse(currentUrl).resolve(location).toString();
-          continue;
+          body = await response.transform(utf8.decoder).join();
+          break;
         }
-        break;
+      } finally {
+        client.close(force: true);
       }
-      dynamic data = response.data;
 
-      if (data is String) {
-        final body = data.trim();
-        if (body.startsWith('[') || body.startsWith('{')) {
-          data = jsonDecode(body);
+      final rawBody = body;
+      if (rawBody == null || rawBody.isEmpty) {
+        debugPrint('从 $url 获取书源: 空响应');
+        return [];
+      }
+
+      dynamic data;
+      final trimmed = rawBody.trim();
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        data = jsonDecode(trimmed);
+      } else {
+        if (trimmed.contains('地址不存在') || trimmed.contains('已失效')) {
+          debugPrint('从 $url 获取书源: 分享链接已失效');
+        } else {
+          debugPrint('从 $url 获取书源: 非 JSON 响应 (${trimmed.length} chars)');
         }
+        return [];
       }
 
       List<dynamic>? sourceList;

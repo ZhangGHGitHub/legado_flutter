@@ -372,6 +372,40 @@ mod tests {
     }
 
     #[test]
+    fn and_union_chapter_list_skips_nav_li() {
+        // 对齐搬山人：`li[class~=volume_chapter] a&&ul[class~=chapter_list] a`
+        // 若 && 未实现，会落到 li 兜底，误收导航链接
+        let source_json = r##"{
+            "bookSourceUrl": "https://www.banshanren.com",
+            "ruleToc": {
+                "chapterList": "li[class~=volume_chapter] a&&ul[class~=chapter_list] a",
+                "chapterName": "text",
+                "chapterUrl": "href"
+            }
+        }"##;
+        let html = r#"
+        <html><body>
+          <ul class="nav">
+            <li><a href="/">首页</a></li>
+            <li><a href="/all/">全部小说</a></li>
+            <li><a href="/plan">搬山人计划</a></li>
+          </ul>
+          <ul class="chapter_list">
+            <li><a href="/novel/book/1">第1章 重生</a></li>
+            <li><a href="/novel/book/2">第2章 美杜莎</a></li>
+            <li><a href="/novel/book/3">第3章 沦陷</a></li>
+          </ul>
+        </body></html>
+        "#;
+        let source = BookSource::from_json(source_json).unwrap();
+        let chapters = parse_html_toc(html, &source).unwrap();
+        assert_eq!(chapters.len(), 3, "{:?}", chapters);
+        assert_eq!(chapters[0].title, "第1章 重生");
+        assert_eq!(chapters[0].url, "/novel/book/1");
+        assert!(!chapters.iter().any(|c| c.title == "首页"));
+    }
+
+    #[test]
     fn kele_chapter_list_js_parses_chap_list_html() {
         let source_json = r##"{
             "bookSourceUrl": "https://www.rrssk.com/",
