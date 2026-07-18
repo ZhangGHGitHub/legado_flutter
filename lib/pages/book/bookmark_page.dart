@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../help/bookmark_hint.dart';
 import '../../models/book.dart';
 import '../../models/chapter.dart';
 import '../../providers/book_provider.dart';
@@ -138,6 +139,7 @@ class _BookmarkPageState extends State<BookmarkPage>
     }
     if (idx < 0) idx = 0;
 
+    final pageIndex = bookmarkPageIndexFromNote(note.noteContent);
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -145,6 +147,7 @@ class _BookmarkPageState extends State<BookmarkPage>
           book: book,
           chapter: chapters[idx],
           allChapters: chapters,
+          initialPageIndex: pageIndex,
         ),
       ),
     );

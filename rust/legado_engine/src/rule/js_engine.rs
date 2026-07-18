@@ -376,33 +376,118 @@ fn run_login_check_script(
     ctx.with(|ctx| {
         init_context(&ctx, js_lib, request_url)?;
         AJAX_SOURCE_JSON.with(|r| *r.borrow_mut() = source_json.to_string());
-        let escaped = serde_json::to_string(body).unwrap_or_else(|_| "\"\"".to_string());
-        // result 为 body 字符串；同时注入 ajax 书源头上下文
+        let escaped_body = serde_json::to_string(body).unwrap_or_else(|_| "\"\"".to_string());
+        let escaped_url = json_escape(request_url);
+        let escaped_src = json_escape(source_json);
+        // 兼容两类 loginCheckJs：
+        // 1) result 当字符串：result.replace(...)
+        // 2) StrResponse：result.body() / result.url() + source.bookSourceUrl
         let mut code = String::new();
-        code.push_str("var result = ");
-        code.push_str(&escaped);
-        code.push_str(";\nvar src = ");
-        code.push_str(&json_escape(source_json));
         code.push_str(
-            ";\nif (typeof __legado_set_ajax_ctx === 'function') { __legado_set_ajax_ctx(src, ''); }\n",
+            r##"
+function __StrResponse(body, url) {
+  this._body = String(body == null ? '' : body);
+  this._url = String(url == null ? '' : url);
+}
+__StrResponse.prototype.body = function() { return this._body; };
+__StrResponse.prototype.url = function() { return this._url; };
+__StrResponse.prototype.toString = function() { return this._body; };
+__StrResponse.prototype.valueOf = function() { return this._body; };
+__StrResponse.prototype.replace = function() {
+  return String.prototype.replace.apply(this._body, arguments);
+};
+__StrResponse.prototype.match = function() {
+  return String.prototype.match.apply(this._body, arguments);
+};
+__StrResponse.prototype.indexOf = function() {
+  return String.prototype.indexOf.apply(this._body, arguments);
+};
+__StrResponse.prototype.substring = function() {
+  return String.prototype.substring.apply(this._body, arguments);
+};
+"##,
         );
+        code.push_str("var src = ");
+        code.push_str(&escaped_src);
+        code.push_str(
+            ";\nvar source = (function(){ try { return JSON.parse(src); } catch(e) { return { bookSourceUrl: '' }; } })();\n",
+        );
+        code.push_str(
+            "if (typeof __legado_set_ajax_ctx === 'function') { __legado_set_ajax_ctx(src, ''); }\n",
+        );
+        code.push_str(
+            r##"
+if (typeof java !== 'undefined') {
+  if (typeof java.startBrowserAwait !== 'function') {
+    java.startBrowserAwait = function(_url, _title) { return ''; };
+  }
+  if (typeof java.connect !== 'function') {
+    java.connect = function(url) {
+      var b = '';
+      if (typeof __legado_java_ajax === 'function') {
+        try { b = __legado_java_ajax(String(url == null ? '' : url)) || ''; } catch (e) { b = ''; }
+      }
+      return new __StrResponse(b, url);
+    };
+  }
+}
+"##,
+        );
+        code.push_str("var result = new __StrResponse(");
+        code.push_str(&escaped_body);
+        code.push_str(", ");
+        code.push_str(&escaped_url);
+        code.push_str(");\n");
         code.push_str(script);
         let v: Value = ctx
             .eval(code.as_bytes())
             .catch(&ctx)
             .map_err(|e| format_caught_err("loginCheckJs 失败", e))?;
-        // 若返回对象且含 body 字段（对齐 StrResponse），取 body
-        if v.is_object() {
-            if let Some(obj) = v.as_object() {
-                if let Ok(body_v) = obj.get::<_, Value>("body") {
-                    if !body_v.is_null() && !body_v.is_undefined() {
-                        return value_to_string(&ctx, body_v);
-                    }
+        // 脚本无完成值时回落到全局 result（常见于只改写 StrResponse 的脚本）
+        let v = if v.is_undefined() || v.is_null() {
+            ctx.globals()
+                .get::<_, Value>("result")
+                .unwrap_or(v)
+        } else {
+            v
+        };
+        normalize_login_check_value(&ctx, v)
+    })
+}
+
+fn normalize_login_check_value<'js>(ctx: &Ctx<'js>, v: Value<'js>) -> Result<String, String> {
+    if v.is_null() || v.is_undefined() {
+        return Ok(String::new());
+    }
+    if v.is_string() {
+        return value_to_string(ctx, v);
+    }
+    if let Some(obj) = v.as_object() {
+        // __StrResponse._body
+        if let Ok(s) = obj.get::<_, String>("_body") {
+            return Ok(s);
+        }
+        // StrResponse.body()
+        if let Ok(func) = obj.get::<_, Function>("body") {
+            let out: Value = func
+                .call(())
+                .map_err(|e| format!("loginCheckJs result.body() 失败: {e}"))?;
+            return value_to_string(ctx, out);
+        }
+        // 兼容 body 为字符串字段
+        if let Ok(s) = obj.get::<_, String>("body") {
+            return Ok(s);
+        }
+        // 优先 toString（避免 json_stringify 整对象）
+        if let Ok(func) = obj.get::<_, Function>("toString") {
+            if let Ok(out) = func.call::<(), Value>(()) {
+                if out.is_string() {
+                    return value_to_string(ctx, out);
                 }
             }
         }
-        value_to_string(&ctx, v)
-    })
+    }
+    value_to_string(ctx, v)
 }
 
 /// 对齐 Jingshiro `WebBook.getChapterListAwait`：目录刷新前执行 `ruleToc.preUpdateJs`。

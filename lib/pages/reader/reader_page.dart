@@ -61,11 +61,15 @@ class ReaderPage extends StatefulWidget {
   final Chapter chapter;
   final List<Chapter> allChapters;
 
+  /// 打开时跳转到的页索引（0-based）；书签回跳用。优先于 [Book.currentPageIndex]。
+  final int? initialPageIndex;
+
   const ReaderPage({
     super.key,
     required this.book,
     required this.chapter,
     required this.allChapters,
+    this.initialPageIndex,
   });
 
   @override
@@ -165,7 +169,9 @@ class _ReaderPageState extends State<ReaderPage> {
     _scrollController = ScrollController();
     _currentIndex = widget.allChapters.indexOf(widget.chapter);
     if (_currentIndex < 0) _currentIndex = 0;
-    if (widget.book.currentPageIndex > 0) {
+    if (widget.initialPageIndex != null && widget.initialPageIndex! >= 0) {
+      _pendingTargetPage = widget.initialPageIndex;
+    } else if (widget.book.currentPageIndex > 0) {
       _pendingTargetPage = widget.book.currentPageIndex;
     }
     _loadContent();
@@ -1375,7 +1381,7 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  void _goToChapter(int index) {
+  void _goToChapter(int index, {int? pageIndex}) {
     if (index < 0 || index >= widget.allChapters.length) return;
     if (_simRead.enabled && index > _maxReadableIndex) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1395,6 +1401,9 @@ class _ReaderPageState extends State<ReaderPage> {
       _pages = [];
       _pageIndex = 0;
       _currentIndex = index;
+      if (pageIndex != null && pageIndex >= 0) {
+        _pendingTargetPage = pageIndex;
+      }
     });
     _loadContent();
     // 勿在此 _keepChromeAlive：翻页/点右侧下一页切章时会误弹出菜单（含「设置」入口）
@@ -1434,14 +1443,14 @@ class _ReaderPageState extends State<ReaderPage> {
       currentChapter: current.title,
       currentChapterId: current.id,
       bookId: widget.book.id,
-      onChapterTap: (chapter) {
+      onChapterTap: (chapter, {int? pageIndex}) {
         final idx = widget.allChapters.indexWhere((c) => c.id == chapter.id);
         if (idx >= 0) {
-          _goToChapter(idx);
+          _goToChapter(idx, pageIndex: pageIndex);
         } else {
           final byUrl =
               widget.allChapters.indexWhere((c) => c.url == chapter.url);
-          if (byUrl >= 0) _goToChapter(byUrl);
+          if (byUrl >= 0) _goToChapter(byUrl, pageIndex: pageIndex);
         }
       },
     );

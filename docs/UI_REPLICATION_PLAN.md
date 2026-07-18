@@ -163,8 +163,8 @@
 | 15 | `activity_cloud_backup.xml` | 云端备份 | ✅ `backup_config_page.dart` | 需核对 |
 | 16 | `activity_import_book.xml` | 本地导入 | ✅ 书架菜单 | 需核对 |
 | 17 | `activity_rss_source.xml` | RSS 源管理 | ✅ `rss_source_manage_page.dart` | 需核对 |
-| 18 | `activity_rss_artivles.xml` | RSS 文章列表 | ❌ **缺失** | 需要新建 |
-| 19 | `activity_rss_read.xml` | RSS 阅读 | ❌ **缺失** | 需要新建 |
+| 18 | `activity_rss_artivles.xml` | RSS 文章列表 | ✅ `rss_articles_page.dart` | 需核对 |
+| 19 | `activity_rss_read.xml` | RSS 阅读 | ✅ `rss_read_page` 等 | 需核对 |
 | 20 | `activity_all_bookmark.xml` | 书签列表 | ✅ `bookmark_page.dart` | UI-8：书签/想法 Tab；跳转阅读器仍开放 |
 | 21 | `activity_arrange_book.xml` | 书架整理 | ❌ **缺失** | 需要新建 |
 | 22 | `activity_cache_book.xml` | 缓存管理 | ✅ `cache_service.dart` 有数据 | **缺 UI 页面** |
@@ -203,7 +203,7 @@
 | 9 | `dialog_change_cover.xml` | ✅ `change_cover_page.dart` | 需核对 |
 | 10 | `dialog_ai_config.xml` | ❌ **缺失** | AI 模型/API 配置 |
 | 11 | `dialog_ai_memory.xml` | ❌ **缺失** | AI 记忆设置 |
-| 12 | `dialog_bookshelf_config.xml` | ❌ **缺失** | 书架布局/排序配置 |
+| 12 | `dialog_bookshelf_config.xml` | ✅ `bookshelf_config_dialog.dart` | 分组样式/视图/排序/开关/书名/边距 |
 | 13 | `dialog_obsidian_export.xml` | ⚠️ `note_export_service.dart`（纯逻辑） | **缺 UI 配置对话框** |
 | 14 | `dialog_search_scope.xml` | ❌ **缺失** | 搜索范围选择 |
 | 15 | `dialog_download_choice.xml` | ❌ **缺失** | 下载选项 |
@@ -248,9 +248,33 @@
 | 未读角标 | `BadgeView`：数量；有更新高亮 | 🟡 章节名推算未读数 + primary 高亮 | 缺 `totalChapterNum`/`durChapterIndex` 精确联动 |
 | "读完" / "N刷" 标签 | `read_badge` | ✅ UI-6 `ReadBadge`（详情/网格）；列表模式已按截图去掉中间进度条，改右侧角标 | |
 | 长按菜单 | 置顶/删除/移动分组/详情 | ✅ UI-7 | |
-| 更多菜单 | 添加本地/缓存全部/分组管理/整理 | ✅（整理→UI-10 占位） | |
+| 更多菜单 | 更新目录/添加本地/远程书籍/添加网址/书架管理/缓存导出/分组管理/书架布局/导出导入书单/日志 | ✅ 文案顺序对齐；UI-BS-1～5 + 书架布局 Dialog 已接通（2026-07-17） | |
 | style2 网格 | 3 列封面墙 + 分组 Drawer | ✅ `bookshelf_style2_page.dart` | 未按本次列表截图改网格 |
 | 下拉刷新 | `SwipeRefreshLayout` + accent 色 + 松手即停转圈；后台 `upToc`；单书 `RotateLoading` | ✅ `LegadoRefreshIndicator` + `refreshShelfToc`（2026-07-15） | 主框架「待更新」角标、分组 `onlyUpdateRead`/`enableRefresh` 仍开放 |
+
+#### 书架更多菜单 backlog（对照 Jingshiro，2026-07-17 记入）
+
+计划原文已覆盖或部分覆盖：
+
+| 菜单项 | 计划位置 | 现状 |
+|--------|----------|------|
+| 更新目录 | 下拉刷新 / `refreshShelfToc` | ✅ 已接菜单 |
+| 添加本地 | `activity_import_book` (#16) | ✅ 已接菜单（已去 FAB） |
+| 书架管理 | UI-10 `activity_arrange_book` | ✅ |
+| 缓存/导出 | UI-13 `activity_cache_book` | ✅ 进缓存页；导出仍开放 |
+| 书架布局 | `dialog_bookshelf_config.xml` (#12 Dialog 表) | ✅ Dialog + Tab/Folder chrome + layout/sort/flags 接线（2026-07-17） |
+
+计划中**未单列**、需补任务：
+
+| 菜单项 | Jingshiro 参考 | 建议任务 |
+|--------|----------------|----------|
+| 远程书籍 | WebDAV/远程目录选书（`RemoteBookActivity`） | ✅ **UI-BS-1** 对齐 Jingshiro：根目录 `{dir}/books/`、多选加入书架、排序/筛选、服务器配置（2026-07-17） |
+| 添加网址 | 粘贴书籍详情 URL → 匹配书源加入书架 | ✅ **UI-BS-2** 对齐 Jingshiro：多行 URL、UrlOption/域名/bookUrlPattern、**直接入库**（2026-07-17） |
+| 导出书单 | 书架书目导出（JSON/分享） | ✅ **UI-BS-3** 仅 `{name,author,intro}` → `bookshelf.json`（2026-07-17） |
+| 导入书单 | 从文件/URL 导入书单 | ✅ **UI-BS-4** url/json + 选文件 → 按 name/author **精准搜索**入库（2026-07-17） |
+| 日志 | App 运行/更新日志（非书源调试） | ✅ **UI-BS-5** AppLogDialog，最多 100 条最新在前（2026-07-17） |
+
+> 菜单项均已接线；书架布局 Dialog 已完整对齐 Jingshiro（2026-07-17）。
 
 ### 2.3 「我的」页 (`ui/main/my/MyFragment` ⚔ `my_page.dart`)
 
@@ -344,13 +368,15 @@
 
 | 对照项 | Jingshiro | Flutter 现状 | 差距 |
 |--------|-----------|-------------|------|
-| 绿/红/灰点 | 校验通过/失败/未校验 | ✅ UI-4 `SourceStatusDot` | |
-| 分组标题 | 按 `bookSourceGroup` 分组 | ✅ `SectionHeader` 分组 | |
-| 批量操作 | 多选→启用/禁用/分组/校验/删除 | ✅ UI-4 底栏批量操作 | |
-| 导入方式 | JSON/URL/二维码/本地文件/剪贴板 | ✅ 已有大部分 | **缺二维码扫描** |
-| 校验书源 | `CheckSourceActivity` | ✅ `validate_source()` | |
-| 搜索书源 | 书源内搜索 | ✅ UI-4 名称/分组/URL | |
-| 排序 | 按名称/分组/启用状态 | ✅ UI-4 | |
+| 顶栏搜索 | TitleBar + `view_search` hint「搜索书源」 | ✅ 主色顶栏内嵌搜索（2026-07-17） | |
+| 排序菜单 | 降序 + 手动/名称/URL/启用… | ✅ 降序/手动/名称/URL/启用 | respondTime/lastUpdateTime 仍开放 |
+| 分组菜单 | 分组管理/启用禁用/登录/未分组/发现开闭/分组名 | ✅ 筛选项对齐；分组管理 Dialog 占位 | |
+| 更多菜单 | 新建/本地/网络/二维码/按域名分组/帮助 | ✅ + 粘贴/市场/校验已启用 | 帮助占位 |
+| 列表行 | 勾选+名 \| Switch \| 编辑 \| ⋮ \| 发现绿点 | ✅ `item_book_source` 对齐 | |
+| 绿/红/灰点 | 校验状态 | ✅ 书名旁 `SourceStatusDot` | |
+| 底栏 | SelectActionBar 全选/反选/删除/⋮ | ✅ 常驻（2026-07-17） | |
+| 批量操作 | 启用/禁用/分组/校验/删除 | ✅ | |
+| 导入方式 | JSON/URL/二维码/剪贴板 | ✅ | |
 
 ---
 
@@ -705,14 +731,14 @@ Task UI-12:  RSS 文章列表 + 阅读  ✅ 复用 Jingshiro Rss/ParserByRule/De
 | 分类 | 完成度 | 说明 |
 |------|:---:|------|
 | 主框架 + 导航 | 85% | 四 Tab 就位，缺角标/默认首页/可配置隐藏 |
-| 书架 | 92% | UI-7：长按菜单 + 列表布局对齐截图（顶栏 Tab/四行元数据/角标）；精确未读章数与整理拖拽仍开放 |
+| 书架 | 95% | UI-7 + UI-BS-1～5（远程/网址/书单/日志）；精确未读章数与完整布局 Dialog 仍开放 |
 | 我的页 | 97% | UI-8：快捷四格长按+Web 状态；UI-18 文件管理 1:1；书签/想法 Tab；TXT 目录规则+字典规则已落地 |
 | 搜索 | 90% | UI-3：按书源分组 + 精准搜索 + Scope |
 | 发现 | 85% | 接近完成 |
 | 书籍详情 | 96% | UI-6：截图布局（模糊头图/红芯片/删除+阅读底栏）；换源页后端仍占位；图标字形可再抠 |
 | 目录 | 95% | UI-5：全页 AppBar+字数/云标+底栏；溢出菜单次级项仍可再抠 |
 | **阅读器** | **93%** | UI-1+UI-2：超时分档+翻页五档+沉浸+系统 TTS+全文搜索(缓存)+模拟追读+主题 zip；HTTP TTS/词级简繁/全书联网搜仍开放 |
-| 书源管理 | 96% | UI-4+UI-28：编辑六 Tab 表单对齐；键盘条/ruleComplete/真 QR 仍开放 |
+| 书源管理 | 97% | UI-4 chrome 2026-07-17 对齐 Jingshiro（搜索顶栏/行布局/SelectActionBar）；分组管理 Dialog、部分排序维度仍开放 |
 | RSS | 92% | UI-12：列表+阅读+sortUrl Tab+收藏+源编辑；调试仍开放 |
 | 新模块(有声/漫画/扫码等) | 40% | UI-17 扫码基本完成；UI-22/23/25 已 1:1 chrome 返工（MP3/真漫画源/店铺仍开放） |
 | **综合** | **~60%** | |
@@ -796,10 +822,13 @@ Task UI-12:  RSS 文章列表 + 阅读  ✅ 复用 Jingshiro Rss/ParserByRule/De
 
 **不要把下列项当成故意简化（属缺陷，应优先修）：**
 
-- 换源页占位、登录头未注入常规 HTTP、`loginCheckJs` / `preUpdateJs` 未执行  
-- 书票 overlay 未挂阅读器、书签点击不回跳  
+- ~~换源页占位~~ → `ChangeSourcePage` + `BookProvider.changeSource` 已接  
+- ~~登录头未注入常规 HTTP~~ → `SourceLoginPrefs.mergeLoginHeaderIntoSourceJson` 经 bridge `_sourceJson`  
+- ~~`loginCheckJs` / `preUpdateJs` 未执行~~ → 引擎已跑；loginCheckJs 已兼容 StrResponse（`body()`/`url()`/`source`）  
+- ~~书票 overlay 未挂阅读器~~ → `ReaderPage._buildBookplate`  
+- ~~书签点击不回跳~~ → 书签页/目录书签 Tab 回跳章节+页（解析「第N页」）  
 - 阅读内替换净化运行时开关等「入口有、行为无」项  
 
 ---
 
-> 最后更新：2026-07-16 | 引擎 v0.5.6 | Focus: UI 复刻；**【故意简化·后做】**见第八节；缺陷并行维修中 | 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)
+> 最后更新：2026-07-18 | 引擎 v0.5.6 | Focus: UI 复刻；**【故意简化·后做】**见第八节；缺陷并行维修（换源/登录头/loginCheckJs/书票/书签回跳已修） | 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)

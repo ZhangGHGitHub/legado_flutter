@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../help/book_help.dart';
+import '../../help/bookmark_hint.dart';
 import '../../models/chapter.dart';
 import '../../services/note_service.dart';
 import '../../src/rust/api.dart' as rust_api;
+
+/// 选中章节；[pageIndex] 为书签回跳时的 0-based 页索引。
+typedef TocChapterTap = void Function(Chapter chapter, {int? pageIndex});
 
 /// 章节目录页 — 对齐 Legado `ChapterList` / `activity_chapter_list`
 /// （顶栏返回+目录/书签 Tab+搜索+菜单；缓存字数 / 未缓存云标；底栏进度+顶底跳转）
@@ -12,7 +16,7 @@ class TocSheet extends StatefulWidget {
   final String? currentChapter;
   final String? currentChapterId;
   final String? bookId;
-  final ValueChanged<Chapter> onChapterTap;
+  final TocChapterTap onChapterTap;
 
   const TocSheet({
     super.key,
@@ -29,7 +33,7 @@ class TocSheet extends StatefulWidget {
     String? currentChapter,
     String? currentChapterId,
     String? bookId,
-    required ValueChanged<Chapter> onChapterTap,
+    required TocChapterTap onChapterTap,
   }) {
     return Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -542,8 +546,10 @@ class _TocSheetState extends State<TocSheet>
               ? null
               : () {
                   final target = chapter!;
+                  final pageIndex =
+                      bookmarkPageIndexFromNote(bm.noteContent);
                   Navigator.pop(context);
-                  widget.onChapterTap(target);
+                  widget.onChapterTap(target, pageIndex: pageIndex);
                 },
         );
       },

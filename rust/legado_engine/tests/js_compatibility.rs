@@ -166,6 +166,14 @@ fn login_check_js_failure_keeps_body() {
 }
 
 #[test]
+fn login_check_js_str_response_body_and_source() {
+    // 对齐恩木类源：result.body() / result.url() / source.bookSourceUrl
+    let src = r#"{"bookSourceUrl":"https://enmu.example","loginCheckJs":"var b=result.body(); if(b.indexOf('NEED')>=0){ result=new __StrResponse(b.replace('NEED','DONE'), result.url()); } result;","jsLib":""}"#;
+    let out = js_engine::apply_login_check_js(src, "NEED login", "https://enmu.example/book");
+    assert_eq!(out, "DONE login");
+}
+
+#[test]
 fn pre_update_js_runs_and_writes_cache() {
     let _ = js_engine::reset_cache();
     let source = BookSource::from_json(

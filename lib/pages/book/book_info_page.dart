@@ -468,7 +468,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
       chapters: chapters,
       currentChapter: _book.currentChapter,
       bookId: _book.id,
-      onChapterTap: (chapter) async {
+      onChapterTap: (chapter, {int? pageIndex}) async {
         Navigator.pop(context);
         final idx = chapters.indexWhere((c) => c.id == chapter.id);
         final source = context.read<SourceProvider>().findSourceForBook(_book);
@@ -486,6 +486,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
                     book: _book,
                     chapter: chapter,
                     allChapters: chapters,
+                    initialPageIndex: pageIndex,
                   ),
           ),
         );
