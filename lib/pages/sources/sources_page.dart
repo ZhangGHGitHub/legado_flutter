@@ -360,15 +360,19 @@ class _SourcesPageState extends State<SourcesPage> {
     );
     if (group == null || !mounted) return;
     final count = _selected.length;
-    await provider.setSourcesGroup(_selected, group);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          group.isEmpty ? '已清除 $count 个书源分组' : '已将 $count 个书源移至「$group」',
-        ),
-      ),
-    );
+    if (group.isEmpty) {
+      await provider.clearGroupOnSources(_selected);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已清除 $count 个书源分组')),
+      );
+    } else {
+      await provider.setSourcesGroup(_selected, group);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已将 $count 个书源移至「$group」')),
+      );
+    }
   }
 
   Future<void> _batchValidateSelected() async {
@@ -506,10 +510,17 @@ class _SourcesPageState extends State<SourcesPage> {
         SnackBar(content: Text('已清除 $n 个书源的全部分组')),
       );
     } else {
+      final withTag = provider.sources
+          .where(
+            (s) =>
+                _selected.contains(s.bookSourceUrl) &&
+                sourceHasGroupTag(s.bookSourceGroup, choice),
+          )
+          .length;
       await provider.removeGroupTagFromSources(_selected, choice);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已从 $n 个书源移除「$choice」')),
+        SnackBar(content: Text('已从 $withTag 个书源移除「$choice」')),
       );
     }
   }
