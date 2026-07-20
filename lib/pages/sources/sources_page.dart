@@ -11,6 +11,7 @@ import '../../providers/source_provider.dart';
 import '../../services/reader_font_loader.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/error_view.dart';
+import '../../widgets/import_book_source_dialog.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../../widgets/source_group_manage_dialog.dart';
 import '../../widgets/source_status_dot.dart';
@@ -1335,8 +1336,65 @@ class _SourcesPageState extends State<SourcesPage> {
 
   // ── 导入 / 校验（保留原业务） ──
 
-  Future<void> _importFromJsonFile(BuildContext context) async {
+  static bool _looksLikeImportUrl(String text) {
+    final t = text.trim();
+    if (RegExp(r'^https?://', caseSensitive: false).hasMatch(t)) return true;
+    final uri = Uri.tryParse(t);
+    return uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty;
+  }
+
+  Future<void> _parseAndPreviewImport(BuildContext context, String text) async {
     final provider = context.read<SourceProvider>();
+    final showLoading = _looksLikeImportUrl(text);
+    if (showLoading && context.mounted) {
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    List<BookSource>? candidates;
+    try {
+      candidates = await provider.parseSourcesForImport(text);
+    } catch (e) {
+      if (showLoading && context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导入失败: $e'), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
+
+    if (showLoading && context.mounted) Navigator.pop(context);
+    if (!context.mounted) return;
+
+    if (candidates == null || candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('未找到有效书源数据'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final existingByUrl = {
+      for (final s in provider.sources) s.bookSourceUrl: s,
+    };
+    await showDialog<void>(
+      context: context,
+      builder: (_) => ImportBookSourceDialog(
+        candidates: candidates!,
+        existingByUrl: existingByUrl,
+      ),
+    );
+  }
+
+  Future<void> _importFromJsonFile(BuildContext context) async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -1345,15 +1403,8 @@ class _SourcesPageState extends State<SourcesPage> {
       if (result == null || result.files.isEmpty) return;
       final file = File(result.files.single.path!);
       final jsonText = await file.readAsString();
-      final success = await provider.importSources(jsonText);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(success ? '书源导入成功' : '导入失败，请检查文件内容'),
-            backgroundColor: success ? null : Colors.red,
-          ),
-        );
-      }
+      if (!context.mounted) return;
+      await _parseAndPreviewImport(context, jsonText);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1369,23 +1420,7 @@ class _SourcesPageState extends State<SourcesPage> {
       MaterialPageRoute(builder: (_) => const QrCodeCapturePage()),
     );
     if (result == null || result.isEmpty || !context.mounted) return;
-    final provider = context.read<SourceProvider>();
-    final success = await provider.importSources(result);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? (provider.statusMessage.isNotEmpty
-                  ? provider.statusMessage
-                  : '书源导入成功')
-              : (provider.statusMessage.isNotEmpty
-                  ? provider.statusMessage
-                  : '导入失败'),
-        ),
-        backgroundColor: success ? null : Colors.red,
-      ),
-    );
+    await _parseAndPreviewImport(context, result);
   }
 
   void _showImportUrlDialog(BuildContext context) {
@@ -1412,18 +1447,7 @@ class _SourcesPageState extends State<SourcesPage> {
               final url = controller.text.trim();
               if (url.isEmpty) return;
               Navigator.pop(ctx);
-              final provider = context.read<SourceProvider>();
-              final success = await provider.importSourcesFromUrl(url);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  success
-                      ? const SnackBar(content: Text('书源导入成功'))
-                      : const SnackBar(
-                          content: Text('导入失败，请检查 URL'),
-                          backgroundColor: Colors.red,
-                        ),
-                );
-              }
+              await _parseAndPreviewImport(context, url);
             },
             child: const Text('导入'),
           ),
