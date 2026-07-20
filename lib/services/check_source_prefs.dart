@@ -7,6 +7,7 @@ abstract final class CheckSourcePrefs {
   static const checkDiscoveryKey = 'check_discovery';
   static const checkTocKey = 'check_toc';
   static const checkContentKey = 'check_content';
+  static const showDebugMessageKey = 'check_source_show_debug_message';
   static const lastKeywordKey = 'check_source_last_keyword';
 
   static const defaultTimeoutSec = 30;
@@ -59,6 +60,16 @@ abstract final class CheckSourcePrefs {
   static Future<void> setCheckContent(bool v) async {
     final p = await SharedPreferences.getInstance();
     await p.setBool(checkContentKey, v);
+  }
+
+  static Future<bool> showDebugMessage() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getBool(showDebugMessageKey) ?? true;
+  }
+
+  static Future<void> setShowDebugMessage(bool v) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(showDebugMessageKey, v);
   }
 
   static Future<String> lastKeyword() async {

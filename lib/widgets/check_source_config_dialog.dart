@@ -28,6 +28,7 @@ class _CheckSourceConfigDialogState extends State<CheckSourceConfigDialog> {
   bool _checkDiscovery = true;
   bool _checkToc = true;
   bool _checkContent = true;
+  bool _showDebugMessage = true;
   bool _loading = true;
 
   @override
@@ -43,6 +44,7 @@ class _CheckSourceConfigDialogState extends State<CheckSourceConfigDialog> {
     final discovery = await CheckSourcePrefs.checkDiscovery();
     final toc = await CheckSourcePrefs.checkToc();
     final content = await CheckSourcePrefs.checkContent();
+    final showDebug = await CheckSourcePrefs.showDebugMessage();
     if (!mounted) return;
     setState(() {
       _timeoutCtrl.text = '$timeout';
@@ -50,6 +52,7 @@ class _CheckSourceConfigDialogState extends State<CheckSourceConfigDialog> {
       _checkDiscovery = discovery;
       _checkToc = toc;
       _checkContent = content;
+      _showDebugMessage = showDebug;
       _loading = false;
     });
   }
@@ -81,6 +84,7 @@ class _CheckSourceConfigDialogState extends State<CheckSourceConfigDialog> {
     await CheckSourcePrefs.setCheckDiscovery(_checkDiscovery);
     await CheckSourcePrefs.setCheckToc(_checkToc);
     await CheckSourcePrefs.setCheckContent(_checkContent);
+    await CheckSourcePrefs.setShowDebugMessage(_showDebugMessage);
     if (!mounted) return;
     Navigator.pop(context);
   }
@@ -143,6 +147,13 @@ class _CheckSourceConfigDialogState extends State<CheckSourceConfigDialog> {
                     title: const Text('正文'),
                     value: _checkContent,
                     onChanged: (v) => setState(() => _checkContent = v),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('显示详细信息'),
+                    subtitle: const Text('校验时在书源行显示步骤文案'),
+                    value: _showDebugMessage,
+                    onChanged: (v) => setState(() => _showDebugMessage = v),
                   ),
                 ],
               ),

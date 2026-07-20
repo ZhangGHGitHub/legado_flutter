@@ -23,6 +23,7 @@ class SourceProvider extends ChangeNotifier {
   List<BookSource> _sources = [];
   Map<String, List<Book>> _searchResults = {};
   final Map<String, SourceValidationResult> _validationResults = {};
+  final Map<String, String> _validationProgress = {};
   bool _isLoading = false;
   bool _isValidating = false;
   String _statusMessage = '';
@@ -41,6 +42,17 @@ class SourceProvider extends ChangeNotifier {
 
   SourceValidationResult? validationOf(String sourceUrl) =>
       _validationResults[sourceUrl];
+
+  String? validationProgressOf(String sourceUrl) => _validationProgress[sourceUrl];
+
+  void _setValidationProgress(String sourceUrl, String? message) {
+    if (message == null || message.isEmpty) {
+      _validationProgress.remove(sourceUrl);
+    } else {
+      _validationProgress[sourceUrl] = message;
+    }
+    notifyListeners();
+  }
 
   /// 分组筛选/管理用：目录 ∪ 书源已有分组标签（不强制改书源）
   List<String> get knownGroups {
@@ -618,9 +630,24 @@ class SourceProvider extends ChangeNotifier {
     final checkToc = await CheckSourcePrefs.checkToc();
     final checkContent = await CheckSourcePrefs.checkContent();
 
+    final url = source.bookSourceUrl;
+    final stages = <String>[
+      if (checkSearch) '搜索中…',
+      if (checkDiscovery) '发现…',
+      if (checkToc) '目录…',
+      if (checkContent) '正文…',
+    ];
+    if (stages.isEmpty) stages.add('校验中…');
+
     _isValidating = true;
-    _validatingSourceUrl = source.bookSourceUrl;
-    notifyListeners();
+    _validatingSourceUrl = url;
+    var stageIndex = 0;
+    _setValidationProgress(url, stages[stageIndex]);
+    final stageTimer = Timer.periodic(const Duration(milliseconds: 900), (_) {
+      if (stageIndex >= stages.length - 1) return;
+      stageIndex++;
+      _setValidationProgress(url, stages[stageIndex]);
+    });
 
     try {
       final raw = await LegadoEngineBridge.validateSource(
@@ -639,23 +666,27 @@ class SourceProvider extends ChangeNotifier {
         checkToc: checkToc,
         checkContent: checkContent,
       );
-      _validationResults[source.bookSourceUrl] = result;
-      await SourceValidationStore.put(source.bookSourceUrl, result);
+      _validationResults[url] = result;
+      await SourceValidationStore.put(url, result);
 
       if (result.searchTimeMs > 0) {
         await _dao.update(source.copyWith(respondTime: result.searchTimeMs));
         _sources = await _dao.getAll();
       }
 
+      _setValidationProgress(url, '完成');
       _statusMessage = result.allOk
           ? '${source.bookSourceName} 校验通过'
           : '${source.bookSourceName} 校验未完全通过';
       return result;
     } catch (e) {
       debugPrint('  ✗ 校验失败 ${source.bookSourceName}: $e');
+      _setValidationProgress(url, '失败: $e');
       _statusMessage = '校验失败: $e';
       return null;
     } finally {
+      stageTimer.cancel();
+      _setValidationProgress(url, null);
       _isValidating = false;
       _validatingSourceUrl = null;
       notifyListeners();

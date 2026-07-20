@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
 import '../../services/import_url_history_store.dart';
+import '../../services/check_source_prefs.dart';
 import '../../services/source_group_tags.dart';
 import '../../services/source_manage_help_prefs.dart';
 import '../../services/reader_font_loader.dart';
@@ -69,6 +70,7 @@ class _SourcesPageState extends State<SourcesPage> {
   /// all | enabled | disabled | login | null_group | explore_on | explore_off | group:xxx
   String _filter = 'all';
   bool _groupByDomain = false;
+  bool _showDebugMessage = true;
 
   bool _dragSelectActive = false;
   bool _dragSelectMode = true;
@@ -85,7 +87,14 @@ class _SourcesPageState extends State<SourcesPage> {
   @override
   void initState() {
     super.initState();
+    _loadCheckSourceUiPrefs();
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoShowHelp());
+  }
+
+  Future<void> _loadCheckSourceUiPrefs() async {
+    final showDebug = await CheckSourcePrefs.showDebugMessage();
+    if (!mounted) return;
+    setState(() => _showDebugMessage = showDebug);
   }
 
   Future<void> _maybeAutoShowHelp() async {
@@ -570,6 +579,7 @@ class _SourcesPageState extends State<SourcesPage> {
   Future<void> _batchValidateSelected() async {
     if (_selected.isEmpty) return;
     final keyword = await showCheckSourceKeywordDialog(context);
+    await _loadCheckSourceUiPrefs();
     if (keyword == null || !mounted) return;
     final provider = context.read<SourceProvider>();
     final selected = provider.sources
@@ -1359,6 +1369,7 @@ class _SourcesPageState extends State<SourcesPage> {
     final validating = provider.isValidating &&
         provider.validatingSourceUrl == s.bookSourceUrl;
     final validation = provider.validationOf(s.bookSourceUrl);
+    final progressMessage = provider.validationProgressOf(s.bookSourceUrl);
     final hasExplore = hasExploreUrl(s);
     final group = s.bookSourceGroup.trim();
     final displayName =
@@ -1405,16 +1416,32 @@ class _SourcesPageState extends State<SourcesPage> {
                 children: [
                   SourceStatusDot(source: s, validation: validation),
                   Expanded(
-                    child: Text(
-                      displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _uiText(
-                        color: s.enabled
-                            ? scheme.onSurface
-                            : scheme.onSurface.withValues(alpha: 0.55),
-                        size: 15,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _uiText(
+                            color: s.enabled
+                                ? scheme.onSurface
+                                : scheme.onSurface.withValues(alpha: 0.55),
+                            size: 15,
+                          ),
+                        ),
+                        if (_showDebugMessage && progressMessage != null)
+                          Text(
+                            progressMessage,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _uiText(
+                              color: scheme.onSurface.withValues(alpha: 0.45),
+                              size: 12,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   if (validating)
@@ -1743,6 +1770,7 @@ class _SourcesPageState extends State<SourcesPage> {
 
   Future<void> _validateOne(BuildContext context, BookSource source) async {
     final keyword = await showCheckSourceKeywordDialog(context);
+    await _loadCheckSourceUiPrefs();
     if (keyword == null || !context.mounted) return;
     final provider = context.read<SourceProvider>();
     final result = await provider.validateSource(

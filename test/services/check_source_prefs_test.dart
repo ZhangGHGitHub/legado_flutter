@@ -21,6 +21,10 @@ void main() {
       expect(await CheckSourcePrefs.checkContent(), isTrue);
     });
 
+    test('showDebugMessage defaults to true', () async {
+      expect(await CheckSourcePrefs.showDebugMessage(), isTrue);
+    });
+
     test('lastKeyword defaults to empty', () async {
       expect(await CheckSourcePrefs.lastKeyword(), '');
     });
@@ -33,12 +37,14 @@ void main() {
       await CheckSourcePrefs.setCheckDiscovery(false);
       await CheckSourcePrefs.setCheckToc(false);
       await CheckSourcePrefs.setCheckContent(false);
+      await CheckSourcePrefs.setShowDebugMessage(false);
 
       expect(await CheckSourcePrefs.timeoutSec(), 45);
       expect(await CheckSourcePrefs.checkSearch(), isFalse);
       expect(await CheckSourcePrefs.checkDiscovery(), isFalse);
       expect(await CheckSourcePrefs.checkToc(), isFalse);
       expect(await CheckSourcePrefs.checkContent(), isFalse);
+      expect(await CheckSourcePrefs.showDebugMessage(), isFalse);
     });
 
     test('persists last keyword', () async {
