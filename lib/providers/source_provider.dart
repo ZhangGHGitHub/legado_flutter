@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -8,7 +9,10 @@ import '../models/source_validation_result.dart';
 import '../bridge/legado_engine_bridge.dart';
 import '../database/dao/source_dao.dart';
 import '../services/book_source_service.dart';
+import '../services/check_source_prefs.dart';
 import '../services/source_group_catalog.dart';
+import '../services/source_group_tags.dart';
+import '../services/source_validation_store.dart';
 import 'source_order.dart';
 
 /// 书源管理 Provider — 书源 CRUD、搜索
@@ -38,12 +42,13 @@ class SourceProvider extends ChangeNotifier {
   SourceValidationResult? validationOf(String sourceUrl) =>
       _validationResults[sourceUrl];
 
-  /// 分组筛选/管理用：目录 ∪ 书源已有分组（不强制改书源）
+  /// 分组筛选/管理用：目录 ∪ 书源已有分组标签（不强制改书源）
   List<String> get knownGroups {
     final set = SourceGroupCatalog.names.toSet();
     for (final s in _sources) {
-      final g = s.bookSourceGroup.trim();
-      if (g.isNotEmpty) set.add(g);
+      for (final tag in splitSourceGroups(s.bookSourceGroup)) {
+        set.add(tag);
+      }
     }
     return set.toList()..sort();
   }
@@ -59,6 +64,9 @@ class SourceProvider extends ChangeNotifier {
       await SourceGroupCatalog.mergeFromSources(
         _sources.map((s) => s.bookSourceGroup),
       );
+      _validationResults
+        ..clear()
+        ..addAll(await SourceValidationStore.load());
       _loadError = null;
     } catch (e) {
       _loadError = '加载书源失败: $e';
@@ -76,14 +84,21 @@ class SourceProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 重命名分组（目录 + 所有该分组书源）
+  /// 重命名分组（目录 + 所有含该标签的书源）
   Future<void> renameGroup(String oldName, String newName) async {
     if (oldName == newName) return;
     await SourceGroupCatalog.rename(oldName, newName);
     for (final s in _sources) {
-      if (s.bookSourceGroup.trim() == oldName) {
-        await _dao.update(s.copyWith(bookSourceGroup: newName));
-      }
+      if (!sourceHasGroupTag(s.bookSourceGroup, oldName)) continue;
+      await _dao.update(
+        s.copyWith(
+          bookSourceGroup: renameSourceGroupTag(
+            s.bookSourceGroup,
+            oldName,
+            newName,
+          ),
+        ),
+      );
     }
     _sources = await _dao.getAll();
     notifyListeners();
@@ -98,16 +113,59 @@ class SourceProvider extends ChangeNotifier {
     return added;
   }
 
-  /// 删除分组（目录移除；该书源 group 清空）
+  /// 删除分组（目录移除；从各书源去掉该标签，其它标签保留）
   Future<void> deleteGroup(String groupName) async {
     await SourceGroupCatalog.remove(groupName);
     for (final s in _sources) {
-      if (s.bookSourceGroup.trim() == groupName) {
-        await _dao.update(s.copyWith(bookSourceGroup: ''));
-      }
+      if (!sourceHasGroupTag(s.bookSourceGroup, groupName)) continue;
+      await _dao.update(
+        s.copyWith(
+          bookSourceGroup: removeSourceGroupTag(s.bookSourceGroup, groupName),
+        ),
+      );
     }
     _sources = await _dao.getAll();
     notifyListeners();
+  }
+
+  /// 解析导入文本为书源列表（不写库；URL 则先拉网）
+  Future<List<BookSource>?> parseSourcesForImport(String text) async {
+    final normalized = _normalizeImportText(text);
+    if (normalized.isEmpty) return null;
+
+    if (_looksLikeUrl(normalized)) {
+      try {
+        final sources = await BookSourceService.fetchSourcesFromUrl(normalized);
+        return sources.isEmpty ? null : sources;
+      } catch (e) {
+        debugPrint('  ✗ 从 URL 解析书源失败: $e');
+        return null;
+      }
+    }
+
+    try {
+      final decoded = jsonDecode(normalized);
+      final list = _extractSourceList(decoded);
+      if (list == null || list.isEmpty) return null;
+      final sources = list
+          .whereType<Map<String, dynamic>>()
+          .map((e) => BookSource.fromJson(e))
+          .toList();
+      return sources.isEmpty ? null : sources;
+    } catch (e) {
+      debugPrint('  ✗ JSON 解析失败: $e');
+      return null;
+    }
+  }
+
+  /// 写入已解析的书源（仅 upsert 传入列表）
+  Future<bool> importParsedSources(List<BookSource> sources) async {
+    if (sources.isEmpty) return false;
+    await _dao.upsertAll(sources);
+    _sources = await _dao.getAll();
+    _statusMessage = '已导入 ${sources.length} 个书源';
+    notifyListeners();
+    return true;
   }
 
   /// 从 JSON 文本或书源订阅 URL 导入
@@ -124,24 +182,12 @@ class SourceProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      final decoded = jsonDecode(text);
-      final list = _extractSourceList(decoded);
-      if (list == null || list.isEmpty) {
+      final sources = await parseSourcesForImport(text);
+      if (sources == null || sources.isEmpty) {
         _statusMessage = '未找到有效书源数据';
         return false;
       }
-      final sources = list
-          .whereType<Map<String, dynamic>>()
-          .map((e) => BookSource.fromJson(e))
-          .toList();
-      if (sources.isEmpty) {
-        _statusMessage = '书源格式无效';
-        return false;
-      }
-      await _dao.upsertAll(sources);
-      _sources = await _dao.getAll();
-      _statusMessage = '已导入 ${sources.length} 个书源';
-      return true;
+      return await importParsedSources(sources);
     } catch (e) {
       debugPrint('  ✗ JSON 解析失败: $e');
       _statusMessage = 'JSON 解析失败，请检查格式或改用「从URL导入」';
@@ -176,6 +222,12 @@ class SourceProvider extends ChangeNotifier {
   }
 
   static List<dynamic>? _extractSourceList(dynamic decoded) {
+    return extractSourceListFromDecoded(decoded);
+  }
+
+  /// 从已解码 JSON 提取书源数组（供导入预览与测试使用）
+  @visibleForTesting
+  static List<dynamic>? extractSourceListFromDecoded(dynamic decoded) {
     if (decoded is List) return decoded;
     if (decoded is Map) {
       if (decoded.containsKey('bookSourceUrl') ||
@@ -223,13 +275,12 @@ class SourceProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      final sources = await BookSourceService.fetchSourcesFromUrl(url);
-      if (sources.isEmpty) {
+      final sources = await parseSourcesForImport(url);
+      if (sources == null || sources.isEmpty) {
         _statusMessage = 'URL 未返回有效书源，请检查链接或网络';
         return false;
       }
-      await _dao.upsertAll(sources);
-      _sources = await _dao.getAll();
+      await importParsedSources(sources);
       _statusMessage = '已从 URL 导入 ${sources.length} 个书源';
       notifyListeners();
       return true;
@@ -254,6 +305,7 @@ class SourceProvider extends ChangeNotifier {
   Future<void> deleteSource(String sourceUrl) async {
     await _dao.delete(sourceUrl);
     _validationResults.remove(sourceUrl);
+    await SourceValidationStore.remove(sourceUrl);
     _sources = await _dao.getAll();
     notifyListeners();
   }
@@ -279,6 +331,7 @@ class SourceProvider extends ChangeNotifier {
     for (final url in urls) {
       await _dao.delete(url);
       _validationResults.remove(url);
+      await SourceValidationStore.remove(url);
     }
     _sources = await _dao.getAll();
     notifyListeners();
@@ -348,26 +401,51 @@ class SourceProvider extends ChangeNotifier {
     return jsonEncode(list);
   }
 
-  /// 为选中书源设置分组
+  /// 为选中书源追加分组标签（保留已有标签）
   Future<void> addGroupToSources(Iterable<String> urls, String group) async {
     final urlSet = urls.toSet();
-    if (urlSet.isEmpty) return;
+    final tag = group.trim();
+    if (urlSet.isEmpty || tag.isEmpty) return;
     for (final s in _sources) {
       if (!urlSet.contains(s.bookSourceUrl)) continue;
-      await _dao.update(s.copyWith(bookSourceGroup: group));
+      final next = addSourceGroupTag(s.bookSourceGroup, tag);
+      if (next == s.bookSourceGroup) continue;
+      await _dao.update(s.copyWith(bookSourceGroup: next));
     }
     _sources = await _dao.getAll();
-    await SourceGroupCatalog.mergeFromSources([group]);
+    await SourceGroupCatalog.mergeFromSources([tag]);
     notifyListeners();
   }
 
-  /// 清除选中书源的分组
+  /// 清除选中书源的全部分组标签
   Future<void> clearGroupOnSources(Iterable<String> urls) async {
     final urlSet = urls.toSet();
     if (urlSet.isEmpty) return;
     for (final s in _sources) {
       if (!urlSet.contains(s.bookSourceUrl)) continue;
+      if (s.bookSourceGroup.isEmpty) continue;
       await _dao.update(s.copyWith(bookSourceGroup: ''));
+    }
+    _sources = await _dao.getAll();
+    notifyListeners();
+  }
+
+  /// 从选中书源移除单个分组标签（其它标签保留）
+  Future<void> removeGroupTagFromSources(
+    Iterable<String> urls,
+    String tag,
+  ) async {
+    final urlSet = urls.toSet();
+    final trimmed = tag.trim();
+    if (urlSet.isEmpty || trimmed.isEmpty) return;
+    for (final s in _sources) {
+      if (!urlSet.contains(s.bookSourceUrl)) continue;
+      if (!sourceHasGroupTag(s.bookSourceGroup, trimmed)) continue;
+      await _dao.update(
+        s.copyWith(
+          bookSourceGroup: removeSourceGroupTag(s.bookSourceGroup, trimmed),
+        ),
+      );
     }
     _sources = await _dao.getAll();
     notifyListeners();
@@ -521,11 +599,24 @@ class SourceProvider extends ChangeNotifier {
       return null;
     }
 
-    final key = defaultValidationKeyword(
+    final fallback = defaultValidationKeyword(
       source.bookSourceName,
       source.bookSourceUrl,
     );
-    final query = (keyword?.trim().isNotEmpty == true) ? keyword!.trim() : key;
+    String query;
+    if (keyword?.trim().isNotEmpty == true) {
+      query = keyword!.trim();
+      await CheckSourcePrefs.setLastKeyword(query);
+    } else {
+      final lastKw = await CheckSourcePrefs.lastKeyword();
+      query = lastKw.isNotEmpty ? lastKw : fallback;
+    }
+
+    final timeoutSec = await CheckSourcePrefs.timeoutSec();
+    final checkSearch = await CheckSourcePrefs.checkSearch();
+    final checkDiscovery = await CheckSourcePrefs.checkDiscovery();
+    final checkToc = await CheckSourcePrefs.checkToc();
+    final checkContent = await CheckSourcePrefs.checkContent();
 
     _isValidating = true;
     _validatingSourceUrl = source.bookSourceUrl;
@@ -535,9 +626,27 @@ class SourceProvider extends ChangeNotifier {
       final raw = await LegadoEngineBridge.validateSource(
         source,
         keyword: query,
+      ).timeout(
+        Duration(seconds: timeoutSec),
+        onTimeout: () {
+          throw TimeoutException('校验超时 (${timeoutSec}s)');
+        },
       );
-      final result = SourceValidationResult.fromRust(raw);
+      final result = _applyCheckPrefsToResult(
+        SourceValidationResult.fromRust(raw),
+        checkSearch: checkSearch,
+        checkDiscovery: checkDiscovery,
+        checkToc: checkToc,
+        checkContent: checkContent,
+      );
       _validationResults[source.bookSourceUrl] = result;
+      await SourceValidationStore.put(source.bookSourceUrl, result);
+
+      if (result.searchTimeMs > 0) {
+        await _dao.update(source.copyWith(respondTime: result.searchTimeMs));
+        _sources = await _dao.getAll();
+      }
+
       _statusMessage = result.allOk
           ? '${source.bookSourceName} 校验通过'
           : '${source.bookSourceName} 校验未完全通过';
@@ -553,22 +662,46 @@ class SourceProvider extends ChangeNotifier {
     }
   }
 
+  /// 未勾选的校验项在持久化结果中视为 ok，避免状态点误报。
+  static SourceValidationResult _applyCheckPrefsToResult(
+    SourceValidationResult result, {
+    required bool checkSearch,
+    required bool checkDiscovery,
+    required bool checkToc,
+    required bool checkContent,
+  }) {
+    // Skipped steps (e.g. checkToc == false) store tocOk as true so allOk
+    // aggregation and status dots ignore unchecked pipeline steps.
+    return SourceValidationResult(
+      searchOk: checkSearch ? result.searchOk : true,
+      discoveryOk: checkDiscovery ? result.discoveryOk : true,
+      tocOk: checkToc ? result.tocOk : true,
+      contentOk: checkContent ? result.contentOk : true,
+      searchTimeMs: result.searchTimeMs,
+      errors: result.errors,
+    );
+  }
+
   /// 批量校验已启用书源
-  Future<int> validateEnabledSources({void Function(int done, int total)? onProgress}) async {
+  Future<int> validateEnabledSources({
+    String? keyword,
+    void Function(int done, int total)? onProgress,
+  }) async {
     final enabled = _sources.where((s) => s.enabled).toList();
-    return validateSources(enabled, onProgress: onProgress);
+    return validateSources(enabled, keyword: keyword, onProgress: onProgress);
   }
 
   /// 批量校验指定书源
   Future<int> validateSources(
     List<BookSource> sources, {
+    String? keyword,
     void Function(int done, int total)? onProgress,
   }) async {
     if (sources.isEmpty) return 0;
     var passed = 0;
     for (var i = 0; i < sources.length; i++) {
       onProgress?.call(i, sources.length);
-      final result = await validateSource(sources[i]);
+      final result = await validateSource(sources[i], keyword: keyword);
       if (result?.pipelineOk == true) passed++;
     }
     onProgress?.call(sources.length, sources.length);
