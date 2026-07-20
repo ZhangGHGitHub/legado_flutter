@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
+import '../../services/import_url_history_store.dart';
 import '../../services/source_group_tags.dart';
 import '../../services/source_manage_help_prefs.dart';
 import '../../services/reader_font_loader.dart';
@@ -1480,6 +1481,10 @@ class _SourcesPageState extends State<SourcesPage> {
       return;
     }
 
+    if (showLoading) {
+      await ImportUrlHistoryStore.add(text.trim());
+    }
+
     final existingByUrl = {
       for (final s in provider.sources) s.bookSourceUrl: s,
     };
@@ -1522,34 +1527,10 @@ class _SourcesPageState extends State<SourcesPage> {
   }
 
   void _showImportUrlDialog(BuildContext context) {
-    final controller = TextEditingController();
-    showDialog(
+    showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('网络导入'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: '输入书源 JSON 的 URL…',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.link),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final url = controller.text.trim();
-              if (url.isEmpty) return;
-              Navigator.pop(ctx);
-              await _parseAndPreviewImport(context, url);
-            },
-            child: const Text('导入'),
-          ),
-        ],
+      builder: (ctx) => _ImportUrlDialog(
+        onImport: (url) => _parseAndPreviewImport(context, url),
       ),
     );
   }
@@ -1567,6 +1548,119 @@ class _SourcesPageState extends State<SourcesPage> {
       context,
       sourceName: source.bookSourceName,
       result: result,
+    );
+  }
+}
+
+class _ImportUrlDialog extends StatefulWidget {
+  final Future<void> Function(String url) onImport;
+
+  const _ImportUrlDialog({required this.onImport});
+
+  @override
+  State<_ImportUrlDialog> createState() => _ImportUrlDialogState();
+}
+
+class _ImportUrlDialogState extends State<_ImportUrlDialog> {
+  final _controller = TextEditingController();
+  List<String> _history = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadHistory() async {
+    final list = await ImportUrlHistoryStore.load();
+    if (mounted) setState(() => _history = list);
+  }
+
+  Future<void> _removeHistory(String url) async {
+    await ImportUrlHistoryStore.remove(url);
+    await _loadHistory();
+  }
+
+  Future<void> _submit() async {
+    final url = _controller.text.trim();
+    if (url.isEmpty) return;
+    Navigator.pop(context);
+    await widget.onImport(url);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('网络导入'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _controller,
+              decoration: const InputDecoration(
+                hintText: '输入书源 JSON 的 URL…',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.link),
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+            if (_history.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                '最近使用',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 4),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 200),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _history.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final url = _history[i];
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        url,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      onTap: () => _controller.text = url,
+                      trailing: IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        tooltip: '删除',
+                        onPressed: () => _removeHistory(url),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('导入'),
+        ),
+      ],
     );
   }
 }
