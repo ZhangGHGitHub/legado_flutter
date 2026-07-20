@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
 import '../../services/source_group_tags.dart';
+import '../../services/source_manage_help_prefs.dart';
 import '../../services/reader_font_loader.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/check_source_keyword_dialog.dart';
@@ -16,6 +17,7 @@ import '../../widgets/error_view.dart';
 import '../../widgets/import_book_source_dialog.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../../widgets/source_group_manage_dialog.dart';
+import '../../widgets/source_manage_help_dialog.dart';
 import '../../widgets/source_status_dot.dart';
 import '../../widgets/source_validation_sheet.dart';
 import '../explore/explore_utils.dart';
@@ -57,6 +59,26 @@ class _SourcesPageState extends State<SourcesPage> {
   /// all | enabled | disabled | login | null_group | explore_on | explore_off | group:xxx
   String _filter = 'all';
   bool _groupByDomain = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoShowHelp());
+  }
+
+  Future<void> _maybeAutoShowHelp() async {
+    if (!mounted) return;
+    if (!await SourceManageHelpPrefs.shouldAutoShow()) return;
+    if (!mounted) return;
+    await SourceManageHelpDialog.show(context);
+    await SourceManageHelpPrefs.markShown();
+  }
+
+  Future<void> _showHelp() async {
+    if (!mounted) return;
+    await SourceManageHelpDialog.show(context);
+    await SourceManageHelpPrefs.markShown();
+  }
 
   @override
   void dispose() {
@@ -242,9 +264,8 @@ class _SourcesPageState extends State<SourcesPage> {
         return;
       case 'help':
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('「帮助」暂未实现')),
-        );
+        await _showHelp();
+        return;
     }
   }
 
