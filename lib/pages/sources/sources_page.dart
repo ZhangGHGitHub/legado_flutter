@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
@@ -381,6 +383,134 @@ class _SourcesPageState extends State<SourcesPage> {
     );
   }
 
+  Future<void> _batchExploreEnable(bool enabled) async {
+    if (_selected.isEmpty) return;
+    final n = _selected.length;
+    await context
+        .read<SourceProvider>()
+        .setSourcesExploreEnabled(_selected, enabled);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(enabled ? '已启用 $n 个书源发现' : '已禁用 $n 个书源发现'),
+      ),
+    );
+  }
+
+  Future<void> _batchAddGroup() async {
+    if (_selected.isEmpty) return;
+    final controller = TextEditingController();
+    final group = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('添加分组'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: '输入分组名',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final g = controller.text.trim();
+              if (g.isEmpty) return;
+              Navigator.pop(ctx, g);
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    if (group == null || group.isEmpty || !mounted) return;
+    final n = _selected.length;
+    await context.read<SourceProvider>().addGroupToSources(_selected, group);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已将 $n 个书源添加至「$group」')),
+    );
+  }
+
+  Future<void> _batchRemoveGroup() async {
+    if (_selected.isEmpty) return;
+    final n = _selected.length;
+    await context.read<SourceProvider>().clearGroupOnSources(_selected);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已移除 $n 个书源的分组')),
+    );
+  }
+
+  Future<void> _batchMoveToTop() async {
+    if (_selected.isEmpty) return;
+    await context.read<SourceProvider>().moveSourcesToTop(_selected);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已将 ${_selected.length} 个书源置顶')),
+    );
+  }
+
+  Future<void> _batchMoveToBottom() async {
+    if (_selected.isEmpty) return;
+    await context.read<SourceProvider>().moveSourcesToBottom(_selected);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已将 ${_selected.length} 个书源置底')),
+    );
+  }
+
+  Future<void> _exportSelected() async {
+    if (_selected.isEmpty) return;
+    final provider = context.read<SourceProvider>();
+    final json = await provider.exportSourcesJson(_selected);
+    final bytes = utf8.encode(json);
+    try {
+      final saved = await FilePicker.platform.saveFile(
+        dialogTitle: '导出书源',
+        fileName: 'bookSource.json',
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        bytes: bytes,
+      );
+      if (!mounted) return;
+      if (saved == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已取消导出')),
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('书源导出成功')),
+      );
+    } catch (_) {
+      await Share.share(json, subject: '书源');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('当前平台不支持保存文件，已改为分享')),
+      );
+    }
+  }
+
+  Future<void> _shareSelected() async {
+    if (_selected.isEmpty) return;
+    final json =
+        await context.read<SourceProvider>().exportSourcesJson(_selected);
+    try {
+      await Share.share(json, subject: '书源');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('分享失败: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   Future<void> _onBottomMore(String value) async {
     if (_selected.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -393,8 +523,24 @@ class _SourcesPageState extends State<SourcesPage> {
         await _batchEnable(true);
       case 'disable':
         await _batchEnable(false);
+      case 'explore_enable':
+        await _batchExploreEnable(true);
+      case 'explore_disable':
+        await _batchExploreEnable(false);
       case 'group':
         await _batchSetGroup();
+      case 'add_group':
+        await _batchAddGroup();
+      case 'remove_group':
+        await _batchRemoveGroup();
+      case 'top':
+        await _batchMoveToTop();
+      case 'bottom':
+        await _batchMoveToBottom();
+      case 'export':
+        await _exportSelected();
+      case 'share':
+        await _shareSelected();
       case 'validate':
         await _batchValidateSelected();
     }
@@ -1137,8 +1283,40 @@ class _SourcesPageState extends State<SourcesPage> {
                     child: Text('禁用所选', style: _uiText(color: scheme.onSurface)),
                   ),
                   PopupMenuItem(
+                    value: 'explore_enable',
+                    child: Text('启用发现', style: _uiText(color: scheme.onSurface)),
+                  ),
+                  PopupMenuItem(
+                    value: 'explore_disable',
+                    child: Text('禁用发现', style: _uiText(color: scheme.onSurface)),
+                  ),
+                  PopupMenuItem(
                     value: 'group',
                     child: Text('设置分组', style: _uiText(color: scheme.onSurface)),
+                  ),
+                  PopupMenuItem(
+                    value: 'add_group',
+                    child: Text('添加分组', style: _uiText(color: scheme.onSurface)),
+                  ),
+                  PopupMenuItem(
+                    value: 'remove_group',
+                    child: Text('移除分组', style: _uiText(color: scheme.onSurface)),
+                  ),
+                  PopupMenuItem(
+                    value: 'top',
+                    child: Text('置顶所选', style: _uiText(color: scheme.onSurface)),
+                  ),
+                  PopupMenuItem(
+                    value: 'bottom',
+                    child: Text('置底所选', style: _uiText(color: scheme.onSurface)),
+                  ),
+                  PopupMenuItem(
+                    value: 'export',
+                    child: Text('导出所选', style: _uiText(color: scheme.onSurface)),
+                  ),
+                  PopupMenuItem(
+                    value: 'share',
+                    child: Text('分享书源', style: _uiText(color: scheme.onSurface)),
                   ),
                   PopupMenuItem(
                     value: 'validate',
