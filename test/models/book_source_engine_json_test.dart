@@ -58,4 +58,36 @@ void main() {
     final engine = jsonDecode(source.toEngineJson()) as Map<String, dynamic>;
     expect(engine['ruleContent'], isA<Map>());
   });
+
+  test('fromJson reads order and explore fields', () {
+    final source = BookSource.fromJson({
+      'bookSourceUrl': 'https://a.example',
+      'bookSourceName': 'A',
+      'customOrder': 3,
+      'lastUpdateTime': 100,
+      'weight': 9,
+      'enabledExplore': false,
+      'respondTime': 5000,
+      'exploreUrl': '[]',
+    });
+    expect(source.customOrder, 3);
+    expect(source.lastUpdateTime, 100);
+    expect(source.weight, 9);
+    expect(source.enabledExplore, false);
+    expect(source.respondTime, 5000);
+  });
+
+  test('toEngineJson syncs order fields into raw map', () {
+    final source = BookSource.fromJson({
+      'bookSourceUrl': 'https://a.example',
+      'bookSourceName': 'A',
+      'ruleContent': {'content': r'$.x'},
+      'customOrder': 1,
+      'enabledExplore': false,
+    }).copyWith(customOrder: 42, enabledExplore: true);
+    final engine = jsonDecode(source.toEngineJson()) as Map<String, dynamic>;
+    expect(engine['customOrder'], 42);
+    expect(engine['enabledExplore'], true);
+    expect(engine['ruleContent'], isA<Map>());
+  });
 }

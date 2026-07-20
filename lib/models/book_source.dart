@@ -8,6 +8,13 @@ class BookSource {
   final String bookSourceGroup;
   final bool enabled;
 
+  // ── 排序 / 发现 ──
+  final int customOrder;
+  final int lastUpdateTime;
+  final int weight;
+  final bool enabledExplore;
+  final int respondTime;
+
   // ── 搜索规则 ──
   final String ruleSearchUrl;
   final String ruleSearchList;
@@ -53,6 +60,11 @@ class BookSource {
     this.bookSourceType = '0',
     this.bookSourceGroup = '',
     this.enabled = true,
+    this.customOrder = 0,
+    this.lastUpdateTime = 0,
+    this.weight = 0,
+    this.enabledExplore = true,
+    this.respondTime = 180000,
     this.ruleSearchUrl = '',
     this.ruleSearchList = '',
     this.ruleSearchName = '',
@@ -242,7 +254,20 @@ class BookSource {
 
   factory BookSource.fromJson(Map<String, dynamic> json) {
     String? safeString(dynamic v) => (v is String) && v.isNotEmpty ? v : null;
+    int safeInt(dynamic v, [int d = 0]) {
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return d;
+    }
+
     bool safeBool(dynamic v) {
+      if (v is bool) return v;
+      if (v is int) return v != 0;
+      return true;
+    }
+
+    bool safeEnabledExplore(dynamic v) {
+      if (v == null) return true;
       if (v is bool) return v;
       if (v is int) return v != 0;
       return true;
@@ -279,6 +304,11 @@ class BookSource {
       bookSourceType: safeString(json['bookSourceType']) ?? '0',
       bookSourceGroup: safeString(json['bookSourceGroup']) ?? '',
       enabled: safeBool(json['enabled']),
+      customOrder: safeInt(json['customOrder']),
+      lastUpdateTime: safeInt(json['lastUpdateTime']),
+      weight: safeInt(json['weight']),
+      enabledExplore: safeEnabledExplore(json['enabledExplore']),
+      respondTime: safeInt(json['respondTime'], 180000),
       ruleSearchUrl: resolvedSearchUrl,
       ruleSearchList:
           nested('ruleSearch', 'bookList', flatKey: 'ruleSearchList') ?? '',
@@ -329,6 +359,11 @@ class BookSource {
           final out = Map<String, dynamic>.from(obj);
           out['enabled'] = enabled;
           out['bookSourceGroup'] = bookSourceGroup;
+          out['customOrder'] = customOrder;
+          out['lastUpdateTime'] = lastUpdateTime;
+          out['weight'] = weight;
+          out['enabledExplore'] = enabledExplore;
+          out['respondTime'] = respondTime;
           return out;
         }
         if (obj is Map) {
@@ -337,6 +372,11 @@ class BookSource {
           };
           out['enabled'] = enabled;
           out['bookSourceGroup'] = bookSourceGroup;
+          out['customOrder'] = customOrder;
+          out['lastUpdateTime'] = lastUpdateTime;
+          out['weight'] = weight;
+          out['enabledExplore'] = enabledExplore;
+          out['respondTime'] = respondTime;
           return out;
         }
       } catch (_) {}
@@ -347,6 +387,11 @@ class BookSource {
       'bookSourceType': bookSourceType,
       'bookSourceGroup': bookSourceGroup,
       'enabled': enabled,
+      'customOrder': customOrder,
+      'lastUpdateTime': lastUpdateTime,
+      'weight': weight,
+      'enabledExplore': enabledExplore,
+      'respondTime': respondTime,
       'ruleSearchUrl': ruleSearchUrl,
       'ruleSearchList': ruleSearchList,
       'ruleSearchName': ruleSearchName,
@@ -383,6 +428,11 @@ class BookSource {
     String? bookSourceType,
     String? bookSourceGroup,
     bool? enabled,
+    int? customOrder,
+    int? lastUpdateTime,
+    int? weight,
+    bool? enabledExplore,
+    int? respondTime,
     String? rawSourceJson,
   }) {
     return BookSource(
@@ -391,6 +441,11 @@ class BookSource {
       bookSourceType: bookSourceType ?? this.bookSourceType,
       bookSourceGroup: bookSourceGroup ?? this.bookSourceGroup,
       enabled: enabled ?? this.enabled,
+      customOrder: customOrder ?? this.customOrder,
+      lastUpdateTime: lastUpdateTime ?? this.lastUpdateTime,
+      weight: weight ?? this.weight,
+      enabledExplore: enabledExplore ?? this.enabledExplore,
+      respondTime: respondTime ?? this.respondTime,
       ruleSearchUrl: ruleSearchUrl,
       ruleSearchList: ruleSearchList,
       ruleSearchName: ruleSearchName,
