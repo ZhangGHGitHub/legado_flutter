@@ -15,6 +15,8 @@ import '../../widgets/source_status_dot.dart';
 import '../../widgets/source_validation_sheet.dart';
 import '../explore/explore_utils.dart';
 import '../qrcode/qrcode_capture_page.dart';
+import '../search/search_page.dart';
+import 'source_debug_page.dart';
 import 'source_editor_page.dart';
 import 'source_login_page.dart';
 import 'source_market_page.dart';
@@ -400,6 +402,8 @@ class _SourcesPageState extends State<SourcesPage> {
 
   void _showItemMenu(BookSource source, Offset anchor) {
     final provider = context.read<SourceProvider>();
+    final manual = _sort == _SourceSort.manual;
+    final explore = hasExploreUrl(source);
     showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -409,19 +413,34 @@ class _SourcesPageState extends State<SourcesPage> {
         anchor.dy,
       ),
       items: [
+        if (manual) const PopupMenuItem(value: 'top', child: Text('置顶')),
+        if (manual) const PopupMenuItem(value: 'bottom', child: Text('置底')),
         const PopupMenuItem(value: 'edit', child: Text('编辑')),
         const PopupMenuItem(value: 'validate', child: Text('校验')),
         if (source.hasLoginConfig)
           const PopupMenuItem(value: 'login', child: Text('登录')),
+        const PopupMenuItem(value: 'search', child: Text('搜索')),
+        const PopupMenuItem(value: 'debug', child: Text('调试')),
         PopupMenuItem(
           value: 'toggle',
           child: Text(source.enabled ? '禁用' : '启用'),
         ),
+        if (explore)
+          PopupMenuItem(
+            value: 'explore',
+            child: Text(
+              isExploreEnabled(source) ? '禁用发现' : '启用发现',
+            ),
+          ),
         const PopupMenuItem(value: 'del', child: Text('删除')),
       ],
     ).then((action) async {
       if (action == null || !mounted) return;
       switch (action) {
+        case 'top':
+          await provider.moveSourcesToTop([source.bookSourceUrl]);
+        case 'bottom':
+          await provider.moveSourcesToBottom([source.bookSourceUrl]);
         case 'edit':
           await Navigator.push(
             context,
@@ -441,8 +460,24 @@ class _SourcesPageState extends State<SourcesPage> {
               builder: (_) => SourceLoginPage(source: source),
             ),
           );
+        case 'search':
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SearchPage(
+                initialRestrictSourceUrls: {source.bookSourceUrl},
+              ),
+            ),
+          );
+        case 'debug':
+          await SourceDebugPage.open(context, source);
         case 'toggle':
           await provider.toggleSource(source.bookSourceUrl, !source.enabled);
+        case 'explore':
+          await provider.setSourcesExploreEnabled(
+            [source.bookSourceUrl],
+            !isExploreEnabled(source),
+          );
         case 'del':
           final yes = await showDialog<bool>(
             context: context,
@@ -877,7 +912,10 @@ class _SourcesPageState extends State<SourcesPage> {
     final validating = provider.isValidating &&
         provider.validatingSourceUrl == s.bookSourceUrl;
     final validation = provider.validationOf(s.bookSourceUrl);
-    final hasExplore = sourceHasExplore(s);
+    final hasExplore = hasExploreUrl(s);
+    final group = s.bookSourceGroup.trim();
+    final displayName =
+        group.isEmpty ? s.bookSourceName : '${s.bookSourceName} ($group)';
 
     return Material(
       color: scheme.surface,
@@ -913,7 +951,7 @@ class _SourcesPageState extends State<SourcesPage> {
                     SourceStatusDot(source: s, validation: validation),
                     Expanded(
                       child: Text(
-                        s.bookSourceName,
+                        displayName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: _uiText(
@@ -980,8 +1018,10 @@ class _SourcesPageState extends State<SourcesPage> {
                     child: Container(
                       width: 8,
                       height: 8,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF43A047),
+                      decoration: BoxDecoration(
+                        color: isExploreEnabled(s)
+                            ? const Color(0xFF43A047)
+                            : const Color(0xFFE53935),
                         shape: BoxShape.circle,
                       ),
                     ),
