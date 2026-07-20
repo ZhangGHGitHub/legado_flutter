@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -50,9 +52,16 @@ class SourcesPage extends StatefulWidget {
 }
 
 class _SourcesPageState extends State<SourcesPage> {
+  static const _checkboxLaneWidth = 48.0;
+  static const _edgeScrollZone = 48.0;
+  static const _edgeScrollStep = 10.0;
+
   final _searchController = TextEditingController();
+  final _listScrollController = ScrollController();
+  final _listViewportKey = GlobalKey();
   final _selected = <String>{};
   final _selectBarKey = GlobalKey();
+  final _rowKeys = <String, GlobalKey>{};
 
   _SourceSort _sort = _SourceSort.manual;
   bool _sortDesc = false;
@@ -60,6 +69,18 @@ class _SourcesPageState extends State<SourcesPage> {
   /// all | enabled | disabled | login | null_group | explore_on | explore_off | group:xxx
   String _filter = 'all';
   bool _groupByDomain = false;
+
+  bool _dragSelectActive = false;
+  bool _dragSelectMode = true;
+  int? _dragAnchorIndex;
+  int? _dragCurrentIndex;
+  Set<String>? _dragSelectSnapshot;
+  Timer? _dragAutoScrollTimer;
+  Offset? _dragLastGlobalPos;
+  bool _dragPending = false;
+  Offset? _dragStartPos;
+  int? _dragPendingIndex;
+  List<BookSource>? _dragPendingVisible;
 
   @override
   void initState() {
@@ -83,8 +104,157 @@ class _SourcesPageState extends State<SourcesPage> {
 
   @override
   void dispose() {
+    _dragAutoScrollTimer?.cancel();
+    _listScrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  GlobalKey _rowKeyFor(String url) =>
+      _rowKeys.putIfAbsent(url, GlobalKey.new);
+
+  void _beginDragSelect(int index, List<BookSource> visible) {
+    final url = visible[index].bookSourceUrl;
+    _dragSelectActive = true;
+    _dragAnchorIndex = index;
+    _dragCurrentIndex = index;
+    _dragSelectMode = !_selected.contains(url);
+    _dragSelectSnapshot = Set<String>.from(_selected);
+    _applyDragSelectRange(index, index, visible);
+    _startDragAutoScroll(visible);
+  }
+
+  void _applyDragSelectRange(
+    int anchor,
+    int current,
+    List<BookSource> visible,
+  ) {
+    final snapshot = _dragSelectSnapshot;
+    if (snapshot == null) return;
+    final lo = math.min(anchor, current);
+    final hi = math.max(anchor, current);
+    setState(() {
+      _selected
+        ..clear()
+        ..addAll(snapshot);
+      for (var i = lo; i <= hi; i++) {
+        final url = visible[i].bookSourceUrl;
+        if (_dragSelectMode) {
+          _selected.add(url);
+        } else {
+          _selected.remove(url);
+        }
+      }
+    });
+  }
+
+  void _updateDragSelect(Offset globalPos, List<BookSource> visible) {
+    if (!_dragSelectActive || _dragAnchorIndex == null) return;
+    _dragLastGlobalPos = globalPos;
+    _performEdgeScroll(globalPos.dy);
+    final index = _indexAtGlobalY(globalPos.dy, visible);
+    if (index == null || index == _dragCurrentIndex) return;
+    _dragCurrentIndex = index;
+    _applyDragSelectRange(_dragAnchorIndex!, index, visible);
+  }
+
+  void _endDragSelect() {
+    if (_dragSelectActive) {
+      _dragSelectActive = false;
+      _dragAnchorIndex = null;
+      _dragCurrentIndex = null;
+      _dragSelectSnapshot = null;
+      _dragLastGlobalPos = null;
+      _dragAutoScrollTimer?.cancel();
+      _dragAutoScrollTimer = null;
+    }
+    _dragPending = false;
+    _dragStartPos = null;
+    _dragPendingIndex = null;
+    _dragPendingVisible = null;
+  }
+
+  void _onDragPointerUp(List<BookSource> visible) {
+    _endDragSelect();
+  }
+
+  void _onDragPointerMove(Offset globalPos, List<BookSource> visible) {
+    if (_dragPending &&
+        _dragStartPos != null &&
+        _dragPendingIndex != null &&
+        _dragPendingVisible != null) {
+      if ((globalPos - _dragStartPos!).distance >= 4) {
+        _dragPending = false;
+        _beginDragSelect(_dragPendingIndex!, _dragPendingVisible!);
+        _updateDragSelect(globalPos, visible);
+      }
+      return;
+    }
+    if (_dragSelectActive) _updateDragSelect(globalPos, visible);
+  }
+
+  int? _indexAtGlobalY(double globalY, List<BookSource> visible) {
+    for (var i = 0; i < visible.length; i++) {
+      final ctx = _rowKeys[visible[i].bookSourceUrl]?.currentContext;
+      if (ctx == null) continue;
+      final box = ctx.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize) continue;
+      final top = box.localToGlobal(Offset.zero).dy;
+      final bottom = top + box.size.height;
+      if (globalY >= top && globalY <= bottom) return i;
+    }
+    return null;
+  }
+
+  void _performEdgeScroll(double globalDy) {
+    if (!_listScrollController.hasClients) return;
+    final viewportCtx = _listViewportKey.currentContext;
+    if (viewportCtx == null) return;
+    final viewport = viewportCtx.findRenderObject() as RenderBox?;
+    if (viewport == null || !viewport.hasSize) return;
+
+    final top = viewport.localToGlobal(Offset.zero).dy;
+    final bottom = top + viewport.size.height;
+    final position = _listScrollController.position;
+
+    double? target;
+    if (globalDy < top + _edgeScrollZone) {
+      target = (position.pixels - _edgeScrollStep)
+          .clamp(0.0, position.maxScrollExtent);
+    } else if (globalDy > bottom - _edgeScrollZone) {
+      target = (position.pixels + _edgeScrollStep)
+          .clamp(0.0, position.maxScrollExtent);
+    }
+    if (target != null && target != position.pixels) {
+      _listScrollController.jumpTo(target);
+    }
+  }
+
+  void _startDragAutoScroll(List<BookSource> visible) {
+    _dragAutoScrollTimer?.cancel();
+    _dragAutoScrollTimer = Timer.periodic(
+      const Duration(milliseconds: 16),
+      (_) {
+        if (!_dragSelectActive) return;
+        final pos = _dragLastGlobalPos;
+        if (pos == null) return;
+        _performEdgeScroll(pos.dy);
+        _updateDragSelect(pos, visible);
+      },
+    );
+  }
+
+  Widget _wrapListWithDragSelect(List<BookSource> visible, Widget list) {
+    return KeyedSubtree(
+      key: _listViewportKey,
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerMove: (e) => _onDragPointerMove(e.position, visible),
+        onPointerUp: (_) => _onDragPointerUp(visible),
+        onPointerCancel: (_) => _endDragSelect(),
+        child: list,
+      ),
+    );
   }
 
   TextStyle _uiText({
@@ -1045,59 +1215,71 @@ class _SourcesPageState extends State<SourcesPage> {
         _searchController.text.trim().isEmpty;
 
     if (canReorder) {
-      return ReorderableListView.builder(
-        buildDefaultDragHandles: false,
-        itemCount: visible.length,
-        onReorder: (oldIndex, newIndex) async {
-          var target = newIndex;
-          if (oldIndex < target) target--;
-          final items = List<BookSource>.from(visible);
-          final moved = items.removeAt(oldIndex);
-          items.insert(target, moved);
-          final urls = items.map((s) => s.bookSourceUrl).toList();
-          await provider.reorderSources(urls);
-        },
-        itemBuilder: (_, i) {
-          final s = visible[i];
-          return Column(
-            key: ValueKey(s.bookSourceUrl),
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildSourceRow(
-                s,
-                provider,
-                scheme,
-                accent,
-                dragHandle: ReorderableDragStartListener(
-                  index: i,
-                  child: Icon(
-                    Icons.drag_handle,
-                    size: 22,
-                    color: scheme.onSurfaceVariant,
+      return _wrapListWithDragSelect(
+        visible,
+        ReorderableListView.builder(
+          scrollController: _listScrollController,
+          buildDefaultDragHandles: false,
+          itemCount: visible.length,
+          onReorder: (oldIndex, newIndex) async {
+            var target = newIndex;
+            if (oldIndex < target) target--;
+            final items = List<BookSource>.from(visible);
+            final moved = items.removeAt(oldIndex);
+            items.insert(target, moved);
+            final urls = items.map((s) => s.bookSourceUrl).toList();
+            await provider.reorderSources(urls);
+          },
+          itemBuilder: (_, i) {
+            final s = visible[i];
+            return Column(
+              key: ValueKey(s.bookSourceUrl),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildSourceRow(
+                  s,
+                  i,
+                  visible,
+                  provider,
+                  scheme,
+                  accent,
+                  dragHandle: ReorderableDragStartListener(
+                    index: i,
+                    child: Icon(
+                      Icons.drag_handle,
+                      size: 22,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
-              ),
-              Divider(
-                height: 1,
-                color: scheme.outlineVariant.withValues(alpha: 0.35),
-              ),
-            ],
-          );
-        },
+                Divider(
+                  height: 1,
+                  color: scheme.outlineVariant.withValues(alpha: 0.35),
+                ),
+              ],
+            );
+          },
+        ),
       );
     }
 
-    return ListView.separated(
-      itemCount: visible.length,
-      separatorBuilder: (_, _) => Divider(
-        height: 1,
-        color: scheme.outlineVariant.withValues(alpha: 0.35),
-      ),
-      itemBuilder: (_, i) => _buildSourceRow(
-        visible[i],
-        provider,
-        scheme,
-        accent,
+    return _wrapListWithDragSelect(
+      visible,
+      ListView.separated(
+        controller: _listScrollController,
+        itemCount: visible.length,
+        separatorBuilder: (_, _) => Divider(
+          height: 1,
+          color: scheme.outlineVariant.withValues(alpha: 0.35),
+        ),
+        itemBuilder: (_, i) => _buildSourceRow(
+          visible[i],
+          i,
+          visible,
+          provider,
+          scheme,
+          accent,
+        ),
       ),
     );
   }
@@ -1113,45 +1295,61 @@ class _SourcesPageState extends State<SourcesPage> {
       map.putIfAbsent(_hostOf(s), () => []).add(s);
     }
     final keys = map.keys.toList()..sort();
-    return ListView.builder(
-      itemCount: keys.length,
-      itemBuilder: (_, gi) {
-        final host = keys[gi];
-        final items = map[host]!;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Text(
-                host,
-                style: _uiText(
-                  color: scheme.secondary,
-                  size: 16,
-                  weight: FontWeight.w500,
+    final indexOf = {
+      for (var i = 0; i < visible.length; i++) visible[i].bookSourceUrl: i,
+    };
+    return _wrapListWithDragSelect(
+      visible,
+      ListView.builder(
+        controller: _listScrollController,
+        itemCount: keys.length,
+        itemBuilder: (_, gi) {
+          final host = keys[gi];
+          final items = map[host]!;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Text(
+                  host,
+                  style: _uiText(
+                    color: scheme.secondary,
+                    size: 16,
+                    weight: FontWeight.w500,
+                  ),
                 ),
               ),
-            ),
-            ...items.map(
-              (s) => Column(
-                children: [
-                  _buildSourceRow(s, provider, scheme, accent),
-                  Divider(
-                    height: 1,
-                    color: scheme.outlineVariant.withValues(alpha: 0.35),
-                  ),
-                ],
+              ...items.map(
+                (s) => Column(
+                  children: [
+                    _buildSourceRow(
+                      s,
+                      indexOf[s.bookSourceUrl]!,
+                      visible,
+                      provider,
+                      scheme,
+                      accent,
+                    ),
+                    Divider(
+                      height: 1,
+                      color: scheme.outlineVariant.withValues(alpha: 0.35),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        );
-      },
+            ],
+          );
+        },
+      ),
     );
   }
 
   /// 对齐 `item_book_source.xml`：勾选+名 | Switch | 编辑 | 更多 | 发现绿点
   Widget _buildSourceRow(
     BookSource s,
+    int index,
+    List<BookSource> visible,
     SourceProvider provider,
     ColorScheme scheme,
     Color accent, {
@@ -1167,6 +1365,7 @@ class _SourcesPageState extends State<SourcesPage> {
         group.isEmpty ? s.bookSourceName : '${s.bookSourceName} ($group)';
 
     return Material(
+      key: _rowKeyFor(s.bookSourceUrl),
       color: scheme.surface,
       child: Padding(
         padding: const EdgeInsets.symmetric(
@@ -1175,50 +1374,56 @@ class _SourcesPageState extends State<SourcesPage> {
         ),
         child: Row(
           children: [
-            if (dragHandle != null) ...[
-              dragHandle,
-              const SizedBox(width: 4),
-            ],
+            Listener(
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: (e) {
+                _dragPending = true;
+                _dragStartPos = e.position;
+                _dragPendingIndex = index;
+                _dragPendingVisible = visible;
+              },
+              child: SizedBox(
+                width: _checkboxLaneWidth,
+                child: Checkbox(
+                  value: checked,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                  onChanged: (v) {
+                    setState(() {
+                      if (v == true) {
+                        _selected.add(s.bookSourceUrl);
+                      } else {
+                        _selected.remove(s.bookSourceUrl);
+                      }
+                    });
+                  },
+                ),
+              ),
+            ),
             Expanded(
-              child: CheckboxListTile(
-                value: checked,
-                onChanged: (v) {
-                  setState(() {
-                    if (v == true) {
-                      _selected.add(s.bookSourceUrl);
-                    } else {
-                      _selected.remove(s.bookSourceUrl);
-                    }
-                  });
-                },
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                visualDensity: VisualDensity.compact,
-                title: Row(
-                  children: [
-                    SourceStatusDot(source: s, validation: validation),
-                    Expanded(
-                      child: Text(
-                        displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _uiText(
-                          color: s.enabled
-                              ? scheme.onSurface
-                              : scheme.onSurface.withValues(alpha: 0.55),
-                          size: 15,
-                        ),
+              child: Row(
+                children: [
+                  SourceStatusDot(source: s, validation: validation),
+                  Expanded(
+                    child: Text(
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _uiText(
+                        color: s.enabled
+                            ? scheme.onSurface
+                            : scheme.onSurface.withValues(alpha: 0.55),
+                        size: 15,
                       ),
                     ),
-                    if (validating)
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                  ],
-                ),
+                  ),
+                  if (validating)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
               ),
             ),
             Switch(
@@ -1277,6 +1482,7 @@ class _SourcesPageState extends State<SourcesPage> {
                   ),
               ],
             ),
+            if (dragHandle != null) dragHandle,
           ],
         ),
       ),
