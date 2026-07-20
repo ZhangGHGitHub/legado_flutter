@@ -38,18 +38,14 @@ String exploreUrlOf(BookSource source) {
   return '';
 }
 
+bool hasExploreUrl(BookSource source) =>
+    exploreUrlOf(source).trim().isNotEmpty;
+
+bool isExploreEnabled(BookSource source) => source.enabledExplore;
+
 /// 书源是否可用于发现 Tab
-bool sourceHasExplore(BookSource source) {
-  if (!source.enabled) return false;
-  final raw = source.rawSourceJson;
-  if (raw.isNotEmpty) {
-    try {
-      final obj = jsonDecode(raw) as Map<String, dynamic>;
-      if (obj['enabledExplore'] == false) return false;
-    } catch (_) {}
-  }
-  return exploreUrlOf(source).trim().isNotEmpty;
-}
+bool sourceHasExplore(BookSource source) =>
+    source.enabled && hasExploreUrl(source) && isExploreEnabled(source);
 
 List<ExploreCategory> parseExploreCategories(String exploreUrlJson) {
   if (exploreUrlJson.trim().isEmpty) return [];
