@@ -939,7 +939,10 @@ class _SourcesPageState extends State<SourcesPage> {
     ColorScheme scheme,
     Color accent,
   ) {
-    final canReorder = _sort == _SourceSort.manual && !_groupByDomain;
+    final canReorder = _sort == _SourceSort.manual &&
+        !_groupByDomain &&
+        _filter == 'all' &&
+        _searchController.text.trim().isEmpty;
 
     if (canReorder) {
       return ReorderableListView.builder(
