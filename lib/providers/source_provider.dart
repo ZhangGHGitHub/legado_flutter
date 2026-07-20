@@ -8,6 +8,8 @@ import '../models/source_validation_result.dart';
 import '../bridge/legado_engine_bridge.dart';
 import '../database/dao/source_dao.dart';
 import '../services/book_source_service.dart';
+import '../services/source_group_catalog.dart';
+import 'source_order.dart';
 
 /// 书源管理 Provider — 书源 CRUD、搜索
 class SourceProvider extends ChangeNotifier {
@@ -36,13 +38,27 @@ class SourceProvider extends ChangeNotifier {
   SourceValidationResult? validationOf(String sourceUrl) =>
       _validationResults[sourceUrl];
 
+  /// 分组筛选/管理用：目录 ∪ 书源已有分组（不强制改书源）
+  List<String> get knownGroups {
+    final set = SourceGroupCatalog.names.toSet();
+    for (final s in _sources) {
+      final g = s.bookSourceGroup.trim();
+      if (g.isNotEmpty) set.add(g);
+    }
+    return set.toList()..sort();
+  }
+
   /// 加载书源
   Future<void> loadSources() async {
     _isLoading = true;
     _loadError = null;
     notifyListeners();
     try {
+      await SourceGroupCatalog.load();
       _sources = await _dao.getAll();
+      await SourceGroupCatalog.mergeFromSources(
+        _sources.map((s) => s.bookSourceGroup),
+      );
       _loadError = null;
     } catch (e) {
       _loadError = '加载书源失败: $e';
@@ -56,6 +72,40 @@ class SourceProvider extends ChangeNotifier {
   /// 添加单个书源
   Future<void> addSource(BookSource source) async {
     await _dao.upsert(source);
+    _sources = await _dao.getAll();
+    notifyListeners();
+  }
+
+  /// 重命名分组（目录 + 所有该分组书源）
+  Future<void> renameGroup(String oldName, String newName) async {
+    if (oldName == newName) return;
+    await SourceGroupCatalog.rename(oldName, newName);
+    for (final s in _sources) {
+      if (s.bookSourceGroup.trim() == oldName) {
+        await _dao.update(s.copyWith(bookSourceGroup: newName));
+      }
+    }
+    _sources = await _dao.getAll();
+    notifyListeners();
+  }
+
+  /// 添加分组名到目录，**不**改动任何书源（避免未分组源被批量改写）。
+  Future<bool> addGroup(String group) async {
+    final name = group.trim();
+    if (name.isEmpty) return false;
+    final added = await SourceGroupCatalog.add(name);
+    if (added) notifyListeners();
+    return added;
+  }
+
+  /// 删除分组（目录移除；该书源 group 清空）
+  Future<void> deleteGroup(String groupName) async {
+    await SourceGroupCatalog.remove(groupName);
+    for (final s in _sources) {
+      if (s.bookSourceGroup.trim() == groupName) {
+        await _dao.update(s.copyWith(bookSourceGroup: ''));
+      }
+    }
     _sources = await _dao.getAll();
     notifyListeners();
   }
@@ -239,18 +289,90 @@ class SourceProvider extends ChangeNotifier {
     Iterable<String> sourceUrls,
     String group,
   ) async {
-    final urls = sourceUrls.toSet();
-    if (urls.isEmpty) return;
-    for (final url in urls) {
-      BookSource? src;
-      for (final s in _sources) {
-        if (s.bookSourceUrl == url) {
-          src = s;
-          break;
-        }
-      }
-      if (src == null) continue;
-      await _dao.update(src.copyWith(bookSourceGroup: group));
+    await addGroupToSources(sourceUrls, group);
+  }
+
+  /// 批量启用/禁用发现
+  Future<void> setSourcesExploreEnabled(
+    Iterable<String> urls,
+    bool enabled,
+  ) async {
+    final urlSet = urls.toSet();
+    if (urlSet.isEmpty) return;
+    for (final s in _sources) {
+      if (!urlSet.contains(s.bookSourceUrl)) continue;
+      await _dao.update(s.copyWith(enabledExplore: enabled));
+    }
+    _sources = await _dao.getAll();
+    notifyListeners();
+  }
+
+  /// 将选中书源移到列表顶部
+  Future<void> moveSourcesToTop(Iterable<String> urls) async {
+    final selected = urls.toSet();
+    if (selected.isEmpty) return;
+    final orders = customOrdersAfterMoveToTop(_sources, selected);
+    await _applyCustomOrders(orders);
+  }
+
+  /// 将选中书源移到列表底部
+  Future<void> moveSourcesToBottom(Iterable<String> urls) async {
+    final selected = urls.toSet();
+    if (selected.isEmpty) return;
+    final orders = customOrdersAfterMoveToBottom(_sources, selected);
+    await _applyCustomOrders(orders);
+  }
+
+  /// 按给定 URL 顺序重排书源
+  Future<void> reorderSources(List<String> orderedUrls) async {
+    if (orderedUrls.isEmpty) return;
+    final orders = {
+      for (var i = 0; i < orderedUrls.length; i++) orderedUrls[i]: i,
+    };
+    await _applyCustomOrders(orders);
+  }
+
+  /// 导出选中书源为 JSON 数组
+  Future<String> exportSourcesJson(Iterable<String> urls) async {
+    final urlSet = urls.toSet();
+    final list = _sources
+        .where((s) => urlSet.contains(s.bookSourceUrl))
+        .map((s) => s.toJson())
+        .toList();
+    return jsonEncode(list);
+  }
+
+  /// 为选中书源设置分组
+  Future<void> addGroupToSources(Iterable<String> urls, String group) async {
+    final urlSet = urls.toSet();
+    if (urlSet.isEmpty) return;
+    for (final s in _sources) {
+      if (!urlSet.contains(s.bookSourceUrl)) continue;
+      await _dao.update(s.copyWith(bookSourceGroup: group));
+    }
+    _sources = await _dao.getAll();
+    await SourceGroupCatalog.mergeFromSources([group]);
+    notifyListeners();
+  }
+
+  /// 清除选中书源的分组
+  Future<void> clearGroupOnSources(Iterable<String> urls) async {
+    final urlSet = urls.toSet();
+    if (urlSet.isEmpty) return;
+    for (final s in _sources) {
+      if (!urlSet.contains(s.bookSourceUrl)) continue;
+      await _dao.update(s.copyWith(bookSourceGroup: ''));
+    }
+    _sources = await _dao.getAll();
+    notifyListeners();
+  }
+
+  Future<void> _applyCustomOrders(Map<String, int> orders) async {
+    if (orders.isEmpty) return;
+    for (final s in _sources) {
+      final order = orders[s.bookSourceUrl];
+      if (order == null || order == s.customOrder) continue;
+      await _dao.update(s.copyWith(customOrder: order));
     }
     _sources = await _dao.getAll();
     notifyListeners();
