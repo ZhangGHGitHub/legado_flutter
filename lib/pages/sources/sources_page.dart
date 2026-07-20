@@ -10,6 +10,7 @@ import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
 import '../../services/reader_font_loader.dart';
 import '../../theme/legado_tokens.dart';
+import '../../widgets/check_source_keyword_dialog.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/import_book_source_dialog.dart';
 import '../../widgets/legado_popup_menu.dart';
@@ -369,6 +370,8 @@ class _SourcesPageState extends State<SourcesPage> {
 
   Future<void> _batchValidateSelected() async {
     if (_selected.isEmpty) return;
+    final keyword = await showCheckSourceKeywordDialog(context);
+    if (keyword == null || !mounted) return;
     final provider = context.read<SourceProvider>();
     final selected = provider.sources
         .where((s) => _selected.contains(s.bookSourceUrl))
@@ -380,6 +383,7 @@ class _SourcesPageState extends State<SourcesPage> {
       builder: (ctx) => _BatchValidateDialog(
         provider: provider,
         sources: selected,
+        keyword: keyword,
       ),
     );
   }
@@ -1457,8 +1461,13 @@ class _SourcesPageState extends State<SourcesPage> {
   }
 
   Future<void> _validateOne(BuildContext context, BookSource source) async {
+    final keyword = await showCheckSourceKeywordDialog(context);
+    if (keyword == null || !context.mounted) return;
     final provider = context.read<SourceProvider>();
-    final result = await provider.validateSource(source);
+    final result = await provider.validateSource(
+      source,
+      keyword: keyword.isEmpty ? null : keyword,
+    );
     if (!context.mounted || result == null) return;
     await SourceValidationSheet.show(
       context,
@@ -1471,10 +1480,12 @@ class _SourcesPageState extends State<SourcesPage> {
 class _BatchValidateDialog extends StatefulWidget {
   final SourceProvider provider;
   final List<BookSource>? sources;
+  final String? keyword;
 
   const _BatchValidateDialog({
     required this.provider,
     this.sources,
+    this.keyword,
   });
 
   @override
@@ -1494,6 +1505,7 @@ class _BatchValidateDialogState extends State<_BatchValidateDialog> {
     widget.provider
         .validateSources(
           targets,
+          keyword: widget.keyword?.isEmpty == true ? null : widget.keyword,
           onProgress: (done, total) {
             if (mounted) {
               setState(() {
