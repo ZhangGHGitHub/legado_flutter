@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
+import '../../services/source_group_tags.dart';
 import '../../services/reader_font_loader.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/check_source_keyword_dialog.dart';
@@ -101,7 +102,9 @@ class _SourcesPageState extends State<SourcesPage> {
       default:
         if (_filter.startsWith('group:')) {
           final g = _filter.substring(6);
-          list = list.where((s) => s.bookSourceGroup.trim() == g).toList();
+          list = list
+              .where((s) => sourceHasGroupTag(s.bookSourceGroup, g))
+              .toList();
         }
     }
 
@@ -444,12 +447,71 @@ class _SourcesPageState extends State<SourcesPage> {
 
   Future<void> _batchRemoveGroup() async {
     if (_selected.isEmpty) return;
-    final n = _selected.length;
-    await context.read<SourceProvider>().clearGroupOnSources(_selected);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已移除 $n 个书源的分组')),
+    final provider = context.read<SourceProvider>();
+    final tags = <String>{};
+    for (final s in provider.sources) {
+      if (!_selected.contains(s.bookSourceUrl)) continue;
+      tags.addAll(splitSourceGroups(s.bookSourceGroup));
+    }
+    if (tags.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('所选书源没有分组标签')),
+      );
+      return;
+    }
+    final sortedTags = tags.toList()..sort();
+    const clearAll = '__clear_all__';
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('移除分组'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 320),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final g in sortedTags)
+                  ListTile(
+                    dense: true,
+                    title: Text(g),
+                    onTap: () => Navigator.pop(ctx, g),
+                  ),
+                const Divider(height: 1),
+                ListTile(
+                  dense: true,
+                  title: const Text('清除全部分组'),
+                  onTap: () => Navigator.pop(ctx, clearAll),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
     );
+    if (choice == null || !mounted) return;
+    final n = _selected.length;
+    if (choice == clearAll) {
+      await provider.clearGroupOnSources(_selected);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已清除 $n 个书源的全部分组')),
+      );
+    } else {
+      await provider.removeGroupTagFromSources(_selected, choice);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已从 $n 个书源移除「$choice」')),
+      );
+    }
   }
 
   Future<void> _batchMoveToTop() async {
