@@ -1,5 +1,15 @@
 import '../models/book_source.dart';
 
+List<BookSource> sourcesInManualOrder(List<BookSource> all) {
+  final ordered = List<BookSource>.from(all);
+  ordered.sort((a, b) {
+    final byOrder = a.customOrder.compareTo(b.customOrder);
+    if (byOrder != 0) return byOrder;
+    return a.bookSourceUrl.compareTo(b.bookSourceUrl);
+  });
+  return ordered;
+}
+
 Map<String, int> customOrdersAfterMoveToTop(
   List<BookSource> all,
   Set<String> selected,

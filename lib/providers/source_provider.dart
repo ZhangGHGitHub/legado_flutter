@@ -311,7 +311,10 @@ class SourceProvider extends ChangeNotifier {
   Future<void> moveSourcesToTop(Iterable<String> urls) async {
     final selected = urls.toSet();
     if (selected.isEmpty) return;
-    final orders = customOrdersAfterMoveToTop(_sources, selected);
+    final orders = customOrdersAfterMoveToTop(
+      sourcesInManualOrder(_sources),
+      selected,
+    );
     await _applyCustomOrders(orders);
   }
 
@@ -319,7 +322,10 @@ class SourceProvider extends ChangeNotifier {
   Future<void> moveSourcesToBottom(Iterable<String> urls) async {
     final selected = urls.toSet();
     if (selected.isEmpty) return;
-    final orders = customOrdersAfterMoveToBottom(_sources, selected);
+    final orders = customOrdersAfterMoveToBottom(
+      sourcesInManualOrder(_sources),
+      selected,
+    );
     await _applyCustomOrders(orders);
   }
 

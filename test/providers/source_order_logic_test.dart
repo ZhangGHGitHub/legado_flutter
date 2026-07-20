@@ -26,4 +26,32 @@ void main() {
     expect(orders['c'], 1);
     expect(orders['b'], 2);
   });
+
+  test('move to top uses customOrder when list is shuffled', () {
+    final shuffled = [
+      BookSource(bookSourceUrl: 'c', bookSourceName: 'c', customOrder: 2),
+      BookSource(bookSourceUrl: 'a', bookSourceName: 'a', customOrder: 0),
+      BookSource(bookSourceUrl: 'b', bookSourceName: 'b', customOrder: 1),
+    ];
+    final ordered = sourcesInManualOrder(shuffled);
+    expect(ordered.map((s) => s.bookSourceUrl).toList(), ['a', 'b', 'c']);
+
+    final orders = customOrdersAfterMoveToTop(ordered, {'b'});
+    expect(orders['b'], 0);
+    expect(orders['a'], 1);
+    expect(orders['c'], 2);
+  });
+
+  test('move to bottom uses customOrder when list is shuffled', () {
+    final shuffled = [
+      BookSource(bookSourceUrl: 'c', bookSourceName: 'c', customOrder: 2),
+      BookSource(bookSourceUrl: 'a', bookSourceName: 'a', customOrder: 0),
+      BookSource(bookSourceUrl: 'b', bookSourceName: 'b', customOrder: 1),
+    ];
+    final ordered = sourcesInManualOrder(shuffled);
+    final orders = customOrdersAfterMoveToBottom(ordered, {'b'});
+    expect(orders['a'], 0);
+    expect(orders['c'], 1);
+    expect(orders['b'], 2);
+  });
 }
