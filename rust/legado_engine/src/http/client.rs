@@ -394,6 +394,20 @@ pub struct FetchResponse {
     pub status_code: u16,
     pub body: String,
     pub byte_len: usize,
+    /// loginCheckJs 期间 `source.putLoginHeader` 写入的最新登录头（供 Dart 回写）
+    pub login_header: Option<String>,
+}
+
+fn book_source_url_from_json(source_json: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(source_json)
+        .ok()
+        .and_then(|v| {
+            v.get("bookSourceUrl")
+                .or_else(|| v.get("sourceUrl"))
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_default()
 }
 
 fn build_source_headers(url: &str, source_json: &str) -> HeaderMap {
@@ -418,6 +432,22 @@ fn build_source_headers(url: &str, source_json: &str) -> HeaderMap {
         }
     }
 
+    // Rust 登录头缓存（loginCheckJs putLoginHeader / Dart seed）
+    let key = book_source_url_from_json(source_json);
+    if !key.is_empty() {
+        let stored = super::login_header_store::get(&key);
+        if !stored.is_empty() {
+            for (k, v) in login_header_map(&stored) {
+                if let (Ok(name), Ok(val)) = (
+                    HeaderName::from_bytes(k.as_bytes()),
+                    HeaderValue::from_str(&v),
+                ) {
+                    headers.insert(name, val);
+                }
+            }
+        }
+    }
+
     let cookie_str = COOKIE_JAR.lock().unwrap().get_cookie(url);
     if !cookie_str.is_empty() {
         if let Ok(v) = HeaderValue::from_str(&cookie_str) {
@@ -425,6 +455,77 @@ fn build_source_headers(url: &str, source_json: &str) -> HeaderMap {
         }
     }
     headers
+}
+
+/// 用显式 header map 同步请求（loginCheckJs `java.getStrResponse`）
+pub fn fetch_blocking_with_header_map(
+    url: &str,
+    method: &str,
+    body: Option<&str>,
+    charset: &str,
+    extra_headers: &std::collections::HashMap<String, String>,
+) -> Result<(u16, String), String> {
+    let url = url.to_string();
+    let method = method.to_string();
+    let body = body.map(|s| s.to_string());
+    let charset = charset.to_string();
+    let extra_headers = extra_headers.clone();
+    let joined = std::thread::spawn(move || {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| format!("创建 getStrResponse runtime 失败: {e}"))?;
+        rt.block_on(async move {
+            let mut headers = default_headers();
+            for (k, v) in &extra_headers {
+                if let (Ok(name), Ok(val)) = (
+                    HeaderName::from_bytes(k.as_bytes()),
+                    HeaderValue::from_str(v),
+                ) {
+                    headers.insert(name, val);
+                }
+            }
+            let cookie_str = COOKIE_JAR.lock().unwrap().get_cookie(&url);
+            if !cookie_str.is_empty() {
+                if let Ok(v) = HeaderValue::from_str(&cookie_str) {
+                    headers.insert("Cookie", v);
+                }
+            }
+            let response =
+                send_request(&url, &method, body.as_deref(), &charset, headers).await?;
+            let status = response.status().as_u16();
+            save_cookies(&url, &response);
+            let bytes = response
+                .bytes()
+                .await
+                .map_err(|e| format!("读取响应失败: {e}"))?;
+            let text = charset::decode_bytes(&bytes, &charset)?;
+            Ok((status, text))
+        })
+    })
+    .join()
+    .map_err(|_| "getStrResponse 线程异常".to_string())?;
+    joined
+}
+
+/// 从 Cookie 字符串刷新 jar（对齐 BaseSource.putLoginHeader）
+pub fn replace_cookie_for_source(source_url: &str, cookie: &str) {
+    let cookie = cookie.trim();
+    if cookie.is_empty() || source_url.trim().is_empty() {
+        return;
+    }
+    let set_cookies: Vec<String> = cookie
+        .split(';')
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty() && p.contains('='))
+        .map(|p| format!("{p}; Path=/"))
+        .collect();
+    if set_cookies.is_empty() {
+        return;
+    }
+    if let Ok(mut jar) = COOKIE_JAR.lock() {
+        jar.save_from_headers(source_url, &set_cookies);
+    }
 }
 
 /// 带书源自定义头发送请求
@@ -443,7 +544,7 @@ pub async fn fetch_with_source(
 /// 带书源自定义头发送请求（含状态码）
 ///
 /// 成功后若书源配置了非空 `loginCheckJs`，会对 body 执行登录检查 JS（可改写响应体）。
-/// 请求失败时也会尝试执行（传入错误文本作 result），便于脚本做重登侧效应；随后仍返回原错误。
+/// 请求失败时也会尝试执行（传入错误文本作 result）；若脚本返回可用 body 则采纳，否则仍返回原错误。
 pub async fn fetch_with_source_meta(
     url: &str,
     method: &str,
@@ -454,19 +555,43 @@ pub async fn fetch_with_source_meta(
     let resp = match fetch_with_source_meta_inner(url, method, body, charset, source_json).await {
         Ok(r) => r,
         Err(e) => {
-            let _ = crate::rule::js_engine::apply_login_check_js(
+            let lc = crate::rule::js_engine::apply_login_check_js(
                 source_json,
                 &format!("Error Response\n{e}"),
                 url,
+                method,
+                body,
+                charset,
             );
+            if !lc.body.is_empty() && !lc.body.starts_with("Error Response") {
+                return Ok(FetchResponse {
+                    status_code: 200,
+                    byte_len: lc.body.len(),
+                    body: lc.body,
+                    login_header: lc.login_header,
+                });
+            }
             return Err(e);
         }
     };
-    let new_body = crate::rule::js_engine::apply_login_check_js(source_json, &resp.body, url);
+    let lc = crate::rule::js_engine::apply_login_check_js(
+        source_json,
+        &resp.body,
+        url,
+        method,
+        body,
+        charset,
+    );
+    let new_body = if lc.body.is_empty() {
+        resp.body
+    } else {
+        lc.body
+    };
     Ok(FetchResponse {
         status_code: resp.status_code,
         byte_len: new_body.len(),
         body: new_body,
+        login_header: lc.login_header,
     })
 }
 
@@ -513,6 +638,7 @@ async fn fetch_with_source_meta_once(
         status_code,
         body,
         byte_len,
+        login_header: None,
     })
 }
 

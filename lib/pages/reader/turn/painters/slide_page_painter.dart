@@ -29,14 +29,10 @@ class SlidePagePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (direction == PageTurnDirection.none) {
-      return;
-    }
-
     final viewWidth = viewSize.width;
     final offsetX = touchX - startX;
 
-    // KT order: invalid offset return → then !isRunning return.
+    // Jingshiro SlidePageDelegate.onDraw order: invalid offset → distanceX → !isRunning.
     if ((direction == PageTurnDirection.next && offsetX > 0) ||
         (direction == PageTurnDirection.prev && offsetX < 0)) {
       return;

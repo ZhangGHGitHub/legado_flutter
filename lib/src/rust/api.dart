@@ -139,6 +139,7 @@ void upsertNote({
   required String selectedText,
   required String noteContent,
   required int position,
+  required int chapterPos,
 }) => LegadoEngine.instance.api.crateApiUpsertNote(
   id: id,
   bookId: bookId,
@@ -146,6 +147,7 @@ void upsertNote({
   selectedText: selectedText,
   noteContent: noteContent,
   position: position,
+  chapterPos: chapterPos,
 );
 
 /// 删除想法笔记
@@ -170,6 +172,17 @@ String evalJs({
   jsLib: jsLib,
   baseUrl: baseUrl,
 );
+
+/// 预热 Rust 登录头缓存（Dart SharedPreferences → 引擎）
+void seedLoginHeader({required String sourceUrl, required String header}) =>
+    LegadoEngine.instance.api.crateApiSeedLoginHeader(
+      sourceUrl: sourceUrl,
+      header: header,
+    );
+
+/// 取出 loginCheckJs 新写入的登录头（JSON: url → header），供 Dart 回写 prefs
+String drainLoginHeaderUpdates() =>
+    LegadoEngine.instance.api.crateApiDrainLoginHeaderUpdates();
 
 /// 获取 RSS 文章列表 — 对齐 Jingshiro Rss.getArticlesAwait
 Future<RssArticlesResult> getRssArticles({
@@ -476,6 +489,9 @@ class NoteDto {
   final String selectedText;
   final String noteContent;
   final int position;
+
+  /// 章内字符偏移（对齐 Jingshiro Bookmark.chapterPos）；-1=未知
+  final int chapterPos;
   final String createdAt;
 
   const NoteDto({
@@ -485,6 +501,7 @@ class NoteDto {
     required this.selectedText,
     required this.noteContent,
     required this.position,
+    required this.chapterPos,
     required this.createdAt,
   });
 
@@ -496,6 +513,7 @@ class NoteDto {
       selectedText.hashCode ^
       noteContent.hashCode ^
       position.hashCode ^
+      chapterPos.hashCode ^
       createdAt.hashCode;
 
   @override
@@ -509,6 +527,7 @@ class NoteDto {
           selectedText == other.selectedText &&
           noteContent == other.noteContent &&
           position == other.position &&
+          chapterPos == other.chapterPos &&
           createdAt == other.createdAt;
 }
 

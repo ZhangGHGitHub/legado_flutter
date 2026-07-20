@@ -35,8 +35,8 @@ class CoverPagePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // KT: if (!isRunning) return — underlay (current page) already visible.
-    if (!isRunning || direction == PageTurnDirection.none) {
+    // Jingshiro CoverPageDelegate.onDraw: if (!isRunning) return.
+    if (!isRunning) {
       return;
     }
 

@@ -6,8 +6,12 @@ import '../../models/chapter.dart';
 import '../../services/note_service.dart';
 import '../../src/rust/api.dart' as rust_api;
 
-/// 选中章节；[pageIndex] 为书签回跳时的 0-based 页索引。
-typedef TocChapterTap = void Function(Chapter chapter, {int? pageIndex});
+/// 选中章节；[pageIndex]/[chapterPos] 为书签回跳参数。
+typedef TocChapterTap = void Function(
+  Chapter chapter, {
+  int? pageIndex,
+  int? chapterPos,
+});
 
 /// 章节目录页 — 对齐 Legado `ChapterList` / `activity_chapter_list`
 /// （顶栏返回+目录/书签 Tab+搜索+菜单；缓存字数 / 未缓存云标；底栏进度+顶底跳转）
@@ -546,10 +550,17 @@ class _TocSheetState extends State<TocSheet>
               ? null
               : () {
                   final target = chapter!;
-                  final pageIndex =
-                      bookmarkPageIndexFromNote(bm.noteContent);
+                  final chapterPos =
+                      bm.chapterPos >= 0 ? bm.chapterPos : null;
+                  final pageIndex = chapterPos == null
+                      ? bookmarkPageIndexFromNote(bm.noteContent)
+                      : null;
                   Navigator.pop(context);
-                  widget.onChapterTap(target, pageIndex: pageIndex);
+                  widget.onChapterTap(
+                    target,
+                    pageIndex: pageIndex,
+                    chapterPos: chapterPos,
+                  );
                 },
         );
       },

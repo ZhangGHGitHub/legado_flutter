@@ -268,7 +268,7 @@ rust/legado_engine/src/rule/
 
 - HTTP：`reqwest` async + `tokio`（非阻塞 UI）
 - JS：`js_engine`（QuickJS）执行 `<js>` / `@js:` / `jsLib` / `cache`
-- **loginCheckJs（EN-09）**：`fetch_with_source_meta` 成功（及失败）后执行；`result`=响应体，可返回新 body；失败打日志保留原文。未实现完整 `java.getStrResponse` / `initUrl` 重登闭环
+- **loginCheckJs（EN-09）**：`fetch_with_source_meta` 成功（及失败）后执行。`result`=StrResponse；`java` 绑定 `getHeaderMap` / `initUrl` / `getStrResponse`；`source.putLoginHeader` / `getLoginHeader` / `getHeaderMap(true)` 写入 Rust 登录头缓存并经 bridge 回写 `SourceLoginPrefs`。失败时若脚本返回可用 body 可采纳。**未实现** `java.startBrowserAwait` 真 WebView。
 - **preUpdateJs（EN-10）**：`get_toc` 入口在拉目录前执行 `ruleToc.preUpdateJs`；失败打日志不阻断
 
 ### Phase D — Jingshiro 增强

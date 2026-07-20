@@ -139,7 +139,10 @@ class _BookmarkPageState extends State<BookmarkPage>
     }
     if (idx < 0) idx = 0;
 
-    final pageIndex = bookmarkPageIndexFromNote(note.noteContent);
+    final chapterPos = note.chapterPos >= 0 ? note.chapterPos : null;
+    final pageIndex = chapterPos == null
+        ? bookmarkPageIndexFromNote(note.noteContent)
+        : null;
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -148,6 +151,7 @@ class _BookmarkPageState extends State<BookmarkPage>
           chapter: chapters[idx],
           allChapters: chapters,
           initialPageIndex: pageIndex,
+          initialChapterPos: chapterPos,
         ),
       ),
     );

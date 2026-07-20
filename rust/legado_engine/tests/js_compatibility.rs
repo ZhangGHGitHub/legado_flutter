@@ -147,30 +147,97 @@ fn js_scan_reports_jsoup_usage() {
 #[test]
 fn login_check_js_rewrites_body() {
     let src = r#"{"bookSourceUrl":"https://example.com","loginCheckJs":"result.replace('LOGIN','OK')","jsLib":""}"#;
-    let out = js_engine::apply_login_check_js(src, "hello LOGIN world", "https://example.com/");
-    assert_eq!(out, "hello OK world");
+    let out = js_engine::apply_login_check_js(
+        src,
+        "hello LOGIN world",
+        "https://example.com/",
+        "GET",
+        None,
+        "UTF-8",
+    );
+    assert_eq!(out.body, "hello OK world");
 }
 
 #[test]
 fn login_check_js_empty_is_noop() {
     let src = r#"{"bookSourceUrl":"https://example.com"}"#;
-    let out = js_engine::apply_login_check_js(src, "raw-body", "https://example.com/");
-    assert_eq!(out, "raw-body");
+    let out = js_engine::apply_login_check_js(
+        src,
+        "raw-body",
+        "https://example.com/",
+        "GET",
+        None,
+        "UTF-8",
+    );
+    assert_eq!(out.body, "raw-body");
 }
 
 #[test]
 fn login_check_js_failure_keeps_body() {
     let src = r#"{"bookSourceUrl":"https://example.com","loginCheckJs":"throw new Error('boom')"}"#;
-    let out = js_engine::apply_login_check_js(src, "keep-me", "https://example.com/");
-    assert_eq!(out, "keep-me");
+    let out = js_engine::apply_login_check_js(
+        src,
+        "keep-me",
+        "https://example.com/",
+        "GET",
+        None,
+        "UTF-8",
+    );
+    assert_eq!(out.body, "keep-me");
 }
 
 #[test]
 fn login_check_js_str_response_body_and_source() {
     // 对齐恩木类源：result.body() / result.url() / source.bookSourceUrl
     let src = r#"{"bookSourceUrl":"https://enmu.example","loginCheckJs":"var b=result.body(); if(b.indexOf('NEED')>=0){ result=new __StrResponse(b.replace('NEED','DONE'), result.url()); } result;","jsLib":""}"#;
-    let out = js_engine::apply_login_check_js(src, "NEED login", "https://enmu.example/book");
-    assert_eq!(out, "DONE login");
+    let out = js_engine::apply_login_check_js(
+        src,
+        "NEED login",
+        "https://enmu.example/book",
+        "GET",
+        None,
+        "UTF-8",
+    );
+    assert_eq!(out.body, "DONE login");
+}
+
+#[test]
+fn login_check_js_put_login_header_and_header_map() {
+    // 对照 jsHelp：source.putLoginHeader + java.getHeaderMap().putAll(source.getHeaderMap(true))
+    legado_engine::http::login_header_store::clear();
+    let src = r#"{"bookSourceUrl":"https://login.example","header":"{\"X-A\":\"1\"}","loginCheckJs":"source.putLoginHeader(JSON.stringify({Cookie:'sid=abc'})); java.getHeaderMap().putAll(source.getHeaderMap(true)); java.initUrl(); result;","jsLib":""}"#;
+    let out = js_engine::apply_login_check_js(
+        src,
+        "ok",
+        "https://login.example/page",
+        "GET",
+        None,
+        "UTF-8",
+    );
+    assert_eq!(out.body, "ok");
+    assert!(out.login_header.as_ref().unwrap().contains("sid=abc"));
+    assert!(
+        legado_engine::http::login_header_store::get("https://login.example").contains("sid=abc")
+    );
+}
+
+#[test]
+fn login_check_js_get_str_response_returns_str_response() {
+    // getStrResponse 对不可达地址返回 code=500 的 StrResponse（不抛）
+    let src = r#"{"bookSourceUrl":"https://getstr.example","loginCheckJs":"result = java.getStrResponse(); result;","jsLib":""}"#;
+    let out = js_engine::apply_login_check_js(
+        src,
+        "orig",
+        "http://127.0.0.1:1/nope",
+        "GET",
+        None,
+        "UTF-8",
+    );
+    assert!(
+        out.body.contains("Error Response") || out.body == "orig",
+        "body={}",
+        out.body
+    );
 }
 
 #[test]

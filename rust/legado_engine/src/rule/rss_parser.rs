@@ -100,7 +100,7 @@ pub async fn get_articles(
             "jsLib": source.js_lib,
         })
         .to_string();
-        js_engine::apply_login_check_js(&mini, &body, &url)
+        js_engine::apply_login_check_js(&mini, &body, &url, "GET", None, "UTF-8").body
     };
     parse_xml(sort_name, &url, &url, &body, &source)
 }

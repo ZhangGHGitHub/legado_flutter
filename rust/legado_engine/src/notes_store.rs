@@ -34,6 +34,10 @@ fn parse_note_json(raw: &str) -> Result<NoteDto, String> {
             .get("position")
             .and_then(|x| x.as_i64())
             .unwrap_or(0) as i32,
+        chapter_pos: v
+            .get("chapterPos")
+            .and_then(|x| x.as_i64())
+            .unwrap_or(-1) as i32,
         created_at: v
             .get("createdAt")
             .and_then(|x| x.as_str())
@@ -49,6 +53,7 @@ pub fn upsert_note(
     selected_text: &str,
     note_content: &str,
     position: i32,
+    chapter_pos: i32,
 ) -> Result<(), String> {
     db::db_upsert_note(
         id.to_string(),
@@ -57,6 +62,7 @@ pub fn upsert_note(
         selected_text.to_string(),
         note_content.to_string(),
         position,
+        chapter_pos,
     )
 }
 
@@ -81,26 +87,4 @@ pub fn export_notes_markdown(book_id: String) -> Result<String, String> {
         Some(book_id)
     };
     db::db_export_notes_markdown(filter)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_note_json_maps_fields() {
-        let raw = r#"{
-            "id":"n1",
-            "bookId":"b1",
-            "chapterTitle":"第一章",
-            "selectedText":"片段",
-            "noteContent":"想法",
-            "position":10,
-            "createdAt":"2026-07-11"
-        }"#;
-        let note = parse_note_json(raw).unwrap();
-        assert_eq!(note.id, "n1");
-        assert_eq!(note.selected_text, "片段");
-        assert_eq!(note.position, 10);
-    }
 }

@@ -823,12 +823,12 @@ Task UI-12:  RSS 文章列表 + 阅读  ✅ 复用 Jingshiro Rss/ParserByRule/De
 **不要把下列项当成故意简化（属缺陷，应优先修）：**
 
 - ~~换源页占位~~ → `ChangeSourcePage` + `BookProvider.changeSource` 已接  
-- ~~登录头未注入常规 HTTP~~ → `SourceLoginPrefs.mergeLoginHeaderIntoSourceJson` 经 bridge `_sourceJson`  
-- ~~`loginCheckJs` / `preUpdateJs` 未执行~~ → 引擎已跑；loginCheckJs 已兼容 StrResponse（`body()`/`url()`/`source`）  
+- ~~登录头未注入常规 HTTP~~ → `SourceLoginPrefs.mergeLoginHeaderIntoSourceJson` 经 bridge `_sourceJson` + Rust `login_header_store`  
+- ~~`loginCheckJs` / `preUpdateJs` 未执行~~ → 引擎已跑；loginCheckJs 已绑 AnalyzeUrl：`getStrResponse`/`initUrl`/`putLoginHeader`（`startBrowserAwait` 仍未做）  
 - ~~书票 overlay 未挂阅读器~~ → `ReaderPage._buildBookplate`  
-- ~~书签点击不回跳~~ → 书签页/目录书签 Tab 回跳章节+页（解析「第N页」）  
+- ~~书签点击不回跳~~ → 书签页/目录书签 Tab 回跳；**`chapterPos` 字符偏移结构化**（旧数据仍可解析「第N页」）  
 - 阅读内替换净化运行时开关等「入口有、行为无」项  
 
 ---
 
-> 最后更新：2026-07-18 | 引擎 v0.5.6 | Focus: UI 复刻；**【故意简化·后做】**见第八节；缺陷并行维修（换源/登录头/loginCheckJs/书票/书签回跳已修） | 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)
+> 最后更新：2026-07-18 | 引擎 v0.5.6 | Focus: UI 复刻；AnalyzeUrl 重登闭环 + 书签 chapterPos 已落地 | 参考：[语雀 Wiki](https://www.yuque.com/legado/wiki)

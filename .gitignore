@@ -52,5 +52,18 @@ app.*.map.json
 # Rust build artifacts
 /rust/target/
 
+# ── Development artifacts (analysis, fix scripts, config dumps, emulator) ──
+analyze_*.txt
+emulator_screen.png
+emulator_ui.xml
+fix_*.ps1
+fix*.py
+legado_my*.xml
+legado_ref.xml
+read_lines*.py
+tools_*_tmp.xml
+test.txt
+.dart_files.txt
+
 # Local reference clone of Jingshiro/legado (for UI layout lookup)
 /reference/

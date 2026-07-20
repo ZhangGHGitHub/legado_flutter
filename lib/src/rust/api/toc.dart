@@ -7,7 +7,7 @@ import '../api.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `parse_html_toc_items`, `resolve_toc_fetch_url`, `split_analyze_url`, `upstream_toc_failure_message`
+// These functions are ignored because they are not marked as `pub`: `extract_tomato_article_id`, `is_already_resolved_toc_url`, `is_usable_toc_url`, `parse_html_toc_items`, `resolve_toc_fetch_url`, `split_analyze_url`, `toc_js_result_payload`, `upstream_toc_failure_message`
 
 /// 获取目录
 Future<List<ChapterItem>> getToc({

@@ -886,7 +886,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       currentChapter: current?.title,
       currentChapterId: current?.id,
       bookId: widget.book.id,
-      onChapterTap: (ch, {int? pageIndex}) async {
+      onChapterTap: (ch, {int? pageIndex, int? chapterPos}) async {
         final i = widget.chapters.indexWhere((c) => c.id == ch.id);
         if (i < 0 || i == _chapterIndex) return;
         setState(() => _chapterIndex = i);

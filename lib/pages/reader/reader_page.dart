@@ -27,6 +27,7 @@ import '../cache/download_choice_dialog.dart';
 import '../cache/download_helpers.dart';
 import '../reader/ai_chat_page.dart';
 import '../../help/book_help.dart';
+import '../../help/bookmark_hint.dart';
 import '../../models/book_progress.dart';
 import '../../services/book_progress_sync.dart';
 import '../../services/book_reader_prefs.dart';
@@ -61,8 +62,11 @@ class ReaderPage extends StatefulWidget {
   final Chapter chapter;
   final List<Chapter> allChapters;
 
-  /// 打开时跳转到的页索引（0-based）；书签回跳用。优先于 [Book.currentPageIndex]。
+  /// 打开时跳转到的页索引（0-based）；书签旧数据 fallback。
   final int? initialPageIndex;
+
+  /// 打开时跳转到的章内字符偏移（对齐 Jingshiro chapterPos）；优先于 [initialPageIndex]。
+  final int? initialChapterPos;
 
   const ReaderPage({
     super.key,
@@ -70,6 +74,7 @@ class ReaderPage extends StatefulWidget {
     required this.chapter,
     required this.allChapters,
     this.initialPageIndex,
+    this.initialChapterPos,
   });
 
   @override
@@ -82,6 +87,7 @@ class _ReaderPageState extends State<ReaderPage> {
   int _currentIndex = 0;
   int _pageIndex = 0;
   int? _pendingTargetPage; // 切换章节后要跳转到的页面索引
+  int? _pendingChapterPos; // 章内字符偏移（优先于页索引）
   List<String> _pages = [];
   late ReaderSettings _settings;
   late ScrollController _scrollController;
@@ -169,7 +175,9 @@ class _ReaderPageState extends State<ReaderPage> {
     _scrollController = ScrollController();
     _currentIndex = widget.allChapters.indexOf(widget.chapter);
     if (_currentIndex < 0) _currentIndex = 0;
-    if (widget.initialPageIndex != null && widget.initialPageIndex! >= 0) {
+    if (widget.initialChapterPos != null && widget.initialChapterPos! >= 0) {
+      _pendingChapterPos = widget.initialChapterPos;
+    } else if (widget.initialPageIndex != null && widget.initialPageIndex! >= 0) {
       _pendingTargetPage = widget.initialPageIndex;
     } else if (widget.book.currentPageIndex > 0) {
       _pendingTargetPage = widget.book.currentPageIndex;
@@ -543,6 +551,7 @@ class _ReaderPageState extends State<ReaderPage> {
     await tts.togglePlay(text);
   }
 
+  // TODO(refactor): 将 _buildClickZones/cell/row 提取到独立 widget 文件。
   /// 九宫格点击热区（对齐 ReadView.setRect9x：宽高各约 1/3）
   Widget _buildClickZones() {
     Widget cell(ClickZoneAction action) {
@@ -1277,7 +1286,9 @@ class _ReaderPageState extends State<ReaderPage> {
 
     if (result.isEmpty) result.add(display);
 
-    final targetPage = _pendingTargetPage ?? 0;
+    final targetPage = _pendingChapterPos != null && _pendingChapterPos! >= 0
+        ? pageIndexForChapterPos(result, _pendingChapterPos!)
+        : (_pendingTargetPage ?? 0);
     final clampedPage = targetPage < 0
         ? result.length - 1
         : (targetPage >= result.length ? 0 : targetPage);
@@ -1286,6 +1297,7 @@ class _ReaderPageState extends State<ReaderPage> {
       _pages = result;
       _pageIndex = clampedPage;
       _pendingTargetPage = null;
+      _pendingChapterPos = null;
     });
     debugPrint(
       '📖 分页完成: ${result.length} 页 (目标=$clampedPage, 总高度=$totalHeight, 页高=$pageHeight)',
@@ -1381,7 +1393,7 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  void _goToChapter(int index, {int? pageIndex}) {
+  void _goToChapter(int index, {int? pageIndex, int? chapterPos}) {
     if (index < 0 || index >= widget.allChapters.length) return;
     if (_simRead.enabled && index > _maxReadableIndex) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1401,8 +1413,12 @@ class _ReaderPageState extends State<ReaderPage> {
       _pages = [];
       _pageIndex = 0;
       _currentIndex = index;
-      if (pageIndex != null && pageIndex >= 0) {
+      if (chapterPos != null && chapterPos >= 0) {
+        _pendingChapterPos = chapterPos;
+        _pendingTargetPage = null;
+      } else if (pageIndex != null && pageIndex >= 0) {
         _pendingTargetPage = pageIndex;
+        _pendingChapterPos = null;
       }
     });
     _loadContent();
@@ -1443,14 +1459,16 @@ class _ReaderPageState extends State<ReaderPage> {
       currentChapter: current.title,
       currentChapterId: current.id,
       bookId: widget.book.id,
-      onChapterTap: (chapter, {int? pageIndex}) {
+      onChapterTap: (chapter, {int? pageIndex, int? chapterPos}) {
         final idx = widget.allChapters.indexWhere((c) => c.id == chapter.id);
         if (idx >= 0) {
-          _goToChapter(idx, pageIndex: pageIndex);
+          _goToChapter(idx, pageIndex: pageIndex, chapterPos: chapterPos);
         } else {
           final byUrl =
               widget.allChapters.indexWhere((c) => c.url == chapter.url);
-          if (byUrl >= 0) _goToChapter(byUrl, pageIndex: pageIndex);
+          if (byUrl >= 0) {
+            _goToChapter(byUrl, pageIndex: pageIndex, chapterPos: chapterPos);
+          }
         }
       },
     );
@@ -1990,6 +2008,9 @@ class _ReaderPageState extends State<ReaderPage> {
     final pageHint = _isHorizontalPaged && _pages.isNotEmpty
         ? '第${_pageIndex + 1}/${_pages.length}页'
         : '滚动位置';
+    final chapterPos = _isHorizontalPaged && _pages.isNotEmpty
+        ? chapterPosForPageIndex(_pages, _pageIndex)
+        : -1;
     NoteService.save(
       id: const Uuid().v4(),
       bookId: widget.book.id,
@@ -1997,6 +2018,7 @@ class _ReaderPageState extends State<ReaderPage> {
       selectedText: preview.isEmpty ? chapter.title : preview,
       noteContent: '书签 · $pageHint',
       position: _currentIndex,
+      chapterPos: chapterPos,
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -2180,6 +2202,7 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
+  // TODO(refactor): 顶/底 chrome 与更多菜单拆到 reader_chrome.dart。
   Widget _buildTopChrome(ReaderTheme theme) {
     final chapter = widget.allChapters[_currentIndex];
     final sourceName = _sourceDisplayName;
@@ -2819,6 +2842,7 @@ class _ReaderPageState extends State<ReaderPage> {
   ReaderTheme get _currentTheme =>
       _settings.resolveTheme();
 
+  // TODO(refactor): 翻页模式（slide/scroll/simulation）拆到 reader_body.dart。
   @override
   Widget build(BuildContext context) {
     final chapter = widget.allChapters[_currentIndex];

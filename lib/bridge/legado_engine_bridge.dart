@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -41,11 +42,39 @@ class LegadoEngineBridge {
   /// 书源 JSON + 登录头合并进 `header`（EN-08，对齐 Jingshiro AnalyzeUrl）
   static Future<String> _sourceJson(BookSource source) async {
     final loginHeader =
-        await SourceLoginPrefs.loadHeader(source.bookSourceUrl);
+        await SourceLoginPrefs.loadHeader(source.bookSourceUrl) ?? '';
+    // 预热 Rust 登录头缓存，供 loginCheckJs / ajax 使用
+    if (loginHeader.trim().isNotEmpty) {
+      try {
+        rust_api.seedLoginHeader(
+          sourceUrl: source.bookSourceUrl,
+          header: loginHeader,
+        );
+      } catch (_) {}
+    }
     return SourceLoginPrefs.mergeLoginHeaderIntoSourceJson(
       source.toEngineJson(),
       loginHeader,
     );
+  }
+
+  /// loginCheckJs `putLoginHeader` → SharedPreferences
+  static Future<void> _syncLoginHeaders() async {
+    if (!_available) return;
+    try {
+      final raw = rust_api.drainLoginHeaderUpdates();
+      if (raw.isEmpty || raw == '{}') return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      for (final e in decoded.entries) {
+        final url = e.key.toString();
+        final header = e.value?.toString() ?? '';
+        if (url.isEmpty || header.isEmpty) continue;
+        await SourceLoginPrefs.saveHeader(url, header);
+      }
+    } catch (e) {
+      debugPrint('[Engine] sync login headers: $e');
+    }
   }
 
   static Future<List<Map<String, String>>> search(
@@ -58,6 +87,7 @@ class LegadoEngineBridge {
       sourceJson: await _sourceJson(source),
       keyword: keyword,
     );
+    await _syncLoginHeaders();
     return items
         .map(
           (item) => {
@@ -84,6 +114,7 @@ class LegadoEngineBridge {
       exploreUrl: exploreUrl,
       page: page,
     );
+    await _syncLoginHeaders();
     return items
         .map(
           (item) => {
@@ -108,6 +139,7 @@ class LegadoEngineBridge {
       sourceJson: await _sourceJson(source),
       bookUrl: bookUrl,
     );
+    await _syncLoginHeaders();
     return {
       'name': info.name,
       'author': info.author,
@@ -126,6 +158,7 @@ class LegadoEngineBridge {
       sourceJson: await _sourceJson(source),
       bookUrl: book.sourceUrl,
     );
+    await _syncLoginHeaders();
     return items.asMap().entries.map((entry) {
       final i = entry.key;
       final item = entry.value;
@@ -145,10 +178,12 @@ class LegadoEngineBridge {
   ) async {
     if (!_available) throw StateError('Rust engine not available');
 
-    return rust_api.getContent(
+    final body = await rust_api.getContent(
       sourceJson: await _sourceJson(source),
       chapterUrl: chapterUrl,
     );
+    await _syncLoginHeaders();
+    return body;
   }
 
   static Future<rust_api.SourceValidation> validateSource(

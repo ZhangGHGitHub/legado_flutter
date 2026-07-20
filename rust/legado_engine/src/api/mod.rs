@@ -91,6 +91,8 @@ pub struct NoteDto {
     pub selected_text: String,
     pub note_content: String,
     pub position: i32,
+    /// 章内字符偏移（对齐 Jingshiro Bookmark.chapterPos）；-1=未知
+    pub chapter_pos: i32,
     pub created_at: String,
 }
 
@@ -298,6 +300,7 @@ pub fn upsert_note(
     selected_text: String,
     note_content: String,
     position: i32,
+    chapter_pos: i32,
 ) -> Result<(), String> {
     crate::notes_store::upsert_note(
         &id,
@@ -306,6 +309,7 @@ pub fn upsert_note(
         &selected_text,
         &note_content,
         position,
+        chapter_pos,
     )
 }
 
@@ -331,6 +335,19 @@ pub fn export_notes_markdown(book_id: String) -> Result<String, String> {
 #[frb(sync)]
 pub fn eval_js(script: String, js_lib: String, base_url: String) -> Result<String, String> {
     crate::rule::js_engine::run_eval_script(&script, &js_lib, &base_url)
+}
+
+/// 预热 Rust 登录头缓存（Dart SharedPreferences → 引擎）
+#[frb(sync)]
+pub fn seed_login_header(source_url: String, header: String) -> Result<(), String> {
+    crate::http::login_header_store::seed(&source_url, &header);
+    Ok(())
+}
+
+/// 取出 loginCheckJs 新写入的登录头（JSON: url → header），供 Dart 回写 prefs
+#[frb(sync)]
+pub fn drain_login_header_updates() -> String {
+    crate::http::login_header_store::drain_dirty_json()
 }
 
 /// RSS 文章 DTO

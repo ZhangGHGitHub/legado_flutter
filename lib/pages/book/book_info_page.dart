@@ -468,7 +468,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
       chapters: chapters,
       currentChapter: _book.currentChapter,
       bookId: _book.id,
-      onChapterTap: (chapter, {int? pageIndex}) async {
+      onChapterTap: (chapter, {int? pageIndex, int? chapterPos}) async {
         Navigator.pop(context);
         final idx = chapters.indexWhere((c) => c.id == chapter.id);
         final source = context.read<SourceProvider>().findSourceForBook(_book);
@@ -487,6 +487,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
                     chapter: chapter,
                     allChapters: chapters,
                     initialPageIndex: pageIndex,
+                    initialChapterPos: chapterPos,
                   ),
           ),
         );
@@ -702,22 +703,17 @@ class _BookInfoPageState extends State<BookInfoPage> {
           style: TextStyle(color: Colors.white, fontSize: 18),
         ),
         centerTitle: true,
+        // 窄窗（Windows）三个 IconButton 会撑爆 trailing；编辑/分享并入溢出菜单
         actions: [
-          IconButton(
-            tooltip: '编辑',
-            icon: const Icon(Icons.edit_outlined),
-            onPressed: _editBookInfo,
-          ),
-          IconButton(
-            tooltip: '分享',
-            icon: const Icon(Icons.share_outlined),
-            onPressed: _shareBook,
-          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.white),
             onSelected: (v) async {
               final provider = context.read<BookProvider>();
               switch (v) {
+                case 'edit':
+                  await _editBookInfo();
+                case 'share':
+                  await _shareBook();
                 case 'cover':
                   await _openChangeCover();
                 case 'status':
@@ -737,6 +733,8 @@ class _BookInfoPageState extends State<BookInfoPage> {
               }
             },
             itemBuilder: (_) => [
+              const PopupMenuItem(value: 'edit', child: Text('编辑')),
+              const PopupMenuItem(value: 'share', child: Text('分享')),
               const PopupMenuItem(value: 'cover', child: Text('更换封面')),
               const PopupMenuItem(value: 'status', child: Text('阅读状态')),
               const PopupMenuItem(value: 'refresh', child: Text('刷新目录')),
@@ -995,6 +993,7 @@ class _MetaRow extends StatelessWidget {
           ),
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(width: 8),
+            // 勿包 Flexible：默认 flex:1 会与左侧 Expanded 对半分宽，按钮无法贴右。
             _RedActionChip(label: actionLabel!, onTap: onAction!),
           ],
         ],
@@ -1021,6 +1020,8 @@ class _RedActionChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           child: Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 12,

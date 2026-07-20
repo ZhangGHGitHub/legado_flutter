@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use std::sync::Mutex;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i32 = 12;
+const SCHEMA_VERSION: i32 = 13;
 
 static DB: OnceCell<Mutex<EngineDb>> = OnceCell::new();
 
@@ -130,15 +130,16 @@ impl EngineDb {
         if current < 9 {
             conn.execute_batch(
                 "CREATE TABLE IF NOT EXISTS notes (
-                   id TEXT PRIMARY KEY,
-                   book_id TEXT NOT NULL,
-                   chapter_title TEXT DEFAULT '',
-                   selected_text TEXT NOT NULL,
-                   note_content TEXT DEFAULT '',
-                   position INTEGER DEFAULT 0,
-                   created_at TEXT DEFAULT (datetime('now')),
-                   FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
-                 );
+                  id TEXT PRIMARY KEY,
+                  book_id TEXT NOT NULL,
+                  chapter_title TEXT DEFAULT '',
+                  selected_text TEXT NOT NULL,
+                  note_content TEXT DEFAULT '',
+                  position INTEGER DEFAULT 0,
+                  chapter_pos INTEGER NOT NULL DEFAULT -1,
+                  created_at TEXT DEFAULT (datetime('now')),
+                  FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+                );
                  CREATE INDEX IF NOT EXISTS idx_notes_book_id ON notes(book_id);",
             )?;
         }
@@ -175,6 +176,13 @@ impl EngineDb {
             );
             let _ = conn.execute(
                 "ALTER TABLE books ADD COLUMN durChapterIndex INTEGER DEFAULT 0",
+                [],
+            );
+        }
+        if current < 13 {
+            // 书签章内字符偏移（对齐 Jingshiro Bookmark.chapterPos）
+            let _ = conn.execute(
+                "ALTER TABLE notes ADD COLUMN chapter_pos INTEGER NOT NULL DEFAULT -1",
                 [],
             );
         }
@@ -696,22 +704,25 @@ impl EngineDb {
         selected_text: &str,
         note_content: &str,
         position: i64,
+        chapter_pos: i64,
     ) -> Result<(), DbError> {
         self.conn.execute(
-            "INSERT INTO notes (id, book_id, chapter_title, selected_text, note_content, position)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            "INSERT INTO notes (id, book_id, chapter_title, selected_text, note_content, position, chapter_pos)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(id) DO UPDATE SET
                chapter_title = excluded.chapter_title,
                selected_text = excluded.selected_text,
                note_content = excluded.note_content,
-               position = excluded.position",
+               position = excluded.position,
+               chapter_pos = excluded.chapter_pos",
             params![
                 id,
                 book_id,
                 chapter_title,
                 selected_text,
                 note_content,
-                position
+                position,
+                chapter_pos
             ],
         )?;
         Ok(())
@@ -727,7 +738,7 @@ impl EngineDb {
         let mut out = Vec::new();
         if let Some(bid) = book_id.filter(|s| !s.is_empty()) {
             let mut stmt = self.conn.prepare(
-                "SELECT id, book_id, chapter_title, selected_text, note_content, position, created_at
+                "SELECT id, book_id, chapter_title, selected_text, note_content, position, created_at, chapter_pos
                  FROM notes WHERE book_id = ?1 ORDER BY created_at DESC",
             )?;
             let rows = stmt.query_map(params![bid], |row| Self::map_note_row(row))?;
@@ -736,7 +747,7 @@ impl EngineDb {
             }
         } else {
             let mut stmt = self.conn.prepare(
-                "SELECT id, book_id, chapter_title, selected_text, note_content, position, created_at
+                "SELECT id, book_id, chapter_title, selected_text, note_content, position, created_at, chapter_pos
                  FROM notes ORDER BY created_at DESC",
             )?;
             let rows = stmt.query_map([], |row| Self::map_note_row(row))?;
@@ -756,6 +767,7 @@ impl EngineDb {
             "noteContent": row.get::<_, String>(4)?,
             "position": row.get::<_, i64>(5)?,
             "createdAt": row.get::<_, String>(6)?,
+            "chapterPos": row.get::<_, i64>(7).unwrap_or(-1),
         })
         .to_string())
     }
@@ -940,15 +952,20 @@ impl EngineDb {
             .get("position")
             .and_then(|v| v.as_i64())
             .unwrap_or(0);
+        let chapter_pos = entry
+            .get("chapterPos")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(-1);
         let created_at = str_field(entry, "createdAt").unwrap_or_default();
         self.conn.execute(
-            "INSERT INTO notes (id, book_id, chapter_title, selected_text, note_content, position, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "INSERT INTO notes (id, book_id, chapter_title, selected_text, note_content, position, chapter_pos, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(id) DO UPDATE SET
                chapter_title = excluded.chapter_title,
                selected_text = excluded.selected_text,
                note_content = excluded.note_content,
                position = excluded.position,
+               chapter_pos = excluded.chapter_pos,
                created_at = excluded.created_at",
             params![
                 id,
@@ -957,6 +974,7 @@ impl EngineDb {
                 selected_text,
                 note_content,
                 position,
+                chapter_pos,
                 created_at
             ],
         )?;
@@ -1152,6 +1170,7 @@ pub fn db_upsert_note(
     selected_text: String,
     note_content: String,
     position: i32,
+    chapter_pos: i32,
 ) -> Result<(), String> {
     with_db(|db| {
         db.upsert_note(
@@ -1161,6 +1180,7 @@ pub fn db_upsert_note(
             &selected_text,
             &note_content,
             position as i64,
+            chapter_pos as i64,
         )
     })
 }
@@ -1439,14 +1459,16 @@ mod tests {
             "选中片段",
             "我的想法",
             120,
+            42,
         )
         .unwrap();
 
         let notes = db.list_notes_json(Some("b1")).unwrap();
         assert_eq!(notes.len(), 1);
         assert!(notes[0].contains("我的想法"));
+        assert!(notes[0].contains("\"chapterPos\":42"));
 
-        db.upsert_note("n1", "b1", "第一章", "选中片段", "更新内容", 120)
+        db.upsert_note("n1", "b1", "第一章", "选中片段", "更新内容", 120, 42)
             .unwrap();
         let notes2 = db.list_notes_json(None).unwrap();
         assert!(notes2[0].contains("更新内容"));
