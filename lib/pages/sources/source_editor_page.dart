@@ -13,6 +13,7 @@ import '../../providers/source_provider.dart';
 import '../../services/cache_service.dart';
 import '../../services/qr_code_service.dart';
 import '../../theme/legado_tokens.dart';
+import '../../widgets/legado_popup_menu.dart';
 import '../code_edit/code_edit_page.dart';
 import '../code_edit/code_edit_prefs.dart';
 import '../code_edit/keyboard_tool_bar.dart';
@@ -1140,6 +1141,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
               onPressed: _isSaving ? null : _debugSource,
             ),
             PopupMenuButton<String>(
+              offset: legadoAppBarPopupOffset(context),
               onSelected: _onMenuSelected,
               itemBuilder: (ctx) => [
                 if (loginUrl.isNotEmpty)

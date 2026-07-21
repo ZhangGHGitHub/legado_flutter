@@ -4,6 +4,7 @@ import '../../help/book_help.dart';
 import '../../help/bookmark_hint.dart';
 import '../../models/chapter.dart';
 import '../../services/note_service.dart';
+import '../../widgets/legado_popup_menu.dart';
 import '../../src/rust/api.dart' as rust_api;
 
 /// 选中章节；[pageIndex]/[chapterPos] 为书签回跳参数。
@@ -279,6 +280,7 @@ class _TocSheetState extends State<TocSheet>
                   },
           ),
           PopupMenuButton<String>(
+            offset: legadoAppBarPopupOffset(context),
             icon: const Icon(Icons.more_vert),
             onSelected: (v) {
               if (v == 'reverse') {

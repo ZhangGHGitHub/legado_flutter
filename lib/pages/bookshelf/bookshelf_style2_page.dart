@@ -6,11 +6,14 @@ import 'package:provider/provider.dart';
 import '../../models/book.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
+import '../../services/book_group_store.dart';
 import '../../services/bookshelf_prefs.dart';
 import '../../services/local_book_service.dart';
 import '../../theme/legado_tokens.dart';
+import '../../widgets/book_group_manage_dialog.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/legado_refresh_indicator.dart';
+import '../../widgets/legado_popup_menu.dart';
 import '../book/book_info_page.dart';
 import '../cache/cache_book_page.dart';
 import '../search/search_page.dart';
@@ -123,6 +126,7 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
       provider.refreshShelfToc(
         books,
         resolveSource: sources.findSourceForBook,
+        onlyUpdateRead: widget.config.onlyUpdateRead,
       ),
     );
     ScaffoldMessenger.of(
@@ -153,12 +157,23 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
           MaterialPageRoute(builder: (_) => const CacheBookPage()),
         );
       case BookshelfOverflowMenu.groupMgmt:
-        _scaffoldKey.currentState?.openDrawer();
+        _showGroupManagement();
       case BookshelfOverflowMenu.layout:
         _openLayoutConfig();
       default:
         _showStub(a);
     }
+  }
+
+  Future<void> _showGroupManagement() async {
+    final books = context.read<BookProvider>().books;
+    await BookGroupStore.syncNamesFromBooks(
+      books.map((b) => b.group).where((g) => g.isNotEmpty),
+    );
+    if (!mounted) return;
+    await showBookGroupManageDialog(context);
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _openLayoutConfig() async {
@@ -262,6 +277,7 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
             ),
           ),
           PopupMenuButton<String>(
+            offset: legadoAppBarPopupOffset(context),
             icon: const Icon(Icons.more_vert),
             onSelected: _onOverflowSelected,
             itemBuilder: (ctx) => BookshelfOverflowMenu.items(ctx),
@@ -314,6 +330,7 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
                 provider.refreshShelfToc(
                   books,
                   resolveSource: sources.findSourceForBook,
+                  onlyUpdateRead: widget.config.onlyUpdateRead,
                 ),
               );
             },

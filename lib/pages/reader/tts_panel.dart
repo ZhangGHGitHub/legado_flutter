@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/http_tts_service.dart';
 import '../../services/tts_service.dart';
 
 /// TTS 朗读面板（对齐 dialog_read_aloud）。
@@ -74,16 +75,13 @@ class _TtsPanelState extends State<TtsPanel> {
   }
 
   Future<void> _togglePlay() async {
+    if (_tts.engineId == 'http' && !_tts.httpTtsConfigured) {
+      await _editHttpTts();
+      if (!_tts.httpTtsConfigured) return;
+    }
     await _tts.togglePlay(widget.sampleText);
     if (!mounted) return;
-    if (_tts.engineId == 'http' && _tts.state == TtsPlaybackState.playing) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('HTTP TTS 尚未实现，请改用系统 TTS'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    } else if (_tts.capability == TtsCapability.stub &&
+    if (_tts.capability == TtsCapability.stub &&
         _tts.state == TtsPlaybackState.playing) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -91,6 +89,39 @@ class _TtsPanelState extends State<TtsPanel> {
           duration: Duration(seconds: 3),
         ),
       );
+    }
+  }
+
+  Future<void> _editHttpTts() async {
+    final controller = TextEditingController(text: _tts.httpTtsUrl);
+    final url = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('HTTP TTS 地址'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'https://example.com/tts?text={{speakText}}',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (url != null && url.isNotEmpty) {
+      _tts.configureHttpTts(HttpTtsConfig(url: url));
     }
   }
 
@@ -139,9 +170,11 @@ class _TtsPanelState extends State<TtsPanel> {
               child: Text(
                 _tts.capability == TtsCapability.platform
                     ? '正在使用 ${_tts.engineLabel} · $sentenceHint'
+                    : _tts.capability == TtsCapability.http
+                    ? '正在使用 HTTP TTS · $sentenceHint'
                     : _tts.engineId == 'http'
-                        ? 'HTTP TTS 待实现 · $sentenceHint'
-                        : '引擎初始化中或不可用 · $sentenceHint',
+                    ? 'HTTP TTS 未配置 · $sentenceHint'
+                    : '引擎初始化中或不可用 · $sentenceHint',
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ),
@@ -252,20 +285,34 @@ class _TtsPanelState extends State<TtsPanel> {
                 _tts.engineLabel,
                 style: const TextStyle(fontSize: 11),
               ),
-              trailing: DropdownButton<String>(
-                value: _tts.engineId,
-                underline: const SizedBox.shrink(),
-                items: TtsService.engines
-                    .map(
-                      (e) => DropdownMenuItem(
-                        value: e.id,
-                        child: Text(e.label, style: const TextStyle(fontSize: 12)),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (id) {
-                  if (id != null) _tts.setEngineId(id);
-                },
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_tts.engineId == 'http')
+                    IconButton(
+                      tooltip: '配置 HTTP TTS',
+                      icon: const Icon(Icons.settings_outlined, size: 20),
+                      onPressed: _editHttpTts,
+                    ),
+                  DropdownButton<String>(
+                    value: _tts.engineId,
+                    underline: const SizedBox.shrink(),
+                    items: TtsService.engines
+                        .map(
+                          (e) => DropdownMenuItem(
+                            value: e.id,
+                            child: Text(
+                              e.label,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (id) {
+                      if (id != null) _tts.setEngineId(id);
+                    },
+                  ),
+                ],
               ),
             ),
             SwitchListTile(

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/book.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
+import '../../widgets/book_cover.dart';
 import '../../widgets/empty_state.dart';
 
 /// 换源页 — 按书名在启用书源中搜索，选中后更新来源并刷新目录
@@ -215,13 +216,16 @@ class _ChangeSourcePageState extends State<ChangeSourcePage> {
                         return ListTile(
                           enabled: !_applying,
                           selected: current,
-                          leading: Icon(
-                            current
-                                ? Icons.check_circle
-                                : Icons.swap_horiz_outlined,
-                            color: current
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.outline,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
+                          ),
+                          leading: BookCover(
+                            coverUrl: book.coverUrl,
+                            author: book.author,
+                            width: 48,
+                            height: 64,
+                            radius: 4,
                           ),
                           title: Text(
                             book.name,
@@ -232,19 +236,18 @@ class _ChangeSourcePageState extends State<ChangeSourcePage> {
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const SizedBox(height: 2),
-                              Text(
-                                [
-                                  if (book.author.isNotEmpty) book.author,
-                                  sourceName,
-                                ].join(' · '),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: theme.colorScheme.onSurfaceVariant,
+                              if (book.author.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  book.author,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
                                 ),
-                              ),
+                              ],
                               if (latest.isNotEmpty) ...[
                                 const SizedBox(height: 2),
                                 Text(
@@ -257,8 +260,35 @@ class _ChangeSourcePageState extends State<ChangeSourcePage> {
                                   ),
                                 ),
                               ],
+                              const SizedBox(height: 4),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Chip(
+                                  label: Text(
+                                    sourceName,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: current
+                                          ? theme.colorScheme.onPrimaryContainer
+                                          : theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  padding: EdgeInsets.zero,
+                                  labelPadding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                  ),
+                                  side: BorderSide.none,
+                                  backgroundColor: current
+                                      ? theme.colorScheme.primaryContainer
+                                      : theme.colorScheme.surfaceContainerHighest,
+                                ),
+                              ),
                             ],
                           ),
+                          isThreeLine: true,
                           trailing: current
                               ? Text(
                                   '当前',

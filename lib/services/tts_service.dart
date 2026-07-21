@@ -1,16 +1,19 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+
+import 'http_tts_service.dart';
 
 /// TTS 朗读服务（UI-2 / UI-22）。
 ///
 /// 系统引擎经 [FlutterTts] 发音（Android / iOS / macOS）；
-/// Windows / Linux 桌面无原生插件（避免 nuget），走 stub；HTTP TTS 仍为占位。
+/// Windows / Linux 桌面仍支持 HTTP 音频；系统 TTS 依赖平台插件。
 enum TtsPlaybackState { idle, playing, paused }
 
-enum TtsCapability { stub, platform }
+enum TtsCapability { stub, platform, http }
 
 /// 对齐 Jingshiro [AudioPlay.PlayMode]
 enum TtsPlayMode {
@@ -40,7 +43,7 @@ class TtsService extends ChangeNotifier {
 
   static const List<TtsEngineOption> engines = [
     TtsEngineOption('system', '系统 TTS'),
-    TtsEngineOption('http', 'HTTP TTS（待实现）'),
+    TtsEngineOption('http', 'HTTP TTS'),
   ];
 
   /// Windows / Linux 不创建引擎，避免依赖未注册的 Windows 插件。
@@ -51,6 +54,9 @@ class TtsService extends ChangeNotifier {
   }
 
   final FlutterTts? _flutterTts;
+  final HttpTtsClient _httpClient = HttpTtsClient();
+  AudioPlayer? _httpPlayer;
+  HttpTtsConfig? _httpConfig;
   bool _engineReady = false;
   bool _platformAvailable = false;
 
@@ -68,7 +74,6 @@ class TtsService extends ChangeNotifier {
   /// 当当前绑定文本全部朗读完成时触发（含 stub）。
   VoidCallback? onPlaybackCompleted;
 
-  String _fullText = '';
   List<String> _sentences = const [];
   int _sentenceIndex = 0;
 
@@ -79,6 +84,7 @@ class TtsService extends ChangeNotifier {
   bool get backgroundPlay => _backgroundPlay;
   int? get timerMinutes => _timerMinutes;
   TtsPlayMode get playMode => _playMode;
+
   /// 定时关闭剩余分钟（向上取整）；未设置返回 null。
   int? get timerRemainingMinutes {
     final deadline = _timerDeadline;
@@ -89,21 +95,32 @@ class TtsService extends ChangeNotifier {
   }
 
   TtsCapability get capability =>
-      _engineId == 'system' && _platformAvailable
-          ? TtsCapability.platform
-          : TtsCapability.stub;
+      _engineId == 'http' && _httpConfig?.isConfigured == true
+      ? TtsCapability.http
+      : _engineId == 'system' && _platformAvailable
+      ? TtsCapability.platform
+      : TtsCapability.stub;
   bool get isActive =>
       _state == TtsPlaybackState.playing || _state == TtsPlaybackState.paused;
   int get sentenceIndex => _sentenceIndex;
   int get sentenceCount => _sentences.length;
-  String get currentSentence =>
-      _sentences.isEmpty ? '' : _sentences[_sentenceIndex.clamp(0, _sentences.length - 1)];
+  String get currentSentence => _sentences.isEmpty
+      ? ''
+      : _sentences[_sentenceIndex.clamp(0, _sentences.length - 1)];
 
   String get engineLabel {
     for (final e in engines) {
       if (e.id == _engineId) return e.label;
     }
     return _engineId;
+  }
+
+  bool get httpTtsConfigured => _httpConfig?.isConfigured == true;
+  String get httpTtsUrl => _httpConfig?.url ?? '';
+
+  void configureHttpTts(HttpTtsConfig? config) {
+    _httpConfig = config;
+    notifyListeners();
   }
 
   Future<void> ensureInitialized() async {
@@ -174,6 +191,8 @@ class TtsService extends ChangeNotifier {
   }
 
   void setEngineId(String id) {
+    if (_engineId == id) return;
+    if (isActive) unawaited(stop());
     _engineId = id;
     notifyListeners();
   }
@@ -230,7 +249,6 @@ class TtsService extends ChangeNotifier {
   }
 
   void bindText(String text) {
-    _fullText = text;
     _sentences = splitSentences(text);
     _sentenceIndex = 0;
     notifyListeners();
@@ -245,10 +263,28 @@ class TtsService extends ChangeNotifier {
 
   Future<bool> _speakFromCurrent() async {
     if (_engineId == 'http') {
-      debugPrint('TTS http stub speak chars=${_fullText.length}');
-      _state = TtsPlaybackState.playing;
-      notifyListeners();
-      return false;
+      final config = _httpConfig;
+      if (config == null || !config.isConfigured) {
+        _state = TtsPlaybackState.idle;
+        notifyListeners();
+        return false;
+      }
+      try {
+        final request = config.resolve(currentSentence, _speechRate);
+        final audio = await _httpClient.fetchAudio(request);
+        final player = _ensureHttpPlayer();
+        await player.stop();
+        await player.setSourceBytes(audio);
+        _state = TtsPlaybackState.playing;
+        notifyListeners();
+        await player.resume();
+        return true;
+      } catch (e) {
+        debugPrint('HTTP TTS 播放失败: $e');
+        _state = TtsPlaybackState.idle;
+        notifyListeners();
+        return false;
+      }
     }
     final tts = _flutterTts;
     if (!_platformAvailable || tts == null) {
@@ -301,6 +337,14 @@ class TtsService extends ChangeNotifier {
   Future<void> pause() async {
     if (_state != TtsPlaybackState.playing) return;
     final tts = _flutterTts;
+    if (_engineId == 'http') {
+      try {
+        await _httpPlayer?.pause();
+      } catch (_) {}
+      _state = TtsPlaybackState.paused;
+      notifyListeners();
+      return;
+    }
     if (_engineId == 'system' && _platformAvailable && tts != null) {
       try {
         await tts.pause();
@@ -312,6 +356,16 @@ class TtsService extends ChangeNotifier {
 
   Future<void> resume() async {
     if (_state != TtsPlaybackState.paused) return;
+    if (_engineId == 'http') {
+      try {
+        await _httpPlayer?.resume();
+        _state = TtsPlaybackState.playing;
+        notifyListeners();
+      } catch (_) {
+        await _speakFromCurrent();
+      }
+      return;
+    }
     if (_engineId == 'system' && _platformAvailable && _flutterTts != null) {
       // 部分平台无真正 resume，重说当前句。
       await _speakFromCurrent();
@@ -323,6 +377,11 @@ class TtsService extends ChangeNotifier {
 
   Future<void> stop() async {
     final tts = _flutterTts;
+    if (_engineId == 'http') {
+      try {
+        await _httpPlayer?.stop();
+      } catch (_) {}
+    }
     if (_engineId == 'system' && _platformAvailable && tts != null) {
       try {
         await tts.stop();
@@ -369,5 +428,14 @@ class TtsService extends ChangeNotifier {
       await stop();
       await _speakFromCurrent();
     }
+  }
+
+  AudioPlayer _ensureHttpPlayer() {
+    final existing = _httpPlayer;
+    if (existing != null) return existing;
+    final player = AudioPlayer();
+    player.onPlayerComplete.listen((_) => _onUtteranceDone());
+    _httpPlayer = player;
+    return player;
   }
 }

@@ -7,6 +7,7 @@ import '../../models/dict_rule.dart';
 import '../../services/dict_rule_prefs.dart';
 import '../../services/dict_rule_tester.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/legado_popup_menu.dart';
 
 /// 字典规则管理 — 对齐 Jingshiro [DictRuleActivity]
 class DictRulePage extends StatefulWidget {
@@ -218,6 +219,7 @@ class _DictRulePageState extends State<DictRulePage> {
             onPressed: () => _showEditDialog(),
           ),
           PopupMenuButton<String>(
+            offset: legadoAppBarPopupOffset(context),
             onSelected: (v) async {
               switch (v) {
                 case 'defaults':

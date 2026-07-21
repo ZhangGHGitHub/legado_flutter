@@ -34,6 +34,7 @@ class _BookshelfConfigDialogState extends State<BookshelfConfigDialog> {
   late bool _showLastUpdate;
   late bool _showWaitUp;
   late bool _fastScroller;
+  late bool _onlyUpdateRead;
   late int _showBookname;
   late double _margin;
 
@@ -67,6 +68,7 @@ class _BookshelfConfigDialogState extends State<BookshelfConfigDialog> {
     _showLastUpdate = c.showLastUpdateTime;
     _showWaitUp = c.showWaitUpCount;
     _fastScroller = c.showBookshelfFastScroller;
+    _onlyUpdateRead = c.onlyUpdateRead;
     _showBookname = c.showBookname.clamp(0, 2);
     _margin = c.bookshelfMargin.toDouble().clamp(0, 60);
   }
@@ -80,6 +82,7 @@ class _BookshelfConfigDialogState extends State<BookshelfConfigDialog> {
       showLastUpdateTime: _showLastUpdate,
       showWaitUpCount: _showWaitUp,
       showBookshelfFastScroller: _fastScroller,
+      onlyUpdateRead: _onlyUpdateRead,
       showBookname: _showBookname,
       bookshelfMargin: _margin.round(),
       bookOrder: widget.initial.bookOrder,
@@ -135,6 +138,13 @@ class _BookshelfConfigDialogState extends State<BookshelfConfigDialog> {
                 subtitle: const Text('仅下拉/批量更新目录时，底栏「书架」上显示进行中数量；空闲时无角标'),
                 value: _showWaitUp,
                 onChanged: (v) => setState(() => _showWaitUp = v),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('仅更新已读'),
+                subtitle: const Text('下拉刷新时只更新已读过的书；未读书不触发联网'),
+                value: _onlyUpdateRead,
+                onChanged: (v) => setState(() => _onlyUpdateRead = v),
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,

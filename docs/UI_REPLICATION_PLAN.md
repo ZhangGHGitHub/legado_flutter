@@ -91,11 +91,11 @@
 **朗读面板**（`dialog_read_aloud`）
 
 - [x] 上/下章、上/下页、上/下句、播放/停止（UI-2：`flutter_tts` 系统引擎 + 句级导航）
-- [x] 定时、语速滑块、TTS 引擎选择、后台播放（系统 TTS 可发音；HTTP TTS 仍占位）
+- [x] 定时、语速滑块、TTS 引擎选择、后台播放（系统/HTTP TTS 可发音）
 
 **界面面板**（`dialog_read_bg_text` / `dialog_read_book_style`）
 
-- [x] 字重（中/粗/细）、缩进、简繁（字级表；词级 OpenCC/quick-transfer 词典仍缺）
+- [x] 字重（中/粗/细）、缩进、简繁（字级表 + 高频词匹配；完整 OpenCC 词典仍开放）
 - [x] 字体（内置系统/衬线/等宽骨架；自定义导入占位）
 - [x] 边距（左右/上下调节）
 - [x] 信息区开关（页码/时间/电量）
@@ -110,7 +110,7 @@
 - [x] 文字两端对齐；文字底部对齐（分页不足一页贴底）
 - [x] 音量键翻页开关；蓝牙翻页器（PageUp/Down·媒体键）
 - [x] 朗读时音量键翻页（`volumeKeyPageOnPlay`）
-- [ ] 自动换源、长按选择文本
+- [x] 自动换源、长按选择文本
 - [x] 显示亮度调节控件（跟随系统 / 阅读遮罩亮度）
 - [x] 点击区域设置；自定义翻页按键可录制（更多设置）
 - [x] 自动阅读（间隔可调 + 定时翻页 + 角标停止）
@@ -166,10 +166,10 @@
 | 18 | `activity_rss_artivles.xml` | RSS 文章列表 | ✅ `rss_articles_page.dart` | 需核对 |
 | 19 | `activity_rss_read.xml` | RSS 阅读 | ✅ `rss_read_page` 等 | 需核对 |
 | 20 | `activity_all_bookmark.xml` | 书签列表 | ✅ `bookmark_page.dart` | UI-8：书签/想法 Tab；跳转阅读器仍开放 |
-| 21 | `activity_arrange_book.xml` | 书架整理 | ❌ **缺失** | 需要新建 |
-| 22 | `activity_cache_book.xml` | 缓存管理 | ✅ `cache_service.dart` 有数据 | **缺 UI 页面** |
+| 21 | `activity_arrange_book.xml` | 书架整理 | ✅ `bookshelf_arrange_page.dart` | UI-10：已基本完成 |
+| 22 | `activity_cache_book.xml` | 缓存管理 | ✅ `cache_book_page.dart` | 缓存列表、下载、清理、TXT 导出/分享 |
 | 23 | `activity_source_debug.xml` | 书源调试 | 🟡 `source_debug_page.dart` | 编辑页菜单进入；chrome/日志区未 1:1 |
-| 24 | `activity_source_login.xml` | 书源登录 | ❌ **缺失** | 需要新建（含动态表单） |
+| 24 | `activity_source_login.xml` | 书源登录 | ✅ `source_login_page.dart` | UI-11：WebView + JS 登录链路 |
 | 25 | `activity_ai_chat.xml` | AI 聊天 | ✅ `ai_chat_page.dart` | **缺工具调用UI、配置入口** |
 | 26 | `activity_welcome.xml` | 欢迎页 | ✅ **1:1 闪屏** | UI-26：竖排品牌+icon_read_book+品读万千故事；500ms→主页；隐私在 MainShell Dialog |
 | 27 | `activity_web_view.xml` | WebView | ⚠️ `webview_flutter` 已引入 | 需核对 |
@@ -181,7 +181,7 @@
 | 33 | `activity_qrcode_capture.xml` | 扫码 | ✅ **基本完成** | UI-17：TitleBar+图库；相机平台 live scan；桌面粘贴/选图回退 |
 | 34 | `activity_audio_play.xml` | 有声播放 | 🟡 **1:1 布局返工** | UI-22：260 封面+进度行+控件行；MP3/歌词后续 |
 | 35 | `activity_video_player.xml` | 视频播放 | ❌ **缺失**（低优） | |
-| 36 | `activity_search_content.xml` | 全文搜索 | 🟡 `search_content_page.dart` | 当前章+缓存章搜索；上/下结果；未缓存网络章跳过（对齐 legado） |
+| 36 | `activity_search_content.xml` | 全文搜索 | ✅ `search_content_page.dart` | 当前章/当前+已缓存章范围；净化/正则；上/下结果 |
 | 37 | `activity_txt_toc_rule.xml` | TXT 目录规则 | ✅ 基本完成（2026-07-15） | UI-20 |
 | 38 | `activity_rss_source_debug.xml` | RSS 源调试 | ❌ **缺失** | |
 | 39 | `activity_rss_source_edit.xml` | RSS 源编辑 | ❌ **缺失** | |
@@ -236,8 +236,8 @@
 | 双击发现 Tab | `compressExplore()` 折叠分类 | ❓ 待确认 | 需要 |
 | 再按返回 | 非书架→书架；书架→双击退出 | ❓ 待确认 | 需要 `PopScope` |
 | 书架更新角标 | `BadgeView` | 🟡 列表右侧角标（章节名推算） | 缺精确章数字段联动 |
-| 默认首页 | `AppConfig.defaultHomePage` | ❌ **缺失** | |
-| 发现/订阅可配置隐藏 | `showDiscover/showRss` pref | ❌ **缺失** | |
+| 默认首页 | `AppConfig.defaultHomePage` | ✅ | 已接入启动页校验 |
+| 发现/订阅可配置隐藏 | `showDiscover/showRss` pref | ✅ | 已接入底栏可见槽位 |
 
 ### 2.2 书架页 (`ui/main/bookshelf/` ⚔ `bookshelf_style1/2_page.dart`)
 
@@ -261,7 +261,7 @@
 | 更新目录 | 下拉刷新 / `refreshShelfToc` | ✅ 已接菜单 |
 | 添加本地 | `activity_import_book` (#16) | ✅ 已接菜单（已去 FAB） |
 | 书架管理 | UI-10 `activity_arrange_book` | ✅ |
-| 缓存/导出 | UI-13 `activity_cache_book` | ✅ 进缓存页；导出仍开放 |
+| 缓存/导出 | UI-13 `activity_cache_book` | ✅ 缓存页、选择导出 TXT/分享 |
 | 书架布局 | `dialog_bookshelf_config.xml` (#12 Dialog 表) | ✅ Dialog + Tab/Folder chrome + layout/sort/flags 接线（2026-07-17） |
 
 计划中**未单列**、需补任务：
@@ -338,9 +338,9 @@
 | **阅读主题** | 米黄/白/暗/绿 + 自定义 | ✅ | 需核对预设值 |
 | **底栏** | 章节进度条 + 页码 + 时间(可选) | ✅ UI-1/UI-2 | 电量 `battery_plus` 真值 |
 | **设置面板** | 字号/行距/翻页/主题/字体/边距/TTS/更多 | ✅ UI-2 主路径 | 更多设置：方向/亮度/蓝牙·自定义键 |
-| **TTS 朗读** | `dialog_read_aloud.xml` | ✅ 系统 TTS | `flutter_tts` + 上/下句；HTTP TTS 仍占位 |
+| **TTS 朗读** | `dialog_read_aloud.xml` | ✅ 系统/HTTP TTS | `flutter_tts` + `audioplayers`，支持上/下句与 HTTP TTS URL/POST |
 | **自动阅读** | `dialog_auto_read.xml` 定时翻页 | ✅ UI-2 | 间隔 + Timer 翻页 |
-| **正文搜索** | `activity_search_content.xml` | 🟡 UI-2 | 菜单「全文搜索」+ 结果页 + 上/下个结果；仅当前章与文件缓存章 |
+| **正文搜索** | `activity_search_content.xml` | ✅ UI-2 | 菜单「全文搜索」+ 范围选择 + 结果页 + 上/下个结果；支持当前章、缓存章和全书联网 |
 | **目录页** | 全页目录（对齐截图 AppBar+列表+底栏） | ✅ `toc_sheet.dart` | UI-5：返回/Tab/搜索/⋮；缓存「N字」/未缓存云标；底栏进度+顶底跳转 |
 | **书签** | 点击书签按钮保存 | ✅ UI-1 阅读器内可加书签 | 书签页仍偏「想法」列表 |
 | **想法/批注** | 长按选文 → 写想法 | ⚠️ 有 `note_editor_sheet` | **需确认交互已连接** |
@@ -414,26 +414,26 @@
 - [x] **信息区开关** — 页码/时间/电量（`battery_plus`）
 - [x] **音量键翻页** — 设置开关 + Focus 接线；**朗读时音量键翻页**（`volumeKeyPageOnPlay`）
 - [x] **TTS / 自动阅读 / 点击区域** — 设置与菜单入口接面板（勿静默）
-- [x] **TTS 朗读设置**（`dialog_read_aloud.xml`）— `flutter_tts` 系统发音 + 上/下句；HTTP TTS 仍占位
+- [x] **TTS 朗读设置**（`dialog_read_aloud.xml`）— `flutter_tts` 系统发音 + HTTP TTS 音频 + 上/下句
 - [x] **自动阅读**（`dialog_auto_read.xml`）— 间隔滑块 + 定时翻页（期间强制常亮）
 - [x] **点击行为配置**（`dialog_click_action_config.xml`）— 九宫格热区 + 默认动作对齐 AppConfig；设置 UI 全屏九宫格；prefs 持久化
 - [x] **更多设置入口** — 屏幕方向/超时分档/亮度遮罩/蓝牙翻页器/自定义翻页键/文字底部对齐
 - [x] **屏幕超时** — 默认 / 1 / 5 / 10 分钟 / 常亮（`wakelock_plus` + 计时重置；对齐 keepLight）
 - [x] **状态栏/导航栏沉浸 + 扩展到刘海** — SystemChrome + SafeArea；菜单显时短暂恢复系统栏
-- [x] **排版** — 中/粗/细、缩进 0–4、字距/段距、简繁字级表、两端对齐、底部对齐；芯片顺序对齐 `dialog_read_book_style`
+- [x] **排版** — 中/粗/细、缩进 0–4、字距/段距、简繁字级/高频词表、两端对齐、底部对齐；芯片顺序对齐 `dialog_read_book_style`
 - [x] **翻页动画** — 覆盖 / 滑动 / 仿真(贝塞尔卷曲) / 滚动 / 无
-- [x] **全文搜索**（`activity_search_content`）— 结果页 + 阅读内上/下结果；当前章与缓存章
+- [x] **全文搜索**（`activity_search_content`）— 结果页 + 阅读内上/下结果；当前章、缓存章和全书联网
 - [x] **模拟追读**（`dialog_simulated_reading`）— 开关/日期/起始章/日更；目录与后章裁剪；Book/DB `simRead*` 同步
 
 - [x] **主题 zip**（`dialog_read_bg_text` 长按入口）— 共用布局 + 长按主题 → 导入/导出 zip + 文字/背景/强调色；`ReadStyleZipService` + 槽位覆盖 prefs
 
 仍开放 / 缺口（勿误报完成）：
 
-- 简繁：**词级**词典（OpenCC / quick-transfer）未接入，仅字级表
-- 仿真翻页已换 Jingshiro 对齐贝塞尔卷曲引擎（lib/pages/reader/turn/）；HTTP TTS
+- 简繁：已接入高频歧义词匹配；完整 OpenCC / quick-transfer 词典仍可作为后续数据扩展
+- 仿真翻页已换 Jingshiro 对齐贝塞尔卷曲引擎（lib/pages/reader/turn/）
 - 主题 zip：自定义字体文件已落盘但阅读器未 `FontLoader`；关闭共用布局后排版仍全局（未做每主题独立字号行距）；内置 assets 背景图库未做
 - 文字底部对齐为分页贴底，未做 legado 行距重分配式撑满
-- 全文搜索：未做全书联网扫章（净化/正则菜单已落地）
+- 全文搜索：已支持可选全书联网扫章；净化/正则菜单已落地
 - 模拟追读：Book/DB 字段已同步；WebDAV 远端合并与书架未读数联动仍开放；旧 SharedPreferences 会在进入阅读器时迁移
 
 另：正文阻塞修复同轮收尾 — 空解析 `Err`、坏占位不缓存、`toEngineJson` 保嵌套规则、失败展示真实错误。
@@ -683,7 +683,7 @@
 
 ```
 Task UI-1:  阅读器底栏 + 顶栏自动隐藏 + 更多菜单  ✅ 基本完成（2026-07-14）
-Task UI-2:  阅读器设置补全（字体/TTS/自动阅读/点击行为/翻页键）  🟡 超时分档+翻页五档+全文搜索+模拟追读+主题 zip；HTTP TTS/真仿真/词级简繁/FontLoader 仍开放
+Task UI-2:  阅读器设置补全（字体/TTS/自动阅读/点击行为/翻页键）  ✅ 核心阅读器闭环；HTTP TTS/真仿真/词级简繁/FontLoader 仍开放
 Task UI-3:  搜索页按书源分组 + 精准搜索 + 搜索范围  ✅ 基本完成（2026-07-14）
 Task UI-4:  书源管理 Wave 3（帮助/拖选/URL 历史/行内 debug）  ✅ 完成（2026-07-21）
 Task UI-5:  目录页对齐截图（AppBar/字数·云标/底栏）  ✅ 对齐截图（2026-07-15）
@@ -746,14 +746,14 @@ Task UI-12:  RSS 文章列表 + 阅读  ✅ 复用 Jingshiro Rss/ParserByRule/De
 
 | 分类 | 完成度 | 说明 |
 |------|:---:|------|
-| 主框架 + 导航 | 85% | 四 Tab 就位，缺角标/默认首页/可配置隐藏 |
+| 主框架 + 导航 | 92% | 四 Tab、默认首页和可配置隐藏已接入；角标精确章数仍开放 |
 | 书架 | 95% | UI-7 + UI-BS-1～5（远程/网址/书单/日志）；精确未读章数与完整布局 Dialog 仍开放 |
 | 我的页 | 97% | UI-8：快捷四格长按+Web 状态；UI-18 文件管理 1:1；书签/想法 Tab；TXT 目录规则+字典规则已落地 |
 | 搜索 | 90% | UI-3：按书源分组 + 精准搜索 + Scope |
 | 发现 | 85% | 接近完成 |
 | 书籍详情 | 96% | UI-6：截图布局（模糊头图/红芯片/删除+阅读底栏）；换源页后端仍占位；图标字形可再抠 |
 | 目录 | 95% | UI-5：全页 AppBar+字数/云标+底栏；溢出菜单次级项仍可再抠 |
-| **阅读器** | **93%** | UI-1+UI-2：超时分档+翻页五档+沉浸+系统 TTS+全文搜索(缓存)+模拟追读+主题 zip；HTTP TTS/词级简繁/全书联网搜仍开放 |
+| **阅读器** | **96%** | UI-1+UI-2：自动换源+超时分档+翻页五档+沉浸+系统 TTS+全文搜索范围(缓存)+模拟追读+主题 zip；HTTP TTS/词级简繁/全书联网搜仍开放 |
 | 书源管理 | 99% | UI-4 Wave 3（2026-07-21）：帮助/滑动多选/URL 历史/行内 debug；分组管理 Dialog 占位仍开放 |
 | RSS | 92% | UI-12：列表+阅读+sortUrl Tab+收藏+源编辑；调试仍开放 |
 | 新模块(有声/漫画/扫码等) | 40% | UI-17 扫码基本完成；UI-22/23/25 已 1:1 chrome 返工（MP3/真漫画源/店铺仍开放） |

@@ -13,6 +13,7 @@ import '../../services/book_group_store.dart';
 import '../../services/bookshelf_prefs.dart';
 import '../../widgets/book_group_manage_dialog.dart';
 import '../../widgets/book_group_select_dialog.dart';
+import '../../widgets/legado_popup_menu.dart';
 import '../book/book_info_page.dart';
 
 /// 书架整理 — 对齐 legado [BookshelfManageActivity] + `activity_arrange_book.xml`
@@ -43,6 +44,7 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
 
   final _searchCtrl = TextEditingController();
   final _selected = <String>{};
+  final _selectBarKey = GlobalKey();
   List<Book> _books = [];
   List<String> _cachedOrder = [];
   bool _dragEnabled = true;
@@ -544,6 +546,7 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
         Theme.of(context).bottomAppBarTheme.color ?? scheme.surface;
 
     return Material(
+      key: _selectBarKey,
       elevation: 2,
       color: bottomBg,
       child: SafeArea(
@@ -592,10 +595,10 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
                   ),
                 ),
               ),
-              PopupMenuButton<String>(
-                tooltip: '更多',
-                padding: EdgeInsets.zero,
+              LegadoBottomBarPopupButton<String>(
+                barKey: _selectBarKey,
                 enabled: hasSelection,
+                onSelected: _onBottomMore,
                 icon: Icon(
                   Icons.more_vert,
                   color: hasSelection
@@ -603,7 +606,6 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
                       : scheme.onSurface.withValues(alpha: 0.38),
                   size: 22,
                 ),
-                onSelected: _onBottomMore,
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'delete', child: Text('删除')),
                   PopupMenuItem(value: 'update_enable', child: Text('允许更新')),
@@ -646,6 +648,7 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
           ),
           actions: [
             PopupMenuButton<String>(
+              offset: legadoAppBarPopupOffset(context),
               tooltip: '分组',
               icon: const Icon(Icons.account_tree_outlined),
               onSelected: _onGroupMenu,
@@ -660,6 +663,7 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
               ],
             ),
             PopupMenuButton<String>(
+              offset: legadoAppBarPopupOffset(context),
               tooltip: '更多',
               icon: const Icon(Icons.more_vert),
               onSelected: _onOverflow,

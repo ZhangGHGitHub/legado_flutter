@@ -12,6 +12,7 @@ import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/manga_prefs.dart';
 import '../../theme/legado_tokens.dart';
+import '../../widgets/legado_popup_menu.dart';
 import '../book/change_source_page.dart';
 import '../book/toc_sheet.dart';
 
@@ -1110,6 +1111,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
                     onPressed: () => unawaited(_openCatalog()),
                   ),
                   PopupMenuButton<String>(
+                    offset: legadoAppBarPopupOffset(context),
                     icon: Icon(Icons.more_vert, color: onSurface),
                     onSelected: (v) => unawaited(_onMenuSelected(v)),
                     itemBuilder: (_) => [

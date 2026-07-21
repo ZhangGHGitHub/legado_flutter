@@ -5,6 +5,7 @@ import '../../models/book_source.dart';
 import '../../models/login_row_ui.dart';
 import '../../services/source_login_prefs.dart';
 import '../../services/source_login_service.dart';
+import '../../widgets/legado_popup_menu.dart';
 import '../common/app_webview_page.dart';
 
 /// 书源登录 — 对齐 Jingshiro `SourceLoginDialog` + `dialog_login.xml`
@@ -365,6 +366,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
         title: Text('登录 · ${source.bookSourceName}'),
         actions: [
           PopupMenuButton<String>(
+            offset: legadoAppBarPopupOffset(context),
             onSelected: (v) async {
               switch (v) {
                 case 'header':

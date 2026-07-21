@@ -53,6 +53,7 @@ import 'turn/reader_turn_view.dart';
 import '../audio/audio_play_page.dart';
 import '../manga/manga_reader_page.dart';
 import '../../widgets/bookplate_overlay.dart';
+import '../../widgets/legado_popup_menu.dart';
 import '../../widgets/note_editor_sheet.dart';
 import '../../widgets/reader_selectable_text.dart';
 
@@ -91,11 +92,13 @@ class _ReaderPageState extends State<ReaderPage> {
   List<String> _pages = [];
   late ReaderSettings _settings;
   late ScrollController _scrollController;
-  final GlobalKey<ReaderTurnViewState> _turnKey = GlobalKey<ReaderTurnViewState>();
+  final GlobalKey<ReaderTurnViewState> _turnKey =
+      GlobalKey<ReaderTurnViewState>();
   BookProvider? _bookProvider; // 缓存引用，避免 dispose 时 context.read 崩溃
   DateTime? _sessionStart;
   int _sessionChars = 0;
   int _lastCountedChapterIndex = -1;
+  int _contentRequestGeneration = 0;
 
   /// UI-1: 顶/底 chrome 可见性（点击正文切换；进入后短延迟自动收起）
   bool _chromeVisible = true;
@@ -177,7 +180,8 @@ class _ReaderPageState extends State<ReaderPage> {
     if (_currentIndex < 0) _currentIndex = 0;
     if (widget.initialChapterPos != null && widget.initialChapterPos! >= 0) {
       _pendingChapterPos = widget.initialChapterPos;
-    } else if (widget.initialPageIndex != null && widget.initialPageIndex! >= 0) {
+    } else if (widget.initialPageIndex != null &&
+        widget.initialPageIndex! >= 0) {
       _pendingTargetPage = widget.initialPageIndex;
     } else if (widget.book.currentPageIndex > 0) {
       _pendingTargetPage = widget.book.currentPageIndex;
@@ -243,16 +247,16 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   ClickZoneLayout get _clickLayout => ClickZoneLayout(
-        tl: _settings.clickTL,
-        tc: _settings.clickTC,
-        tr: _settings.clickTR,
-        ml: _settings.clickML,
-        mc: _settings.clickMC,
-        mr: _settings.clickMR,
-        bl: _settings.clickBL,
-        bc: _settings.clickBC,
-        br: _settings.clickBR,
-      );
+    tl: _settings.clickTL,
+    tc: _settings.clickTC,
+    tr: _settings.clickTR,
+    ml: _settings.clickML,
+    mc: _settings.clickMC,
+    mr: _settings.clickMR,
+    bl: _settings.clickBL,
+    bc: _settings.clickBC,
+    br: _settings.clickBR,
+  );
 
   Future<void> _loadSimulatedReading() async {
     final provider = context.read<BookProvider>();
@@ -272,7 +276,9 @@ class _ReaderPageState extends State<ReaderPage> {
     }
     if (!mounted) return;
     setState(() => _simRead = cfg);
-    if (cfg.enabled && _currentIndex > _maxReadableIndex && _maxReadableIndex >= 0) {
+    if (cfg.enabled &&
+        _currentIndex > _maxReadableIndex &&
+        _maxReadableIndex >= 0) {
       _goToChapter(_maxReadableIndex);
     }
   }
@@ -345,7 +351,8 @@ class _ReaderPageState extends State<ReaderPage> {
   void _applyScreenTimeout({bool forceAlways = false}) {
     _screenOffTimer?.cancel();
     _screenOffTimer = null;
-    final always = forceAlways ||
+    final always =
+        forceAlways ||
         _autoReadRunning ||
         _settings.screenTimeout == ScreenTimeoutMode.always;
     if (always) {
@@ -395,10 +402,10 @@ class _ReaderPageState extends State<ReaderPage> {
       SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: Colors.transparent,
-        statusBarIconBrightness:
-            darkTheme ? Brightness.light : Brightness.dark,
-        systemNavigationBarIconBrightness:
-            darkTheme ? Brightness.light : Brightness.dark,
+        statusBarIconBrightness: darkTheme ? Brightness.light : Brightness.dark,
+        systemNavigationBarIconBrightness: darkTheme
+            ? Brightness.light
+            : Brightness.dark,
       ),
     );
   }
@@ -444,6 +451,8 @@ class _ReaderPageState extends State<ReaderPage> {
 
   @override
   void dispose() {
+    // 让 dispose 前已经发出的网络结果无法再提交到阅读器状态。
+    _contentRequestGeneration++;
     _autoHideTimer?.cancel();
     _autoReadTimer?.cancel();
     _batteryTimer?.cancel();
@@ -476,7 +485,8 @@ class _ReaderPageState extends State<ReaderPage> {
     _autoReadTimer = Timer.periodic(interval, (_) {
       if (!mounted || !_autoReadRunning) return;
       final lastIdx = _maxReadableIndex;
-      final atLastPage = _isHorizontalPaged &&
+      final atLastPage =
+          _isHorizontalPaged &&
           _pages.isNotEmpty &&
           _pageIndex >= _pages.length - 1 &&
           _currentIndex >= lastIdx;
@@ -564,9 +574,7 @@ class _ReaderPageState extends State<ReaderPage> {
     }
 
     Widget row(ClickZoneAction l, ClickZoneAction c, ClickZoneAction r) {
-      return Expanded(
-        child: Row(children: [cell(l), cell(c), cell(r)]),
-      );
+      return Expanded(child: Row(children: [cell(l), cell(c), cell(r)]));
     }
 
     return Column(
@@ -656,13 +664,14 @@ class _ReaderPageState extends State<ReaderPage> {
   /// UI-22：有声播放器（对齐 activity_audio_play）
   Future<void> _openAudioPlayPage() async {
     _autoHideTimer?.cancel();
-    final chapters =
-        _readableChapters.isNotEmpty ? _readableChapters : widget.allChapters;
+    final chapters = _readableChapters.isNotEmpty
+        ? _readableChapters
+        : widget.allChapters;
     if (chapters.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('暂无章节，无法打开有声播放器')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('暂无章节，无法打开有声播放器')));
       }
       return;
     }
@@ -683,13 +692,14 @@ class _ReaderPageState extends State<ReaderPage> {
   /// UI-23：漫画阅读器（对齐 activity_manga）
   Future<void> _openMangaReader() async {
     _autoHideTimer?.cancel();
-    final chapters =
-        _readableChapters.isNotEmpty ? _readableChapters : widget.allChapters;
+    final chapters = _readableChapters.isNotEmpty
+        ? _readableChapters
+        : widget.allChapters;
     if (chapters.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('暂无章节，无法打开漫画阅读器')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('暂无章节，无法打开漫画阅读器')));
       }
       return;
     }
@@ -824,10 +834,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   TextStyle _readerTextStyle(Color color) {
-    return ReaderFontLoader.contentTextStyle(
-      settings: _settings,
-      color: color,
-    );
+    return ReaderFontLoader.contentTextStyle(settings: _settings, color: color);
   }
 
   TextAlign get _readerTextAlign =>
@@ -851,7 +858,9 @@ class _ReaderPageState extends State<ReaderPage> {
 
   /// 顶栏书源芯片文案（书源名；无名称时用 host）
   String get _sourceDisplayName {
-    final source = context.read<SourceProvider>().findSourceForBook(widget.book);
+    final source = context.read<SourceProvider>().findSourceForBook(
+      widget.book,
+    );
     if (source != null && source.bookSourceName.isNotEmpty) {
       return source.bookSourceName;
     }
@@ -875,6 +884,7 @@ class _ReaderPageState extends State<ReaderPage> {
   static const Color _chromeAccent = Color(0xFFFF6D00);
 
   Future<void> _loadContent({bool forceRefresh = false}) async {
+    final requestGeneration = ++_contentRequestGeneration;
     setState(() => _isLoading = true);
     try {
       final chapter = widget.allChapters[_currentIndex];
@@ -884,6 +894,19 @@ class _ReaderPageState extends State<ReaderPage> {
       );
       String content;
       if (source != null) {
+        final rb = ReadBook.instance;
+        if (rb.book?.id != widget.book.id ||
+            rb.bookSource?.bookSourceUrl != source.bookSourceUrl ||
+            rb.chapters.length != widget.allChapters.length) {
+          rb.open(
+            currentBook: widget.book,
+            source: source,
+            chapterList: widget.allChapters,
+            startIndex: _currentIndex,
+          );
+        } else {
+          rb.durChapterIndex = _currentIndex;
+        }
         if (forceRefresh) {
           await ReadBook.instance.invalidateChapterCache(
             chapter.id,
@@ -899,7 +922,7 @@ class _ReaderPageState extends State<ReaderPage> {
       } else {
         content = '⚠️ 未找到匹配的书源';
       }
-      if (mounted) {
+      if (mounted && requestGeneration == _contentRequestGeneration) {
         setState(() {
           _content = content.contains('（加载失败')
               ? '⚠️ 加载失败，请检查网络\n\n$content'
@@ -911,7 +934,8 @@ class _ReaderPageState extends State<ReaderPage> {
             }
           });
         });
-        final ok = !ReadBook.isEmptyContentPlaceholder(content) &&
+        final ok =
+            !ReadBook.isEmptyContentPlaceholder(content) &&
             !content.contains('（加载失败') &&
             !content.startsWith('⚠️');
         if (ok) {
@@ -922,7 +946,7 @@ class _ReaderPageState extends State<ReaderPage> {
         _applyPendingSearchJump();
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && requestGeneration == _contentRequestGeneration) {
         setState(() {
           _isLoading = false;
           _content = '⚠️ 无法加载章节内容\n\n请检查网络连接，或尝试其他书源。\n\n错误: $e';
@@ -1001,6 +1025,18 @@ class _ReaderPageState extends State<ReaderPage> {
           : widget.allChapters,
       durChapterIndex: _currentIndex,
       currentChapterContent: _content,
+      onlineContentLoader: (chapter) async {
+        final source = context.read<SourceProvider>().findSourceForBook(
+          widget.book,
+        );
+        if (source == null) return null;
+        return context.read<BookProvider>().loadChapterContentCached(
+          chapter.url,
+          source: source,
+          chapterId: chapter.id,
+          bookId: widget.book.id,
+        );
+      },
       initialQuery: results != null && results.isNotEmpty
           ? results[resultIndex.clamp(0, results.length - 1)].query
           : null,
@@ -1032,9 +1068,9 @@ class _ReaderPageState extends State<ReaderPage> {
       return;
     }
     if (_simRead.enabled && r.chapterIndex > _maxReadableIndex) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('模拟追读未解锁该章节')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('模拟追读未解锁该章节')));
       return;
     }
     setState(() => _searchResultIndex = i);
@@ -1049,9 +1085,9 @@ class _ReaderPageState extends State<ReaderPage> {
   void _searchPrev() {
     if (!_searchMenuVisible || _searchResults.isEmpty) return;
     if (_searchResultIndex <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已是第一个结果')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已是第一个结果')));
       return;
     }
     unawaited(_gotoSearchResult(_searchResultIndex - 1));
@@ -1060,9 +1096,9 @@ class _ReaderPageState extends State<ReaderPage> {
   void _searchNext() {
     if (!_searchMenuVisible || _searchResults.isEmpty) return;
     if (_searchResultIndex >= _searchResults.length - 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已是最后一个结果')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已是最后一个结果')));
       return;
     }
     unawaited(_gotoSearchResult(_searchResultIndex + 1));
@@ -1104,8 +1140,9 @@ class _ReaderPageState extends State<ReaderPage> {
           _maxReadableIndex >= 0) {
         _goToChapter(_maxReadableIndex);
       }
-      final unlocked =
-          _simRead.simulatedTotalChapterNum(widget.allChapters.length);
+      final unlocked = _simRead.simulatedTotalChapterNum(
+        widget.allChapters.length,
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1227,8 +1264,7 @@ class _ReaderPageState extends State<ReaderPage> {
     final edgePadB = _settings.expandIntoCutout ? 0.0 : pad.bottom;
     final display = _displayContent;
     final hPad = _settings.paddingHorizontal * 2;
-    final pageWidth =
-        renderBox.size.width - hPad - edgePadL - edgePadR;
+    final pageWidth = renderBox.size.width - hPad - edgePadL - edgePadR;
     // chrome 以 overlay 叠在正文上，分页按「无顶/底栏」可视高度估算
     final chapterTitleHeight = _settings.fontSize + 36.0;
     // 页脚：分割线 + 章名/页码行（对齐 legado）
@@ -1311,15 +1347,16 @@ class _ReaderPageState extends State<ReaderPage> {
     }
     final immersionChanged =
         newSettings.hideStatusBar != _settings.hideStatusBar ||
-            newSettings.hideNavigationBar != _settings.hideNavigationBar ||
-            newSettings.themeName != _settings.themeName;
+        newSettings.hideNavigationBar != _settings.hideNavigationBar ||
+        newSettings.themeName != _settings.themeName;
     if (newSettings.showBattery && _batteryLevel == null) {
       _refreshBattery();
     }
     final oldMode = _settings.pageMode;
     final newMode = newSettings.pageMode;
     final modeChanged = oldMode != newMode;
-    final needRepaginate = PageAnimMode.fromId(newMode).isHorizontalPaged &&
+    final needRepaginate =
+        PageAnimMode.fromId(newMode).isHorizontalPaged &&
         !_isLoading &&
         _content.isNotEmpty &&
         (modeChanged ||
@@ -1397,11 +1434,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (index < 0 || index >= widget.allChapters.length) return;
     if (_simRead.enabled && index > _maxReadableIndex) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '模拟追读：今日最多读到第 ${_maxReadableIndex + 1} 章',
-          ),
-        ),
+        SnackBar(content: Text('模拟追读：今日最多读到第 ${_maxReadableIndex + 1} 章')),
       );
       return;
     }
@@ -1426,7 +1459,9 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   void _syncPreload() {
-    final source = context.read<SourceProvider>().findSourceForBook(widget.book);
+    final source = context.read<SourceProvider>().findSourceForBook(
+      widget.book,
+    );
     if (source == null) return;
     final rb = ReadBook.instance;
     if (rb.book?.id != widget.book.id ||
@@ -1446,7 +1481,8 @@ class _ReaderPageState extends State<ReaderPage> {
   Future<void> _showTocSheet() async {
     final provider = context.read<BookProvider>();
     // 对齐 Legado：目录秒开，不在此等待联网 / 扫盘
-    final chapters = provider.currentChapters.isNotEmpty &&
+    final chapters =
+        provider.currentChapters.isNotEmpty &&
             provider.currentChapters.first.bookId == widget.book.id
         ? provider.currentChapters
         : widget.allChapters;
@@ -1464,8 +1500,9 @@ class _ReaderPageState extends State<ReaderPage> {
         if (idx >= 0) {
           _goToChapter(idx, pageIndex: pageIndex, chapterPos: chapterPos);
         } else {
-          final byUrl =
-              widget.allChapters.indexWhere((c) => c.url == chapter.url);
+          final byUrl = widget.allChapters.indexWhere(
+            (c) => c.url == chapter.url,
+          );
           if (byUrl >= 0) {
             _goToChapter(byUrl, pageIndex: pageIndex, chapterPos: chapterPos);
           }
@@ -1507,7 +1544,8 @@ class _ReaderPageState extends State<ReaderPage> {
       if (mounted) setState(() {});
       return;
     }
-    final needRepaginate = PageAnimMode.fromId(newMode).isHorizontalPaged &&
+    final needRepaginate =
+        PageAnimMode.fromId(newMode).isHorizontalPaged &&
         !_isLoading &&
         _content.isNotEmpty;
     setState(() {
@@ -1526,9 +1564,9 @@ class _ReaderPageState extends State<ReaderPage> {
   Future<void> _pullCloudProgress() async {
     if (!await BookProgressSync.isConfigured()) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先配置 WebDAV')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先配置 WebDAV')));
       return;
     }
     final localIdx = _currentIndex;
@@ -1538,23 +1576,23 @@ class _ReaderPageState extends State<ReaderPage> {
       progress = await BookProgressSync.getBookProgress(widget.book);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('拉取阅读进度失败: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('拉取阅读进度失败: $e')));
       return;
     }
     if (!mounted) return;
     if (progress == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('云端暂无进度')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('云端暂无进度')));
       return;
     }
     if (progress.durChapterIndex == localIdx &&
         progress.durChapterPos == localPos) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已是最新进度')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已是最新进度')));
       return;
     }
     if (progress.isBehind(chapterIndex: localIdx, chapterPos: localPos)) {
@@ -1581,13 +1619,14 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _applyCloudProgress(BookProgress progress) async {
-    final maxIdx =
-        widget.allChapters.isEmpty ? 0 : widget.allChapters.length - 1;
+    final maxIdx = widget.allChapters.isEmpty
+        ? 0
+        : widget.allChapters.length - 1;
     if (progress.durChapterIndex > maxIdx) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('云端章节超出本地目录')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('云端章节超出本地目录')));
       }
       return;
     }
@@ -1610,9 +1649,7 @@ class _ReaderPageState extends State<ReaderPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          title == null || title.isEmpty
-              ? '已同步最新阅读进度'
-              : '已同步最新阅读进度：$title',
+          title == null || title.isEmpty ? '已同步最新阅读进度' : '已同步最新阅读进度：$title',
         ),
       ),
     );
@@ -1622,9 +1659,9 @@ class _ReaderPageState extends State<ReaderPage> {
   Future<void> _syncReadingProgress() async {
     if (!await BookProgressSync.isConfigured()) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先配置 WebDAV')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先配置 WebDAV')));
       return;
     }
     final localIdx = _currentIndex;
@@ -1635,9 +1672,9 @@ class _ReaderPageState extends State<ReaderPage> {
       progress = await BookProgressSync.getBookProgress(widget.book);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('拉取阅读进度失败: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('拉取阅读进度失败: $e')));
       return;
     }
     if (!mounted) return;
@@ -1653,14 +1690,14 @@ class _ReaderPageState extends State<ReaderPage> {
           ),
         );
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('上传成功')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('上传成功')));
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('上传失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('上传失败: $e')));
       }
       return;
     }
@@ -1688,18 +1725,18 @@ class _ReaderPageState extends State<ReaderPage> {
       return;
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('进度已同步')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('进度已同步')));
     }
   }
 
   Future<void> _coverCloudProgress() async {
     if (!await BookProgressSync.isConfigured()) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先配置 WebDAV')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先配置 WebDAV')));
       return;
     }
     final chapter = widget.allChapters[_currentIndex];
@@ -1714,14 +1751,14 @@ class _ReaderPageState extends State<ReaderPage> {
         toast: true,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('上传成功')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('上传成功')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('上传失败: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('上传失败: $e')));
     }
   }
 
@@ -1733,16 +1770,16 @@ class _ReaderPageState extends State<ReaderPage> {
     );
     if (!mounted) return;
     if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('当前章节无缓存，无法反转')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('当前章节无缓存，无法反转')));
       return;
     }
     await _loadContent();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已反转本章内容')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已反转本章内容')));
     }
   }
 
@@ -1752,11 +1789,11 @@ class _ReaderPageState extends State<ReaderPage> {
     ReadBook.instance.reSegment = next;
     await BookReaderPrefs.setReSegment(widget.book.id, next);
     final chapter = widget.allChapters[_currentIndex];
-    ReadBook.instance.invalidateMemoryCache(chapter.id);
+    ReadBook.instance.invalidateMemoryCache(chapter.id, bookId: widget.book.id);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(next ? '已开启重新分段' : '已关闭重新分段')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(next ? '已开启重新分段' : '已关闭重新分段')));
     await _loadContent();
   }
 
@@ -1783,8 +1820,7 @@ class _ReaderPageState extends State<ReaderPage> {
           final source = sourceProvider.findSourceForBook(widget.book);
           if (source == null) return '';
           final svc = BookSourceService();
-          final raw =
-              await svc.getChapterContent(chapter.url, source: source);
+          final raw = await svc.getChapterContent(chapter.url, source: source);
           if (!ReadBook.shouldSkipCache(raw)) {
             await BookHelp.saveContent(bid, chapter.id, raw);
           }
@@ -1809,22 +1845,23 @@ class _ReaderPageState extends State<ReaderPage> {
     ReadBook.instance.enableReplace = next;
     await ReaderSessionPrefs(enableReplace: next).save();
     final chapter = widget.allChapters[_currentIndex];
-    ReadBook.instance.invalidateMemoryCache(chapter.id);
+    ReadBook.instance.invalidateMemoryCache(chapter.id, bookId: widget.book.id);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(next ? '已开启替换净化' : '已关闭替换净化')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(next ? '已开启替换净化' : '已关闭替换净化')));
     await _loadContent();
   }
 
-
   Future<void> _updateToc() async {
-    final source = context.read<SourceProvider>().findSourceForBook(widget.book);
+    final source = context.read<SourceProvider>().findSourceForBook(
+      widget.book,
+    );
     if (source == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('未找到书源，无法更新目录')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('未找到书源，无法更新目录')));
       }
       return;
     }
@@ -1852,9 +1889,9 @@ class _ReaderPageState extends State<ReaderPage> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('更新目录失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('更新目录失败: $e')));
       }
       return;
     }
@@ -1862,9 +1899,9 @@ class _ReaderPageState extends State<ReaderPage> {
     if (!mounted) return;
     final newChapters = provider.currentChapters;
     if (newChapters.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('目录为空')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('目录为空')));
       return;
     }
 
@@ -1876,9 +1913,9 @@ class _ReaderPageState extends State<ReaderPage> {
       newIndex = _currentIndex.clamp(0, newChapters.length - 1);
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('目录已更新，共 ${newChapters.length} 章')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('目录已更新，共 ${newChapters.length} 章')));
 
     await Navigator.pushReplacement(
       context,
@@ -1898,24 +1935,26 @@ class _ReaderPageState extends State<ReaderPage> {
       if (provider.downloadBookId == widget.book.id) {
         provider.cancelDownload();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('已停止缓存')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('已停止缓存')));
         }
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('正在缓存其他书籍')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('正在缓存其他书籍')));
       }
       return;
     }
 
-    final source = context.read<SourceProvider>().findSourceForBook(widget.book);
+    final source = context.read<SourceProvider>().findSourceForBook(
+      widget.book,
+    );
     if (source == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('未找到书源，无法缓存')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('未找到书源，无法缓存')));
       }
       return;
     }
@@ -1928,9 +1967,9 @@ class _ReaderPageState extends State<ReaderPage> {
     }
     if (chapters.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('目录为空')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('目录为空')));
       }
       return;
     }
@@ -1939,8 +1978,7 @@ class _ReaderPageState extends State<ReaderPage> {
     final cachedCount = chapters
         .where(
           (c) =>
-              c.isDownloaded ||
-              cachedIds.contains(BookHelp.sanitizeId(c.id)),
+              c.isDownloaded || cachedIds.contains(BookHelp.sanitizeId(c.id)),
         )
         .length;
 
@@ -1960,15 +1998,15 @@ class _ReaderPageState extends State<ReaderPage> {
       cachedIds: cachedIds,
     );
     if (toDownload.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('没有需要缓存的章节')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('没有需要缓存的章节')));
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('开始缓存 ${toDownload.length} 章…')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('开始缓存 ${toDownload.length} 章…')));
     await provider.downloadAllChapters(
       widget.book.id,
       toDownload,
@@ -1995,16 +2033,18 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Future<void> _addBookmark() async {
     if (!NoteService.isReady) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('引擎未就绪，无法添加书签')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('引擎未就绪，无法添加书签')));
       return;
     }
     final chapter = widget.allChapters[_currentIndex];
     final snippet = _isHorizontalPaged && _pages.isNotEmpty
         ? _pages[_pageIndex].trim()
         : _content.trim();
-    final preview = snippet.length > 80 ? '${snippet.substring(0, 80)}…' : snippet;
+    final preview = snippet.length > 80
+        ? '${snippet.substring(0, 80)}…'
+        : snippet;
     final pageHint = _isHorizontalPaged && _pages.isNotEmpty
         ? '第${_pageIndex + 1}/${_pages.length}页'
         : '滚动位置';
@@ -2021,9 +2061,9 @@ class _ReaderPageState extends State<ReaderPage> {
       chapterPos: chapterPos,
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已添加书签')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已添加书签')));
   }
 
   Future<void> _copyContent() async {
@@ -2032,9 +2072,9 @@ class _ReaderPageState extends State<ReaderPage> {
         : _content;
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已复制本章/本页内容')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已复制本章/本页内容')));
   }
 
   Future<void> _openChangeSource() async {
@@ -2047,9 +2087,9 @@ class _ReaderPageState extends State<ReaderPage> {
     final chapters = provider.currentChapters;
     if (chapters.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已换源，但目录为空，请返回详情重试')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已换源，但目录为空，请返回详情重试')));
       return;
     }
     final idx = _currentIndex.clamp(0, chapters.length - 1);
@@ -2060,6 +2100,43 @@ class _ReaderPageState extends State<ReaderPage> {
         builder: (_) => ReaderPage(
           book: result,
           chapter: chapters[idx],
+          allChapters: List<Chapter>.from(chapters),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _autoChangeSource() async {
+    final sourceProvider = context.read<SourceProvider>();
+    final provider = context.read<BookProvider>();
+    if (sourceProvider.sources.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('暂无可用书源，无法自动换源')));
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('正在自动寻找可用书源…')));
+    final updated = await provider.autoChangeSource(
+      widget.book,
+      sources: sourceProvider.sources,
+    );
+    if (!mounted) return;
+    final chapters = provider.currentChapters;
+    if (updated == null || chapters.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('没有找到可用书源')));
+      return;
+    }
+    final index = _currentIndex.clamp(0, chapters.length - 1);
+    await Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReaderPage(
+          book: updated,
+          chapter: chapters[index],
           allChapters: List<Chapter>.from(chapters),
         ),
       ),
@@ -2088,6 +2165,8 @@ class _ReaderPageState extends State<ReaderPage> {
         );
       case 'change_source':
         unawaited(_openChangeSource());
+      case 'auto_change_source':
+        unawaited(_autoChangeSource());
       case 'refresh':
         _refreshChapter();
       case 'bookmark':
@@ -2147,6 +2226,7 @@ class _ReaderPageState extends State<ReaderPage> {
 
     return [
       item('change_source', Icons.swap_horiz, '换源'),
+      item('auto_change_source', Icons.autorenew, '自动换源'),
       item('refresh', Icons.refresh, '刷新'),
       item('cache', Icons.download_outlined, '离线缓存'),
       const PopupMenuDivider(),
@@ -2194,10 +2274,7 @@ class _ReaderPageState extends State<ReaderPage> {
     return ExcludeSemantics(
       child: IgnorePointer(
         ignoring: !_chromeVisible,
-        child: Opacity(
-          opacity: _chromeVisible ? 1 : 0,
-          child: child,
-        ),
+        child: Opacity(opacity: _chromeVisible ? 1 : 0, child: child),
       ),
     );
   }
@@ -2275,6 +2352,7 @@ class _ReaderPageState extends State<ReaderPage> {
                       onPressed: () => unawaited(_openOfflineCache()),
                     ),
                     PopupMenuButton<String>(
+                      offset: legadoAppBarPopupOffset(context),
                       icon: Icon(Icons.more_vert, color: theme.text),
                       tooltip: '更多',
                       onSelected: _onMenuSelected,
@@ -2642,7 +2720,11 @@ class _ReaderPageState extends State<ReaderPage> {
           child: SizedBox(
             width: 44,
             height: 44,
-            child: Icon(icon, size: 22, color: theme.text.withValues(alpha: 0.9)),
+            child: Icon(
+              icon,
+              size: 22,
+              color: theme.text.withValues(alpha: 0.9),
+            ),
           ),
         ),
       ),
@@ -2705,24 +2787,25 @@ class _ReaderPageState extends State<ReaderPage> {
     final raw = _chapterUrlLabel;
     if (raw.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('当前章节无可用网址')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('当前章节无可用网址')));
       return;
     }
     final uri = Uri.tryParse(raw);
-    if (uri == null || !(uri.hasScheme && (uri.isScheme('http') || uri.isScheme('https')))) {
+    if (uri == null ||
+        !(uri.hasScheme && (uri.isScheme('http') || uri.isScheme('https')))) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('章节地址不是有效的网页链接')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('章节地址不是有效的网页链接')));
       return;
     }
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('无法打开原网页')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('无法打开原网页')));
     }
   }
 
@@ -2828,8 +2911,7 @@ class _ReaderPageState extends State<ReaderPage> {
         final isDesktop = switch (defaultTargetPlatform) {
           TargetPlatform.windows ||
           TargetPlatform.linux ||
-          TargetPlatform.macOS =>
-            true,
+          TargetPlatform.macOS => true,
           _ => false,
         };
         return isDesktop ? ExcludeSemantics(child: panel) : panel;
@@ -2839,8 +2921,7 @@ class _ReaderPageState extends State<ReaderPage> {
     });
   }
 
-  ReaderTheme get _currentTheme =>
-      _settings.resolveTheme();
+  ReaderTheme get _currentTheme => _settings.resolveTheme();
 
   // TODO(refactor): 翻页模式（slide/scroll/simulation）拆到 reader_body.dart。
   @override
@@ -2861,8 +2942,7 @@ class _ReaderPageState extends State<ReaderPage> {
     final isDesktop = switch (defaultTargetPlatform) {
       TargetPlatform.windows ||
       TargetPlatform.linux ||
-      TargetPlatform.macOS =>
-        true,
+      TargetPlatform.macOS => true,
       _ => false,
     };
     if (isDesktop) {
@@ -2912,18 +2992,13 @@ class _ReaderPageState extends State<ReaderPage> {
     // textBottomJustify：不足一页时贴底（legado 同名开关）
     final body = _settings.textBottomJustify
         ? SizedBox.expand(
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: padded,
-            ),
+            child: Align(alignment: Alignment.bottomCenter, child: padded),
           )
         : ScrollConfiguration(
-            behavior:
-                ScrollConfiguration.of(context).copyWith(scrollbars: false),
-            child: SingleChildScrollView(
-              primary: false,
-              child: padded,
-            ),
+            behavior: ScrollConfiguration.of(
+              context,
+            ).copyWith(scrollbars: false),
+            child: SingleChildScrollView(primary: false, child: padded),
           );
     // Include bg in the page itself so Cover/Slide snapshots occlude (Jingshiro).
     final path = theme.bgImagePath;
@@ -3152,7 +3227,6 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-
   void _prevPage() {
     _bumpScreenTimeout();
     if (_isHorizontalPaged && _pages.isNotEmpty) {
@@ -3272,55 +3346,54 @@ class _ReaderPageState extends State<ReaderPage> {
                       ? _buildBodyText(theme, paged: false)
                       : _wrapScrollWithClickZones(
                           NotificationListener<ScrollNotification>(
-                              key: ValueKey('scroll_$_currentIndex'),
-                              onNotification: (notification) {
-                                if (notification is ScrollEndNotification) {
-                                  final pixels =
-                                      _scrollController.position.pixels;
-                                  final maxExt = _scrollController
-                                      .position.maxScrollExtent;
-                                  if (pixels >= maxExt - 100) {
-                                    if (_currentIndex <
-                                        widget.allChapters.length - 1) {
-                                      _goToChapter(_currentIndex + 1);
-                                    }
+                            key: ValueKey('scroll_$_currentIndex'),
+                            onNotification: (notification) {
+                              if (notification is ScrollEndNotification) {
+                                final pixels =
+                                    _scrollController.position.pixels;
+                                final maxExt =
+                                    _scrollController.position.maxScrollExtent;
+                                if (pixels >= maxExt - 100) {
+                                  if (_currentIndex <
+                                      widget.allChapters.length - 1) {
+                                    _goToChapter(_currentIndex + 1);
                                   }
                                 }
-                                return false;
-                              },
-                              child: SingleChildScrollView(
-                                controller: _scrollController,
-                                primary: false,
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: _settings.paddingHorizontal,
-                                  vertical: _settings.paddingVertical > 0
-                                      ? _settings.paddingVertical + 8
-                                      : 16,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    _buildChapterHeader(chapter, theme),
-                                    _buildBookplate(
-                                      isHeader: true,
-                                      textColor: theme.text,
-                                    ),
-                                    ReaderSelectableText(
-                                      text: _displayContent,
-                                      style: _readerTextStyle(theme.text),
-                                      textAlign: _readerTextAlign,
-                                      onWriteNote: _openNoteEditor,
-                                    ),
-                                    _buildBookplate(
-                                      isHeader: false,
-                                      textColor: theme.text,
-                                    ),
-                                    const SizedBox(height: 32),
-                                  ],
-                                ),
+                              }
+                              return false;
+                            },
+                            child: SingleChildScrollView(
+                              controller: _scrollController,
+                              primary: false,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: _settings.paddingHorizontal,
+                                vertical: _settings.paddingVertical > 0
+                                    ? _settings.paddingVertical + 8
+                                    : 16,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildChapterHeader(chapter, theme),
+                                  _buildBookplate(
+                                    isHeader: true,
+                                    textColor: theme.text,
+                                  ),
+                                  ReaderSelectableText(
+                                    text: _displayContent,
+                                    style: _readerTextStyle(theme.text),
+                                    textAlign: _readerTextAlign,
+                                    onWriteNote: _openNoteEditor,
+                                  ),
+                                  _buildBookplate(
+                                    isHeader: false,
+                                    textColor: theme.text,
+                                  ),
+                                  const SizedBox(height: 32),
+                                ],
                               ),
                             ),
+                          ),
                         ),
                 ),
                 if (!_isLoading && !_isEmptyBody)

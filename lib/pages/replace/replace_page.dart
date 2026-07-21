@@ -5,6 +5,7 @@ import '../../models/replace_rule.dart';
 import '../../providers/replace_provider.dart';
 import '../../services/replace_preset_library.dart';
 import '../../widgets/replace_preview_panel.dart';
+import '../../widgets/legado_popup_menu.dart';
 
 /// 替换净化页面 - 规则管理 + 实时预览 + 预设库
 class ReplacePage extends StatefulWidget {
@@ -54,6 +55,7 @@ class _ReplacePageState extends State<ReplacePage>
             onPressed: () => _showRuleEditor(context, null),
           ),
           PopupMenuButton<String>(
+            offset: legadoAppBarPopupOffset(context),
             onSelected: (v) {
               if (v == 'reset') {
                 context.read<ReplaceProvider>().resetReplaceRules();

@@ -1,0 +1,19 @@
+rule_subscription=规则订阅
+rule_sub_empty_msg=添加大佬们提供的规则导入地址\n添加后点击可导入规则
+auto_update=自动更新
+silent_update=静默更新
+update_interval=间隔：
+time_hour=小时
+book_type=类型：
+null_url=URL 为空
+url_already=此 URL 已订阅
+name=名称
+add=添加
+delete=删除
+cancel=取消
+ok=确认
+rule_type=
+		<item>BookSource</item>
+		<item>RssSource</item>
+		<item>ReplaceRule</item>
+	

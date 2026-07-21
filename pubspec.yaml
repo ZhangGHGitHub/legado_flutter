@@ -51,6 +51,7 @@ dependencies:
   image: ^4.8.0
   webview_flutter: ^4.13.0
   xml: ^6.5.0
+  audioplayers: 6.1.0
 
 dev_dependencies:
   flutter_test:

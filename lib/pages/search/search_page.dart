@@ -4,6 +4,7 @@ import '../../models/book_source.dart';
 import '../../providers/source_provider.dart';
 import '../../services/search_history.dart';
 import '../../widgets/book_list_tile.dart';
+import '../../widgets/legado_popup_menu.dart';
 import '../book/book_info_page.dart';
 
 /// 搜索范围模式
@@ -364,6 +365,7 @@ class _SearchPageState extends State<SearchPage> {
         ),
         actions: [
           PopupMenuButton<String>(
+            offset: legadoAppBarPopupOffset(context),
             icon: const Icon(Icons.more_vert),
             onSelected: (value) {
               switch (value) {

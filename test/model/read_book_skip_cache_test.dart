@@ -8,4 +8,22 @@ void main() {
     expect(ReadBook.shouldSkipCache('⚠️ 网络错误'), isTrue);
     expect(ReadBook.shouldSkipCache('真正的章节正文内容'), isFalse);
   });
+
+  test('content cache key is isolated by book and chapter', () {
+    final first = ReadBook.contentCacheKey(
+      bookId: 'book-a',
+      chapterId: 'chapter-1',
+    );
+    final sameChapterOtherBook = ReadBook.contentCacheKey(
+      bookId: 'book-b',
+      chapterId: 'chapter-1',
+    );
+    final otherChapter = ReadBook.contentCacheKey(
+      bookId: 'book-a',
+      chapterId: 'chapter-2',
+    );
+
+    expect(first, isNot(sameChapterOtherBook));
+    expect(first, isNot(otherChapter));
+  });
 }

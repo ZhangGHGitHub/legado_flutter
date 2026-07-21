@@ -17,6 +17,7 @@ class BookshelfConfig {
   final bool showLastUpdateTime;
   final bool showWaitUpCount;
   final bool showBookshelfFastScroller;
+  final bool onlyUpdateRead;
 
   /// 0显示 1隐藏 2叠加（仅网格）
   final int showBookname;
@@ -34,6 +35,7 @@ class BookshelfConfig {
     this.showLastUpdateTime = false,
     this.showWaitUpCount = false,
     this.showBookshelfFastScroller = false,
+    this.onlyUpdateRead = false,
     this.showBookname = 0,
     this.bookshelfMargin = 12,
     this.bookOrder = const [],
@@ -56,6 +58,7 @@ abstract final class BookshelfPrefs {
   static const showLastUpdateTimeKey = 'showLastUpdateTime';
   static const showWaitUpCountKey = 'showWaitUpCount';
   static const showBookshelfFastScrollerKey = 'showBookshelfFastScroller';
+  static const onlyUpdateReadKey = 'onlyUpdateRead';
   static const showBooknameKey = 'showBooknameLayout';
   static const bookshelfMarginKey = 'bookshelfMargin';
 
@@ -105,6 +108,7 @@ abstract final class BookshelfPrefs {
       showWaitUpCount: prefs.getBool(showWaitUpCountKey) ?? false,
       showBookshelfFastScroller:
           prefs.getBool(showBookshelfFastScrollerKey) ?? false,
+      onlyUpdateRead: prefs.getBool(onlyUpdateReadKey) ?? false,
       showBookname: showName,
       bookshelfMargin: margin,
       bookOrder: prefs.getStringList(shelfBookOrderKey) ?? const [],
@@ -126,6 +130,7 @@ abstract final class BookshelfPrefs {
       showBookshelfFastScrollerKey,
       c.showBookshelfFastScroller,
     );
+    await prefs.setBool(onlyUpdateReadKey, c.onlyUpdateRead);
     await prefs.setInt(showBooknameKey, c.showBookname.clamp(0, 2));
     await prefs.setInt(bookshelfMarginKey, c.bookshelfMargin.clamp(0, 60));
     _cached = c;
@@ -148,6 +153,7 @@ abstract final class BookshelfPrefs {
         showLastUpdateTime: cur.showLastUpdateTime,
         showWaitUpCount: cur.showWaitUpCount,
         showBookshelfFastScroller: cur.showBookshelfFastScroller,
+        onlyUpdateRead: cur.onlyUpdateRead,
         showBookname: cur.showBookname,
         bookshelfMargin: cur.bookshelfMargin,
         bookOrder: cur.bookOrder,

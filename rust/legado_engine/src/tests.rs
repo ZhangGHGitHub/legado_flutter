@@ -143,7 +143,7 @@ mod engine_tests {
     fn needs_dart_js_only_for_at_js_url() {
         let js_source = r#"{"bookSourceUrl":"http://x.com","searchUrl":"@js:java.ajax(...)"}"#;
         let js = BookSource::from_json(js_source).unwrap();
-        assert!(!js.needs_dart_js_for_search());
+        assert!(js.needs_dart_js_for_search());
         assert!(!fixture_source().needs_dart_js_for_search());
     }
 
@@ -213,6 +213,7 @@ mod engine_tests {
 
     #[test]
     fn tomato_json_toc_chapter_url_uses_list_base() {
+        let _ = crate::rule::js_engine::reset_cache();
         let raw = include_str!("../../../assets/builtin_sources/7497.json");
         let json = raw.trim_start_matches('\u{feff}');
         let source = if json.starts_with('[') {

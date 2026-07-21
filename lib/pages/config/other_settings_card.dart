@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../config/app_config.dart';
 import '../../bridge/legado_engine_bridge.dart';
 import '../../services/app_paths.dart';
 import '../../services/cache_service.dart';
@@ -138,6 +139,39 @@ class _OtherSettingsCardState extends State<OtherSettingsCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text('默认首页', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(LegadoTokens.spacingMd),
+            child: Row(
+              children: [
+                const Text('启动时默认显示'),
+                const SizedBox(width: 16),
+                ListenableBuilder(
+                  listenable: AppConfig.instance,
+                  builder: (context, _) {
+                    return DropdownButton<String>(
+                      value: AppConfig.instance.defaultHomePage,
+                      items: const [
+                        DropdownMenuItem(value: 'bookshelf', child: Text('书架')),
+                        DropdownMenuItem(value: 'explore', child: Text('发现')),
+                        DropdownMenuItem(value: 'rss', child: Text('订阅')),
+                        DropdownMenuItem(value: 'mine', child: Text('我的')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) {
+                          AppConfig.instance.setDefaultHomePage(v);
+                        }
+                      },
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
         Text('网络代理', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
         Card(

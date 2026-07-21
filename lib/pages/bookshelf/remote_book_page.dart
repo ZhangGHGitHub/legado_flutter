@@ -10,6 +10,7 @@ import '../../providers/book_provider.dart';
 import '../../services/app_log.dart';
 import '../../services/webdav_prefs.dart';
 import '../../src/rust/api/webdav.dart';
+import '../../widgets/legado_popup_menu.dart';
 import '../book/book_info_page.dart';
 import '../my/webdav_config_dialog.dart';
 import 'app_log_dialog.dart';
@@ -417,6 +418,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
             ),
             // 对齐 book_remote.xml：排序独立 always-show
             PopupMenuButton<_RemoteSort>(
+              offset: legadoAppBarPopupOffset(context),
               tooltip: '排序',
               icon: const Icon(Icons.sort),
               onSelected: _setSort,
@@ -438,6 +440,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
               ],
             ),
             PopupMenuButton<String>(
+              offset: legadoAppBarPopupOffset(context),
               tooltip: '更多',
               onSelected: (v) async {
                 if (v == 'server') {

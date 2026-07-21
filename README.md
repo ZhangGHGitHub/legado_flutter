@@ -80,6 +80,7 @@ lib/services/           # BookSourceService（Rust 门面）
 - [x] Phase 1: Dart 双轨改造 + 设置页开关
 - [x] Phase 2A: AnalyzeRule 通用规则管道（Dart）
 - [x] Phase 2B: FRB 绑定 + LegadoEngineBridge 对接（搜索）
-- [ ] Phase 2C: Rust 目录/正文 + 移除站点 hack
+- [x] Phase 2C: Rust 目录/正文 + 分页/JSON/JS 规则基础链路
 - [x] Phase 2C (partial): 翻页引擎 Jingshiro parity（仿真/滑动/覆盖翻页）
-- [ ] Phase 3: 移除 Dart 规则引擎
+- [~] Phase 2C follow-up: Rust 目录/正文 fixture、FFI 契约和阅读缓存回归
+- [ ] Phase 3: 移除 Dart 规则引擎残余兼容层

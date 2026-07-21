@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -14,6 +14,7 @@ import '../../providers/source_provider.dart';
 import '../../services/book_source_service.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_cover.dart';
+import '../../widgets/legado_popup_menu.dart';
 import '../reader/reader_page.dart';
 import '../manga/manga_reader_page.dart';
 import 'change_cover_page.dart';
@@ -706,6 +707,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
         // 窄窗（Windows）三个 IconButton 会撑爆 trailing；编辑/分享并入溢出菜单
         actions: [
           PopupMenuButton<String>(
+            offset: legadoAppBarPopupOffset(context),
             icon: const Icon(Icons.more_vert, color: Colors.white),
             onSelected: (v) async {
               final provider = context.read<BookProvider>();

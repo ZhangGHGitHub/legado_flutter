@@ -24,8 +24,9 @@ class LegadoRefreshIndicator extends StatelessWidget {
     if (!enabled) return child;
 
     final scheme = Theme.of(context).colorScheme;
+    // 指示器对齐 accent（secondary）；顶栏为 primary，二者在 Jingshiro 中不同
     return RefreshIndicator(
-      color: scheme.primary,
+      color: scheme.secondary,
       backgroundColor: scheme.surface,
       displacement: displacement,
       strokeWidth: 2.5,
@@ -68,7 +69,7 @@ class LegadoShelfUpdatingIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
+    final color = Theme.of(context).colorScheme.secondary;
     return SizedBox(
       width: size,
       height: size,

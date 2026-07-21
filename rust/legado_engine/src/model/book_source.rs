@@ -174,27 +174,67 @@ impl BookSource {
     }
 
     pub fn needs_dart_js_for_search(&self) -> bool {
-        false
+        any_field_needs_js(&[
+            &self.rule_search_url,
+            &self.rule_search_list,
+            &self.rule_search_name,
+            &self.rule_search_author,
+            &self.rule_search_cover_url,
+            &self.rule_search_kind,
+            &self.rule_search_note,
+            &self.rule_search_book_url,
+        ]) || json_needs_js(&self.rule_search_obj)
     }
 
     pub fn needs_dart_js_for_toc(&self) -> bool {
-        false
+        any_field_needs_js(&[
+            &self.rule_toc_chapter_list,
+            &self.rule_toc_chapter_name,
+            &self.rule_toc_chapter_url,
+            &self.rule_toc_next_toc_url,
+            &self.rule_book_info_toc_url,
+            &self.pre_update_js,
+        ]) || json_needs_js(&self.rule_toc_obj)
     }
 
     pub fn needs_dart_js_for_content(&self) -> bool {
-        false
+        any_field_needs_js(&[
+            &self.rule_content,
+            &self.rule_content_next_url,
+        ]) || json_needs_js(&self.rule_content_obj)
     }
 
     pub fn needs_dart_js_for_book_info(&self) -> bool {
-        false
+        any_field_needs_js(&[
+            &self.rule_book_info_toc_url,
+            &self.rule_book_info_name,
+            &self.rule_book_info_author,
+            &self.rule_book_info_cover_url,
+            &self.rule_book_info_intro,
+            &self.rule_book_info_kind,
+            &self.rule_book_info_last_chapter,
+        ]) || json_needs_js(&self.rule_book_info_obj)
     }
 
     pub fn needs_dart_js_for_explore(&self) -> bool {
-        false
+        any_field_needs_js(&[
+            &self.rule_explore_url,
+            &self.rule_explore_list,
+            &self.rule_explore_name,
+            &self.rule_explore_author,
+            &self.rule_explore_cover_url,
+            &self.rule_explore_book_url,
+            &self.rule_explore_kind,
+            &self.rule_explore_note,
+            &self.rule_explore_intro,
+        ]) || json_needs_js(&self.rule_explore_obj)
     }
 }
 
-/// 是否含 JS 规则片段（仅 @js: URL 模板需强制 Dart）
+/// 是否含 `@js:` 规则片段。
+///
+/// Rust QuickJS 支持 `<js>...</js>`；`@js:` 是 Legado 的 URL 模板脚本，
+/// 仍交由 Dart 兼容层处理，避免把未实现的变量上下文误当成普通 URL。
 pub fn field_needs_js(s: &str) -> bool {
     s.contains("@js:")
 }
@@ -323,5 +363,38 @@ mod tests {
         let bs = BookSource::from_json(src).unwrap();
         assert_eq!(bs.login_check_js, "result");
         assert!(bs.pre_update_js.contains("cache.put"));
+    }
+
+    #[test]
+    fn js_capability_contract_distinguishes_at_js_from_js_block() {
+        let source = BookSource::from_json(
+            r#"{
+                "bookSourceUrl":"https://example.com",
+                "searchUrl":"@js:'https://example.com/search?q=' + key",
+                "ruleToc":{"chapterList":".chapter@text"},
+                "ruleContent":{"content":"<js>result.trim()</js>"}
+            }"#,
+        )
+        .unwrap();
+
+        assert!(source.needs_dart_js());
+        assert!(source.needs_dart_js_for_search());
+        assert!(!source.needs_dart_js_for_toc());
+        assert!(!source.needs_dart_js_for_content());
+    }
+
+    #[test]
+    fn nested_at_js_is_reported_for_the_matching_pipeline() {
+        let source = BookSource::from_json(
+            r#"{
+                "bookSourceUrl":"https://example.com",
+                "ruleToc":{"chapterList":"@js:result"},
+                "ruleContent":{"content":"$.data.content"}
+            }"#,
+        )
+        .unwrap();
+
+        assert!(source.needs_dart_js_for_toc());
+        assert!(!source.needs_dart_js_for_content());
     }
 }

@@ -6,11 +6,12 @@ import '../../help/content_processor.dart';
 import '../../models/chapter.dart';
 import '../../providers/replace_provider.dart';
 import '../../services/search_content_prefs.dart';
+import '../../widgets/legado_popup_menu.dart';
 import 'search_content_result.dart';
 
 /// 全文搜索（对齐 `activity_search_content.xml` + SearchContentActivity）
 ///
-/// 范围：当前章始终可搜；其余章仅搜已文件缓存的正文（网络书未缓存章跳过，对齐 legado）。
+/// 范围：当前章、文件缓存章，或按用户选择联网加载全书章节。
 class SearchContentPage extends StatefulWidget {
   final String bookId;
   final String bookName;
@@ -20,6 +21,7 @@ class SearchContentPage extends StatefulWidget {
   final String? initialQuery;
   final List<SearchContentResult>? initialResults;
   final int initialResultIndex;
+  final Future<String?> Function(Chapter chapter)? onlineContentLoader;
 
   const SearchContentPage({
     super.key,
@@ -31,6 +33,7 @@ class SearchContentPage extends StatefulWidget {
     this.initialQuery,
     this.initialResults,
     this.initialResultIndex = 0,
+    this.onlineContentLoader,
   });
 
   static Future<SearchContentNavigate?> open(
@@ -43,6 +46,7 @@ class SearchContentPage extends StatefulWidget {
     String? initialQuery,
     List<SearchContentResult>? initialResults,
     int initialResultIndex = 0,
+    Future<String?> Function(Chapter chapter)? onlineContentLoader,
   }) {
     return Navigator.push<SearchContentNavigate>(
       context,
@@ -56,6 +60,7 @@ class SearchContentPage extends StatefulWidget {
           initialQuery: initialQuery,
           initialResults: initialResults,
           initialResultIndex: initialResultIndex,
+          onlineContentLoader: onlineContentLoader,
         ),
       ),
     );
@@ -86,7 +91,9 @@ class _SearchContentPageState extends State<SearchContentPage> {
         if (!mounted) return;
         final i = widget.initialResultIndex.clamp(0, _results.length - 1);
         if (_scrollCtrl.hasClients) {
-          _scrollCtrl.jumpTo((i * 72.0).clamp(0.0, _scrollCtrl.position.maxScrollExtent));
+          _scrollCtrl.jumpTo(
+            (i * 72.0).clamp(0.0, _scrollCtrl.position.maxScrollExtent),
+          );
         }
       });
     } else if ((widget.initialQuery ?? '').trim().isNotEmpty) {
@@ -113,6 +120,14 @@ class _SearchContentPageState extends State<SearchContentPage> {
 
   Future<void> _toggleRegex(bool value) async {
     setState(() => _prefs.enableRegex = value);
+    await _prefs.save();
+    if (_queryCtrl.text.trim().isNotEmpty) {
+      _startSearch(_queryCtrl.text.trim());
+    }
+  }
+
+  Future<void> _setScope(String scope) async {
+    setState(() => _prefs.scope = scope);
     await _prefs.save();
     if (_queryCtrl.text.trim().isNotEmpty) {
       _startSearch(_queryCtrl.text.trim());
@@ -146,14 +161,28 @@ class _SearchContentPageState extends State<SearchContentPage> {
 
     for (var i = 0; i < widget.chapters.length; i++) {
       if (_cancelled || !mounted) break;
+      if (_prefs.scope == SearchContentPrefs.scopeCurrent &&
+          i != widget.durChapterIndex) {
+        continue;
+      }
       final ch = widget.chapters[i];
       String? content;
       if (i == widget.durChapterIndex) {
         content = widget.currentChapterContent;
       } else {
         final san = BookHelp.sanitizeId(ch.id);
-        if (!cachedIds.contains(san)) continue;
-        content = await BookHelp.getCachedContent(widget.bookId, ch.id);
+        if (cachedIds.contains(san)) {
+          content = await BookHelp.getCachedContent(widget.bookId, ch.id);
+        } else if (_prefs.scope == SearchContentPrefs.scopeCurrentAndNetwork &&
+            widget.onlineContentLoader != null) {
+          try {
+            content = await widget.onlineContentLoader!(ch);
+          } catch (e) {
+            debugPrint('全文搜索加载 ${ch.title} 失败: $e');
+          }
+        } else {
+          continue;
+        }
       }
       if (content == null || content.isEmpty) continue;
       if (content.startsWith('⚠️') || content.contains('（加载失败')) continue;
@@ -269,16 +298,16 @@ class _SearchContentPageState extends State<SearchContentPage> {
     );
     Navigator.pop(
       context,
-      SearchContentNavigate(
-        results: list,
-        index: i >= 0 ? i : 0,
-      ),
+      SearchContentNavigate(results: list, index: i >= 0 ? i : 0),
     );
   }
 
   InlineSpan _highlightSpan(SearchContentResult r, Color accent, Color text) {
     if (r.query.isEmpty) {
-      return TextSpan(text: r.resultText, style: TextStyle(color: text, fontSize: 14));
+      return TextSpan(
+        text: r.resultText,
+        style: TextStyle(color: text, fontSize: 14),
+      );
     }
     final q = r.query;
     final t = r.resultText;
@@ -290,9 +319,16 @@ class _SearchContentPageState extends State<SearchContentPage> {
           if (r.chapterTitle.isNotEmpty)
             TextSpan(
               text: '${r.chapterTitle} ',
-              style: TextStyle(color: accent, fontSize: 14, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: accent,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          TextSpan(text: t, style: TextStyle(color: text, fontSize: 14)),
+          TextSpan(
+            text: t,
+            style: TextStyle(color: text, fontSize: 14),
+          ),
         ],
       );
     }
@@ -301,14 +337,28 @@ class _SearchContentPageState extends State<SearchContentPage> {
         if (r.chapterTitle.isNotEmpty)
           TextSpan(
             text: '${r.chapterTitle} ',
-            style: TextStyle(color: accent, fontSize: 14, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: accent,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        TextSpan(text: t.substring(0, at), style: TextStyle(color: text, fontSize: 14)),
+        TextSpan(
+          text: t.substring(0, at),
+          style: TextStyle(color: text, fontSize: 14),
+        ),
         TextSpan(
           text: q,
-          style: TextStyle(color: accent, fontSize: 14, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: accent,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        TextSpan(text: t.substring(at + q.length), style: TextStyle(color: text, fontSize: 14)),
+        TextSpan(
+          text: t.substring(at + q.length),
+          style: TextStyle(color: text, fontSize: 14),
+        ),
       ],
     );
   }
@@ -340,12 +390,19 @@ class _SearchContentPageState extends State<SearchContentPage> {
             onPressed: () => _startSearch(_queryCtrl.text.trim()),
           ),
           PopupMenuButton<String>(
+            offset: legadoAppBarPopupOffset(context),
             tooltip: '更多',
             onSelected: (v) {
               if (v == 'replace') {
                 _toggleReplace(!_prefs.enableReplace);
               } else if (v == 'regex') {
                 _toggleRegex(!_prefs.enableRegex);
+              } else if (v == 'scope_current') {
+                _setScope(SearchContentPrefs.scopeCurrent);
+              } else if (v == 'scope_cached') {
+                _setScope(SearchContentPrefs.scopeCurrentAndCached);
+              } else if (v == 'scope_network') {
+                _setScope(SearchContentPrefs.scopeCurrentAndNetwork);
               }
             },
             itemBuilder: (ctx) => [
@@ -358,6 +415,24 @@ class _SearchContentPageState extends State<SearchContentPage> {
                 value: 'regex',
                 checked: _prefs.enableRegex,
                 child: const Text('正则'),
+              ),
+              const PopupMenuDivider(),
+              CheckedPopupMenuItem<String>(
+                value: 'scope_current',
+                checked: _prefs.scope == SearchContentPrefs.scopeCurrent,
+                child: const Text('仅当前章节'),
+              ),
+              CheckedPopupMenuItem<String>(
+                value: 'scope_cached',
+                checked:
+                    _prefs.scope == SearchContentPrefs.scopeCurrentAndCached,
+                child: const Text('当前+已缓存章节'),
+              ),
+              CheckedPopupMenuItem<String>(
+                value: 'scope_network',
+                checked:
+                    _prefs.scope == SearchContentPrefs.scopeCurrentAndNetwork,
+                child: const Text('当前+全书联网'),
               ),
             ],
           ),
@@ -427,7 +502,9 @@ class _SearchContentPageState extends State<SearchContentPage> {
                       icon: const Icon(Icons.arrow_drop_down),
                       onPressed: () {
                         if (_scrollCtrl.hasClients) {
-                          _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+                          _scrollCtrl.jumpTo(
+                            _scrollCtrl.position.maxScrollExtent,
+                          );
                         }
                       },
                     ),

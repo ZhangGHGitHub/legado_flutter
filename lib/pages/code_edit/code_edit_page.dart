@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/legado_popup_menu.dart';
 import 'code_edit_formatter.dart';
 import 'code_edit_highlighter.dart';
 import 'code_edit_prefs.dart';
@@ -690,6 +691,7 @@ class _CodeEditPageState extends State<CodeEditPage> {
                 onPressed: () => _save(checkUnsaved: false),
               ),
             PopupMenuButton<_CodeMenu>(
+              offset: legadoAppBarPopupOffset(context),
               onSelected: (item) {
                 switch (item) {
                   case _CodeMenu.theme:

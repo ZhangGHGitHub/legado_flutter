@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/reading_record_service.dart';
 import '../../src/rust/api.dart' as rust_api;
 import '../../widgets/empty_state.dart';
+import '../../widgets/legado_popup_menu.dart';
 import '../../widgets/reading_stats_chart.dart';
 
 /// 阅读记录 — 本地统计 + 可选 LegadoRecord Web
@@ -82,6 +83,7 @@ class _ReadRecordPageState extends State<ReadRecordPage> {
         title: const Text('阅读记录'),
         actions: [
           PopupMenuButton<String>(
+            offset: legadoAppBarPopupOffset(context),
             tooltip: '导出',
             onSelected: _export,
             itemBuilder: (_) => const [

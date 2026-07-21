@@ -17,7 +17,13 @@ import '../utils/site_busy_guard.dart';
 
 /// 书籍管理 Provider — 书架、阅读、章节、下载缓存
 class BookProvider extends ChangeNotifier {
-  BookProvider() {
+  BookProvider({
+    BookDao? dao,
+    BookSourceService? sourceService,
+    LocalBookService? localService,
+  }) : _dao = dao ?? BookDao(),
+       _sourceService = sourceService ?? BookSourceService(),
+       _localService = localService ?? LocalBookService() {
     // ReadBook 仍直接依赖 DatabaseHelper（会话层缓存），与 BookDao 同为单例库
     ReadBook.instance.configure(
       sourceService: _sourceService,
@@ -26,9 +32,9 @@ class BookProvider extends ChangeNotifier {
     );
   }
 
-  final BookDao _dao = BookDao();
-  final BookSourceService _sourceService = BookSourceService();
-  final LocalBookService _localService = LocalBookService();
+  final BookDao _dao;
+  final BookSourceService _sourceService;
+  final LocalBookService _localService;
 
   List<Book> _books = [];
   List<Chapter> _currentChapters = [];
@@ -57,7 +63,8 @@ class BookProvider extends ChangeNotifier {
   /// 本地目录章数 + 当前读到章索引（0-based），供未读角标精确计算
   final Map<String, ({int count, int? durIndex})> _shelfChapterMeta = {};
 
-  bool isBookShelfUpdating(String bookId) => _shelfUpdatingBookIds.contains(bookId);
+  bool isBookShelfUpdating(String bookId) =>
+      _shelfUpdatingBookIds.contains(bookId);
 
   /// 待更新 + 更新中数量（对齐 `postUpBooksLiveData` / 主框架角标，后续可接）
   int get shelfUpdateActiveCount =>
@@ -76,6 +83,12 @@ class BookProvider extends ChangeNotifier {
   String get downloadBookId => _downloadBookId;
   double get downloadProgress =>
       _downloadTotal > 0 ? _downloadCompleted / _downloadTotal : 0.0;
+
+  @visibleForTesting
+  static String tocLoadKey({
+    required String bookId,
+    required String sourceUrl,
+  }) => '$bookId\u0000$sourceUrl';
 
   /// 本地库中该书的章节数（缓存页展示用）
   Future<int> getChapterCount(String bookId) async {
@@ -257,8 +270,7 @@ class BookProvider extends ChangeNotifier {
       final idTaken = _books.any((b) => b.id == raw.id);
       final book = idTaken
           ? raw.copyWith(
-              id:
-                  '${raw.bookSourceUrl}_${raw.sourceUrl.hashCode}_${DateTime.now().microsecondsSinceEpoch}',
+              id: '${raw.bookSourceUrl}_${raw.sourceUrl.hashCode}_${DateTime.now().microsecondsSinceEpoch}',
             )
           : raw;
       await _dao.insert(book);
@@ -350,8 +362,9 @@ class BookProvider extends ChangeNotifier {
             ? book.bookSourceUrl
             : same.bookSourceUrl,
         coverUrl: book.coverUrl.isNotEmpty ? book.coverUrl : same.coverUrl,
-        description:
-            book.description.isNotEmpty ? book.description : same.description,
+        description: book.description.isNotEmpty
+            ? book.description
+            : same.description,
         lastChapter: book.lastChapter ?? same.lastChapter,
         type: 'online',
       );
@@ -461,7 +474,8 @@ class BookProvider extends ChangeNotifier {
         );
         for (final b in books) {
           final nOk = b.name.trim().toLowerCase() == nameLower;
-          final aOk = authorLower.isEmpty ||
+          final aOk =
+              authorLower.isEmpty ||
               b.author.trim().toLowerCase() == authorLower;
           if (nOk && aOk) {
             return b.copyWith(
@@ -751,8 +765,8 @@ class BookProvider extends ChangeNotifier {
     final last = selected.lastChapter?.trim().isNotEmpty == true
         ? selected.lastChapter
         : (selected.description.trim().isNotEmpty
-            ? selected.description
-            : base.lastChapter);
+              ? selected.description
+              : base.lastChapter);
     var updated = base.copyWith(
       sourceUrl: selected.sourceUrl,
       bookSourceUrl: selected.bookSourceUrl,
@@ -766,15 +780,19 @@ class BookProvider extends ChangeNotifier {
 
     if (source != null && updated.sourceUrl.isNotEmpty) {
       try {
-        final info =
-            await _sourceService.getBookInfo(source, updated.sourceUrl);
+        final info = await _sourceService.getBookInfo(
+          source,
+          updated.sourceUrl,
+        );
         final infoCover = _usableCoverUrl(info['coverUrl']);
         final intro = info['intro']?.trim() ?? '';
         final lastFromInfo = info['lastChapter']?.trim() ?? '';
         updated = updated.copyWith(
           coverUrl: infoCover ?? updated.coverUrl,
           description: intro.isNotEmpty ? intro : updated.description,
-          lastChapter: lastFromInfo.isNotEmpty ? lastFromInfo : updated.lastChapter,
+          lastChapter: lastFromInfo.isNotEmpty
+              ? lastFromInfo
+              : updated.lastChapter,
         );
       } catch (e, st) {
         debugPrint('换源后拉取详情封面失败: $e\n$st');
@@ -791,6 +809,124 @@ class BookProvider extends ChangeNotifier {
     }
     notifyListeners();
     return updated;
+  }
+
+  /// 自动换源 — 对齐 Jingshiro `ReadBookViewModel.autoChangeSource`：
+  /// 并发精确搜索，依次验证目录和当前章正文，采用首个完整可读结果。
+  Future<Book?> autoChangeSource(
+    Book current, {
+    required List<BookSource> sources,
+    int concurrency = 4,
+  }) async {
+    final candidates = sources
+        .where(
+          (source) =>
+              source.enabled &&
+              source.bookSourceUrl.isNotEmpty &&
+              source.bookSourceUrl != current.bookSourceUrl,
+        )
+        .toList();
+    if (candidates.isEmpty) return null;
+
+    final result =
+        Completer<({Book book, BookSource source, List<Chapter> toc})?>();
+    var remaining = candidates.length;
+    var cursor = 0;
+    final workers = List.generate(concurrency.clamp(1, candidates.length), (
+      _,
+    ) async {
+      while (true) {
+        final index = cursor++;
+        if (index >= candidates.length || result.isCompleted) return;
+        final source = candidates[index];
+        final found = await _probeAutoSource(current, source);
+        if (found != null && !result.isCompleted) {
+          result.complete(found);
+          return;
+        }
+        remaining--;
+        if (remaining == 0 && !result.isCompleted) {
+          result.complete(null);
+          return;
+        }
+      }
+    });
+    unawaited(Future.wait(workers));
+
+    final found = await result.future;
+    if (found == null) return null;
+    final updated = await changeSource(
+      current,
+      found.book,
+      source: found.source,
+    );
+    final remapped = found.toc
+        .asMap()
+        .entries
+        .map(
+          (entry) => Chapter(
+            id: '${updated.id}_ch_${entry.key}',
+            bookId: updated.id,
+            title: entry.value.title,
+            index: entry.key,
+            url: entry.value.url,
+          ),
+        )
+        .toList();
+    _currentChapters = _tocViewList(remapped);
+    ReadBook.instance.open(
+      currentBook: updated,
+      source: found.source,
+      chapterList: _currentChapters,
+      startIndex: current.durChapterIndex.clamp(0, _currentChapters.length - 1),
+    );
+    if (_books.any((book) => book.id == updated.id)) {
+      try {
+        await _dao.insertChapters(_currentChapters);
+      } catch (e) {
+        debugPrint('自动换源目录落库失败（内存目录仍可用）: $e');
+      }
+    }
+    notifyListeners();
+    return updated;
+  }
+
+  Future<({Book book, BookSource source, List<Chapter> toc})?> _probeAutoSource(
+    Book current,
+    BookSource source,
+  ) async {
+    try {
+      final results = await _sourceService.search(source, current.name);
+      final books = _sourceService.resultsToBooks(
+        results,
+        source.bookSourceUrl,
+      );
+      Book? matched;
+      for (final book in books) {
+        final sameName = book.name.trim() == current.name.trim();
+        final author = current.author.trim();
+        if (sameName &&
+            (author.isEmpty ||
+                author == '未知作者' ||
+                book.author.trim() == author)) {
+          matched = book;
+          break;
+        }
+      }
+      if (matched == null) return null;
+      final toc = await _sourceService.getChapters(matched, source: source);
+      if (toc.isEmpty) return null;
+      final index = current.durChapterIndex.clamp(0, toc.length - 1);
+      final probe = await _sourceService.getChapterContent(
+        toc[index].url,
+        source: source,
+      );
+      if (ReadBook.shouldSkipCache(probe)) return null;
+      return (book: matched, source: source, toc: toc);
+    } catch (e) {
+      debugPrint('自动换源跳过 ${source.bookSourceUrl}: $e');
+      return null;
+    }
   }
 
   /// 添加书籍到书架
@@ -856,12 +992,7 @@ class BookProvider extends ChangeNotifier {
         return;
       }
     }
-    await _dao.updateProgress(
-      bookId,
-      progress,
-      chapter,
-      pageIndex: pageIndex,
-    );
+    await _dao.updateProgress(bookId, progress, chapter, pageIndex: pageIndex);
     _books = await _dao.getAll();
     await _refreshShelfChapterMetaFor(bookId);
     notifyListeners();
@@ -1029,17 +1160,23 @@ class BookProvider extends ChangeNotifier {
     bool backgroundRefresh = false,
   }) async {
     // 内存命中：同一本书重复进详情/目录直接秒开（对齐 Legado 内存态）
+    final currentSourceUrl = ReadBook.instance.bookSource?.bookSourceUrl;
     if (!forceRefresh &&
         _currentChapters.isNotEmpty &&
-        _currentChapters.first.bookId == book.id) {
+        _currentChapters.first.bookId == book.id &&
+        currentSourceUrl == source.bookSourceUrl) {
       _isLoading = false;
       notifyListeners();
       return;
     }
 
     // 强制刷新不与旧请求合并；非强制时与同书进行中的加载共用
+    final loadKey = tocLoadKey(
+      bookId: book.id,
+      sourceUrl: source.bookSourceUrl,
+    );
     if (!forceRefresh) {
-      final pending = _inflightTocLoads[book.id];
+      final pending = _inflightTocLoads[loadKey];
       if (pending != null) return pending;
     }
 
@@ -1049,12 +1186,12 @@ class BookProvider extends ChangeNotifier {
       forceRefresh: forceRefresh,
       backgroundRefresh: backgroundRefresh,
     );
-    _inflightTocLoads[book.id] = future;
+    _inflightTocLoads[loadKey] = future;
     try {
       await future;
     } finally {
-      if (identical(_inflightTocLoads[book.id], future)) {
-        _inflightTocLoads.remove(book.id);
+      if (identical(_inflightTocLoads[loadKey], future)) {
+        _inflightTocLoads.remove(loadKey);
       }
     }
   }
@@ -1145,10 +1282,8 @@ class BookProvider extends ChangeNotifier {
           await _dao.insertChapters(meta);
           if (gen != _tocLoadGen) return;
           final shelfBook = findBookById(book.id);
-          if (shelfBook != null &&
-              shelfBook.totalChapterNum != merged.length) {
-            final next =
-                shelfBook.copyWith(totalChapterNum: merged.length);
+          if (shelfBook != null && shelfBook.totalChapterNum != merged.length) {
+            final next = shelfBook.copyWith(totalChapterNum: merged.length);
             await _dao.insert(next);
             final i = _books.indexWhere((b) => b.id == book.id);
             if (i >= 0) _books[i] = next;
@@ -1187,10 +1322,7 @@ class BookProvider extends ChangeNotifier {
   }
 
   /// 用章节 URL 合并本地下载状态，避免刷新目录清掉已缓存正文标记
-  List<Chapter> _mergeTocWithLocal(
-    List<Chapter> remote,
-    List<Chapter> local,
-  ) {
+  List<Chapter> _mergeTocWithLocal(List<Chapter> remote, List<Chapter> local) {
     final byUrl = <String, Chapter>{
       for (final c in local)
         if (c.url.isNotEmpty) c.url: c,

@@ -26,14 +26,30 @@ class ReadBook extends ChangeNotifier {
   List<Chapter> chapters = [];
   int durChapterIndex = 0;
   bool isLoadingContent = false;
+
   /// 阅读会话内是否对正文应用替换净化（对齐 legado enableReplace）
   bool enableReplace = true;
 
   /// 本书是否重新分段（对齐 Book.getReSegment）
   bool reSegment = false;
 
-  final Set<int> _preloading = {};
-  final Map<int, String> _memoryCache = {};
+  /// 预加载去重必须包含会话代数，避免旧会话完成时移除新会话的同索引任务。
+  final Set<String> _preloading = {};
+  final Map<String, String> _memoryCache = {};
+  final Map<int, int> _activeContentLoads = {};
+  int _sessionGeneration = 0;
+
+  @visibleForTesting
+  static String contentCacheKey({
+    required String bookId,
+    required String chapterId,
+  }) => '$bookId\u0000$chapterId';
+
+  @visibleForTesting
+  int get sessionGeneration => _sessionGeneration;
+
+  @visibleForTesting
+  Set<String> get preloadingKeys => Set.unmodifiable(_preloading);
 
   void configure({
     required BookSourceService sourceService,
@@ -52,17 +68,26 @@ class ReadBook extends ChangeNotifier {
     required List<Chapter> chapterList,
     int startIndex = 0,
   }) {
+    _sessionGeneration++;
     book = currentBook;
     bookSource = source;
     chapters = List<Chapter>.from(chapterList);
-    durChapterIndex = startIndex.clamp(0, chapters.isEmpty ? 0 : chapters.length - 1);
+    durChapterIndex = startIndex.clamp(
+      0,
+      chapters.isEmpty ? 0 : chapters.length - 1,
+    );
     _memoryCache.clear();
+    _preloading.clear();
+    _activeContentLoads.clear();
+    isLoadingContent = false;
     notifyListeners();
     preloadAdjacent();
   }
 
   Chapter? get currentChapter {
-    if (chapters.isEmpty || durChapterIndex < 0 || durChapterIndex >= chapters.length) {
+    if (chapters.isEmpty ||
+        durChapterIndex < 0 ||
+        durChapterIndex >= chapters.length) {
       return null;
     }
     return chapters[durChapterIndex];
@@ -71,9 +96,7 @@ class ReadBook extends ChangeNotifier {
   /// Rust 空解析占位（恰好 9 字）——勿当成功正文缓存 / 勿当可阅读段落
   static bool isEmptyContentPlaceholder(String s) {
     final t = s.trim();
-    return t.isEmpty ||
-        t == '（此章节暂无内容）' ||
-        t == '（阅读引擎未初始化）';
+    return t.isEmpty || t == '（此章节暂无内容）' || t == '（阅读引擎未初始化）';
   }
 
   /// 失败 / 空结果：一律不写文件/DB 缓存
@@ -110,7 +133,7 @@ class ReadBook extends ChangeNotifier {
     }
 
     final bid = bookId ?? book?.id ?? chapter.bookId;
-    final memKey = chapter.id.hashCode;
+    final memKey = contentCacheKey(bookId: bid, chapterId: chapter.id);
     if (_memoryCache.containsKey(memKey)) {
       final hit = _memoryCache[memKey]!;
       // 坏缓存（空章/失败占位）一律丢弃并重新拉取
@@ -118,23 +141,36 @@ class ReadBook extends ChangeNotifier {
       _memoryCache.remove(memKey);
     }
 
-    isLoadingContent = true;
-    notifyListeners();
+    final generation = _sessionGeneration;
+    _activeContentLoads[generation] =
+        (_activeContentLoads[generation] ?? 0) + 1;
+    if (generation == _sessionGeneration) {
+      isLoadingContent = true;
+      notifyListeners();
+    }
 
     try {
       // 1. 文件缓存（跳过空章/失败占位，并清掉坏文件）
       final fileCached = await BookHelp.getCachedContent(bid, chapter.id);
       if (fileCached != null && fileCached.isNotEmpty) {
         if (shouldSkipCache(fileCached)) {
-          await BookHelp.deleteChapterContent(bid, chapter.id);
+          if (generation == _sessionGeneration) {
+            await BookHelp.deleteChapterContent(bid, chapter.id);
+          }
         } else {
-          final processed =
-              _processContent(fileCached, chapterTitle: chapter.title);
+          final processed = _processContent(
+            fileCached,
+            chapterTitle: chapter.title,
+          );
           if (!shouldSkipCache(processed)) {
-            _memoryCache[memKey] = processed;
+            if (generation == _sessionGeneration) {
+              _memoryCache[memKey] = processed;
+            }
             return processed;
           }
-          await BookHelp.deleteChapterContent(bid, chapter.id);
+          if (generation == _sessionGeneration) {
+            await BookHelp.deleteChapterContent(bid, chapter.id);
+          }
         }
       }
 
@@ -142,13 +178,12 @@ class ReadBook extends ChangeNotifier {
       // 若仅标志已下载但文件丢失，继续走网络拉取
       if (chapter.isDownloaded) {
         final again = await BookHelp.getCachedContent(bid, chapter.id);
-        if (again != null &&
-            again.isNotEmpty &&
-            !shouldSkipCache(again)) {
-          final processed =
-              _processContent(again, chapterTitle: chapter.title);
+        if (again != null && again.isNotEmpty && !shouldSkipCache(again)) {
+          final processed = _processContent(again, chapterTitle: chapter.title);
           if (!shouldSkipCache(processed)) {
-            _memoryCache[memKey] = processed;
+            if (generation == _sessionGeneration) {
+              _memoryCache[memKey] = processed;
+            }
             return processed;
           }
         }
@@ -165,6 +200,8 @@ class ReadBook extends ChangeNotifier {
           // 占位 / 失败文案：不进内存、不写库（旧引擎 Ok 占位兼容）
           return processed;
         }
+        // 换书/换源后旧请求仍可能完成，但不能把旧源正文写进当前会话缓存。
+        if (generation != _sessionGeneration) return processed;
         _memoryCache[memKey] = processed;
 
         if (saveCache) {
@@ -197,14 +234,23 @@ class ReadBook extends ChangeNotifier {
         return '（加载失败: $e）';
       }
     } finally {
-      isLoadingContent = false;
-      notifyListeners();
+      final active = (_activeContentLoads[generation] ?? 1) - 1;
+      if (active <= 0) {
+        _activeContentLoads.remove(generation);
+      } else {
+        _activeContentLoads[generation] = active;
+      }
+      if (generation == _sessionGeneration) {
+        isLoadingContent = active > 0;
+        notifyListeners();
+      }
     }
   }
 
   /// 切换到指定章节索引
   Future<String> loadAtIndex(int index, {required BookSource source}) async {
     if (index < 0 || index >= chapters.length) return '';
+    final generation = _sessionGeneration;
     durChapterIndex = index;
     notifyListeners();
     final content = await loadChapterContent(
@@ -212,7 +258,7 @@ class ReadBook extends ChangeNotifier {
       source: source,
       bookId: book?.id,
     );
-    preloadAdjacent();
+    if (generation == _sessionGeneration) preloadAdjacent();
     return content;
   }
 
@@ -221,35 +267,46 @@ class ReadBook extends ChangeNotifier {
     final source = bookSource;
     if (source == null || chapters.isEmpty) return;
 
+    final generation = _sessionGeneration;
     for (final idx in [durChapterIndex - 1, durChapterIndex + 1]) {
       if (idx < 0 || idx >= chapters.length) continue;
-      if (_preloading.contains(idx)) continue;
-      _preloading.add(idx);
       final ch = chapters[idx];
+      final token =
+          '$generation:${contentCacheKey(bookId: book?.id ?? ch.bookId, chapterId: ch.id)}';
+      if (_preloading.contains(token)) continue;
+      _preloading.add(token);
       loadChapterContent(
         chapter: ch,
         source: source,
         bookId: book?.id,
         saveCache: true,
-      ).whenComplete(() => _preloading.remove(idx));
+      ).whenComplete(() => _preloading.remove(token));
     }
   }
 
   /// 使某章缓存失效（内存 + 文件），下次加载将重新拉取
-  Future<void> invalidateChapterCache(String chapterId, {String? bookId}) async {
-    _memoryCache.remove(chapterId.hashCode);
+  Future<void> invalidateChapterCache(
+    String chapterId, {
+    String? bookId,
+  }) async {
     final bid = bookId ?? book?.id;
     if (bid != null && bid.isNotEmpty) {
+      _memoryCache.remove(contentCacheKey(bookId: bid, chapterId: chapterId));
       await BookHelp.deleteChapterContent(bid, chapterId);
     }
   }
 
   /// 仅清内存缓存（文件原文保留，供替换/重分段开关切换后重算）
-  void invalidateMemoryCache([String? chapterId]) {
+  void invalidateMemoryCache(String? chapterId, {String? bookId}) {
     if (chapterId == null) {
       _memoryCache.clear();
+    } else if (bookId != null && bookId.isNotEmpty) {
+      _memoryCache.remove(
+        contentCacheKey(bookId: bookId, chapterId: chapterId),
+      );
     } else {
-      _memoryCache.remove(chapterId.hashCode);
+      final suffix = '\u0000$chapterId';
+      _memoryCache.removeWhere((key, _) => key.endsWith(suffix));
     }
   }
 
@@ -264,7 +321,7 @@ class ReadBook extends ChangeNotifier {
     if (raw == null || raw.isEmpty || shouldSkipCache(raw)) return false;
     final reversed = String.fromCharCodes(raw.runes.toList().reversed);
     await BookHelp.saveContent(bid, chapter.id, reversed);
-    invalidateMemoryCache(chapter.id);
+    invalidateMemoryCache(chapter.id, bookId: bid);
     return true;
   }
 
@@ -277,16 +334,19 @@ class ReadBook extends ChangeNotifier {
     final bid = bookId ?? book?.id;
     if (bid == null || bid.isEmpty) return;
     await BookHelp.saveContent(bid, chapter.id, content);
-    invalidateMemoryCache(chapter.id);
+    invalidateMemoryCache(chapter.id, bookId: bid);
   }
 
   void reset() {
+    _sessionGeneration++;
     book = null;
     bookSource = null;
     chapters = [];
     durChapterIndex = 0;
     _memoryCache.clear();
     _preloading.clear();
+    _activeContentLoads.clear();
+    isLoadingContent = false;
     notifyListeners();
   }
 }

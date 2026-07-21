@@ -28,6 +28,10 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
     let mut visited_pages = HashSet::new();
     let mut current_url = fetch_url;
     let base_url = http::client::base_url(&current_url);
+    // 直接从已解析的番茄目录 URL 进入时，列表中的 articleid 优先于前一本书残留的全局 cache。
+    if let Some(article_id) = extract_tomato_article_id(&current_url) {
+        crate::rule::js_cache::put("articleid", &article_id, 0);
+    }
     let max_pages = 50;
     let mut last_body = String::new();
 
@@ -448,5 +452,258 @@ mod tomato_toc_resolve_tests {
             out.contains("/list/?") || !out.contains("81571"),
             "期望空 result 在 list URL 上无法得到正确 id，got {out}"
         );
+    }
+}
+
+#[cfg(test)]
+mod http_fixture_tests {
+    use super::*;
+    use crate::api::content;
+    use crate::http::client;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+    use std::thread;
+    use std::time::Duration;
+
+    struct FixtureServer {
+        base_url: String,
+        stop: Arc<AtomicBool>,
+    }
+
+    impl FixtureServer {
+        fn start() -> Self {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.set_nonblocking(true).unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let stop = Arc::new(AtomicBool::new(false));
+            let thread_stop = Arc::clone(&stop);
+
+            thread::spawn(move || {
+                while !thread_stop.load(Ordering::Relaxed) {
+                    match listener.accept() {
+                        Ok((stream, _)) => {
+                            // reqwest 可能分片发送请求头；每个连接独立处理，避免一个慢连接阻塞后续请求。
+                            thread::spawn(|| handle_request(stream));
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                            thread::sleep(Duration::from_millis(1));
+                        }
+                        Err(_) => thread::sleep(Duration::from_millis(1)),
+                    }
+                }
+            });
+
+            Self {
+                base_url: format!("http://127.0.0.1:{port}"),
+                stop,
+            }
+        }
+
+        fn source_json(&self) -> String {
+            serde_json::json!({
+                "bookSourceUrl": self.base_url,
+                "ruleToc": {
+                    "chapterList": ".chapters li",
+                    "chapterName": "a@text",
+                    "chapterUrl": "a@href",
+                    "nextTocUrl": "a.next@href"
+                },
+                "ruleContent": {
+                    "content": "#content@text",
+                    "nextContentUrl": "a.next@href"
+                }
+            })
+            .to_string()
+        }
+
+        fn json_source_json(&self) -> String {
+            serde_json::json!({
+                "bookSourceUrl": self.base_url,
+                "ruleToc": {
+                    "chapterList": "$.data",
+                    "chapterName": "$.chaptername",
+                    "chapterUrl": "$.url",
+                    "nextTocUrl": "$.next"
+                },
+                "ruleContent": {
+                    "content": "$.data.content",
+                    "nextContentUrl": "$.next"
+                }
+            })
+            .to_string()
+        }
+
+        fn url(&self, path: &str) -> String {
+            format!("{}{}", self.base_url, path)
+        }
+    }
+
+    impl Drop for FixtureServer {
+        fn drop(&mut self) {
+            self.stop.store(true, Ordering::Relaxed);
+        }
+    }
+
+    fn handle_request(mut stream: TcpStream) {
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+        let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
+        let mut request = Vec::with_capacity(4096);
+        let mut chunk = [0_u8; 1024];
+        while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+            match stream.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(read) => request.extend_from_slice(&chunk[..read]),
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        std::io::ErrorKind::Interrupted | std::io::ErrorKind::WouldBlock
+                    ) => continue,
+                Err(_) => return,
+            }
+            if request.len() > 64 * 1024 {
+                return;
+            }
+        }
+        let line = String::from_utf8_lossy(&request);
+        let path = line
+            .lines()
+            .next()
+            .and_then(|l| l.split_whitespace().nth(1))
+            .unwrap_or("/");
+
+        let (status, body) = match path {
+            "/toc" => (
+                "200 OK",
+                r#"<ul class="chapters"><li><a href="/c/1">第一章</a></li><li><a href="/c/2">第二章</a></li></ul><a class="next" href="/toc?page=2">下一页</a>"#
+                    .to_string(),
+            ),
+            "/toc?page=2" => (
+                "200 OK",
+                r#"<ul class="chapters"><li><a href="/c/3">第三章</a></li><li><a href="/c/4">第四章</a></li></ul>"#
+                    .to_string(),
+            ),
+            "/content/1" => (
+                "200 OK",
+                r#"<div id="content">第一段正文</div><a class="next" href="/content/2">下一页</a>"#
+                    .to_string(),
+            ),
+            "/content/2" => (
+                "200 OK",
+                r#"<div id="content">第二段正文</div>"#.to_string(),
+            ),
+            "/json/toc" => (
+                "200 OK",
+                serde_json::json!({
+                    "data": [
+                        {"chaptername": "JSON 第一章", "url": "/json/c/1"},
+                        {"chaptername": "JSON 第二章", "url": "/json/c/2"}
+                    ],
+                    "next": "/json/toc?page=2"
+                })
+                .to_string(),
+            ),
+            "/json/toc?page=2" => (
+                "200 OK",
+                serde_json::json!({
+                    "data": [
+                        {"chaptername": "JSON 第三章", "url": "/json/c/3"}
+                    ]
+                })
+                .to_string(),
+            ),
+            "/json/content/1" => (
+                "200 OK",
+                serde_json::json!({
+                    "data": {"content": "JSON 第一段正文"},
+                    "next": "/json/content/2"
+                })
+                .to_string(),
+            ),
+            "/json/content/2" => (
+                "200 OK",
+                serde_json::json!({
+                    "data": {"content": "JSON 第二段正文"}
+                })
+                .to_string(),
+            ),
+            "/empty" => ("200 OK", String::new()),
+            "/status/503" => ("503 Service Unavailable", "站点维护".to_string()),
+            "/large" => (
+                "200 OK",
+                "x".repeat(client::MAX_RESPONSE_BYTES + 1),
+            ),
+            _ => ("404 Not Found", "not found".to_string()),
+        };
+
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(), body
+        );
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.flush();
+    }
+
+    #[tokio::test]
+    async fn get_toc_fixture_covers_html_pagination_and_empty_error() {
+        let fixture = FixtureServer::start();
+        let source = fixture.source_json();
+        let chapters = get_toc(&source, &fixture.url("/toc")).await.unwrap();
+
+        assert_eq!(chapters.len(), 4);
+        assert_eq!(chapters[0].title, "第一章");
+        assert!(chapters[3].url.ends_with("/c/4"));
+
+        let error = get_toc(&source, &fixture.url("/empty"))
+            .await
+            .expect_err("空目录响应必须返回诊断错误");
+        assert!(error.contains("为空响应"), "got {error}");
+    }
+
+    #[tokio::test]
+    async fn get_content_fixture_covers_pagination_status_and_size_errors() {
+        let fixture = FixtureServer::start();
+        let source = fixture.source_json();
+        let content_text = content::get_content(&source, &fixture.url("/content/1"))
+            .await
+            .unwrap();
+        assert!(content_text.contains("第一段正文"));
+        assert!(content_text.contains("第二段正文"));
+
+        let status_error = content::get_content(&source, &fixture.url("/status/503"))
+            .await
+            .expect_err("非 2xx 必须返回 HTTP 诊断错误");
+        assert!(status_error.contains("HTTP 请求失败"), "got {status_error}");
+
+        let size_error = client::fetch_with_source(
+            &fixture.url("/large"),
+            "GET",
+            None,
+            "UTF-8",
+            &source,
+        )
+        .await
+        .expect_err("超大响应必须被拒绝");
+        assert!(size_error.contains("响应过大"), "got {size_error}");
+    }
+
+    #[tokio::test]
+    async fn json_fixtures_cover_toc_and_content_pagination() {
+        let fixture = FixtureServer::start();
+        let source = fixture.json_source_json();
+
+        let chapters = get_toc(&source, &fixture.url("/json/toc")).await.unwrap();
+        assert_eq!(chapters.len(), 3);
+        assert_eq!(chapters[0].title, "JSON 第一章");
+        assert!(chapters[2].url.ends_with("/json/c/3"));
+
+        let content_text = content::get_content(&source, &fixture.url("/json/content/1"))
+            .await
+            .unwrap();
+        assert!(content_text.contains("JSON 第一段正文"));
+        assert!(content_text.contains("JSON 第二段正文"));
     }
 }

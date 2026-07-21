@@ -14,6 +14,7 @@ import '../../theme/legado_tokens.dart';
 import '../../widgets/book_group_manage_dialog.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/legado_refresh_indicator.dart';
+import '../../widgets/legado_popup_menu.dart';
 import '../book/book_info_page.dart';
 import '../cache/cache_book_page.dart';
 import '../search/search_page.dart';
@@ -157,6 +158,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
       provider.refreshShelfToc(
         books,
         resolveSource: sources.findSourceForBook,
+        onlyUpdateRead: widget.config.onlyUpdateRead,
       ),
     );
     ScaffoldMessenger.of(
@@ -231,6 +233,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                 ),
               ),
               PopupMenuButton<String>(
+                offset: legadoAppBarPopupOffset(context),
                 icon: const Icon(Icons.more_vert),
                 onSelected: _onOverflowSelected,
                 itemBuilder: (ctx) => [
@@ -280,6 +283,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
           provider.refreshShelfToc(
             books,
             resolveSource: sources.findSourceForBook,
+            onlyUpdateRead: widget.config.onlyUpdateRead,
           ),
         );
       },

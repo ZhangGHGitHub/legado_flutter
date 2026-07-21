@@ -3,7 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../../models/rss_source.dart';
 import '../../providers/rss_provider.dart';
+import '../../services/reader_font_loader.dart';
 import '../../services/source_login_service.dart';
+import '../../theme/legado_tokens.dart';
+import '../../widgets/legado_refresh_indicator.dart';
 import '../my/read_record_page.dart';
 import '../rule_sub/rule_sub_page.dart';
 import '../sources/source_login_page.dart';
@@ -13,7 +16,7 @@ import 'rss_source_edit_page.dart';
 import 'rss_source_manage_page.dart';
 import 'widgets/rss_source_tile.dart';
 
-/// 订阅 Tab — 对齐 Jingshiro [RssFragment](https://github.com/Jingshiro/legado/blob/main/app/src/main/java/io/legado/app/ui/main/rss/RssFragment.kt)
+/// 订阅 Tab — 对齐 Jingshiro [RssFragment] / `fragment_rss.xml` + `menu/main_rss.xml`
 class RssTabPage extends StatefulWidget {
   const RssTabPage({super.key});
 
@@ -53,6 +56,27 @@ class RssTabPageState extends State<RssTabPage> {
       MaterialPageRoute(
         builder: (_) => RssArticlesPage(source: source),
       ),
+    );
+  }
+
+  void _openHistory() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ReadRecordPage()),
+    );
+  }
+
+  void _openFavorites() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const RssFavoritesPage()),
+    );
+  }
+
+  void _openManage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const RssSourceManagePage()),
     );
   }
 
@@ -152,116 +176,108 @@ class RssTabPageState extends State<RssTabPage> {
     );
   }
 
+  /// TitleBar 内嵌搜索 — 对齐 `view_search.xml` + `bg_searchview`（主色上 10% 透明底）
+  Widget _buildSearchField(ColorScheme scheme) {
+    final onBar = scheme.onPrimary;
+    return SizedBox(
+      height: 36,
+      child: TextField(
+        controller: _searchController,
+        onChanged: (_) => setState(() {}),
+        style: TextStyle(
+          color: onBar,
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+          fontFamily: ReaderFontLoader.platformSansFamily(),
+          fontFamilyFallback: ReaderFontLoader.cjkFallbackFamilies(),
+        ),
+        cursorColor: onBar,
+        decoration: InputDecoration(
+          hintText: '订阅',
+          hintStyle: TextStyle(
+            color: onBar.withValues(alpha: 0.72),
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            fontFamily: ReaderFontLoader.platformSansFamily(),
+            fontFamilyFallback: ReaderFontLoader.cjkFallbackFamilies(),
+          ),
+          isDense: true,
+          filled: true,
+          fillColor: onBar.withValues(alpha: 0.10),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          prefixIcon: Icon(Icons.search, size: 20, color: onBar.withValues(alpha: 0.85)),
+          prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          suffixIcon: _searchController.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: Icon(Icons.close, size: 18, color: onBar.withValues(alpha: 0.85)),
+                  onPressed: _clearSearch,
+                  visualDensity: VisualDensity.compact,
+                ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide(
+              color: onBar.withValues(alpha: 0.10),
+              width: 0.5,
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide(
+              color: onBar.withValues(alpha: 0.22),
+              width: 0.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 0,
-        title: Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: TextField(
-            controller: _searchController,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              hintText: '搜索订阅',
-              isDense: true,
-              filled: true,
-              fillColor: scheme.surfaceContainerHighest,
-              contentPadding: const EdgeInsets.symmetric(vertical: 8),
-              prefixIcon: const Icon(Icons.search, size: 20),
-              suffixIcon: _searchController.text.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: _clearSearch,
-                    ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(24),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-        ),
+        titleSpacing: LegadoTokens.spacingSm,
+        title: _buildSearchField(scheme),
+        // 对齐 main_rss.xml：历史 / 收藏 / 分组 / 设置 始终显示在顶栏
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: '阅读记录',
+            onPressed: _openHistory,
+          ),
+          IconButton(
+            icon: const Icon(Icons.star_outline),
+            tooltip: '收藏',
+            onPressed: _openFavorites,
+          ),
           Consumer<RssProvider>(
             builder: (context, provider, _) {
               final groups = provider.enabledGroups();
-              return PopupMenuButton<String>(
-                tooltip: '更多',
-                onSelected: (value) {
-                  switch (value) {
-                    case 'history':
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ReadRecordPage(),
-                        ),
-                      );
-                    case 'favorite':
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const RssFavoritesPage(),
-                        ),
-                      );
-                    case 'group':
-                      if (groups.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('暂无分组')),
-                        );
-                      } else {
-                        _showGroupPicker(groups);
-                      }
-                    case 'manage':
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const RssSourceManagePage(),
-                        ),
-                      );
+              return IconButton(
+                icon: const Icon(Icons.hub_outlined),
+                tooltip: '分组',
+                onPressed: () {
+                  if (groups.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('暂无分组')),
+                    );
+                  } else {
+                    _showGroupPicker(groups);
                   }
                 },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'history',
-                    child: ListTile(
-                      leading: Icon(Icons.history),
-                      title: Text('阅读记录'),
-                      contentPadding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'favorite',
-                    child: ListTile(
-                      leading: Icon(Icons.star_outline),
-                      title: Text('收藏'),
-                      contentPadding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'group',
-                    child: ListTile(
-                      leading: Icon(Icons.folder_outlined),
-                      title: Text('分组'),
-                      contentPadding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'manage',
-                    child: ListTile(
-                      leading: Icon(Icons.settings_outlined),
-                      title: Text('订阅源管理'),
-                      contentPadding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                ],
               );
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: '订阅源管理',
+            onPressed: _openManage,
           ),
         ],
       ),
@@ -270,43 +286,50 @@ class RssTabPageState extends State<RssTabPage> {
           final sources = provider.enabledSources(
             searchKey: _searchController.text,
           );
-          return GridView.builder(
-            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              mainAxisSpacing: 0,
-              crossAxisSpacing: 0,
-              childAspectRatio: 0.72,
+          return ScrollConfiguration(
+            behavior: LegadoScrollBehavior(
+              overscrollColor: scheme.primary,
             ),
-            itemCount: sources.length + 1,
-            itemBuilder: (_, index) {
-              if (index == 0) {
-                return Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: RssSourceTile(
-                    name: '规则订阅',
-                    icon: Icons.auto_stories,
-                    onTap: _openRuleSubscription,
+            child: GridView.builder(
+              padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                // item_rss + GridLayoutManager spanCount=4
+                crossAxisCount: 4,
+                mainAxisSpacing: 0,
+                crossAxisSpacing: 0,
+                childAspectRatio: 0.78,
+              ),
+              itemCount: sources.length + 1,
+              itemBuilder: (_, index) {
+                if (index == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: RssSourceTile(
+                      name: '规则订阅',
+                      icon: Icons.menu_book_rounded,
+                      onTap: _openRuleSubscription,
+                    ),
+                  );
+                }
+                final source = sources[index - 1];
+                return Builder(
+                  builder: (tileContext) => Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: RssSourceTile.fromSource(
+                      source,
+                      onTap: () => _openRssSource(source),
+                      onLongPress: () {
+                        final box =
+                            tileContext.findRenderObject() as RenderBox?;
+                        final offset =
+                            box?.localToGlobal(Offset.zero) ?? Offset.zero;
+                        _showSourceMenu(source, offset);
+                      },
+                    ),
                   ),
                 );
-              }
-              final source = sources[index - 1];
-              return Builder(
-                builder: (tileContext) => Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: RssSourceTile.fromSource(
-                    source,
-                    onTap: () => _openRssSource(source),
-                    onLongPress: () {
-                      final box = tileContext.findRenderObject() as RenderBox?;
-                      final offset =
-                          box?.localToGlobal(Offset.zero) ?? Offset.zero;
-                      _showSourceMenu(source, offset);
-                    },
-                  ),
-                ),
-              );
-            },
+              },
+            ),
           );
         },
       ),

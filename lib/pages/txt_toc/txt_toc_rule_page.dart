@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../models/txt_toc_rule.dart';
 import '../../services/txt_toc_rule_prefs.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/legado_popup_menu.dart';
 
 /// TXT 目录规则管理 — 对齐 Jingshiro [TxtTocRuleActivity]
 class TxtTocRulePage extends StatefulWidget {
@@ -197,6 +198,7 @@ class _TxtTocRulePageState extends State<TxtTocRulePage> {
             onPressed: () => _showEditDialog(),
           ),
           PopupMenuButton<String>(
+            offset: legadoAppBarPopupOffset(context),
             onSelected: (v) async {
               switch (v) {
                 case 'defaults':

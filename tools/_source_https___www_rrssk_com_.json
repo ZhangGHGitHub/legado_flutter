@@ -1,0 +1,47 @@
+{
+  "bookSourceName": "可乐小说",
+  "bookSourceUrl": "https://www.rrssk.com/",
+  "ruleSearchUrl_column": "",
+  "raw": {
+    "bookSourceName": "可乐小说",
+    "bookSourceUrl": "https://www.rrssk.com/",
+    "bookSourceType": 0,
+    "bookSourceGroup": "小说",
+    "bookSourceComment": "可乐小说（人人搜书库），搜索使用AES-256-CBC加密。目录分页支持HTML首页+AJAX后续页，密钥动态提取+硬编码兜底。chapterList返回JS对象数组，chapterName/chapterUrl直接属性访问。v4.0",
+    "enabled": true,
+    "enabledExplore": true,
+    "loginUrl": "",
+    "searchUrl": "<js>var keyStr='lzxHpH8PLGXcrCIQ';var key32=keyStr;while(key32.length < 32){key32 += String.fromCharCode(0);}var crypto=java.createSymmetricCrypto('AES/CBC/PKCS5Padding',key32,keyStr);var enc=crypto.encryptBase64(key);var url='https://www.rrssk.com/k-'+enc+'.html';if(page>1)url='https://www.rrssk.com/k-'+enc+'-'+page+'.html';url</js>",
+    "ruleSearch": {
+      "bookList": ".rankIBox.searchIBox li",
+      "name": ".txtb .name.font18 a@text",
+      "author": ".txtb .info dl:eq(0) dd a@text",
+      "kind": ".txtb .info dl:eq(1) dd a@text",
+      "lastChapter": ".txtb .info dl:last-child dd a@text",
+      "intro": ".txtb .intro@text",
+      "coverUrl": ".picb .pic img@src",
+      "bookUrl": "<js>var html=result.toString();var match=html.match(/upclick\\('([^']+)'\\)/);var id='';if(match != null){id=match[1];}'https://www.kelexs.com/book/'+id+'.html'</js>"
+    },
+    "ruleBookInfo": {
+      "name": "meta[property=og:novel:book_name]@content",
+      "author": "meta[property=og:novel:author]@content",
+      "coverUrl": "meta[property=og:image]@content",
+      "kind": "meta[property=og:novel:category]@content",
+      "intro": "meta[property=og:description]@content",
+      "lastChapter": "meta[property=og:novel:latest_chapter_name]@content",
+      "tocUrl": "<js>var tocUrl=baseUrl.replace('/book/','/chapter/');try{var html=java.ajax(book.bookUrl);if(html){var jsMatch=html.match(/script type=\"text\\/javascript\" src=\"(\\/templates\\/js\\/[A-Za-z0-9]+\\.js)\"/)||html.match(/src=\"(\\/templates\\/js\\/[A-Za-z0-9]+\\.js)\"/);if(jsMatch){var jsUrl='https://www.kelexs.com'+jsMatch[1];var jsContent=java.ajax(jsUrl);if(jsContent){var keyMatch=jsContent.match(/new AESCrypt\\('([A-Za-z0-9]{32})'\\)/);var ivMatch=jsContent.match(/CryptoJS\\.enc\\.Utf8\\.parse\\('(\\d{16})'\\)/);if(keyMatch){cache.put('kelexs_key',keyMatch[1],86400);}if(ivMatch){cache.put('kelexs_iv',ivMatch[1],86400);}}}}}catch(e){}tocUrl</js>"
+    },
+    "ruleToc": {
+      "chapterList": "<js>var resStr = result.toString().trim(); var elements = []; if (resStr.charAt(0) == '{' || resStr.charAt(0) == '[') { var parsed = false; try { var json = JSON.parse(resStr); if (json.code == 0 && json.data && json.data.length > 0) { for (var i = 0; i < json.data.length; i++) { var ch = json.data[i]; elements.push({ chaptername: ch.chaptername, chapterurl: 'https://www.kelexs.com' + ch.chapterurl }); } parsed = true; } } catch (e) {} if (!parsed || elements.length == 0) { var nameRegex = /\"chaptername\":\"([^\"]+)\"/g; var urlRegex = /\"chapterurl\":\"([^\"]+)\"/g; var names = []; var urls = []; var m; while ((m = nameRegex.exec(resStr)) !== null) { names.push(m[1]); } while ((m = urlRegex.exec(resStr)) !== null) { urls.push(m[1]); } for (var i = 0; i < names.length && i < urls.length; i++) { elements.push({ chaptername: names[i], chapterurl: 'https://www.kelexs.com' + urls[i] }); } } } else { var startIdx = resStr.indexOf('class=\"chapList chapListBody\"'); if (startIdx == -1) { startIdx = resStr.indexOf(\"class='chapList chapListBody'\"); } if (startIdx != -1) { var endIdx = resStr.indexOf('</ul>', startIdx); if (endIdx != -1) { var section = resStr.substring(startIdx, endIdx + 5); var liRegex = /<li[\\s\\S]*?<\\/li>/g; var m; while ((m = liRegex.exec(section)) !== null) { var aMatch = m[0].match(/<a\\s+[^>]*href=\"([^\"]+)\"[^>]*>([^<]+)<\\/a>/i); if (aMatch) { elements.push({ chaptername: aMatch[2], chapterurl: 'https://www.kelexs.com' + aMatch[1] }); } } } } } elements</js>",
+      "chapterName": "chaptername",
+      "chapterUrl": "chapterurl",
+      "nextTocUrl": "<js>var resStr = result.toString().trim(); var nextUrl = ''; var id = ''; var currentPage = 1; var idMatch = baseUrl.match(/[?&]id=([^&]+)/); id = idMatch ? idMatch[1] : ''; if (!id) { var chapterMatch = baseUrl.match(/chapter\\/([^.]+)\\.html/); id = chapterMatch ? chapterMatch[1] : ''; } if (!id && book) { var bookMatch = book.bookUrl.match(/book\\/([^.]+)\\.html/); id = bookMatch ? bookMatch[1] : ''; } var pageMatch = baseUrl.match(/[?&]page=(\\d+)/); if (pageMatch) { currentPage = parseInt(pageMatch[1]); } if (id) { var hasMore = false; if (resStr.charAt(0) == '{' || resStr.charAt(0) == '[') { try { var json = JSON.parse(resStr); if (json.code == 0 && json.data) { if (json.data.length >= 100) { hasMore = true; } } } catch (e) { var countMatch = resStr.match(/\"chaptername\"/g); if (countMatch && countMatch.length >= 100) { hasMore = true; } } } else { var countMatch = resStr.match(/<li[\\s>]/g); if (countMatch && countMatch.length >= 100) { hasMore = true; } } if (hasMore) { var nextPage = currentPage + 1; var keyStr = cache.get('kelexs_key'); var ivStr = cache.get('kelexs_iv'); if (!keyStr || !ivStr) { try { var html = java.ajax(book.bookUrl); if (html) { var jsMatch = html.match(/script type=\"text\\/javascript\" src=\"(\\/templates\\/js\\/[A-Za-z0-9]+\\.js)\"/) || html.match(/src=\"(\\/templates\\/js\\/[A-Za-z0-9]+\\.js)\"/); if (jsMatch) { var jsUrl = 'https://www.kelexs.com' + jsMatch[1]; var jsContent = java.ajax(jsUrl); if (jsContent) { var keyMatch = jsContent.match(/new AESCrypt\\('([A-Za-z0-9]{32})'\\)/); var ivMatch = jsContent.match(/CryptoJS\\.enc\\.Utf8\\.parse\\('(\\d{16})'\\)/); if (keyMatch) { keyStr = keyMatch[1]; cache.put('kelexs_key', keyStr, 86400); } if (ivMatch) { ivStr = ivMatch[1]; cache.put('kelexs_iv', ivStr, 86400); } } } } } catch (e) {} if (!keyStr) { keyStr = 'fx2zcphhn3MhznJlrfGMXN7ZefBa6eny'; } if (!ivStr) { ivStr = '5486678252717425'; } } if (keyStr && ivStr) { var crypto = java.createSymmetricCrypto('AES/CBC/PKCS5Padding', keyStr, ivStr); var data = JSON.stringify({id: id, page: nextPage}); var enc = crypto.encryptBase64(data); nextUrl = 'https://www.kelexs.com/index.php?action=loadChapterPage&id=' + id + '&page=' + nextPage + ',{\"method\":\"POST\",\"body\":\"data=' + enc + '\"}'; } } } nextUrl</js>"
+    },
+    "ruleContent": {
+      "title": "h1@text",
+      "content": ".content p@textNodes",
+      "nextContentUrl": ".btnW a:contains(下一页)@href"
+    },
+    "lastUpdateTime": "1783996700425"
+  }
+}

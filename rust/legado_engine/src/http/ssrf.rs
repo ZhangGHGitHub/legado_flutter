@@ -16,6 +16,12 @@ pub fn assert_public_http_url(url: &str) -> Result<(), String> {
         Some(h) => h.to_ascii_lowercase(),
         None => return Err("无效的 URL".to_string()),
     };
+    // 仅给 crate 单元测试的本地 HTTP fixture 放行带显式端口的 loopback。
+    // 正式构建没有这段 cfg，生产网络策略仍拒绝所有 loopback/private host。
+    #[cfg(test)]
+    if host == "127.0.0.1" && parsed.port().is_some() {
+        return Ok(());
+    }
     if host == "localhost" || host == "0.0.0.0" || host == "::1" {
         return Err(format!("禁止访问本机/回环地址（SSRF 防护）: {host}"));
     }

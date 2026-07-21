@@ -1,0 +1,18 @@
+=== values-zh/arrays.xml ===
+
+        <item>书源</item>
+        <item>订阅源</item>
+        <item>替换规则</item>
+    
+=== values/arrays.xml ===
+
+		<item>BookSource</item>
+		<item>RssSource</item>
+		<item>ReplaceRule</item>
+	
+app/src/main/java/io/legado/app/data/dao/RuleSubDao.kt
+app/src/main/java/io/legado/app/data/entities/RuleSub.kt
+app/src/main/java/io/legado/app/ui/rss/subscription
+app/src/main/java/io/legado/app/ui/rss/subscription/RuleSubActivity.kt
+app/src/main/java/io/legado/app/ui/rss/subscription/RuleSubAdapter.kt
+app/src/main/res/menu/source_subscription.xml

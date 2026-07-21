@@ -10,6 +10,7 @@ import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/tts_service.dart';
 import '../../widgets/book_cover.dart';
+import '../../widgets/legado_popup_menu.dart';
 
 /// 有声 / TTS 播放器 — 对齐 Jingshiro [AudioPlayActivity] + `activity_audio_play.xml`
 class AudioPlayPage extends StatefulWidget {
@@ -108,8 +109,9 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
   String get _subTitle => _chapter?.title ?? '暂无章节';
 
   int get _progressMax => max(1, _tts.sentenceCount);
-  int get _progressValue =>
-      _tts.sentenceCount == 0 ? 0 : _tts.sentenceIndex.clamp(0, _progressMax - 1);
+  int get _progressValue => _tts.sentenceCount == 0
+      ? 0
+      : _tts.sentenceIndex.clamp(0, _progressMax - 1);
 
   Future<void> _loadChapter({bool autoPlay = false}) async {
     if (widget.chapters.isEmpty) return;
@@ -123,17 +125,18 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
           _content.isEmpty) {
         content = widget.initialContent!;
       } else {
-        final source =
-            context.read<SourceProvider>().findSourceForBook(widget.book);
+        final source = context.read<SourceProvider>().findSourceForBook(
+          widget.book,
+        );
         if (source == null) {
           content = '未找到匹配的书源';
         } else {
           content = await context.read<BookProvider>().loadChapterContentCached(
-                chapter.url,
-                source: source,
-                chapterId: chapter.id,
-                bookId: widget.book.id,
-              );
+            chapter.url,
+            source: source,
+            chapterId: chapter.id,
+            bookId: widget.book.id,
+          );
         }
       }
       if (!mounted) return;
@@ -158,14 +161,7 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
   }
 
   void _maybeWarnCapability() {
-    if (_tts.engineId == 'http' && _tts.state == TtsPlaybackState.playing) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('HTTP TTS 尚未实现，请改用系统 TTS'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    } else if (_tts.capability == TtsCapability.stub &&
+    if (_tts.capability == TtsCapability.stub &&
         _tts.state == TtsPlaybackState.playing) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -406,13 +402,17 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
                           ch.title,
                           style: TextStyle(
                             color: active ? _accentBorder : _chromeFg,
-                            fontWeight:
-                                active ? FontWeight.w600 : FontWeight.normal,
+                            fontWeight: active
+                                ? FontWeight.w600
+                                : FontWeight.normal,
                           ),
                         ),
                         trailing: active
-                            ? const Icon(Icons.graphic_eq,
-                                color: _accentBorder, size: 18)
+                            ? const Icon(
+                                Icons.graphic_eq,
+                                color: _accentBorder,
+                                size: 18,
+                              )
                             : null,
                         onTap: () => Navigator.pop(ctx, i),
                       );
@@ -431,11 +431,11 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
   }
 
   IconData _playModeIcon(TtsPlayMode mode) => switch (mode) {
-        TtsPlayMode.listEndStop => Icons.playlist_play,
-        TtsPlayMode.singleLoop => Icons.repeat_one,
-        TtsPlayMode.random => Icons.shuffle,
-        TtsPlayMode.listLoop => Icons.repeat,
-      };
+    TtsPlayMode.listEndStop => Icons.playlist_play,
+    TtsPlayMode.singleLoop => Icons.repeat_one,
+    TtsPlayMode.random => Icons.shuffle,
+    TtsPlayMode.listLoop => Icons.repeat,
+  };
 
   String _fmtClock(int units) {
     final s = units.clamp(0, 359999);
@@ -476,7 +476,8 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
     final progress = _seeking ? _seekValue : _progressValue.toDouble();
     final maxProg = (_progressMax - 1).toDouble().clamp(0.0, double.infinity);
     final lyricLine = _tts.currentSentence.trim();
-    final showLyric = lyricLine.isNotEmpty &&
+    final showLyric =
+        lyricLine.isNotEmpty &&
         (_tts.state == TtsPlaybackState.playing ||
             _tts.state == TtsPlaybackState.paused);
 
@@ -526,6 +527,7 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
                     ),
                     actions: [
                       PopupMenuButton<String>(
+                        offset: legadoAppBarPopupOffset(context),
                         icon: const Icon(Icons.more_vert),
                         onSelected: (v) {
                           switch (v) {
@@ -566,8 +568,9 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
                         children: [
                           if (timerLeft != null && timerLeft > 0)
                             Container(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white24,
                                 borderRadius: BorderRadius.circular(4),
@@ -575,8 +578,11 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.timer,
-                                      size: 14, color: _chromeFg),
+                                  const Icon(
+                                    Icons.timer,
+                                    size: 14,
+                                    color: _chromeFg,
+                                  ),
                                   const SizedBox(width: 4),
                                   Text(
                                     '${timerLeft}m',
@@ -593,8 +599,9 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
                           const Spacer(),
                           if (showSpeed)
                             Container(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white24,
                                 borderRadius: BorderRadius.circular(4),
@@ -751,8 +758,9 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
                         _circleBtn(
                           icon: Icons.skip_previous,
                           tooltip: '上一个',
-                          onPressed:
-                              _chapterIndex > 0 ? () => _prevChapter() : null,
+                          onPressed: _chapterIndex > 0
+                              ? () => _prevChapter()
+                              : null,
                         ),
                         Stack(
                           alignment: Alignment.center,

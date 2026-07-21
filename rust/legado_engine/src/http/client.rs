@@ -12,8 +12,13 @@ static CLIENT: Lazy<Mutex<Client>> = Lazy::new(|| Mutex::new(build_http_client(&
 
 static COOKIE_JAR: Lazy<Mutex<CookieJar>> = Lazy::new(|| Mutex::new(CookieJar::new()));
 
+/// 单次书源响应上限，避免异常站点或错误 URL 无限占用内存。
+pub(crate) const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
+
 fn build_http_client(cfg: &NetworkConfig) -> Client {
     let mut builder = Client::builder()
+        // 网络代理只由 legado 的 NetworkConfig 控制，避免继承机器环境代理干扰离线测试。
+        .no_proxy()
         .timeout(Duration::from_secs(30))
         .connect_timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::limited(5))
@@ -338,10 +343,7 @@ async fn ajax_fetch(
     )
     .await?;
     save_cookies(&url, &response);
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("读取响应失败: {e}"))?;
+    let bytes = read_response_bytes(response).await?;
     let text = charset::decode_bytes(&bytes, &cfg.charset)?;
     // 对齐 fetch_text：命中 WAF 时尝试 GE-UA 后重试
     maybe_pass_ge_ua_and_retry(
@@ -380,10 +382,7 @@ pub async fn fetch_text(
 
     let response = send_request(url, method, body, charset, headers).await?;
     save_cookies(url, &response);
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("读取响应失败: {e}"))?;
+    let bytes = read_response_bytes(response).await?;
     let text = charset::decode_bytes(&bytes, charset)?;
     maybe_pass_ge_ua_and_retry(url, method, body, charset, None, text).await
 }
@@ -495,10 +494,7 @@ pub fn fetch_blocking_with_header_map(
                 send_request(&url, &method, body.as_deref(), &charset, headers).await?;
             let status = response.status().as_u16();
             save_cookies(&url, &response);
-            let bytes = response
-                .bytes()
-                .await
-                .map_err(|e| format!("读取响应失败: {e}"))?;
+            let bytes = read_response_bytes(response).await?;
             let text = charset::decode_bytes(&bytes, &charset)?;
             Ok((status, text))
         })
@@ -628,10 +624,7 @@ async fn fetch_with_source_meta_once(
     let response = send_request(url, method, body, charset, headers).await?;
     let status_code = response.status().as_u16();
     save_cookies(url, &response);
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("读取响应失败: {e}"))?;
+    let bytes = read_response_bytes(response).await?;
     let byte_len = bytes.len();
     let body = charset::decode_bytes(&bytes, charset)?;
     Ok(FetchResponse {
@@ -668,10 +661,7 @@ async fn maybe_pass_ge_ua_and_retry(
         }
         let response = send_request(url, method, body, charset, headers).await?;
         save_cookies(url, &response);
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| format!("读取响应失败: {e}"))?;
+        let bytes = read_response_bytes(response).await?;
         charset::decode_bytes(&bytes, charset)?
     };
     if super::ge_ua::is_challenge(&retry) {
@@ -733,10 +723,7 @@ async fn pass_ge_ua_challenge(url: &str, challenge_html: &str) -> Result<(), Str
 
     let response = send_request(url, "POST", Some(&post_body), "UTF-8", headers).await?;
     save_cookies(url, &response);
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("读取 WAF 验证响应失败: {e}"))?;
+    let bytes = read_response_bytes(response).await?;
     let text = String::from_utf8_lossy(&bytes).to_string();
     let ok = text.contains("\"ok\":true")
         || text.contains("\"ok\": true")
@@ -772,7 +759,7 @@ async fn send_request(
 ) -> Result<reqwest::Response, String> {
     super::ssrf::assert_public_http_url(url)?;
     let _permit = super::rate_limit::acquire_host_permit(url).await?;
-    if method == "POST" {
+    let response = if method == "POST" {
         let post_body = body.unwrap_or("");
         let encoded = charset::encode_form_body(post_body, charset);
         headers.insert(
@@ -785,15 +772,42 @@ async fn send_request(
             .body(encoded)
             .send()
             .await
-            .map_err(|e| format!("POST 请求失败: {e}"))
+            .map_err(|e| format!("POST 请求失败: {e:?}"))?
     } else {
         http_client()?
             .get(url)
             .headers(headers)
             .send()
             .await
-            .map_err(|e| format!("GET 请求失败: {e}"))
+            .map_err(|e| format!("GET 请求失败: {e:?}"))?
+    };
+    if !response.status().is_success() {
+        return Err(format!("HTTP 请求失败: {}", response.status()));
     }
+    Ok(response)
+}
+
+async fn read_response_bytes(response: reqwest::Response) -> Result<Vec<u8>, String> {
+    if response
+        .content_length()
+        .is_some_and(|size| size > MAX_RESPONSE_BYTES as u64)
+    {
+        return Err(format!(
+            "响应过大: 超过 {} MiB",
+            MAX_RESPONSE_BYTES / (1024 * 1024)
+        ));
+    }
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("读取响应失败: {e}"))?;
+    if bytes.len() > MAX_RESPONSE_BYTES {
+        return Err(format!(
+            "响应过大: 超过 {} MiB",
+            MAX_RESPONSE_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(bytes.to_vec())
 }
 
 fn save_cookies(url: &str, response: &reqwest::Response) {
