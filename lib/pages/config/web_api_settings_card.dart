@@ -116,7 +116,7 @@ class _WebApiSettingsCardState extends State<WebApiSettingsCard> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Web API 服务'),
               subtitle: Text(
-                running ? '运行中 · $baseUrl' : '局域网 HTTP 接口（书架/书源/阅读记录）',
+                running ? '运行中 · $baseUrl' : '本机 HTTP 接口（书架/书源/阅读记录）',
               ),
               value: _enabled,
               onChanged: _toggle,
@@ -152,13 +152,12 @@ class _WebApiSettingsCardState extends State<WebApiSettingsCard> {
                 if (running && baseUrl.isNotEmpty)
                   OutlinedButton.icon(
                     onPressed: () {
-                      final token = _status?.token ?? _tokenCtrl.text.trim();
-                      final url = '$baseUrl/api/books?token=$token';
+                      final url = '$baseUrl/api/books';
                       Clipboard.setData(ClipboardData(text: url));
-                      _showSnack('API 地址已复制');
+                      _showSnack('API 地址已复制，Token 请通过 Authorization 请求头传递');
                     },
                     icon: const Icon(Icons.copy, size: 16),
-                    label: const Text('复制书架 API'),
+                    label: const Text('复制 API 地址'),
                   ),
               ],
             ),

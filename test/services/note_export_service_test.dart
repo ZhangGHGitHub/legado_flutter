@@ -33,6 +33,7 @@ void main() {
         selectedText: '选中片段',
         noteContent: '我的想法',
         position: 0,
+        chapterPos: 0,
         createdAt: '2026-07-11',
       ),
     ];

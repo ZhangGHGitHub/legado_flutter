@@ -59,6 +59,8 @@ class _MainShellState extends State<MainShell> {
   }
 
   Future<void> _initProviders() async {
+    await AppConfig.instance.load();
+    if (!mounted) return;
     final db = DatabaseHelper();
     final bookProvider = context.read<BookProvider>();
     final sourceProvider = context.read<SourceProvider>();
@@ -68,6 +70,17 @@ class _MainShellState extends State<MainShell> {
     await bookProvider.loadBooks();
     await rssProvider.loadSources();
 
+    final defaultHome = AppConfig.instance.defaultHomePage;
+    final homeIndex = switch (defaultHome) {
+      'explore' => 1,
+      'rss' => 2,
+      'mine' => 3,
+      _ => 0,
+    };
+    // 校验默认首页是否可见；隐藏 Tab 回退到第一个可见槽（通常 0=书架）
+    final slots = _visiblePageSlots(AppConfig.instance);
+    final validatedIndex = slots.contains(homeIndex) ? homeIndex : slots.first;
+
     var sources = await db.getBookSources();
     if (sources.isEmpty) {
       await db.insertBookSources(await BookSourceService.loadBuiltInSources());
@@ -76,6 +89,9 @@ class _MainShellState extends State<MainShell> {
     await sourceProvider.loadSources();
 
     if (mounted) {
+      if (validatedIndex != 0) {
+        setState(() => _pageIndex = validatedIndex);
+      }
       setState(() => _initialized = true);
       WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowPrivacy());
       // 对齐 Jingshiro MainActivity：启动约 1s 后检查规则订阅自动更新

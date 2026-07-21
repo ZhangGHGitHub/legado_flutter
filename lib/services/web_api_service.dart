@@ -1,3 +1,5 @@
+import 'package:uuid/uuid.dart';
+
 import '../bridge/legado_db_bridge.dart';
 import '../bridge/legado_engine_bridge.dart';
 import '../src/rust/api.dart' as rust_api;
@@ -5,6 +7,8 @@ import 'web_api_prefs.dart';
 
 /// Web API 服务管理
 abstract final class WebApiService {
+  static final _uuid = Uuid();
+
   static rust_api.WebApiStatus? currentStatus() {
     if (!LegadoEngineBridge.isAvailable) return null;
     try {
@@ -23,7 +27,8 @@ abstract final class WebApiService {
     }
     final config = await WebApiPrefs.load();
     final p = port ?? config.port;
-    final t = token ?? config.token;
+    final configuredToken = (token ?? config.token).trim();
+    final t = configuredToken.isEmpty ? _uuid.v4() : configuredToken;
     return rust_api.startWebApi(port: p, token: t);
   }
 
@@ -56,7 +61,13 @@ abstract final class WebApiService {
   static Future<void> restoreIfEnabled() async {
     final config = await WebApiPrefs.load();
     if (config.enabled) {
-      await start(port: config.port, token: config.token);
+      final status = await start(port: config.port, token: config.token);
+      if (status != null &&
+          (config.port != status.port || config.token != status.token)) {
+        await WebApiPrefs.save(
+          config.copyWith(port: status.port, token: status.token),
+        );
+      }
     }
   }
 

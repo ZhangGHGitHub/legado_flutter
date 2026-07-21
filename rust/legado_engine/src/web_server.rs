@@ -12,7 +12,6 @@ use axum::{
 use once_cell::sync::Lazy;
 use serde_json::{json, Value};
 use tokio::sync::oneshot;
-use tower_http::cors::{Any, CorsLayer};
 
 use crate::api::WebApiStatus;
 use crate::db;
@@ -86,20 +85,7 @@ async fn auth_middleware(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.trim().strip_prefix("Bearer ").unwrap_or(s).to_string());
 
-    let query_token = req.uri().query().and_then(|q| {
-        q.split('&').find_map(|pair| {
-            let mut kv = pair.splitn(2, '=');
-            let key = kv.next()?;
-            let val = kv.next().unwrap_or("");
-            if key == "token" {
-                Some(val.to_string())
-            } else {
-                None
-            }
-        })
-    });
-
-    let provided = header_token.or(query_token).unwrap_or_default();
+    let provided = header_token.unwrap_or_default();
     if provided == state.token {
         next.run(req).await
     } else {
@@ -112,11 +98,6 @@ async fn auth_middleware(
 }
 
 fn build_router(state: AppState) -> Router {
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
-
     let protected = Router::new()
         .route("/books", get(list_books).post(add_book))
         .route("/books/:id", delete(delete_book))
@@ -128,7 +109,6 @@ fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health))
         .nest("/api", protected)
-        .layer(cors)
         .with_state(state)
 }
 
@@ -225,10 +205,10 @@ pub async fn start_web_api(port: i32, token: String) -> Result<WebApiStatus, Str
     if !(1..=65535).contains(&port) {
         return Err("端口无效".into());
     }
-    let token = normalize_token(&token);
+    let token = normalize_token(&token)?;
     stop_web_api_inner();
 
-    let addr = format!("0.0.0.0:{port}");
+    let addr = format!("127.0.0.1:{port}");
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .map_err(|e| format!("绑定端口 {port} 失败: {e}"))?;
@@ -271,21 +251,13 @@ fn stop_web_api_inner() {
     guard.token.clear();
 }
 
-fn normalize_token(token: &str) -> String {
+fn normalize_token(token: &str) -> Result<String, String> {
     let trimmed = token.trim();
     if trimmed.is_empty() {
-        format!("legado_{}", simple_random_token())
+        Err("Token 不能为空".into())
     } else {
-        trimmed.to_string()
+        Ok(trimmed.to_string())
     }
-}
-
-fn simple_random_token() -> u32 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| (d.as_nanos() as u32) ^ 0xA5A5_1234)
-        .unwrap_or(12345)
 }
 
 #[cfg(test)]
@@ -293,13 +265,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn normalize_token_generates_when_empty() {
-        let t = normalize_token("");
-        assert!(t.starts_with("legado_"));
+    fn normalize_token_rejects_empty() {
+        assert!(normalize_token("").is_err());
     }
 
     #[test]
     fn normalize_token_keeps_custom() {
-        assert_eq!(normalize_token("  abc  "), "abc");
+        assert_eq!(normalize_token("  abc  ").unwrap(), "abc");
     }
 }

@@ -40,7 +40,8 @@ async fn web_api_auth_and_books_roundtrip() {
     .unwrap();
 
     let books = client
-        .get(format!("{base}/api/books?token={token}"))
+        .get(format!("{base}/api/books"))
+        .header("Authorization", format!("Bearer {token}"))
         .send()
         .await
         .unwrap();

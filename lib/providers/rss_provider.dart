@@ -1,11 +1,15 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/rss_source.dart';
+import '../utils/ssrf_guard.dart';
 
 const _rssSourcesKey = 'legado_rss_sources';
+const _rssImportTimeout = Duration(seconds: 30);
+const _rssImportMaxBytes = 10 * 1024 * 1024;
 
 /// RSS 订阅源管理 — 本地持久化（UI 层；规则引擎后续接入）
 class RssProvider extends ChangeNotifier {
@@ -80,14 +84,164 @@ class RssProvider extends ChangeNotifier {
     return sorted;
   }
 
+  /// 全部源的分组名（含禁用），供管理页筛选
+  List<String> allGroups() {
+    final groups = <String>{};
+    for (final s in _sources) {
+      for (final g in s.sourceGroup.split(',')) {
+        final t = g.trim();
+        if (t.isNotEmpty) groups.add(t);
+      }
+    }
+    final sorted = groups.toList()..sort();
+    return sorted;
+  }
+
+  /// 管理页列表过滤：搜索 + 分组/启用态
+  List<RssSource> managedSources({
+    String? searchKey,
+    String filter = 'all',
+  }) {
+    var list = List<RssSource>.from(_sources)
+      ..sort((a, b) {
+        final order = b.customOrder.compareTo(a.customOrder);
+        if (order != 0) return order;
+        return a.sourceName.compareTo(b.sourceName);
+      });
+
+    switch (filter) {
+      case 'enabled':
+        list = list.where((s) => s.enabled).toList();
+      case 'disabled':
+        list = list.where((s) => !s.enabled).toList();
+      case 'login':
+        list = list
+            .where((s) => s.loginUrl != null && s.loginUrl!.trim().isNotEmpty)
+            .toList();
+      case 'null_group':
+        list = list.where((s) => s.sourceGroup.trim().isEmpty).toList();
+      default:
+        if (filter.startsWith('group:')) {
+          final g = filter.substring(6);
+          list = list.where((s) => _matchGroup(s.sourceGroup, g)).toList();
+        }
+    }
+
+    final key = searchKey?.trim();
+    if (key == null || key.isEmpty) return list;
+    final lower = key.toLowerCase();
+    return list
+        .where(
+          (s) =>
+              s.sourceName.toLowerCase().contains(lower) ||
+              s.sourceUrl.toLowerCase().contains(lower) ||
+              s.sourceGroup.toLowerCase().contains(lower),
+        )
+        .toList();
+  }
+
+  Future<void> setEnabled(RssSource source, bool enabled) async {
+    await upsertSource(source.copyWith(enabled: enabled));
+  }
+
+  Future<void> setEnabledMany(Iterable<String> urls, bool enabled) async {
+    final set = urls.toSet();
+    var changed = false;
+    for (var i = 0; i < _sources.length; i++) {
+      final s = _sources[i];
+      if (set.contains(s.sourceUrl) && s.enabled != enabled) {
+        _sources[i] = s.copyWith(enabled: enabled);
+        changed = true;
+      }
+    }
+    if (changed) await _persist();
+  }
+
+  Future<void> deleteSources(Iterable<String> urls) async {
+    final set = urls.toSet();
+    final before = _sources.length;
+    _sources.removeWhere((s) => set.contains(s.sourceUrl));
+    if (_sources.length != before) await _persist();
+  }
+
+  Future<void> topSources(Iterable<String> urls) async {
+    final set = urls.toSet();
+    var maxOrder = _sources.fold<int>(
+      0,
+      (prev, s) => s.customOrder > prev ? s.customOrder : prev,
+    );
+    for (var i = 0; i < _sources.length; i++) {
+      final s = _sources[i];
+      if (set.contains(s.sourceUrl)) {
+        maxOrder += 1;
+        _sources[i] = s.copyWith(customOrder: maxOrder);
+      }
+    }
+    await _persist();
+  }
+
+  Future<bool> importSourcesFromUrl(String url) async {
+    try {
+      var currentUrl = url.trim();
+      SsrfGuard.assertPublicHttpUrl(currentUrl);
+      final client = HttpClient();
+      client.connectionTimeout = _rssImportTimeout;
+      try {
+        for (var hop = 0; hop <= SsrfGuard.maxRedirects; hop++) {
+          SsrfGuard.assertPublicHttpUrl(currentUrl);
+          final uri = Uri.parse(currentUrl);
+          final req = await client.getUrl(uri);
+          req.followRedirects = false;
+          req.maxRedirects = 0;
+          final res = await req.close().timeout(_rssImportTimeout);
+
+          if (res.statusCode >= 300 && res.statusCode < 400) {
+            final location = res.headers.value(HttpHeaders.locationHeader);
+            await res.drain<void>();
+            if (location == null || location.isEmpty ||
+                hop == SsrfGuard.maxRedirects) {
+              return false;
+            }
+            SsrfGuard.assertRedirectTarget(currentUrl, location);
+            currentUrl = uri.resolve(location).toString();
+            continue;
+          }
+
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            await res.drain<void>();
+            return false;
+          }
+          if (res.contentLength > _rssImportMaxBytes) return false;
+
+          final bytes = <int>[];
+          await for (final chunk in res.timeout(_rssImportTimeout)) {
+            if (bytes.length + chunk.length > _rssImportMaxBytes) return false;
+            bytes.addAll(chunk);
+          }
+          return importSources(utf8.decode(bytes));
+        }
+        return false;
+      } finally {
+        client.close(force: true);
+      }
+    } catch (e) {
+      debugPrint('RSS import URL failed: $e');
+      return false;
+    }
+  }
+
   Future<void> upsertSource(RssSource source) async {
+    _upsertInMemory(source);
+    await _persist();
+  }
+
+  void _upsertInMemory(RssSource source) {
     final i = _sources.indexWhere((s) => s.sourceUrl == source.sourceUrl);
     if (i >= 0) {
       _sources[i] = source;
     } else {
       _sources.add(source);
     }
-    await _persist();
   }
 
   Future<bool> importSources(String jsonText) async {
@@ -99,12 +253,18 @@ class RssProvider extends ChangeNotifier {
               ? decoded['sources'] as List
               : <dynamic>[];
       if (list.isEmpty) return false;
+      final imported = <RssSource>[];
       for (final item in list) {
         if (item is! Map<String, dynamic>) continue;
         final source = RssSource.fromJson(item);
-        if (source.sourceUrl.isEmpty) continue;
-        await upsertSource(source);
+        if (source.sourceUrl.trim().isEmpty) continue;
+        imported.add(source);
       }
+      if (imported.isEmpty) return false;
+      for (final source in imported) {
+        _upsertInMemory(source);
+      }
+      await _persist();
       return true;
     } catch (e) {
       debugPrint('RSS import failed: $e');
