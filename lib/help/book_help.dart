@@ -85,6 +85,25 @@ class BookHelp {
     }
   }
 
+  /// 删除数据库中已不存在的书籍缓存目录（对齐 legado clearInvalidCache）。
+  static Future<int> clearInvalidCache(Set<String> validBookIds) async {
+    var removed = 0;
+    try {
+      final root = await _cacheRoot();
+      final valid = validBookIds.map(_sanitize).toSet();
+      if (!await root.exists()) return 0;
+      await for (final entity in root.list()) {
+        if (entity is! Directory) continue;
+        if (valid.contains(p.basename(entity.path))) continue;
+        await entity.delete(recursive: true);
+        removed++;
+      }
+    } catch (e) {
+      debugPrint('BookHelp 清理孤立缓存失败: $e');
+    }
+    return removed;
+  }
+
   /// 是否已有文件缓存
   static Future<bool> hasCachedContent(String bookId, String chapterId) async {
     final file = await _chapterFile(bookId, chapterId);

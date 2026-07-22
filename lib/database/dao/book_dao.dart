@@ -17,13 +17,7 @@ class BookDao {
     double progress,
     String? chapter, {
     int pageIndex = 0,
-  }) =>
-      _db.updateBookProgress(
-        bookId,
-        progress,
-        chapter,
-        pageIndex: pageIndex,
-      );
+  }) => _db.updateBookProgress(bookId, progress, chapter, pageIndex: pageIndex);
 
   Future<void> delete(String bookId) => _db.deleteBook(bookId);
 
@@ -40,4 +34,7 @@ class BookDao {
 
   Future<void> saveChapterContent(String chapterId, String content) =>
       _db.saveChapterContent(chapterId, content);
+
+  Future<void> clearChapterContent(Chapter chapter) =>
+      _db.clearChapterContent(chapter);
 }

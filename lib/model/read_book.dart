@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 
 import '../database/database_helper.dart';
 import '../help/book_help.dart';
-import '../help/content_help.dart';
 import '../help/content_processor.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
@@ -109,14 +108,15 @@ class ReadBook extends ChangeNotifier {
 
   /// 对齐 ContentProcessor：reSegment → replace
   String _processContent(String raw, {String chapterTitle = ''}) {
-    var result = raw;
-    if (reSegment && result.isNotEmpty) {
-      result = ContentHelp.reSegment(result, chapterTitle);
-    }
-    if (!enableReplace) return result;
     final proc = _processor;
-    if (proc == null) return result;
-    return proc.getContent(result);
+    if (proc == null) return raw;
+    return proc.processForReading(
+      raw,
+      chapterTitle: chapterTitle,
+      includeTitle: false,
+      useReplace: enableReplace,
+      reSegment: reSegment,
+    );
   }
 
   /// 加载章节正文（文件缓存 → DB → 网络 → 净化 → 写缓存）
@@ -175,18 +175,26 @@ class ReadBook extends ChangeNotifier {
       }
 
       // 2. DB 正文列（目录查询已不再带 content；正文以文件缓存为主）
-      // 若仅标志已下载但文件丢失，继续走网络拉取
-      if (chapter.isDownloaded) {
-        final again = await BookHelp.getCachedContent(bid, chapter.id);
-        if (again != null && again.isNotEmpty && !shouldSkipCache(again)) {
-          final processed = _processContent(again, chapterTitle: chapter.title);
+      // 文件丢失时回落到 DB；数据库未就绪或读取失败则继续走网络。
+      try {
+        final dbCached = await _db?.getChapterContent(chapter.id);
+        if (dbCached != null && dbCached.isNotEmpty) {
+          final processed = _processContent(
+            dbCached,
+            chapterTitle: chapter.title,
+          );
           if (!shouldSkipCache(processed)) {
             if (generation == _sessionGeneration) {
               _memoryCache[memKey] = processed;
+              if (saveCache) {
+                await BookHelp.saveContent(bid, chapter.id, dbCached);
+              }
             }
             return processed;
           }
         }
+      } catch (e) {
+        debugPrint('DB 章节正文回落跳过: $e');
       }
 
       // 3. 网络拉取（失败转为可展示文案，绝不写缓存；预加载也不会变 unhandled）

@@ -12,6 +12,7 @@ import '../help/content_processor.dart';
 import '../help/shelf_unread.dart';
 import '../model/read_book.dart';
 import '../services/book_source_service.dart';
+import '../services/chapter_progress_migrator.dart';
 import '../services/local_book_service.dart';
 import '../utils/site_busy_guard.dart';
 
@@ -98,6 +99,42 @@ class BookProvider extends ChangeNotifier {
 
   ReadBook get readBook => ReadBook.instance;
 
+  Future<({Book book, ChapterProgress progress})> _migrateReadingProgress(
+    Book book, {
+    required List<Chapter> oldChapters,
+    required List<Chapter> newChapters,
+  }) async {
+    final shelfBook = findBookById(book.id);
+    final base = shelfBook ?? book;
+    final progress = ChapterProgressMigrator.migrate(
+      oldChapters: oldChapters,
+      newChapters: newChapters,
+      oldChapterIndex: base.durChapterIndex,
+      oldChapterPos: base.currentPageIndex,
+    );
+    if (newChapters.isEmpty) {
+      return (book: base, progress: progress);
+    }
+
+    final chapter = newChapters[progress.chapterIndex];
+    final next = base.copyWith(
+      totalChapterNum: newChapters.length,
+      durChapterIndex: progress.chapterIndex,
+      currentPageIndex: progress.chapterPos,
+      currentChapter: chapter.title,
+    );
+    if (shelfBook != null &&
+        (shelfBook.totalChapterNum != next.totalChapterNum ||
+            shelfBook.durChapterIndex != next.durChapterIndex ||
+            shelfBook.currentPageIndex != next.currentPageIndex ||
+            shelfBook.currentChapter != next.currentChapter)) {
+      await _dao.insert(next);
+      final shelfIndex = _books.indexWhere((item) => item.id == book.id);
+      if (shelfIndex >= 0) _books[shelfIndex] = next;
+    }
+    return (book: next, progress: progress);
+  }
+
   /// 书架中匹配的书（优先 sourceUrl，其次 书名+作者）
   Book? findShelfBook(Book book) {
     for (final b in _books) {
@@ -122,12 +159,18 @@ class BookProvider extends ChangeNotifier {
     final list = _currentChapters.asMap().entries.map((e) {
       final c = e.value;
       return Chapter(
-        id: '${book.id}_ch_${e.key}',
+        id: Chapter.idFor(bookId: book.id, url: c.url, index: e.key),
         bookId: book.id,
         title: c.title,
         index: e.key,
         url: c.url,
+        isVolume: c.isVolume,
+        isVip: c.isVip,
+        isPay: c.isPay,
+        tag: c.tag,
+        baseUrl: c.baseUrl,
         isDownloaded: c.isDownloaded,
+        content: c.content,
       );
     }).toList();
     await _dao.insertChapters(list);
@@ -150,6 +193,10 @@ class BookProvider extends ChangeNotifier {
     notifyListeners();
     try {
       _books = await _dao.getAll();
+      // 缓存清理是启动维护任务，不应阻塞书架首屏初始化。
+      unawaited(
+        BookHelp.clearInvalidCache(_books.map((book) => book.id).toSet()),
+      );
       await _refreshShelfChapterMeta();
       _loadError = null;
     } catch (e) {
@@ -703,7 +750,13 @@ class BookProvider extends ChangeNotifier {
               title: c.title,
               index: c.index,
               url: c.url,
+              isVolume: c.isVolume,
+              isVip: c.isVip,
+              isPay: c.isPay,
+              tag: c.tag,
+              baseUrl: c.baseUrl,
               isDownloaded: c.isDownloaded,
+              content: c.content,
             ),
           )
           .toList(),
@@ -855,6 +908,7 @@ class BookProvider extends ChangeNotifier {
 
     final found = await result.future;
     if (found == null) return null;
+    final oldChapters = List<Chapter>.from(_currentChapters);
     final updated = await changeSource(
       current,
       found.book,
@@ -865,20 +919,34 @@ class BookProvider extends ChangeNotifier {
         .entries
         .map(
           (entry) => Chapter(
-            id: '${updated.id}_ch_${entry.key}',
+            id: Chapter.idFor(
+              bookId: updated.id,
+              url: entry.value.url,
+              index: entry.key,
+            ),
             bookId: updated.id,
             title: entry.value.title,
             index: entry.key,
             url: entry.value.url,
+            isVolume: entry.value.isVolume,
+            isVip: entry.value.isVip,
+            isPay: entry.value.isPay,
+            tag: entry.value.tag,
+            baseUrl: entry.value.baseUrl,
           ),
         )
         .toList();
+    final migrated = await _migrateReadingProgress(
+      updated,
+      oldChapters: oldChapters,
+      newChapters: remapped,
+    );
     _currentChapters = _tocViewList(remapped);
     ReadBook.instance.open(
-      currentBook: updated,
+      currentBook: migrated.book,
       source: found.source,
       chapterList: _currentChapters,
-      startIndex: current.durChapterIndex.clamp(0, _currentChapters.length - 1),
+      startIndex: migrated.progress.chapterIndex,
     );
     if (_books.any((book) => book.id == updated.id)) {
       try {
@@ -1110,6 +1178,11 @@ class BookProvider extends ChangeNotifier {
               title: c.title,
               index: c.index,
               url: c.url,
+              isVolume: c.isVolume,
+              isVip: c.isVip,
+              isPay: c.isPay,
+              tag: c.tag,
+              baseUrl: c.baseUrl,
               isDownloaded: downloadedIds.contains(c.id) || c.isDownloaded,
               content: c.content,
             ),
@@ -1209,12 +1282,18 @@ class BookProvider extends ChangeNotifier {
     if (hasLocal && !forceRefresh) {
       // 元数据即可展示；文件勾选异步补，不挡首屏
       _currentChapters = _tocViewList(localChapters);
+      final migrated = await _migrateReadingProgress(
+        book,
+        oldChapters: localChapters,
+        newChapters: _currentChapters,
+      );
       _isLoading = false;
       notifyListeners();
       ReadBook.instance.open(
-        currentBook: book,
+        currentBook: migrated.book,
         source: source,
         chapterList: _currentChapters,
+        startIndex: migrated.progress.chapterIndex,
       );
       unawaited(_enrichDownloadedFromFiles(book.id, gen));
       if (backgroundRefresh) {
@@ -1255,10 +1334,16 @@ class BookProvider extends ChangeNotifier {
       // 先写入内存，避免「已拉到目录但落库失败」时界面仍空白
       if (gen != _tocLoadGen) return;
       _currentChapters = _tocViewList(merged);
+      final migrated = await _migrateReadingProgress(
+        book,
+        oldChapters: local,
+        newChapters: _currentChapters,
+      );
       ReadBook.instance.open(
-        currentBook: book,
+        currentBook: migrated.book,
         source: source,
         chapterList: _currentChapters,
+        startIndex: migrated.progress.chapterIndex,
       );
       notifyListeners();
 
@@ -1274,7 +1359,13 @@ class BookProvider extends ChangeNotifier {
                 title: c.title,
                 index: c.index,
                 url: c.url,
+                isVolume: c.isVolume,
+                isVip: c.isVip,
+                isPay: c.isPay,
+                tag: c.tag,
+                baseUrl: c.baseUrl,
                 isDownloaded: c.isDownloaded,
+                content: c.content,
               ),
             )
             .toList();
@@ -1292,9 +1383,10 @@ class BookProvider extends ChangeNotifier {
           if (saved.isNotEmpty) {
             _currentChapters = _tocViewList(saved);
             ReadBook.instance.open(
-              currentBook: book,
+              currentBook: migrated.book,
               source: source,
               chapterList: _currentChapters,
+              startIndex: migrated.progress.chapterIndex,
             );
             await _refreshShelfChapterMetaFor(book.id);
             notifyListeners();
@@ -1323,25 +1415,7 @@ class BookProvider extends ChangeNotifier {
 
   /// 用章节 URL 合并本地下载状态，避免刷新目录清掉已缓存正文标记
   List<Chapter> _mergeTocWithLocal(List<Chapter> remote, List<Chapter> local) {
-    final byUrl = <String, Chapter>{
-      for (final c in local)
-        if (c.url.isNotEmpty) c.url: c,
-    };
-    final byId = <String, Chapter>{for (final c in local) c.id: c};
-
-    return remote.map((r) {
-      final old = (r.url.isNotEmpty ? byUrl[r.url] : null) ?? byId[r.id];
-      if (old == null) return r;
-      final downloaded = old.isDownloaded;
-      return Chapter(
-        id: r.id,
-        bookId: r.bookId,
-        title: r.title,
-        index: r.index,
-        url: r.url,
-        isDownloaded: downloaded,
-      );
-    }).toList();
+    return Chapter.mergeWithLocal(remote, local);
   }
 
   /// 目录列表元数据（不含正文）
@@ -1354,7 +1428,13 @@ class BookProvider extends ChangeNotifier {
             title: c.title,
             index: c.index,
             url: c.url,
+            isVolume: c.isVolume,
+            isVip: c.isVip,
+            isPay: c.isPay,
+            tag: c.tag,
+            baseUrl: c.baseUrl,
             isDownloaded: c.isDownloaded,
+            content: c.content,
           ),
         )
         .toList();
@@ -1363,23 +1443,41 @@ class BookProvider extends ChangeNotifier {
   /// 异步用文件缓存补全勾选，不阻塞目录首屏
   Future<void> _enrichDownloadedFromFiles(String bookId, int gen) async {
     final fileCached = await BookHelp.listCachedChapterIds(bookId);
-    if (gen != _tocLoadGen || fileCached.isEmpty) return;
+    if (gen != _tocLoadGen) return;
     var changed = false;
+    final cleared = <Chapter>[];
     final next = _currentChapters.map((c) {
-      if (c.isDownloaded) return c;
-      if (!fileCached.contains(BookHelp.sanitizeId(c.id))) return c;
+      final hasFile = fileCached.contains(BookHelp.sanitizeId(c.id));
+      if (c.isDownloaded == hasFile) return c;
       changed = true;
+      if (!hasFile) cleared.add(c);
       return Chapter(
         id: c.id,
         bookId: c.bookId,
         title: c.title,
         index: c.index,
         url: c.url,
-        isDownloaded: true,
+        isVolume: c.isVolume,
+        isVip: c.isVip,
+        isPay: c.isPay,
+        tag: c.tag,
+        baseUrl: c.baseUrl,
+        isDownloaded: hasFile,
+        content: c.content,
       );
     }).toList();
     if (!changed || gen != _tocLoadGen) return;
     _currentChapters = next;
+    if (_books.any((book) => book.id == bookId)) {
+      try {
+        await _dao.insertChapters(next);
+        for (final chapter in cleared) {
+          await _dao.clearChapterContent(chapter);
+        }
+      } catch (e) {
+        debugPrint('章节文件缓存元数据回写失败: $e');
+      }
+    }
     notifyListeners();
   }
 
@@ -1395,7 +1493,13 @@ class BookProvider extends ChangeNotifier {
       title: c.title,
       index: c.index,
       url: c.url,
+      isVolume: c.isVolume,
+      isVip: c.isVip,
+      isPay: c.isPay,
+      tag: c.tag,
+      baseUrl: c.baseUrl,
       isDownloaded: true,
+      content: c.content,
     );
     notifyListeners();
   }

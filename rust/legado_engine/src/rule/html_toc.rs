@@ -8,6 +8,11 @@ use std::collections::HashSet;
 pub struct HtmlChapter {
     pub title: String,
     pub url: String,
+    pub is_volume: bool,
+    pub is_vip: bool,
+    pub is_pay: bool,
+    pub tag: String,
+    pub base_url: String,
 }
 
 pub fn parse_html_toc(html: &str, source: &BookSource) -> Result<Vec<HtmlChapter>, String> {
@@ -25,6 +30,8 @@ pub fn parse_html_toc_at(
     let mut effective_rule = list_rule.to_string();
     if effective_rule.starts_with('-') {
         reverse = true;
+        effective_rule = effective_rule[1..].trim().to_string();
+    } else if effective_rule.starts_with('+') {
         effective_rule = effective_rule[1..].trim().to_string();
     }
 
@@ -51,7 +58,7 @@ pub fn parse_html_toc_at(
 
     let mut chapters = Vec::new();
     let mut seen_urls = HashSet::new();
-    for item in items {
+    for (index, item) in items.into_iter().enumerate() {
         let mut title = engine::extract_text(&item, &source.rule_toc_chapter_name);
         let name_rule = source.rule_toc_chapter_name.trim();
         if title.is_empty() && (name_rule == "text" || name_rule.is_empty()) {
@@ -80,8 +87,31 @@ pub fn parse_html_toc_at(
             title = item.text().collect::<String>().trim().to_string();
         }
 
-        if !title.is_empty() && !url.is_empty() && seen_urls.insert(url.clone()) {
-            chapters.push(HtmlChapter { title, url });
+        let is_volume = is_true(engine::extract_text(&item, &source.rule_toc_is_volume));
+        if url.is_empty() {
+            if is_volume {
+                url = format!("{title}{index}");
+            } else if !page_url.is_empty() {
+                url = page_url.to_string();
+            } else {
+                url = source.book_source_url.clone();
+            }
+        }
+
+        if !title.is_empty() && seen_urls.insert(url.clone()) {
+            chapters.push(HtmlChapter {
+                title,
+                url,
+                is_volume,
+                is_vip: is_true(engine::extract_text(&item, &source.rule_toc_is_vip)),
+                is_pay: is_true(engine::extract_text(&item, &source.rule_toc_is_pay)),
+                tag: engine::extract_text(&item, &source.rule_toc_update_time),
+                base_url: if page_url.is_empty() {
+                    source.book_source_url.clone()
+                } else {
+                    page_url.to_string()
+                },
+            });
         }
     }
 
@@ -89,6 +119,13 @@ pub fn parse_html_toc_at(
         chapters.reverse();
     }
     Ok(chapters)
+}
+
+fn is_true(value: String) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "y" | "是" | "卷"
+    )
 }
 
 fn parse_toc_via_js(
@@ -144,7 +181,15 @@ fn parse_toc_via_js(
         let title = json_prop(&item, name_key);
         let url = json_prop(&item, url_key);
         if !title.is_empty() && !url.is_empty() && seen.insert(url.clone()) {
-            chapters.push(HtmlChapter { title, url });
+            chapters.push(HtmlChapter {
+                title,
+                url,
+                is_volume: false,
+                is_vip: false,
+                is_pay: false,
+                tag: String::new(),
+                base_url: base.to_string(),
+            });
         }
     }
     Ok(chapters)
@@ -267,9 +312,23 @@ pub fn extract_next_toc_url_at(
     base_url: &str,
     book_url: &str,
 ) -> String {
+    extract_next_toc_urls_at(html, source, base_url, book_url)
+        .ok()
+        .and_then(|urls| urls.into_iter().next())
+        .map(|url| engine::resolve_url(&url, base_url))
+        .unwrap_or_default()
+}
+
+/// 提取全部下一页 URL，保持原版 `getStringList` 的多值语义。
+pub fn extract_next_toc_urls_at(
+    html: &str,
+    source: &BookSource,
+    base_url: &str,
+    book_url: &str,
+) -> Result<Vec<String>, String> {
     let rule = source.rule_toc_next_toc_url.trim();
     if rule.is_empty() {
-        return String::new();
+        return Ok(Vec::new());
     }
     if js_engine::contains_js_block(rule) {
         if let Some(script) = js_engine::extract_js_block(rule) {
@@ -283,28 +342,54 @@ pub fn extract_next_toc_url_at(
             {
                 let out = out.trim().to_string();
                 if !out.is_empty() && out != "null" && out != "undefined" {
-                    // nextTocUrl 可能含 `,{"method":"POST",...}` —— analyze_url 会解析
-                    return out;
+                    if let Ok(values) = serde_json::from_str::<Value>(&out) {
+                        if let Value::Array(items) = values {
+                            return Ok(items
+                                .into_iter()
+                                .filter_map(|item| item.as_str().map(str::to_string))
+                                .collect());
+                        }
+                    }
+                    return Ok(vec![out]);
                 }
             }
         }
-        return String::new();
+        return Ok(Vec::new());
     }
 
     let document = Html::parse_document(html);
     let body = match document.select(&Selector::parse("body").unwrap()).next() {
         Some(b) => b,
-        None => return String::new(),
+        None => return Ok(Vec::new()),
     };
 
-    let mut url = engine::extract_attr(&body, rule, "href");
-    if url.is_empty() {
-        url = engine::extract_text(&body, rule);
+    let (selector, terminal) = if let Some(index) = rule.rfind('@') {
+        (&rule[..index], &rule[index + 1..])
+    } else {
+        (rule, "href")
+    };
+    if let Ok(selector) = Selector::parse(selector.trim()) {
+        let values: Vec<String> = body
+            .select(&selector)
+            .filter_map(|element| {
+                if terminal == "text" || terminal == "ownText" {
+                    Some(element.text().collect::<String>().trim().to_string())
+                } else {
+                    let attr = terminal.strip_prefix('@').unwrap_or(terminal);
+                    element.value().attr(attr).map(str::to_string)
+                }
+            })
+            .filter(|value| !value.is_empty())
+            .collect();
+        if !values.is_empty() {
+            return Ok(values);
+        }
     }
+    let url = engine::extract_text(&body, rule);
     if url.is_empty() {
-        return String::new();
+        return Ok(Vec::new());
     }
-    engine::resolve_url(&url, base_url)
+    Ok(vec![url])
 }
 
 fn smart_chapter_items<'a>(body: &'a ElementRef<'a>) -> Vec<ElementRef<'a>> {
@@ -322,7 +407,12 @@ fn smart_chapter_items<'a>(body: &'a ElementRef<'a>) -> Vec<ElementRef<'a>> {
             }
         }
     }
-    for fallback in ["#list a", ".chapter-list a", "ul.chapter li a", "#list li a"] {
+    for fallback in [
+        "#list a",
+        ".chapter-list a",
+        "ul.chapter li a",
+        "#list li a",
+    ] {
         if let Ok(sel) = Selector::parse(fallback) {
             let items: Vec<_> = body.select(&sel).collect();
             if items.len() >= 3 {
@@ -422,8 +512,8 @@ mod tests {
 </ul>
 </body></html>"#;
         let source = BookSource::from_json(source_json).unwrap();
-        let chapters = parse_html_toc_at(html, &source, "https://www.kelexs.com/chapter/ABC.html")
-            .unwrap();
+        let chapters =
+            parse_html_toc_at(html, &source, "https://www.kelexs.com/chapter/ABC.html").unwrap();
         assert_eq!(chapters.len(), 2);
         assert_eq!(chapters[0].title, "第一章 序章");
         assert_eq!(chapters[0].url, "https://www.kelexs.com/read/1.html");

@@ -70,6 +70,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[serial_test::serial(js_cache)]
     fn put_get_and_ttl() {
         clear();
         put("k", "v", 0);

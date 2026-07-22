@@ -77,6 +77,11 @@ pub fn db_get_chapters(book_id: String) -> Result<Vec<String>, String> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn db_get_chapter_content(chapter_id: String) -> Result<Option<String>, String> {
+    db::db_get_chapter_content(chapter_id)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn db_save_chapter_content(chapter_id: String, content: String) -> Result<(), String> {
     db::db_save_chapter_content(chapter_id, content)
 }

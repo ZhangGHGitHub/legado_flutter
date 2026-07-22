@@ -6,7 +6,7 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 初始化 Rust 书源引擎
 void initEngine() => LegadoEngine.instance.api.crateApiInitEngine();
@@ -127,6 +127,23 @@ ReadingStats getReadingStats({required String range}) =>
 String exportReadingRecords({required String format}) =>
     LegadoEngine.instance.api.crateApiExportReadingRecords(format: format);
 
+/// 写入详细阅读会话
+void recordDetailedReadSession({
+  required String bookName,
+  required PlatformInt64 startTime,
+  required PlatformInt64 endTime,
+  required PlatformInt64 readIteration,
+}) => LegadoEngine.instance.api.crateApiRecordDetailedReadSession(
+  bookName: bookName,
+  startTime: startTime,
+  endTime: endTime,
+  readIteration: readIteration,
+);
+
+/// 导出详细阅读会话
+String exportDetailedReadRecords() =>
+    LegadoEngine.instance.api.crateApiExportDetailedReadRecords();
+
 /// 单本书阅读统计（阅读小票）
 BookReadingStats getBookReadingStats({required String bookId}) =>
     LegadoEngine.instance.api.crateApiGetBookReadingStats(bookId: bookId);
@@ -161,6 +178,37 @@ List<NoteDto> listNotes({required String bookId}) =>
 /// 导出 Obsidian 风格 Markdown
 String exportNotesMarkdown({required String bookId}) =>
     LegadoEngine.instance.api.crateApiExportNotesMarkdown(bookId: bookId);
+
+/// 保存独立书签；time 对齐原版 Bookmark 主键
+void upsertBookmark({
+  required PlatformInt64 time,
+  required String bookId,
+  required String bookName,
+  required String bookAuthor,
+  required int chapterIndex,
+  required int chapterPos,
+  required String chapterName,
+  required String bookText,
+  required String content,
+}) => LegadoEngine.instance.api.crateApiUpsertBookmark(
+  time: time,
+  bookId: bookId,
+  bookName: bookName,
+  bookAuthor: bookAuthor,
+  chapterIndex: chapterIndex,
+  chapterPos: chapterPos,
+  chapterName: chapterName,
+  bookText: bookText,
+  content: content,
+);
+
+/// 删除独立书签
+void deleteBookmark({required PlatformInt64 time}) =>
+    LegadoEngine.instance.api.crateApiDeleteBookmark(time: time);
+
+/// 列出独立书签；book_id 为空则全部
+List<BookmarkDto> listBookmarks({required String bookId}) =>
+    LegadoEngine.instance.api.crateApiListBookmarks(bookId: bookId);
 
 /// 执行裸 JS（登录 UI / loginUrl / 按钮脚本）
 String evalJs({
@@ -305,15 +353,87 @@ class BookReadingStats {
           readingDays == other.readingDays;
 }
 
+/// 独立书签实体；字段对齐 Jingshiro Bookmark
+class BookmarkDto {
+  final PlatformInt64 time;
+  final String bookId;
+  final String bookName;
+  final String bookAuthor;
+  final int chapterIndex;
+  final int chapterPos;
+  final String chapterName;
+  final String bookText;
+  final String content;
+
+  const BookmarkDto({
+    required this.time,
+    required this.bookId,
+    required this.bookName,
+    required this.bookAuthor,
+    required this.chapterIndex,
+    required this.chapterPos,
+    required this.chapterName,
+    required this.bookText,
+    required this.content,
+  });
+
+  @override
+  int get hashCode =>
+      time.hashCode ^
+      bookId.hashCode ^
+      bookName.hashCode ^
+      bookAuthor.hashCode ^
+      chapterIndex.hashCode ^
+      chapterPos.hashCode ^
+      chapterName.hashCode ^
+      bookText.hashCode ^
+      content.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BookmarkDto &&
+          runtimeType == other.runtimeType &&
+          time == other.time &&
+          bookId == other.bookId &&
+          bookName == other.bookName &&
+          bookAuthor == other.bookAuthor &&
+          chapterIndex == other.chapterIndex &&
+          chapterPos == other.chapterPos &&
+          chapterName == other.chapterName &&
+          bookText == other.bookText &&
+          content == other.content;
+}
+
 /// 目录章节条目
 class ChapterItem {
   final String title;
   final String url;
+  final bool isVolume;
+  final bool isVip;
+  final bool isPay;
+  final String tag;
+  final String baseUrl;
 
-  const ChapterItem({required this.title, required this.url});
+  const ChapterItem({
+    required this.title,
+    required this.url,
+    required this.isVolume,
+    required this.isVip,
+    required this.isPay,
+    required this.tag,
+    required this.baseUrl,
+  });
 
   @override
-  int get hashCode => title.hashCode ^ url.hashCode;
+  int get hashCode =>
+      title.hashCode ^
+      url.hashCode ^
+      isVolume.hashCode ^
+      isVip.hashCode ^
+      isPay.hashCode ^
+      tag.hashCode ^
+      baseUrl.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -321,7 +441,12 @@ class ChapterItem {
       other is ChapterItem &&
           runtimeType == other.runtimeType &&
           title == other.title &&
-          url == other.url;
+          url == other.url &&
+          isVolume == other.isVolume &&
+          isVip == other.isVip &&
+          isPay == other.isPay &&
+          tag == other.tag &&
+          baseUrl == other.baseUrl;
 }
 
 /// 单日阅读统计

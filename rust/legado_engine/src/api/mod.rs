@@ -96,6 +96,20 @@ pub struct NoteDto {
     pub created_at: String,
 }
 
+/// 独立书签实体；字段对齐 Jingshiro Bookmark
+#[derive(Debug, Clone)]
+pub struct BookmarkDto {
+    pub time: i64,
+    pub book_id: String,
+    pub book_name: String,
+    pub book_author: String,
+    pub chapter_index: i32,
+    pub chapter_pos: i32,
+    pub chapter_name: String,
+    pub book_text: String,
+    pub content: String,
+}
+
 /// 引擎版本号
 #[frb(sync)]
 pub fn engine_version() -> String {
@@ -160,6 +174,11 @@ pub struct SearchItem {
 pub struct ChapterItem {
     pub title: String,
     pub url: String,
+    pub is_volume: bool,
+    pub is_vip: bool,
+    pub is_pay: bool,
+    pub tag: String,
+    pub base_url: String,
 }
 
 /// 书籍详情
@@ -219,10 +238,7 @@ pub async fn validate_source(
 
 /// 分步调试搜索
 #[frb]
-pub async fn debug_search(
-    source_json: String,
-    keyword: String,
-) -> Result<DebugResult, String> {
+pub async fn debug_search(source_json: String, keyword: String) -> Result<DebugResult, String> {
     debug::debug_search(&source_json, &keyword).await
 }
 
@@ -285,6 +301,23 @@ pub fn export_reading_records(format: String) -> Result<String, String> {
     read_record::export_reading_records(&format)
 }
 
+/// 写入详细阅读会话
+#[frb(sync)]
+pub fn record_detailed_read_session(
+    book_name: String,
+    start_time: i64,
+    end_time: i64,
+    read_iteration: i64,
+) -> Result<(), String> {
+    read_record::record_detailed_read_session(&book_name, start_time, end_time, read_iteration)
+}
+
+/// 导出详细阅读会话
+#[frb(sync)]
+pub fn export_detailed_read_records() -> Result<String, String> {
+    read_record::export_detailed_read_records()
+}
+
 /// 单本书阅读统计（阅读小票）
 #[frb(sync)]
 pub fn get_book_reading_stats(book_id: String) -> Result<BookReadingStats, String> {
@@ -329,6 +362,44 @@ pub fn list_notes(book_id: String) -> Result<Vec<NoteDto>, String> {
 #[frb(sync)]
 pub fn export_notes_markdown(book_id: String) -> Result<String, String> {
     crate::notes_store::export_notes_markdown(book_id)
+}
+
+/// 保存独立书签；time 对齐原版 Bookmark 主键
+#[frb(sync)]
+pub fn upsert_bookmark(
+    time: i64,
+    book_id: String,
+    book_name: String,
+    book_author: String,
+    chapter_index: i32,
+    chapter_pos: i32,
+    chapter_name: String,
+    book_text: String,
+    content: String,
+) -> Result<(), String> {
+    crate::bookmarks_store::upsert_bookmark(
+        time,
+        &book_id,
+        &book_name,
+        &book_author,
+        chapter_index,
+        chapter_pos,
+        &chapter_name,
+        &book_text,
+        &content,
+    )
+}
+
+/// 删除独立书签
+#[frb(sync)]
+pub fn delete_bookmark(time: i64) -> Result<(), String> {
+    crate::bookmarks_store::delete_bookmark(time)
+}
+
+/// 列出独立书签；book_id 为空则全部
+#[frb(sync)]
+pub fn list_bookmarks(book_id: String) -> Result<Vec<BookmarkDto>, String> {
+    crate::bookmarks_store::list_bookmarks(book_id)
 }
 
 /// 执行裸 JS（登录 UI / loginUrl / 按钮脚本）
@@ -405,11 +476,11 @@ pub async fn get_rss_content(source_json: String, article_link: String) -> Resul
 }
 
 pub use db::{
-    db_clear_replace_rules, db_delete_book, db_delete_replace_rule, db_delete_source,
-    db_get_books, db_get_chapters, db_get_replace_rules, db_get_sources, db_init,
-    db_insert_book, db_insert_chapters, db_save_chapter_content, db_schema_version,
-    db_toggle_replace_rule, db_toggle_source, db_update_book_cover, db_update_book_group,
-    db_update_book_progress, db_upsert_replace_rule, db_upsert_source,
+    db_clear_replace_rules, db_delete_book, db_delete_replace_rule, db_delete_source, db_get_books,
+    db_get_chapters, db_get_replace_rules, db_get_sources, db_init, db_insert_book,
+    db_insert_chapters, db_save_chapter_content, db_schema_version, db_toggle_replace_rule,
+    db_toggle_source, db_update_book_cover, db_update_book_group, db_update_book_progress,
+    db_upsert_replace_rule, db_upsert_source,
 };
 
 /// HTTP 请求并返回解码后的文本（调试用）

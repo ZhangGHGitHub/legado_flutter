@@ -32,9 +32,7 @@ fn parse_stats_json(json: &str) -> Result<ReadingStats, String> {
                     Some(DailyReadingStat {
                         date: item.get("date")?.as_str()?.to_string(),
                         chars: i64_to_i32(item.get("chars")?.as_i64()?),
-                        duration_seconds: i64_to_i32(
-                            item.get("durationSeconds")?.as_i64()?,
-                        ),
+                        duration_seconds: i64_to_i32(item.get("durationSeconds")?.as_i64()?),
                     })
                 })
                 .collect()
@@ -42,25 +40,19 @@ fn parse_stats_json(json: &str) -> Result<ReadingStats, String> {
         .unwrap_or_default();
 
     Ok(ReadingStats {
-        total_chars: i64_to_i32(
-            v.get("totalChars").and_then(|x| x.as_i64()).unwrap_or(0),
-        ),
+        total_chars: i64_to_i32(v.get("totalChars").and_then(|x| x.as_i64()).unwrap_or(0)),
         total_duration_seconds: i64_to_i32(
             v.get("totalDurationSeconds")
                 .and_then(|x| x.as_i64())
                 .unwrap_or(0),
         ),
-        today_chars: i64_to_i32(
-            v.get("todayChars").and_then(|x| x.as_i64()).unwrap_or(0),
-        ),
+        today_chars: i64_to_i32(v.get("todayChars").and_then(|x| x.as_i64()).unwrap_or(0)),
         today_duration_seconds: i64_to_i32(
             v.get("todayDurationSeconds")
                 .and_then(|x| x.as_i64())
                 .unwrap_or(0),
         ),
-        week_chars: i64_to_i32(
-            v.get("weekChars").and_then(|x| x.as_i64()).unwrap_or(0),
-        ),
+        week_chars: i64_to_i32(v.get("weekChars").and_then(|x| x.as_i64()).unwrap_or(0)),
         daily,
     })
 }
@@ -76,13 +68,30 @@ pub fn export_reading_records(format: &str) -> Result<String, String> {
     db::db_export_reading_records(format.to_string())
 }
 
+/// 写入详细阅读会话（短会话由数据库层过滤并按同书时间间隔合并）
+pub fn record_detailed_read_session(
+    book_name: &str,
+    start_time: i64,
+    end_time: i64,
+    read_iteration: i64,
+) -> Result<(), String> {
+    db::db_record_detailed_read_session(book_name.to_string(), start_time, end_time, read_iteration)
+}
+
+/// 导出按书分组的详细阅读会话
+pub fn export_detailed_read_records() -> Result<String, String> {
+    db::db_export_detailed_read_records()
+}
+
 /// 单本书阅读统计
 pub fn get_book_reading_stats(book_id: &str) -> Result<BookReadingStats, String> {
     let json = db::db_get_book_reading_stats(book_id.to_string())?;
     let v: Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
     Ok(BookReadingStats {
         duration_seconds: i64_to_i32(
-            v.get("durationSeconds").and_then(|x| x.as_i64()).unwrap_or(0),
+            v.get("durationSeconds")
+                .and_then(|x| x.as_i64())
+                .unwrap_or(0),
         ),
         read_chars: i64_to_i32(v.get("readChars").and_then(|x| x.as_i64()).unwrap_or(0)),
         start_date: v
@@ -93,9 +102,7 @@ pub fn get_book_reading_stats(book_id: &str) -> Result<BookReadingStats, String>
             .get("lastDate")
             .and_then(|x| x.as_str())
             .map(str::to_string),
-        reading_days: i64_to_i32(
-            v.get("readingDays").and_then(|x| x.as_i64()).unwrap_or(0),
-        ),
+        reading_days: i64_to_i32(v.get("readingDays").and_then(|x| x.as_i64()).unwrap_or(0)),
     })
 }
 

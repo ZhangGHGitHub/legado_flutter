@@ -124,9 +124,29 @@ class DatabaseHelper {
         .toList();
   }
 
+  Future<String?> getChapterContent(String chapterId) async {
+    _requireReady();
+    return rust_db.dbGetChapterContent(chapterId: chapterId);
+  }
+
   Future<void> saveChapterContent(String chapterId, String content) async {
     _requireReady();
     rust_db.dbSaveChapterContent(chapterId: chapterId, content: content);
+  }
+
+  /// 清除章节文件缓存对应的数据库正文和下载标记。
+  Future<void> clearChapterContent(Chapter chapter) async {
+    _requireReady();
+    rust_db.dbInsertChapters(
+      chaptersJson: jsonEncode([
+        {
+          ...chapter.toJson(),
+          'isDownloaded': false,
+          'content': null,
+          'clearDownloaded': true,
+        },
+      ]),
+    );
   }
 
   // ═══════════════════ 替换规则操作 ═══════════════════
@@ -147,9 +167,7 @@ class DatabaseHelper {
     _requireReady();
     return rust_db
         .dbGetReplaceRules()
-        .map(
-          (s) => ReplaceRule.fromJson(jsonDecode(s) as Map<String, dynamic>),
-        )
+        .map((s) => ReplaceRule.fromJson(jsonDecode(s) as Map<String, dynamic>))
         .toList();
   }
 

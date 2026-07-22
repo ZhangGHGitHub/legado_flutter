@@ -42,6 +42,9 @@ abstract class LegadoEngineApiImplPlatform
   BookReadingStats dco_decode_book_reading_stats(dynamic raw);
 
   @protected
+  BookmarkDto dco_decode_bookmark_dto(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
@@ -63,7 +66,13 @@ abstract class LegadoEngineApiImplPlatform
   int dco_decode_i_32(dynamic raw);
 
   @protected
+  PlatformInt64 dco_decode_i_64(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<BookmarkDto> dco_decode_list_bookmark_dto(dynamic raw);
 
   @protected
   List<ChapterItem> dco_decode_list_chapter_item(dynamic raw);
@@ -156,6 +165,9 @@ abstract class LegadoEngineApiImplPlatform
   BookReadingStats sse_decode_book_reading_stats(SseDeserializer deserializer);
 
   @protected
+  BookmarkDto sse_decode_bookmark_dto(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
@@ -177,7 +189,13 @@ abstract class LegadoEngineApiImplPlatform
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
+  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<BookmarkDto> sse_decode_list_bookmark_dto(SseDeserializer deserializer);
 
   @protected
   List<ChapterItem> sse_decode_list_chapter_item(SseDeserializer deserializer);
@@ -283,6 +301,9 @@ abstract class LegadoEngineApiImplPlatform
   );
 
   @protected
+  void sse_encode_bookmark_dto(BookmarkDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
@@ -307,7 +328,16 @@ abstract class LegadoEngineApiImplPlatform
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
+  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_bookmark_dto(
+    List<BookmarkDto> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_chapter_item(

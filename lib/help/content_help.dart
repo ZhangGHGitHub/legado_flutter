@@ -14,8 +14,7 @@ abstract final class ContentHelp {
   static const _wordMaxLength = 16;
 
   static final _paragraphDialog = RegExp(r'^["“”][^"“”]+["“”]$');
-  static final _reColonQuotes =
-      RegExp('[:：][\\\'\\"\u2018\u201c\u201d]+');
+  static final _reColonQuotes = RegExp('[:：][\\\'\\"\u2018\u201c\u201d]+');
   static final _random = math.Random();
 
   /// 段落重排算法入口。把整篇内容输入，连接错误的分段，再把每个段落调用其他方法重新切分
@@ -37,10 +36,7 @@ abstract final class ContentHelp {
     for (var i = 1; i < p.length; i++) {
       if (_match(_markSentencesEnd, _lastChar(buffer)) ||
           (_match(_markQuotationRight, _lastChar(buffer)) &&
-              _match(
-                _markSentencesEnd,
-                _charAt(buffer, buffer.length - 2),
-              ))) {
+              _match(_markSentencesEnd, _charAt(buffer, buffer.length - 2)))) {
         buffer.write('\n');
       }
       buffer.write(p[i].replaceAll(RegExp(r'[\u3000\s]'), ''));
@@ -49,9 +45,18 @@ abstract final class ContentHelp {
     p = buffer
         .toString()
         .replaceAll(RegExp(r'["”“]+\s*["”“]+'), '”\n“')
-        .replaceAll(RegExp(r'["”“]+(？。！?!~)[""”]+'), '”\$1\n“')
-        .replaceAll(RegExp(r'["”“]+(？。！?!~)([^"”“])'), '”\$1\n\$2')
-        .replaceAll(RegExp(r'([问说喊唱叫骂道着答])[\.。]'), '\$1。\n')
+        .replaceAllMapped(
+          RegExp(r'["”“]+(？。！?!~)[""”]+'),
+          (match) => '”${match.group(1)}\n“',
+        )
+        .replaceAllMapped(
+          RegExp(r'["”“]+(？。！?!~)([^"”“])'),
+          (match) => '”${match.group(1)}\n${match.group(2)}',
+        )
+        .replaceAllMapped(
+          RegExp(r'([问说喊唱叫骂道着答])[\.。]'),
+          (match) => '${match.group(1)}。\n',
+        )
         .split('\n');
 
     buffer = StringBuffer();
@@ -65,9 +70,9 @@ abstract final class ContentHelp {
         .replaceFirst(RegExp(r'^\s+'), '')
         .replaceAll(RegExp(r'\s*["”“]+\s*["”“][\s"”“]*'), '”\n“')
         .replaceAll(RegExp(r'[:：][”“"\s]+'), '：“')
-        .replaceAll(
+        .replaceAllMapped(
           RegExp(r'\n["“”]([^\n"“”]+)([,:，：]["”“])([^\n"“”]+)'),
-          '\n\$1：“\$3',
+          (match) => '\n${match.group(1)}：“${match.group(3)}',
         )
         .replaceAll(RegExp(r'\n(\s*)'), '\n');
     return content1;
@@ -116,7 +121,8 @@ abstract final class ContentHelp {
         }
       }
     } else if (_match(_markQuotation, str[length - 1])) {
-      final i = length - 1 - _seekIndex(str, _markQuotation, 1, length - 2, false);
+      final i =
+          length - 1 - _seekIndex(str, _markQuotation, 1, length - 2, false);
       if (i > 1) {
         if (!_match(_markQuotationBefore, str[i - 1])) {
           return '${str.substring(0, i)}\n${str.substring(i)}';
@@ -134,10 +140,20 @@ abstract final class ContentHelp {
     int tigger,
   ) {
     final result = <int>[];
-    final arrayEnd =
-        _seekIndexes(str, _markSentencesEndP, 0, str.length - 2, true);
-    final arrayMid =
-        _seekIndexes(str, _markSentencesMid, 0, str.length - 2, true);
+    final arrayEnd = _seekIndexes(
+      str,
+      _markSentencesEndP,
+      0,
+      str.length - 2,
+      true,
+    );
+    final arrayMid = _seekIndexes(
+      str,
+      _markSentencesMid,
+      0,
+      str.length - 2,
+      true,
+    );
     if (arrayEnd.length < tigger && arrayMid.length < tigger * 3) {
       return result;
     }
@@ -288,12 +304,7 @@ abstract final class ContentHelp {
     final insN1 = <int>[];
     for (final i in insN) {
       if (_match('"\'”“', stringChars[i])) {
-        final start = _seekLast(
-          str,
-          '"\'”“',
-          i - 1,
-          i - _wordMaxLength,
-        );
+        final start = _seekLast(str, '"\'”“', i - 1, i - _wordMaxLength);
         if (start > 0) {
           final word = str.substring(start + 1, i);
           if (dict.contains(word)) {
@@ -433,14 +444,12 @@ abstract final class ContentHelp {
   }
 
   static List<String> _makeDict(String str) {
-    final pattern = RegExp(
-      '(?<=[\\"\'“”])([^\\n\\p{P}]{1,$_wordMaxLength})(?=[\\"\'“”])',
-      unicode: true,
-    );
+    final pattern = RegExp(r'''(?<=["'“”])([^\n]{1,16})(?=["'“”])''');
     final cache = <String>[];
     final dict = <String>[];
     for (final match in pattern.allMatches(str)) {
       final word = match.group(0)!;
+      if (word.runes.any(_isUnicodePunctuation)) continue;
       if (cache.contains(word)) {
         if (!dict.contains(word)) dict.add(word);
       } else {
@@ -448,6 +457,18 @@ abstract final class ContentHelp {
       }
     }
     return dict;
+  }
+
+  static bool _isUnicodePunctuation(int codePoint) {
+    return (codePoint >= 0x21 && codePoint <= 0x2f) ||
+        (codePoint >= 0x3a && codePoint <= 0x40) ||
+        (codePoint >= 0x5b && codePoint <= 0x60) ||
+        (codePoint >= 0x7b && codePoint <= 0x7e) ||
+        (codePoint >= 0x2000 && codePoint <= 0x206f) ||
+        (codePoint >= 0x2e00 && codePoint <= 0x2eff) ||
+        (codePoint >= 0x3000 && codePoint <= 0x303f) ||
+        (codePoint >= 0xfe10 && codePoint <= 0xfe6f) ||
+        (codePoint >= 0xff01 && codePoint <= 0xff65);
   }
 
   static List<int> _seekIndexes(

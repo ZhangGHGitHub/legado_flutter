@@ -1,9 +1,20 @@
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 书源/RSS 源登录信息与登录头 — 对齐 legado `getLoginInfo` / `getLoginHeader`
 class SourceLoginPrefs {
+  static Future<SharedPreferences?> _prefsOrNull() async {
+    try {
+      return await SharedPreferences.getInstance();
+    } on MissingPluginException {
+      // Pure Dart/FFI tests do not register the platform plugin. In that
+      // environment the original app semantics are simply "no saved login".
+      return null;
+    }
+  }
+
   static String _infoKey(String sourceUrl) =>
       'source_login_info_${Uri.encodeComponent(sourceUrl)}';
 
@@ -11,7 +22,8 @@ class SourceLoginPrefs {
       'source_login_header_${Uri.encodeComponent(sourceUrl)}';
 
   static Future<Map<String, String>> load(String sourceUrl) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return {};
     final raw = p.getString(_infoKey(sourceUrl));
     if (raw == null || raw.isEmpty) return {};
     try {
@@ -24,27 +36,32 @@ class SourceLoginPrefs {
   }
 
   static Future<void> save(String sourceUrl, Map<String, String> info) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return;
     await p.setString(_infoKey(sourceUrl), jsonEncode(info));
   }
 
   static Future<void> clear(String sourceUrl) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return;
     await p.remove(_infoKey(sourceUrl));
   }
 
   static Future<String?> loadHeader(String sourceUrl) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return null;
     return p.getString(_headerKey(sourceUrl));
   }
 
   static Future<void> saveHeader(String sourceUrl, String header) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return;
     await p.setString(_headerKey(sourceUrl), header);
   }
 
   static Future<void> clearHeader(String sourceUrl) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return;
     await p.remove(_headerKey(sourceUrl));
   }
 

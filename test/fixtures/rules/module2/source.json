@@ -1,0 +1,11 @@
+{
+  "bookSourceUrl": "<BASE_URL>",
+  "bookSourceName": "Module 2 TOC fixture",
+  "ruleToc": {
+    "chapterList": ".chapters li",
+    "chapterName": "a@text",
+    "chapterUrl": "a@href",
+    "isVolume": ".is-volume@text",
+    "nextTocUrl": "a.next@href"
+  }
+}

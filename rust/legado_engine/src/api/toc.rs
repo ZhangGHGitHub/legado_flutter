@@ -3,13 +3,22 @@ use crate::api::book_info;
 use crate::http;
 use crate::model::book_source::BookSource;
 use crate::rule;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 use crate::rule::js_engine;
 
 /// 获取目录
 pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterItem>, String> {
-    let source = BookSource::from_json(source_json)?;
+    let mut source = BookSource::from_json(source_json)?;
+    let mut reverse = false;
+    let mut list_rule = source.rule_toc_chapter_list.trim().to_string();
+    if list_rule.starts_with('-') {
+        reverse = true;
+        list_rule = list_rule[1..].trim().to_string();
+    } else if list_rule.starts_with('+') {
+        list_rule = list_rule[1..].trim().to_string();
+    }
+    source.rule_toc_chapter_list = list_rule;
     // 不清空 js_cache：详情 tocUrl 的 java.ajax 可能已写入 kelexs_key/iv
     if source.needs_dart_js_for_toc() {
         return Err("书源含 JS 规则，需 Dart 引擎".to_string());
@@ -27,7 +36,7 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
     let mut seen = HashSet::new();
     let mut visited_pages = HashSet::new();
     let mut current_url = fetch_url;
-    let base_url = http::client::base_url(&current_url);
+    let mut pending_urls = VecDeque::new();
     // 直接从已解析的番茄目录 URL 进入时，列表中的 articleid 优先于前一本书残留的全局 cache。
     if let Some(article_id) = extract_tomato_article_id(&current_url) {
         crate::rule::js_cache::put("articleid", &article_id, 0);
@@ -36,20 +45,23 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
     let mut last_body = String::new();
 
     for _page in 0..max_pages {
-        if current_url.is_empty() || visited_pages.contains(&current_url) {
+        if current_url.is_empty() {
+            current_url = pending_urls.pop_front().unwrap_or_default();
+        }
+        if current_url.is_empty() {
             break;
         }
+        if visited_pages.contains(&current_url) {
+            current_url.clear();
+            continue;
+        }
         visited_pages.insert(current_url.clone());
+        let page_base_url = http::client::base_url(&current_url);
 
         http::rate_limit::wait_if_needed(&source.book_source_url).await?;
-        let body = http::client::fetch_with_source(
-            &current_url,
-            "GET",
-            None,
-            "UTF-8",
-            &source.raw_json,
-        )
-        .await?;
+        let body =
+            http::client::fetch_with_source(&current_url, "GET", None, "UTF-8", &source.raw_json)
+                .await?;
         last_body = body.clone();
 
         let batch = if let Ok(data) = serde_json::from_str::<serde_json::Value>(&body) {
@@ -58,14 +70,23 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
                     .into_iter()
                     .map(|c| ChapterItem {
                         title: c.title,
-                        url: http::client::resolve_url(&c.url, &base_url),
+                        url: if c.is_volume {
+                            c.url
+                        } else {
+                            http::client::resolve_url(&c.url, &page_base_url)
+                        },
+                        is_volume: c.is_volume,
+                        is_vip: c.is_vip,
+                        is_pay: c.is_pay,
+                        tag: c.tag,
+                        base_url: c.base_url,
                     })
                     .collect()
             } else {
-                parse_html_toc_items(&body, &source, &base_url, &current_url)?
+                parse_html_toc_items(&body, &source, &page_base_url, &current_url)?
             }
         } else {
-            parse_html_toc_items(&body, &source, &base_url, &current_url)?
+            parse_html_toc_items(&body, &source, &page_base_url, &current_url)?
         };
 
         let mut added = 0;
@@ -76,41 +97,49 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
             }
         }
 
-        if added == 0 && !merged.is_empty() {
-            break;
-        }
-
-        let next = if let Ok(data) = serde_json::from_str::<serde_json::Value>(&body) {
+        let next_urls = if let Ok(data) = serde_json::from_str::<serde_json::Value>(&body) {
             if source.is_json_api() {
-                rule::json_toc::extract_json_next_url(&data, &source.rule_toc_next_toc_url)
+                let next =
+                    rule::json_toc::extract_json_next_url(&data, &source.rule_toc_next_toc_url);
+                if next.is_empty() {
+                    Vec::new()
+                } else {
+                    vec![next]
+                }
             } else {
-                String::new()
+                Vec::new()
             }
         } else {
             let book_url_guess = current_url.replace("/chapter/", "/book/");
-            rule::html_toc::extract_next_toc_url_at(
-                &body,
-                &source,
-                &current_url,
-                &book_url_guess,
-            )
+            rule::html_toc::extract_next_toc_urls_at(&body, &source, &current_url, &book_url_guess)?
         };
 
-        if next.is_empty() {
-            break;
+        if next_urls.is_empty() {
+            current_url = pending_urls.pop_front().unwrap_or_default();
+            continue;
         }
         // nextTocUrl 可能是 `url,{json}` AnalyzeUrl 形态
-        let (next_url, next_method, next_body) = split_analyze_url(&next);
+        let (next_url, next_method, next_body) = split_analyze_url(&next_urls[0]);
         let resolved = if next_url.starts_with("http") {
             next_url
         } else {
-            http::client::resolve_url(&next_url, &base_url)
+            http::client::resolve_url(&next_url, &page_base_url)
         };
         if visited_pages.contains(&resolved) {
             break;
         }
 
         if next_method.eq_ignore_ascii_case("POST") {
+            for extra in next_urls.iter().skip(1) {
+                let (url, method, _) = split_analyze_url(extra);
+                if !method.eq_ignore_ascii_case("POST") {
+                    pending_urls.push_back(if url.starts_with("http") {
+                        url
+                    } else {
+                        http::client::resolve_url(&url, &page_base_url)
+                    });
+                }
+            }
             // 分页 Ajax：连续 POST，直到无新增章节或无下一页
             let mut post_url = resolved;
             let mut post_payload = next_body;
@@ -128,8 +157,12 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
                 )
                 .await?;
                 last_body = post_resp.clone();
-                let post_batch =
-                    parse_html_toc_items(&post_resp, &source, &base_url, &post_url)?;
+                let post_batch = parse_html_toc_items(
+                    &post_resp,
+                    &source,
+                    &http::client::base_url(&post_url),
+                    &post_url,
+                )?;
                 let mut added = 0;
                 for ch in post_batch {
                     if seen.insert(ch.url.clone()) {
@@ -155,24 +188,31 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
                     current_url = if u.starts_with("http") {
                         u
                     } else {
-                        http::client::resolve_url(&u, &base_url)
+                        http::client::resolve_url(&u, &page_base_url)
                     };
                     break;
                 }
                 post_url = if u.starts_with("http") {
                     u
                 } else {
-                    http::client::resolve_url(&u, &base_url)
+                    http::client::resolve_url(&u, &page_base_url)
                 };
                 post_payload = b;
             }
             // POST 链结束后退出外层；若切回 GET 则由外层继续
-            if current_url.is_empty() || visited_pages.contains(&current_url) {
-                break;
-            }
             continue;
         }
         current_url = resolved;
+        for extra in next_urls.iter().skip(1) {
+            let (url, method, _) = split_analyze_url(extra);
+            if !method.eq_ignore_ascii_case("POST") {
+                pending_urls.push_back(if url.starts_with("http") {
+                    url
+                } else {
+                    http::client::resolve_url(&url, &page_base_url)
+                });
+            }
+        }
     }
 
     if merged.is_empty() {
@@ -181,6 +221,9 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
         }
     }
 
+    if !reverse {
+        merged.reverse();
+    }
     Ok(merged)
 }
 
@@ -335,10 +378,7 @@ fn extract_tomato_article_id(url: &str) -> Option<String> {
     for marker in ["/api/novel/detail/", "/api/chapter/list/"] {
         if let Some(pos) = url.find(marker) {
             let rest = &url[pos + marker.len()..];
-            let id: String = rest
-                .chars()
-                .take_while(|c| c.is_ascii_digit())
-                .collect();
+            let id: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
             if !id.is_empty() {
                 return Some(id);
             }
@@ -357,11 +397,18 @@ fn parse_html_toc_items(
         .into_iter()
         .map(|c| ChapterItem {
             title: c.title,
-            url: if c.url.starts_with("http") {
+            url: if c.is_volume {
+                c.url
+            } else if c.url.starts_with("http") {
                 c.url
             } else {
                 http::client::resolve_url(&c.url, base_url)
             },
+            is_volume: c.is_volume,
+            is_vip: c.is_vip,
+            is_pay: c.is_pay,
+            tag: c.tag,
+            base_url: c.base_url,
         })
         .collect())
 }
@@ -440,14 +487,9 @@ mod tomato_toc_resolve_tests {
             .unwrap();
         let script = js_engine::extract_js_block(toc_rule).unwrap();
         let list_url = "https://novel.cooks.tw/api/chapter/list/81571?lang=zh-CN";
-        let out = js_engine::run_with_result_opts(
-            &script,
-            "",
-            &source.js_lib,
-            list_url,
-            Some(list_url),
-        )
-        .unwrap_or_default();
+        let out =
+            js_engine::run_with_result_opts(&script, "", &source.js_lib, list_url, Some(list_url))
+                .unwrap_or_default();
         assert!(
             out.contains("/list/?") || !out.contains("81571"),
             "期望空 result 在 list URL 上无法得到正确 id，got {out}"
@@ -520,6 +562,21 @@ mod http_fixture_tests {
             .to_string()
         }
 
+        fn module2_source_json(&self, chapter_list: &str) -> String {
+            serde_json::json!({
+                "bookSourceUrl": self.base_url,
+                "bookSourceName": "Module 2 TOC fixture",
+                "ruleToc": {
+                    "chapterList": chapter_list,
+                    "chapterName": "a@text",
+                    "chapterUrl": "a@href",
+                    "isVolume": ".is-volume@text",
+                    "nextTocUrl": "a.next@href"
+                }
+            })
+            .to_string()
+        }
+
         fn json_source_json(&self) -> String {
             serde_json::json!({
                 "bookSourceUrl": self.base_url,
@@ -561,7 +618,10 @@ mod http_fixture_tests {
                     if matches!(
                         e.kind(),
                         std::io::ErrorKind::Interrupted | std::io::ErrorKind::WouldBlock
-                    ) => continue,
+                    ) =>
+                {
+                    continue
+                }
                 Err(_) => return,
             }
             if request.len() > 64 * 1024 {
@@ -586,6 +646,13 @@ mod http_fixture_tests {
                 r#"<ul class="chapters"><li><a href="/c/3">第三章</a></li><li><a href="/c/4">第四章</a></li></ul>"#
                     .to_string(),
             ),
+            "/module2/toc" => ("200 OK", module2_fixture("toc_page1.html")),
+            "/module2/toc?page=2" => ("200 OK", module2_fixture("toc_page2.html")),
+            "/module2/toc/plus" => ("200 OK", module2_fixture("toc_plus.html")),
+            "/module2/toc/multi" => ("200 OK", module2_fixture("toc_multi.html")),
+            "/module2/toc/multi-2" => ("200 OK", module2_fixture("toc_multi2.html")),
+            "/module2/toc/multi-3" => ("200 OK", module2_fixture("toc_multi3.html")),
+            "/module2/toc/cycle" => ("200 OK", module2_fixture("toc_cycle.html")),
             "/content/1" => (
                 "200 OK",
                 r#"<div id="content">第一段正文</div><a class="next" href="/content/2">下一页</a>"#
@@ -647,6 +714,13 @@ mod http_fixture_tests {
         let _ = stream.flush();
     }
 
+    fn module2_fixture(name: &str) -> String {
+        let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("../../test/fixtures/rules/module2");
+        path.push(name);
+        std::fs::read_to_string(path).expect("模块 2 目录 fixture")
+    }
+
     #[tokio::test]
     async fn get_toc_fixture_covers_html_pagination_and_empty_error() {
         let fixture = FixtureServer::start();
@@ -654,13 +728,16 @@ mod http_fixture_tests {
         let chapters = get_toc(&source, &fixture.url("/toc")).await.unwrap();
 
         assert_eq!(chapters.len(), 4);
-        assert_eq!(chapters[0].title, "第一章");
-        assert!(chapters[3].url.ends_with("/c/4"));
+        assert_eq!(chapters[0].title, "第四章");
+        assert!(chapters[3].url.ends_with("/c/1"));
 
         let error = get_toc(&source, &fixture.url("/empty"))
             .await
             .expect_err("空目录响应必须返回诊断错误");
         assert!(error.contains("为空响应"), "got {error}");
+
+        let recovered = get_toc(&source, &fixture.url("/toc")).await.unwrap();
+        assert_eq!(recovered.len(), 4);
     }
 
     #[tokio::test]
@@ -678,15 +755,10 @@ mod http_fixture_tests {
             .expect_err("非 2xx 必须返回 HTTP 诊断错误");
         assert!(status_error.contains("HTTP 请求失败"), "got {status_error}");
 
-        let size_error = client::fetch_with_source(
-            &fixture.url("/large"),
-            "GET",
-            None,
-            "UTF-8",
-            &source,
-        )
-        .await
-        .expect_err("超大响应必须被拒绝");
+        let size_error =
+            client::fetch_with_source(&fixture.url("/large"), "GET", None, "UTF-8", &source)
+                .await
+                .expect_err("超大响应必须被拒绝");
         assert!(size_error.contains("响应过大"), "got {size_error}");
     }
 
@@ -697,13 +769,56 @@ mod http_fixture_tests {
 
         let chapters = get_toc(&source, &fixture.url("/json/toc")).await.unwrap();
         assert_eq!(chapters.len(), 3);
-        assert_eq!(chapters[0].title, "JSON 第一章");
-        assert!(chapters[2].url.ends_with("/json/c/3"));
+        assert_eq!(chapters[0].title, "JSON 第三章");
+        assert!(chapters[2].url.ends_with("/json/c/1"));
 
         let content_text = content::get_content(&source, &fixture.url("/json/content/1"))
             .await
             .unwrap();
         assert!(content_text.contains("JSON 第一段正文"));
         assert!(content_text.contains("JSON 第二段正文"));
+    }
+
+    #[tokio::test]
+    async fn module2_default_order_volume_fallback_and_plus_prefix_match_original() {
+        let fixture = FixtureServer::start();
+        let source = fixture.module2_source_json(".chapters li");
+        let toc_url = fixture.url("/module2/toc");
+        let chapters = get_toc(&source, &toc_url).await.unwrap();
+
+        assert_eq!(chapters.len(), 3);
+        assert_eq!(chapters[0].title, "第一章");
+        assert_eq!(chapters[1].title, "卷一");
+        assert_eq!(chapters[1].url, "卷一1");
+        assert_eq!(chapters[2].title, "第二章");
+
+        let plus_source = fixture.module2_source_json("+.chapters li");
+        let plus_url = fixture.url("/module2/toc/plus");
+        let plus = get_toc(&plus_source, &plus_url).await.unwrap();
+        assert_eq!(plus.len(), 1);
+        assert_eq!(plus[0].title, "加号规则章节");
+    }
+
+    #[tokio::test]
+    async fn module2_multiple_next_toc_urls_are_all_followed() {
+        let fixture = FixtureServer::start();
+        let source = fixture.module2_source_json(".chapters li");
+        let toc_url = fixture.url("/module2/toc/multi");
+        let chapters = get_toc(&source, &toc_url).await.unwrap();
+
+        assert_eq!(chapters.len(), 3);
+        assert!(chapters.iter().any(|chapter| chapter.title == "第二页"));
+        assert!(chapters.iter().any(|chapter| chapter.title == "第三页"));
+    }
+
+    #[tokio::test]
+    async fn module2_cyclic_next_toc_url_terminates() {
+        let fixture = FixtureServer::start();
+        let source = fixture.module2_source_json(".chapters li");
+        let toc_url = fixture.url("/module2/toc/cycle");
+        let chapters = get_toc(&source, &toc_url).await.unwrap();
+
+        assert_eq!(chapters.len(), 1);
+        assert_eq!(chapters[0].title, "循环章节");
     }
 }

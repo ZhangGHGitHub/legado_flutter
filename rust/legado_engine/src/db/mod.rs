@@ -1,12 +1,13 @@
 //! Rust 本地数据库 — 与 Flutter `legado.db` schema v7 对齐（Phase C）
 
 use once_cell::sync::OnceCell;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i32 = 13;
+const SCHEMA_VERSION: i32 = 15;
 
 static DB: OnceCell<Mutex<EngineDb>> = OnceCell::new();
 
@@ -186,6 +187,37 @@ impl EngineDb {
                 [],
             );
         }
+        if current < 14 {
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS detailed_read_records (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   book_name TEXT NOT NULL,
+                   start_time INTEGER NOT NULL,
+                   end_time INTEGER NOT NULL,
+                   read_iteration INTEGER DEFAULT 0
+                 );
+                 CREATE INDEX IF NOT EXISTS idx_detailed_read_records_book
+                   ON detailed_read_records(book_name, end_time);",
+            )?;
+        }
+        if current < 15 {
+            // 独立书签实体；旧 notes 表继续保存想法和历史兼容数据
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS bookmarks (
+                   time INTEGER PRIMARY KEY,
+                   book_id TEXT NOT NULL DEFAULT '',
+                   book_name TEXT NOT NULL DEFAULT '',
+                   book_author TEXT NOT NULL DEFAULT '',
+                   chapter_index INTEGER NOT NULL DEFAULT 0,
+                   chapter_pos INTEGER NOT NULL DEFAULT 0,
+                   chapter_name TEXT NOT NULL DEFAULT '',
+                   book_text TEXT NOT NULL DEFAULT '',
+                   content TEXT NOT NULL DEFAULT ''
+                 );
+                 CREATE INDEX IF NOT EXISTS idx_bookmarks_book
+                   ON bookmarks(book_name, book_author, chapter_index, chapter_pos);",
+            )?;
+        }
         if current < SCHEMA_VERSION {
             conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
         }
@@ -193,7 +225,9 @@ impl EngineDb {
     }
 
     pub fn schema_version(&self) -> Result<i32, DbError> {
-        Ok(self.conn.query_row("PRAGMA user_version", [], |r| r.get(0))?)
+        Ok(self
+            .conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))?)
     }
 
     pub fn insert_book_json(&self, book_json: &str) -> Result<(), DbError> {
@@ -267,11 +301,7 @@ impl EngineDb {
         )?;
         let rows = stmt.query_map([], |row| {
             let daily_raw = row.get::<_, Option<i64>>(20)?.unwrap_or(3);
-            let daily = if daily_raw < 1 {
-                3
-            } else {
-                daily_raw.min(999)
-            };
+            let daily = if daily_raw < 1 { 3 } else { daily_raw.min(999) };
             Ok(json!({
                 "id": row.get::<_, String>(0)?,
                 "name": row.get::<_, String>(1)?,
@@ -415,9 +445,7 @@ impl EngineDb {
                     ruleSearchUrl FROM book_sources ORDER BY createdAt DESC"
         };
         let mut stmt = self.conn.prepare(sql)?;
-        let rows = stmt.query_map([], |row| {
-            Ok(source_row_to_json(row)?)
-        })?;
+        let rows = stmt.query_map([], |row| Ok(source_row_to_json(row)?))?;
         rows.map(|r| r.map_err(|e| DbError::Message(e.to_string())))
             .collect()
     }
@@ -443,7 +471,12 @@ impl EngineDb {
             .map_err(|e| DbError::Message(format!("chapters JSON 无效: {e}")))?;
         for ch in arr {
             let id = str_field(&ch, "id")?;
-            // TOC 刷新时常见 content=null / isDownloaded=0；勿覆盖已缓存正文
+            // TOC 刷新时常见 content=null / isDownloaded=0；勿覆盖已缓存正文。
+            // clearDownloaded 只由文件缓存一致性修复流程显式传入。
+            let clear_downloaded = ch
+                .get("clearDownloaded")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
             self.conn.execute(
                 "INSERT INTO chapters (id, bookId, title, idx, url, isDownloaded, content)
                  VALUES (?1,?2,?3,?4,?5,?6,?7)
@@ -452,10 +485,12 @@ impl EngineDb {
                    idx=excluded.idx,
                    url=excluded.url,
                    isDownloaded=CASE
+                     WHEN ?8 != 0 THEN 0
                      WHEN excluded.isDownloaded != 0 THEN 1
                      ELSE chapters.isDownloaded
                    END,
                    content=CASE
+                     WHEN ?8 != 0 THEN NULL
                      WHEN excluded.content IS NOT NULL AND excluded.content != ''
                        THEN excluded.content
                      ELSE chapters.content
@@ -468,6 +503,7 @@ impl EngineDb {
                     str_field(&ch, "url").unwrap_or_default(),
                     bool_field(&ch, "isDownloaded") as i64,
                     opt_str_field(&ch, "content"),
+                    clear_downloaded as i64,
                 ],
             )?;
         }
@@ -498,9 +534,9 @@ impl EngineDb {
 
     /// 单章正文（文件缓存未命中时的 DB 回落）
     pub fn get_chapter_content(&self, chapter_id: &str) -> Result<Option<String>, DbError> {
-        let mut stmt = self.conn.prepare(
-            "SELECT content FROM chapters WHERE id=?1 AND isDownloaded=1",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT content FROM chapters WHERE id=?1 AND isDownloaded=1")?;
         let mut rows = stmt.query(params![chapter_id])?;
         if let Some(row) = rows.next()? {
             Ok(row.get::<_, Option<String>>(0)?)
@@ -669,22 +705,19 @@ impl EngineDb {
     }
 
     pub fn get_book_reading_stats_json(&self, book_id: &str) -> Result<String, DbError> {
-        let (duration, chars, start_date, last_date, days): (i64, i64, Option<String>, Option<String>, i64) =
-            self.conn.query_row(
-                "SELECT COALESCE(SUM(duration_seconds),0), COALESCE(SUM(read_chars),0),
+        let (duration, chars, start_date, last_date, days): (
+            i64,
+            i64,
+            Option<String>,
+            Option<String>,
+            i64,
+        ) = self.conn.query_row(
+            "SELECT COALESCE(SUM(duration_seconds),0), COALESCE(SUM(read_chars),0),
                         MIN(date), MAX(date), COUNT(DISTINCT date)
                  FROM reading_records WHERE book_id = ?1",
-                params![book_id],
-                |r| {
-                    Ok((
-                        r.get(0)?,
-                        r.get(1)?,
-                        r.get(2)?,
-                        r.get(3)?,
-                        r.get(4)?,
-                    ))
-                },
-            )?;
+            params![book_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+        )?;
 
         Ok(json!({
             "durationSeconds": duration,
@@ -797,6 +830,93 @@ impl EngineDb {
         Ok(out)
     }
 
+    pub fn upsert_bookmark(
+        &self,
+        time: i64,
+        book_id: &str,
+        book_name: &str,
+        book_author: &str,
+        chapter_index: i64,
+        chapter_pos: i64,
+        chapter_name: &str,
+        book_text: &str,
+        content: &str,
+    ) -> Result<(), DbError> {
+        self.conn.execute(
+            "INSERT INTO bookmarks
+             (time, book_id, book_name, book_author, chapter_index, chapter_pos,
+              chapter_name, book_text, content)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+             ON CONFLICT(time) DO UPDATE SET
+               book_id = excluded.book_id,
+               book_name = excluded.book_name,
+               book_author = excluded.book_author,
+               chapter_index = excluded.chapter_index,
+               chapter_pos = excluded.chapter_pos,
+               chapter_name = excluded.chapter_name,
+               book_text = excluded.book_text,
+               content = excluded.content",
+            params![
+                time,
+                book_id,
+                book_name,
+                book_author,
+                chapter_index,
+                chapter_pos,
+                chapter_name,
+                book_text,
+                content,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_bookmark(&self, time: i64) -> Result<(), DbError> {
+        self.conn
+            .execute("DELETE FROM bookmarks WHERE time = ?1", params![time])?;
+        Ok(())
+    }
+
+    pub fn list_bookmarks_json(&self, book_id: Option<&str>) -> Result<Vec<String>, DbError> {
+        let sql = "SELECT time, book_id, book_name, book_author, chapter_index,
+                          chapter_pos, chapter_name, book_text, content
+                   FROM bookmarks";
+        let order = " ORDER BY book_name COLLATE NOCASE, book_author COLLATE NOCASE,
+                               chapter_index, chapter_pos, time";
+        let mut out = Vec::new();
+        if let Some(book_id) = book_id.filter(|s| !s.is_empty()) {
+            let mut stmt = self
+                .conn
+                .prepare(&format!("{sql} WHERE book_id = ?1{order}"))?;
+            let rows = stmt.query_map(params![book_id], |row| Self::map_bookmark_row(row))?;
+            for row in rows {
+                out.push(row.map_err(|e| DbError::Message(e.to_string()))?);
+            }
+        } else {
+            let mut stmt = self.conn.prepare(&format!("{sql}{order}"))?;
+            let rows = stmt.query_map([], |row| Self::map_bookmark_row(row))?;
+            for row in rows {
+                out.push(row.map_err(|e| DbError::Message(e.to_string()))?);
+            }
+        }
+        Ok(out)
+    }
+
+    fn map_bookmark_row(row: &rusqlite::Row<'_>) -> Result<String, rusqlite::Error> {
+        Ok(json!({
+            "time": row.get::<_, i64>(0)?,
+            "bookId": row.get::<_, String>(1)?,
+            "bookName": row.get::<_, String>(2)?,
+            "bookAuthor": row.get::<_, String>(3)?,
+            "chapterIndex": row.get::<_, i64>(4)?,
+            "chapterPos": row.get::<_, i64>(5)?,
+            "chapterName": row.get::<_, String>(6)?,
+            "bookText": row.get::<_, String>(7)?,
+            "content": row.get::<_, String>(8)?,
+        })
+        .to_string())
+    }
+
     pub fn export_reading_records(&self, format: &str) -> Result<String, DbError> {
         let mut stmt = self.conn.prepare(
             "SELECT date, book_id, book_name, read_chars, duration_seconds
@@ -838,8 +958,77 @@ impl EngineDb {
                 })
             })
             .collect();
-        Ok(serde_json::to_string_pretty(&list)
-            .map_err(|e| DbError::Message(e.to_string()))?)
+        Ok(serde_json::to_string_pretty(&list).map_err(|e| DbError::Message(e.to_string()))?)
+    }
+
+    /// 写入详细阅读会话；短于等于两分钟的会话不计入记录。
+    pub fn insert_detailed_read_session(
+        &self,
+        book_name: &str,
+        start_time: i64,
+        end_time: i64,
+        read_iteration: i64,
+    ) -> Result<(), DbError> {
+        let book_name = book_name.trim();
+        if book_name.is_empty() || end_time - start_time <= 120_000 {
+            return Ok(());
+        }
+
+        let last: Option<(i64, i64)> = self
+            .conn
+            .query_row(
+                "SELECT start_time, end_time FROM detailed_read_records
+                 WHERE book_name = ?1 ORDER BY end_time DESC LIMIT 1",
+                params![book_name],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        if let Some((_, last_end)) = last {
+            if (start_time - last_end) >= 0 && (start_time - last_end) <= 180_000 {
+                self.conn.execute(
+                    "UPDATE detailed_read_records SET end_time = MAX(end_time, ?1),
+                     read_iteration = ?2 WHERE book_name = ?3 AND end_time = ?4",
+                    params![end_time, read_iteration, book_name, last_end],
+                )?;
+                return Ok(());
+            }
+        }
+
+        self.conn.execute(
+            "INSERT INTO detailed_read_records
+             (book_name, start_time, end_time, read_iteration)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![book_name, start_time, end_time, read_iteration],
+        )?;
+        Ok(())
+    }
+
+    /// 导出按书分组、按开始时间排序的详细阅读会话。
+    pub fn export_detailed_read_records(&self) -> Result<String, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT book_name, start_time, end_time, read_iteration
+             FROM detailed_read_records ORDER BY book_name ASC, start_time ASC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                json!({
+                    "startTime": row.get::<_, i64>(1)?,
+                    "endTime": row.get::<_, i64>(2)?,
+                    "readIteration": row.get::<_, i64>(3)?,
+                }),
+            ))
+        })?;
+        let mut grouped = BTreeMap::<String, Vec<Value>>::new();
+        for row in rows {
+            let (book_name, session) = row.map_err(|e| DbError::Message(e.to_string()))?;
+            grouped.entry(book_name).or_default().push(session);
+        }
+        let export: Vec<Value> = grouped
+            .into_iter()
+            .map(|(book_name, sessions)| json!({"bookName": book_name, "sessions": sessions}))
+            .collect();
+        serde_json::to_string_pretty(&export).map_err(|e| DbError::Message(e.to_string()))
     }
 
     pub fn get_all_chapters_json(&self) -> Result<Vec<String>, DbError> {
@@ -886,8 +1075,15 @@ impl EngineDb {
             .collect();
         let reading_records: Vec<Value> =
             serde_json::from_str(&self.export_reading_records("json")?).unwrap_or_default();
+        let detailed_read_records: Vec<Value> =
+            serde_json::from_str(&self.export_detailed_read_records()?).unwrap_or_default();
         let notes: Vec<Value> = self
             .list_notes_json(None)?
+            .into_iter()
+            .filter_map(|s| serde_json::from_str(&s).ok())
+            .collect();
+        let bookmarks: Vec<Value> = self
+            .list_bookmarks_json(None)?
             .into_iter()
             .filter_map(|s| serde_json::from_str(&s).ok())
             .collect();
@@ -900,7 +1096,9 @@ impl EngineDb {
             "chapters": chapters,
             "replaceRules": replace_rules,
             "readingRecords": reading_records,
+            "detailedReadRecords": detailed_read_records,
             "notes": notes,
+            "bookmarks": bookmarks,
         })
         .to_string())
     }
@@ -912,7 +1110,9 @@ impl EngineDb {
              DELETE FROM book_sources;
              DELETE FROM replace_rules;
              DELETE FROM reading_records;
-             DELETE FROM notes;",
+             DELETE FROM detailed_read_records;
+             DELETE FROM notes;
+             DELETE FROM bookmarks;",
         )?;
         Ok(())
     }
@@ -921,10 +1121,7 @@ impl EngineDb {
         let book_id = str_field(entry, "bookId")?;
         let book_name = str_field(entry, "bookName").unwrap_or_default();
         let date = str_field(entry, "date")?;
-        let chars = entry
-            .get("readChars")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0);
+        let chars = entry.get("readChars").and_then(|v| v.as_i64()).unwrap_or(0);
         let duration = entry
             .get("durationSeconds")
             .and_then(|v| v.as_i64())
@@ -948,10 +1145,7 @@ impl EngineDb {
         let chapter_title = str_field(entry, "chapterTitle").unwrap_or_default();
         let selected_text = str_field(entry, "selectedText")?;
         let note_content = str_field(entry, "noteContent").unwrap_or_default();
-        let position = entry
-            .get("position")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0);
+        let position = entry.get("position").and_then(|v| v.as_i64()).unwrap_or(0);
         let chapter_pos = entry
             .get("chapterPos")
             .and_then(|v| v.as_i64())
@@ -979,6 +1173,38 @@ impl EngineDb {
             ],
         )?;
         Ok(())
+    }
+
+    fn restore_bookmark(&self, entry: &Value) -> Result<(), DbError> {
+        let time = entry
+            .get("time")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| DbError::Message("书签缺少 time 字段".to_string()))?;
+        let book_id = str_field(entry, "bookId").unwrap_or_default();
+        let book_name = str_field(entry, "bookName").unwrap_or_default();
+        let book_author = str_field(entry, "bookAuthor").unwrap_or_default();
+        let chapter_index = entry
+            .get("chapterIndex")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        let chapter_pos = entry
+            .get("chapterPos")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        let chapter_name = str_field(entry, "chapterName").unwrap_or_default();
+        let book_text = str_field(entry, "bookText").unwrap_or_default();
+        let content = str_field(entry, "content").unwrap_or_default();
+        self.upsert_bookmark(
+            time,
+            &book_id,
+            &book_name,
+            &book_author,
+            chapter_index,
+            chapter_pos,
+            &chapter_name,
+            &book_text,
+            &content,
+        )
     }
 
     pub fn restore_backup_json(&self, raw: &str, replace: bool) -> Result<(), DbError> {
@@ -1013,9 +1239,39 @@ impl EngineDb {
                 self.restore_reading_record(item)?;
             }
         }
+        if let Some(groups) = v.get("detailedReadRecords").and_then(|x| x.as_array()) {
+            for group in groups {
+                let book_name = str_field(group, "bookName").unwrap_or_default();
+                if let Some(sessions) = group.get("sessions").and_then(|x| x.as_array()) {
+                    for session in sessions {
+                        self.insert_detailed_read_session(
+                            &book_name,
+                            session
+                                .get("startTime")
+                                .and_then(|x| x.as_i64())
+                                .unwrap_or(0),
+                            session.get("endTime").and_then(|x| x.as_i64()).unwrap_or(0),
+                            session
+                                .get("readIteration")
+                                .and_then(|x| x.as_i64())
+                                .unwrap_or(0),
+                        )?;
+                    }
+                }
+            }
+        }
         if let Some(arr) = v.get("notes").and_then(|x| x.as_array()) {
             for item in arr {
                 self.restore_note(item)?;
+            }
+        }
+        if let Some(arr) = v
+            .get("bookmarks")
+            .or_else(|| v.get("bookmark"))
+            .and_then(|x| x.as_array())
+        {
+            for item in arr {
+                self.restore_bookmark(item)?;
             }
         }
         Ok(())
@@ -1037,12 +1293,8 @@ fn with_db<F, T>(f: F) -> Result<T, String>
 where
     F: FnOnce(&EngineDb) -> Result<T, DbError>,
 {
-    let cell = DB
-        .get()
-        .ok_or_else(|| "数据库未初始化".to_string())?;
-    let guard = cell
-        .lock()
-        .map_err(|_| "数据库锁失败".to_string())?;
+    let cell = DB.get().ok_or_else(|| "数据库未初始化".to_string())?;
+    let guard = cell.lock().map_err(|_| "数据库锁失败".to_string())?;
     f(&guard).map_err(|e| e.to_string())
 }
 
@@ -1080,6 +1332,10 @@ pub fn db_insert_chapters(chapters_json: String) -> Result<(), String> {
 
 pub fn db_get_chapters(book_id: String) -> Result<Vec<String>, String> {
     with_db(|db| db.get_chapters_json(&book_id))
+}
+
+pub fn db_get_chapter_content(chapter_id: String) -> Result<Option<String>, String> {
+    with_db(|db| db.get_chapter_content(&chapter_id))
 }
 
 pub fn db_update_book_progress(
@@ -1145,14 +1401,7 @@ pub fn db_record_reading(
     chars: i32,
     duration_seconds: i32,
 ) -> Result<(), String> {
-    with_db(|db| {
-        db.record_reading(
-            &book_id,
-            &book_name,
-            chars as i64,
-            duration_seconds as i64,
-        )
-    })
+    with_db(|db| db.record_reading(&book_id, &book_name, chars as i64, duration_seconds as i64))
 }
 
 pub fn db_get_reading_stats(range: String) -> Result<String, String> {
@@ -1190,19 +1439,62 @@ pub fn db_delete_note(id: String) -> Result<(), String> {
 }
 
 pub fn db_list_notes(book_id: Option<String>) -> Result<Vec<String>, String> {
-    with_db(|db| {
-        db.list_notes_json(book_id.as_deref().filter(|s| !s.is_empty()))
-    })
+    with_db(|db| db.list_notes_json(book_id.as_deref().filter(|s| !s.is_empty())))
 }
 
 pub fn db_export_notes_markdown(book_id: Option<String>) -> Result<String, String> {
+    with_db(|db| db.export_notes_markdown(book_id.as_deref().filter(|s| !s.is_empty())))
+}
+
+pub fn db_upsert_bookmark(
+    time: i64,
+    book_id: String,
+    book_name: String,
+    book_author: String,
+    chapter_index: i32,
+    chapter_pos: i32,
+    chapter_name: String,
+    book_text: String,
+    content: String,
+) -> Result<(), String> {
     with_db(|db| {
-        db.export_notes_markdown(book_id.as_deref().filter(|s| !s.is_empty()))
+        db.upsert_bookmark(
+            time,
+            &book_id,
+            &book_name,
+            &book_author,
+            chapter_index as i64,
+            chapter_pos as i64,
+            &chapter_name,
+            &book_text,
+            &content,
+        )
     })
+}
+
+pub fn db_delete_bookmark(time: i64) -> Result<(), String> {
+    with_db(|db| db.delete_bookmark(time))
+}
+
+pub fn db_list_bookmarks(book_id: Option<String>) -> Result<Vec<String>, String> {
+    with_db(|db| db.list_bookmarks_json(book_id.as_deref().filter(|s| !s.is_empty())))
 }
 
 pub fn db_export_reading_records(format: String) -> Result<String, String> {
     with_db(|db| db.export_reading_records(&format))
+}
+
+pub fn db_record_detailed_read_session(
+    book_name: String,
+    start_time: i64,
+    end_time: i64,
+    read_iteration: i64,
+) -> Result<(), String> {
+    with_db(|db| db.insert_detailed_read_session(&book_name, start_time, end_time, read_iteration))
+}
+
+pub fn db_export_detailed_read_records() -> Result<String, String> {
+    with_db(|db| db.export_detailed_read_records())
 }
 
 pub fn db_export_backup() -> Result<String, String> {
@@ -1306,7 +1598,10 @@ mod tests {
         assert_eq!(books.len(), 1);
         assert!(books[0].contains("斗破"));
         let book: Value = serde_json::from_str(&books[0]).unwrap();
-        assert_eq!(book.get("simReadEnabled").and_then(|x| x.as_bool()), Some(false));
+        assert_eq!(
+            book.get("simReadEnabled").and_then(|x| x.as_bool()),
+            Some(false)
+        );
         assert_eq!(
             book.get("simReadDailyChapters").and_then(|x| x.as_i64()),
             Some(3)
@@ -1320,7 +1615,10 @@ mod tests {
         .unwrap();
         let books2 = db.get_books_json().unwrap();
         let book2: Value = serde_json::from_str(&books2[0]).unwrap();
-        assert_eq!(book2.get("simReadEnabled").and_then(|x| x.as_bool()), Some(true));
+        assert_eq!(
+            book2.get("simReadEnabled").and_then(|x| x.as_bool()),
+            Some(true)
+        );
         assert_eq!(
             book2.get("simReadStartDate").and_then(|x| x.as_str()),
             Some("2026-07-01")
@@ -1345,18 +1643,57 @@ mod tests {
         .unwrap();
         let books = db.get_books_json().unwrap();
         let book: Value = serde_json::from_str(&books[0]).unwrap();
-        assert_eq!(book.get("totalChapterNum").and_then(|x| x.as_i64()), Some(120));
-        assert_eq!(book.get("durChapterIndex").and_then(|x| x.as_i64()), Some(49));
+        assert_eq!(
+            book.get("totalChapterNum").and_then(|x| x.as_i64()),
+            Some(120)
+        );
+        assert_eq!(
+            book.get("durChapterIndex").and_then(|x| x.as_i64()),
+            Some(49)
+        );
 
         db.update_book_progress("b2", 0.5, Some("第60章"), 0, Some(59))
             .unwrap();
         let books2 = db.get_books_json().unwrap();
         let book2: Value = serde_json::from_str(&books2[0]).unwrap();
-        assert_eq!(book2.get("durChapterIndex").and_then(|x| x.as_i64()), Some(59));
+        assert_eq!(
+            book2.get("durChapterIndex").and_then(|x| x.as_i64()),
+            Some(59)
+        );
         assert_eq!(
             book2.get("currentChapter").and_then(|x| x.as_str()),
             Some("第60章")
         );
+    }
+
+    #[test]
+    fn chapter_cache_metadata_can_be_explicitly_cleared() {
+        let db = EngineDb::open_in_memory().unwrap();
+        db.insert_book_json(r#"{"id":"cache-book","name":"缓存书"}"#)
+            .unwrap();
+        db.insert_chapters_json(
+            r#"[{"id":"cache-chapter","bookId":"cache-book","title":"第一章",
+                "index":0,"url":"/1","isDownloaded":true,"content":"正文"}]"#,
+        )
+        .unwrap();
+        assert_eq!(
+            db.get_chapter_content("cache-chapter").unwrap(),
+            Some("正文".to_string())
+        );
+
+        db.insert_chapters_json(
+            r#"[{"id":"cache-chapter","bookId":"cache-book","title":"第一章",
+                "index":0,"url":"/1","isDownloaded":false,"content":null,
+                "clearDownloaded":true}]"#,
+        )
+        .unwrap();
+        let chapters = db.get_chapters_json("cache-book").unwrap();
+        let chapter: Value = serde_json::from_str(&chapters[0]).unwrap();
+        assert_eq!(
+            chapter.get("isDownloaded").and_then(|v| v.as_bool()),
+            Some(false)
+        );
+        assert_eq!(db.get_chapter_content("cache-chapter").unwrap(), None);
     }
 
     #[test]
@@ -1392,16 +1729,22 @@ mod tests {
             r#"[{"id":"c1","bookId":"b1","title":"第一章","index":0,"url":"/1"}]"#,
         )
         .unwrap();
+        db.insert_detailed_read_session("测试书", 1_000_000, 1_120_001, 1)
+            .unwrap();
 
         let backup = db.export_backup_json().unwrap();
         assert!(backup.contains("测试书"));
         assert!(backup.contains("测试源"));
+        assert!(backup.contains("detailedReadRecords"));
 
         let db2 = EngineDb::open_in_memory().unwrap();
         db2.restore_backup_json(&backup, true).unwrap();
         assert_eq!(db2.get_books_json().unwrap().len(), 1);
         assert_eq!(db2.get_sources_json(false).unwrap().len(), 1);
         assert_eq!(db2.get_chapters_json("b1").unwrap().len(), 1);
+        let detailed: Vec<Value> =
+            serde_json::from_str(&db2.export_detailed_read_records().unwrap()).unwrap();
+        assert_eq!(detailed.len(), 1);
     }
 
     #[test]
@@ -1414,10 +1757,7 @@ mod tests {
         let stats_json = db.get_reading_stats_json("month").unwrap();
         let stats: Value = serde_json::from_str(&stats_json).unwrap();
         assert_eq!(stats.get("totalChars").and_then(|x| x.as_i64()), Some(2300));
-        assert_eq!(
-            stats.get("todayChars").and_then(|x| x.as_i64()),
-            Some(2300)
-        );
+        assert_eq!(stats.get("todayChars").and_then(|x| x.as_i64()), Some(2300));
 
         let csv = db.export_reading_records("csv").unwrap();
         assert!(csv.starts_with("date,book_id,book_name,read_chars,duration_seconds"));
@@ -1445,6 +1785,29 @@ mod tests {
     }
 
     #[test]
+    fn detailed_read_sessions_filter_and_merge() {
+        let db = EngineDb::open_in_memory().unwrap();
+        db.insert_detailed_read_session("斗破", 1_000_000, 1_120_000, 1)
+            .unwrap();
+        db.insert_detailed_read_session("斗破", 1_000_000, 1_120_001, 1)
+            .unwrap();
+        db.insert_detailed_read_session("斗破", 1_300_001, 1_420_002, 2)
+            .unwrap();
+        db.insert_detailed_read_session("遮天", 2_000_000, 2_120_001, 0)
+            .unwrap();
+
+        let value: Value =
+            serde_json::from_str(&db.export_detailed_read_records().unwrap()).unwrap();
+        assert_eq!(value.as_array().unwrap().len(), 2);
+        let doupo = &value.as_array().unwrap()[0];
+        assert_eq!(doupo["bookName"], "斗破");
+        assert_eq!(doupo["sessions"].as_array().unwrap().len(), 1);
+        assert_eq!(doupo["sessions"][0]["startTime"], 1_000_000);
+        assert_eq!(doupo["sessions"][0]["endTime"], 1_420_002);
+        assert_eq!(doupo["sessions"][0]["readIteration"], 2);
+    }
+
+    #[test]
     fn notes_crud_and_markdown_export() {
         let db = EngineDb::open_in_memory().unwrap();
         db.insert_book_json(
@@ -1452,16 +1815,8 @@ mod tests {
         )
         .unwrap();
 
-        db.upsert_note(
-            "n1",
-            "b1",
-            "第一章",
-            "选中片段",
-            "我的想法",
-            120,
-            42,
-        )
-        .unwrap();
+        db.upsert_note("n1", "b1", "第一章", "选中片段", "我的想法", 120, 42)
+            .unwrap();
 
         let notes = db.list_notes_json(Some("b1")).unwrap();
         assert_eq!(notes.len(), 1);
@@ -1479,5 +1834,88 @@ mod tests {
 
         db.delete_note("n1").unwrap();
         assert!(db.list_notes_json(Some("b1")).unwrap().is_empty());
+    }
+
+    #[test]
+    fn bookmarks_roundtrip_fields_and_original_order() {
+        let db = EngineDb::open_in_memory().unwrap();
+        assert_eq!(db.schema_version().unwrap(), 15);
+        db.upsert_bookmark(
+            200,
+            "b1",
+            "测试书",
+            "作者乙",
+            2,
+            80,
+            "第三章",
+            "正文片段",
+            "",
+        )
+        .unwrap();
+        db.upsert_bookmark(
+            100,
+            "b1",
+            "测试书",
+            "作者乙",
+            1,
+            20,
+            "第二章",
+            "较早片段",
+            "备注",
+        )
+        .unwrap();
+
+        let rows = db.list_bookmarks_json(Some("b1")).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(rows[0].contains("\"time\":100"));
+        assert!(rows[0].contains("\"bookAuthor\":\"作者乙\""));
+        assert!(rows[0].contains("\"chapterName\":\"第二章\""));
+        assert!(rows[0].contains("\"bookText\":\"较早片段\""));
+
+        db.upsert_bookmark(
+            100,
+            "b1",
+            "测试书",
+            "作者乙",
+            1,
+            20,
+            "第二章",
+            "更新片段",
+            "备注",
+        )
+        .unwrap();
+        let updated = db.list_bookmarks_json(Some("b1")).unwrap();
+        assert_eq!(updated.len(), 2);
+        assert!(updated[0].contains("更新片段"));
+
+        db.delete_bookmark(100).unwrap();
+        assert_eq!(db.list_bookmarks_json(Some("b1")).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn bookmarks_backup_export_restore_roundtrip() {
+        let db = EngineDb::open_in_memory().unwrap();
+        db.upsert_bookmark(
+            123456,
+            "b1",
+            "备份书",
+            "备份作者",
+            7,
+            99,
+            "第八章",
+            "书签正文",
+            "书签备注",
+        )
+        .unwrap();
+        let backup = db.export_backup_json().unwrap();
+        assert!(backup.contains("\"bookmarks\""));
+        assert!(backup.contains("备份作者"));
+
+        let restored = EngineDb::open_in_memory().unwrap();
+        restored.restore_backup_json(&backup, true).unwrap();
+        let rows = restored.list_bookmarks_json(None).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].contains("\"chapterPos\":99"));
+        assert!(rows[0].contains("\"content\":\"书签备注\""));
     }
 }

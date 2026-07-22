@@ -6,6 +6,11 @@ use serde_json::Value;
 pub struct JsonChapter {
     pub title: String,
     pub url: String,
+    pub is_volume: bool,
+    pub is_vip: bool,
+    pub is_pay: bool,
+    pub tag: String,
+    pub base_url: String,
 }
 
 pub fn parse_json_toc(
@@ -13,10 +18,7 @@ pub fn parse_json_toc(
     source: &BookSource,
     js_base_url: &str,
 ) -> Result<Vec<JsonChapter>, String> {
-    let rule_toc = source
-        .rule_toc_obj
-        .as_ref()
-        .ok_or("无 ruleToc 对象")?;
+    let rule_toc = source.rule_toc_obj.as_ref().ok_or("无 ruleToc 对象")?;
 
     let list_path = rule_toc
         .get("chapterList")
@@ -46,20 +48,58 @@ pub fn parse_json_toc(
 
     let items = json_util::collect_array(data, &list_paths);
     let mut chapters = Vec::new();
-    for item in items {
+    for (index, item) in items.into_iter().enumerate() {
         let title = json_rule::resolve_field(&item, name_paths, js_lib, base);
         let mut url = json_rule::resolve_field(&item, url_paths, js_lib, base);
         if url.contains("{{") {
             url = json_util::resolve_template(&url, &item);
         }
-        if !title.is_empty() && !url.is_empty() {
-            chapters.push(JsonChapter { title, url });
+        let is_volume = is_true(json_rule::resolve_field(
+            &item,
+            &source.rule_toc_is_volume,
+            js_lib,
+            base,
+        ));
+        if url.is_empty() {
+            url = if is_volume {
+                format!("{title}{index}")
+            } else {
+                base.to_string()
+            };
+        }
+        if !title.is_empty() {
+            chapters.push(JsonChapter {
+                title,
+                url,
+                is_volume,
+                is_vip: is_true(json_rule::resolve_field(
+                    &item,
+                    &source.rule_toc_is_vip,
+                    js_lib,
+                    base,
+                )),
+                is_pay: is_true(json_rule::resolve_field(
+                    &item,
+                    &source.rule_toc_is_pay,
+                    js_lib,
+                    base,
+                )),
+                tag: json_rule::resolve_field(&item, &source.rule_toc_update_time, js_lib, base),
+                base_url: base.to_string(),
+            });
         }
     }
     if reverse {
         chapters.reverse();
     }
     Ok(chapters)
+}
+
+fn is_true(value: String) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "y" | "是" | "卷"
+    )
 }
 
 pub fn extract_json_next_url(data: &Value, next_rule: &str) -> String {

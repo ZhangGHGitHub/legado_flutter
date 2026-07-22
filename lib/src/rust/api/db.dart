@@ -67,6 +67,11 @@ void dbInsertChapters({required String chaptersJson}) => LegadoEngine
 List<String> dbGetChapters({required String bookId}) =>
     LegadoEngine.instance.api.crateApiDbDbGetChapters(bookId: bookId);
 
+String? dbGetChapterContent({required String chapterId}) => LegadoEngine
+    .instance
+    .api
+    .crateApiDbDbGetChapterContent(chapterId: chapterId);
+
 void dbSaveChapterContent({
   required String chapterId,
   required String content,

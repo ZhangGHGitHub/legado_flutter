@@ -17,6 +17,10 @@ pub struct BookSource {
     pub rule_toc_chapter_list: String,
     pub rule_toc_chapter_name: String,
     pub rule_toc_chapter_url: String,
+    pub rule_toc_is_volume: String,
+    pub rule_toc_update_time: String,
+    pub rule_toc_is_vip: String,
+    pub rule_toc_is_pay: String,
     pub rule_toc_next_toc_url: String,
     pub rule_book_info_toc_url: String,
     pub rule_book_info_name: String,
@@ -103,6 +107,10 @@ impl BookSource {
             rule_toc_chapter_list: nested("ruleToc", "chapterList", "ruleChapterList"),
             rule_toc_chapter_name: nested("ruleToc", "chapterName", "ruleChapterName"),
             rule_toc_chapter_url: nested("ruleToc", "chapterUrl", "ruleChapterUrl"),
+            rule_toc_is_volume: nested("ruleToc", "isVolume", "ruleChapterIsVolume"),
+            rule_toc_update_time: nested("ruleToc", "updateTime", "ruleChapterUpdateTime"),
+            rule_toc_is_vip: nested("ruleToc", "isVip", "ruleChapterIsVip"),
+            rule_toc_is_pay: nested("ruleToc", "isPay", "ruleChapterIsPay"),
             rule_toc_next_toc_url: nested("ruleToc", "nextTocUrl", "rulePageNext"),
             rule_book_info_toc_url: nested("ruleBookInfo", "tocUrl", "ruleBookTocUrl"),
             rule_book_info_name: nested("ruleBookInfo", "name", "ruleBookName"),
@@ -110,7 +118,11 @@ impl BookSource {
             rule_book_info_cover_url: nested("ruleBookInfo", "coverUrl", "ruleBookCoverUrl"),
             rule_book_info_intro: nested("ruleBookInfo", "intro", "ruleBookNote"),
             rule_book_info_kind: nested("ruleBookInfo", "kind", "ruleBookKind"),
-            rule_book_info_last_chapter: nested("ruleBookInfo", "lastChapter", "ruleBookLastChapter"),
+            rule_book_info_last_chapter: nested(
+                "ruleBookInfo",
+                "lastChapter",
+                "ruleBookLastChapter",
+            ),
             rule_explore_url: {
                 let a = str_field(map, "exploreUrl");
                 if a.is_empty() {
@@ -198,10 +210,8 @@ impl BookSource {
     }
 
     pub fn needs_dart_js_for_content(&self) -> bool {
-        any_field_needs_js(&[
-            &self.rule_content,
-            &self.rule_content_next_url,
-        ]) || json_needs_js(&self.rule_content_obj)
+        any_field_needs_js(&[&self.rule_content, &self.rule_content_next_url])
+            || json_needs_js(&self.rule_content_obj)
     }
 
     pub fn needs_dart_js_for_book_info(&self) -> bool {
@@ -342,10 +352,7 @@ mod tests {
         }"#;
         let bs = BookSource::from_json(src).unwrap();
         assert!(bs.is_json_api());
-        assert_eq!(
-            bs.rule_content,
-            "$.data.content\n<js>Clean(result)</js>"
-        );
+        assert_eq!(bs.rule_content, "$.data.content\n<js>Clean(result)</js>");
         // 扁平字符串仍要能识别为 JSON 规则
         assert!(matches!(
             bs.rule_content_obj,

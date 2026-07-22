@@ -167,6 +167,7 @@ class BookSource {
       _rawExtract('ruleContent', 'nextContentUrl');
   String get ruleContentReplaceRegex =>
       _rawExtract('ruleContent', 'replaceRegex');
+  String get ruleContentImageStyle => _rawExtract('ruleContent', 'imageStyle');
 
   /// 获取 ruleSearch 的 bookUrl（搜索结果中书本链接的提取规则）
   String get ruleSearchBookUrl => _rawExtract('ruleSearch', 'bookUrl');
@@ -479,7 +480,13 @@ class BookSource {
 }
 
 bool _hasNestedLegadoRules(Map<String, dynamic> json) {
-  for (final key in ['ruleContent', 'ruleToc', 'ruleSearch', 'ruleBookInfo', 'ruleExplore']) {
+  for (final key in [
+    'ruleContent',
+    'ruleToc',
+    'ruleSearch',
+    'ruleBookInfo',
+    'ruleExplore',
+  ]) {
     if (json[key] is Map) return true;
   }
   return false;

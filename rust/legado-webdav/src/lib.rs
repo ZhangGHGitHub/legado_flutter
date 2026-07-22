@@ -25,6 +25,7 @@ pub struct WebDavItem {
     pub path: String,
     pub is_dir: bool,
     pub size: i64,
+    pub last_modified: i64,
 }
 
 pub struct WebDavClient {
@@ -55,12 +56,16 @@ impl WebDavClient {
   <d:prop>
     <d:displayname/>
     <d:getcontentlength/>
+    <d:getlastmodified/>
     <d:resourcetype/>
   </d:prop>
 </d:propfind>"#;
         let resp = self
             .client
-            .request(reqwest::Method::from_bytes(b"PROPFIND").unwrap(), target.clone())
+            .request(
+                reqwest::Method::from_bytes(b"PROPFIND").unwrap(),
+                target.clone(),
+            )
             .headers(self.auth_headers()?)
             .header("Depth", "1")
             .header(CONTENT_TYPE, "application/xml; charset=utf-8")
@@ -143,11 +148,7 @@ impl WebDavClient {
             format!("/{p}")
         };
         let mut url = self.base_url.clone();
-        url.set_path(&format!(
-            "{}{}",
-            url.path().trim_end_matches('/'),
-            rel
-        ));
+        url.set_path(&format!("{}{}", url.path().trim_end_matches('/'), rel));
         Ok(url)
     }
 }
@@ -159,6 +160,7 @@ fn parse_propfind(xml: &str, base: &Url) -> Vec<WebDavItem> {
     let mut in_response = false;
     let mut href = String::new();
     let mut size: i64 = 0;
+    let mut last_modified: i64 = 0;
     let mut is_dir = false;
     let mut in_collection = false;
 
@@ -170,6 +172,7 @@ fn parse_propfind(xml: &str, base: &Url) -> Vec<WebDavItem> {
                     in_response = true;
                     href.clear();
                     size = 0;
+                    last_modified = 0;
                     is_dir = false;
                     in_collection = false;
                 } else if in_response && name.ends_with("collection") {
@@ -192,8 +195,13 @@ fn parse_propfind(xml: &str, base: &Url) -> Vec<WebDavItem> {
                     // handled via regex fallback
                 } else if name.ends_with("response") {
                     if !href.is_empty() {
-                        if let Some(item) = item_from_href(&href, base, is_dir || in_collection, size)
-                        {
+                        if let Some(item) = item_from_href(
+                            &href,
+                            base,
+                            is_dir || in_collection,
+                            size,
+                            last_modified,
+                        ) {
                             items.push(item);
                         }
                     }
@@ -229,7 +237,11 @@ fn parse_propfind_regex(xml: &str, base: &Url) -> Vec<WebDavItem> {
             .or_else(|| extract_tag(chunk, "getcontentlength"))
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
-        if let Some(item) = item_from_href(&href, base, is_dir, size) {
+        let last_modified = extract_tag(chunk, "d:getlastmodified")
+            .or_else(|| extract_tag(chunk, "getlastmodified"))
+            .and_then(|s| parse_http_date_millis(&s))
+            .unwrap_or(0);
+        if let Some(item) = item_from_href(&href, base, is_dir, size, last_modified) {
             items.push(item);
         }
     }
@@ -244,7 +256,13 @@ fn extract_tag(xml: &str, tag: &str) -> Option<String> {
     Some(xml[start..end].trim().to_string())
 }
 
-fn item_from_href(href: &str, base: &Url, is_dir: bool, size: i64) -> Option<WebDavItem> {
+fn item_from_href(
+    href: &str,
+    base: &Url,
+    is_dir: bool,
+    size: i64,
+    last_modified: i64,
+) -> Option<WebDavItem> {
     let decoded = urlencoding_simple(href);
     let path = if let Ok(u) = Url::parse(&decoded) {
         u.path().to_string()
@@ -263,7 +281,16 @@ fn item_from_href(href: &str, base: &Url, is_dir: bool, size: i64) -> Option<Web
         path,
         is_dir,
         size,
+        last_modified,
     })
+}
+
+fn parse_http_date_millis(value: &str) -> Option<i64> {
+    let duration = httpdate::parse_http_date(value)
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?;
+    i64::try_from(duration.as_millis()).ok()
 }
 
 fn urlencoding_simple(s: &str) -> String {
@@ -291,11 +318,34 @@ mod tests {
   </d:response>
   <d:response>
     <d:href>/remote/legado/backup.json</d:href>
-    <d:propstat><d:prop><d:getcontentlength>1024</d:getcontentlength></d:prop></d:propstat>
+    <d:propstat><d:prop>
+      <d:getcontentlength>1024</d:getcontentlength>
+      <d:getlastmodified>Wed, 21 Oct 2015 07:28:00 GMT</d:getlastmodified>
+    </d:prop></d:propstat>
   </d:response>
 </d:multistatus>"#;
         let base = Url::parse("https://dav.example.com/remote/legado/").unwrap();
-        let items = parse_propfind_regex(xml, &base);
-        assert!(items.iter().any(|i| i.name == "backup.json" && !i.is_dir));
+        let items = parse_propfind(xml, &base);
+        let item = items
+            .iter()
+            .find(|i| i.name == "backup.json" && !i.is_dir)
+            .unwrap();
+        assert_eq!(item.size, 1024);
+        assert_eq!(item.last_modified, 1_445_412_480_000);
+    }
+
+    #[test]
+    fn invalid_last_modified_falls_back_to_zero() {
+        let xml = r#"<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>/remote/legado/backup.json</d:href>
+    <d:propstat><d:prop>
+      <d:getlastmodified>not-a-date</d:getlastmodified>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>"#;
+        let base = Url::parse("https://dav.example.com/remote/legado/").unwrap();
+        let items = parse_propfind(xml, &base);
+        assert_eq!(items[0].last_modified, 0);
     }
 }

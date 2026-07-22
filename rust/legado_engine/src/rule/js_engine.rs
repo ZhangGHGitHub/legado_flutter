@@ -1,5 +1,5 @@
 use rquickjs::{
-    CatchResultExt, CaughtError, Context, Ctx, Exception, Function, Runtime, Value,
+    Array, CatchResultExt, CaughtError, Context, Ctx, Exception, Function, Runtime, Value,
 };
 use std::cell::RefCell;
 
@@ -300,6 +300,18 @@ pub fn run_with_result(
     run_with_result_opts(script, result, js_lib, base_url, None)
 }
 
+/// Execute a JS rule and convert its final value as `AnalyzeRule.getString` does.
+/// Structured callers should continue using [`run_with_result`], which preserves
+/// arrays/objects as JSON at the Rust parsing boundary.
+pub fn run_with_result_as_string(
+    script: &str,
+    result: &str,
+    js_lib: &str,
+    base_url: &str,
+) -> Result<String, String> {
+    run_with_result_opts_as_string(script, result, js_lib, base_url, None)
+}
+
 /// 同 [`run_with_result`]，可注入 `book.bookUrl`（对齐 Jingshiro AnalyzeRule + Book）
 pub fn run_with_result_opts(
     script: &str,
@@ -307,6 +319,27 @@ pub fn run_with_result_opts(
     js_lib: &str,
     base_url: &str,
     book_url: Option<&str>,
+) -> Result<String, String> {
+    run_with_result_opts_internal(script, result, js_lib, base_url, book_url, false)
+}
+
+pub fn run_with_result_opts_as_string(
+    script: &str,
+    result: &str,
+    js_lib: &str,
+    base_url: &str,
+    book_url: Option<&str>,
+) -> Result<String, String> {
+    run_with_result_opts_internal(script, result, js_lib, base_url, book_url, true)
+}
+
+fn run_with_result_opts_internal(
+    script: &str,
+    result: &str,
+    js_lib: &str,
+    base_url: &str,
+    book_url: Option<&str>,
+    as_string: bool,
 ) -> Result<String, String> {
     let rt = Runtime::new().map_err(|e| format!("JS Runtime 失败: {e}"))?;
     let ctx = Context::full(&rt).map_err(|e| format!("JS Context 失败: {e}"))?;
@@ -325,7 +358,11 @@ pub fn run_with_result_opts(
             .eval(code.as_bytes())
             .catch(&ctx)
             .map_err(|e| format_caught_err("JS 执行失败", e))?;
-        value_to_string(&ctx, v)
+        if as_string {
+            value_to_js_string(&ctx, v)
+        } else {
+            value_to_string(&ctx, v)
+        }
     })
 }
 
@@ -1030,22 +1067,50 @@ pub fn run_pre_update_js(source: &crate::model::book_source::BookSource, book_ur
 
 /// 提取 `<js>...</js>` 内脚本
 pub fn extract_js_block(rule: &str) -> Option<String> {
-    let start = rule.find("<js>")?;
-    let end = rule.find("</js>")?;
-    if end <= start {
-        return None;
+    let lower = rule.to_ascii_lowercase();
+    let start = lower.find("<js>")?;
+    let content_start = start + 4;
+    let relative_end = lower[content_start..].find("</js>")?;
+    let end = content_start + relative_end;
+    Some(rule[content_start..end].to_string())
+}
+
+/// JavaScript `String(value)` semantics used by AnalyzeRule.getString.
+fn value_to_js_string<'js>(ctx: &Ctx<'js>, v: Value<'js>) -> Result<String, String> {
+    if v.is_null() || v.is_undefined() {
+        return Ok(String::new());
     }
-    Some(rule[start + 4..end].to_string())
+    if v.is_string() || v.is_number() || v.is_bool() {
+        return value_to_string(ctx, v);
+    }
+    if v.is_array() {
+        let array: Array<'js> = v
+            .get()
+            .map_err(|e| format!("JS 数组转换失败: {e}"))?;
+        let mut values = Vec::with_capacity(array.len());
+        for item in array.iter::<Value<'js>>() {
+            values.push(value_to_js_string(
+                ctx,
+                item.map_err(|e| format!("JS 数组读取失败: {e}"))?,
+            )?);
+        }
+        return Ok(values.join(","));
+    }
+    if v.is_object() {
+        return Ok("[object Object]".to_string());
+    }
+    value_to_string(ctx, v)
 }
 
 /// 规则是否含 `<js>` 块
 pub fn contains_js_block(rule: &str) -> bool {
-    rule.contains("<js>") && rule.contains("</js>")
+    extract_js_block(rule).is_some()
 }
 
 /// 提取 `<js>...</js>` 之后的 CSS/链式规则部分
 pub fn css_suffix_after_js(rule: &str) -> &str {
-    if let Some(end) = rule.find("</js>") {
+    let lower = rule.to_ascii_lowercase();
+    if let Some(end) = lower.find("</js>") {
         rule[end + 5..].trim()
     } else {
         rule.trim()
@@ -1061,9 +1126,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn js_block_markers_are_case_insensitive_and_keep_suffix() {
+        let rule = "<JS>result + '!'</Js>\n.book-list";
+        assert!(contains_js_block(rule));
+        assert_eq!(extract_js_block(rule).as_deref(), Some("result + '!'"));
+        assert_eq!(css_suffix_after_js(rule), ".book-list");
+    }
+
+    #[test]
     fn run_simple_js_transform() {
         let out = run_with_result("result + '!'", "hello", "", "").unwrap();
         assert_eq!(out, "hello!");
+    }
+
+    #[test]
+    fn string_conversion_of_js_array_matches_rhino_array_to_string() {
+        let out = run_with_result_as_string("['第一项', '第二项']", "", "", "").unwrap();
+        assert_eq!(out, "第一项,第二项");
     }
 
     #[test]
@@ -1293,6 +1372,7 @@ crypto.encryptBase64(key);
     }
 
     #[test]
+    #[serial_test::serial(js_cache)]
     fn shared_cache_across_js_runtimes() {
         let _ = reset_cache();
         let put = run_with_result(

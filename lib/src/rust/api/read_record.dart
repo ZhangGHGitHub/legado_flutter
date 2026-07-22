@@ -32,6 +32,23 @@ Future<String> exportReadingRecords({required String format}) => LegadoEngine
     .api
     .crateApiReadRecordExportReadingRecords(format: format);
 
+/// 写入详细阅读会话（短会话由数据库层过滤并按同书时间间隔合并）
+Future<void> recordDetailedReadSession({
+  required String bookName,
+  required PlatformInt64 startTime,
+  required PlatformInt64 endTime,
+  required PlatformInt64 readIteration,
+}) => LegadoEngine.instance.api.crateApiReadRecordRecordDetailedReadSession(
+  bookName: bookName,
+  startTime: startTime,
+  endTime: endTime,
+  readIteration: readIteration,
+);
+
+/// 导出按书分组的详细阅读会话
+Future<String> exportDetailedReadRecords() =>
+    LegadoEngine.instance.api.crateApiReadRecordExportDetailedReadRecords();
+
 /// 单本书阅读统计
 Future<BookReadingStats> getBookReadingStats({required String bookId}) =>
     LegadoEngine.instance.api.crateApiReadRecordGetBookReadingStats(

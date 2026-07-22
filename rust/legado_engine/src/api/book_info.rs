@@ -3,12 +3,9 @@ use crate::http;
 use crate::model::book_source::BookSource;
 use crate::rule;
 
-use crate::rule::js_engine;
-
 /// 获取书籍详情
 pub async fn get_book_info(source_json: &str, book_url: &str) -> Result<BookInfoItem, String> {
     let source = BookSource::from_json(source_json)?;
-    let _ = js_engine::reset_cache();
     if source.needs_dart_js_for_book_info() {
         return Err("书源含 JS 规则，需 Dart 引擎".to_string());
     }
@@ -18,14 +15,8 @@ pub async fn get_book_info(source_json: &str, book_url: &str) -> Result<BookInfo
     }
     http::rate_limit::wait_if_needed(&source.book_source_url).await?;
 
-    let body = http::client::fetch_with_source(
-        book_url,
-        "GET",
-        None,
-        "UTF-8",
-        &source.raw_json,
-    )
-    .await?;
+    let body =
+        http::client::fetch_with_source(book_url, "GET", None, "UTF-8", &source.raw_json).await?;
 
     if let Ok(data) = serde_json::from_str::<serde_json::Value>(&body) {
         if source.is_json_api() {

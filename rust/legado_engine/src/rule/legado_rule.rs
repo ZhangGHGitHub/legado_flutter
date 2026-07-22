@@ -20,7 +20,12 @@ pub fn extract_text(element: &ElementRef<'_>, rule: &str) -> String {
     for (idx, seg) in segments.iter().enumerate() {
         let is_last = idx == segments.len() - 1;
         if is_last && seg.is_terminal {
-            let mut out = extract_terminal(&current[0], seg);
+            let mut out = current
+                .iter()
+                .map(|el| extract_terminal(el, seg))
+                .filter(|value| !value.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n");
             if let Some((pat, rep)) = regex {
                 out = apply_regex(&out, &pat, &rep);
             }

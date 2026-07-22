@@ -69,17 +69,23 @@ class WebDavEntry {
   final String path;
   final bool isDir;
   final int size;
+  final PlatformInt64 lastModified;
 
   const WebDavEntry({
     required this.name,
     required this.path,
     required this.isDir,
     required this.size,
+    required this.lastModified,
   });
 
   @override
   int get hashCode =>
-      name.hashCode ^ path.hashCode ^ isDir.hashCode ^ size.hashCode;
+      name.hashCode ^
+      path.hashCode ^
+      isDir.hashCode ^
+      size.hashCode ^
+      lastModified.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -89,5 +95,6 @@ class WebDavEntry {
           name == other.name &&
           path == other.path &&
           isDir == other.isDir &&
-          size == other.size;
+          size == other.size &&
+          lastModified == other.lastModified;
 }

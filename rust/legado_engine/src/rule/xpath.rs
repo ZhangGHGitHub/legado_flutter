@@ -88,9 +88,11 @@ pub fn extract_text(root: &ElementRef<'_>, xpath: &str) -> String {
     }
 
     query_all(root, xpath)
-        .first()
+        .iter()
         .map(|e| e.text().collect::<String>().trim().to_string())
-        .unwrap_or_default()
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// 执行 XPath 并提取属性（规则含 `@href` 终端）
@@ -557,5 +559,14 @@ mod tests {
         let root = doc.root_element();
         let out = extract_attr(&root, "//a/@href");
         assert_eq!(out, "/book/1");
+    }
+
+    #[test]
+    fn non_terminal_text_joins_all_matching_nodes() {
+        let doc = Html::parse_fragment(
+            r#"<div class="item">第一项</div><div class="item">第二项</div>"#,
+        );
+        let root = doc.root_element();
+        assert_eq!(extract_text(&root, "//div[@class='item']"), "第一项\n第二项");
     }
 }

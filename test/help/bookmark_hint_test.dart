@@ -26,4 +26,31 @@ void main() {
     expect(chapterPosForPageIndex(pages, 1), 4);
     expect(chapterPosForPageIndex(pages, 2), 8);
   });
+
+  test('chapterPosForScrollOffset maps scroll ratio to content offset', () {
+    expect(
+      chapterPosForScrollOffset(
+        offset: 0,
+        maxScrollExtent: 900,
+        contentLength: 1000,
+      ),
+      0,
+    );
+    expect(
+      chapterPosForScrollOffset(
+        offset: 450,
+        maxScrollExtent: 900,
+        contentLength: 1000,
+      ),
+      500,
+    );
+    expect(
+      chapterPosForScrollOffset(
+        offset: 1200,
+        maxScrollExtent: 900,
+        contentLength: 1000,
+      ),
+      1000,
+    );
+  });
 }

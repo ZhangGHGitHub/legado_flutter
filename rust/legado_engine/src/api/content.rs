@@ -27,14 +27,9 @@ pub async fn get_content(source_json: &str, chapter_url: &str) -> Result<String,
         }
 
         http::rate_limit::wait_if_needed(&source.book_source_url).await?;
-        let body = http::client::fetch_with_source(
-            &current_url,
-            "GET",
-            None,
-            "UTF-8",
-            &source.raw_json,
-        )
-        .await?;
+        let body =
+            http::client::fetch_with_source(&current_url, "GET", None, "UTF-8", &source.raw_json)
+                .await?;
 
         let chunk = if let Ok(data) = serde_json::from_str::<serde_json::Value>(&body) {
             if source.is_json_api() {
@@ -57,12 +52,7 @@ pub async fn get_content(source_json: &str, chapter_url: &str) -> Result<String,
                 String::new()
             }
         } else {
-            rule::html_content::extract_next_content_url(
-                &body,
-                &source,
-                &base_url,
-                &current_url,
-            )
+            rule::html_content::extract_next_content_url(&body, &source, &base_url, &current_url)
         };
 
         if next.is_empty() {

@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../model/read_book.dart';
@@ -16,7 +15,6 @@ import '../../models/book.dart';
 import '../../models/chapter.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/note_service.dart';
 import '../../services/reading_record_service.dart';
 import '../../services/tts_service.dart';
 import '../../utils/chinese_convert.dart';
@@ -31,11 +29,13 @@ import '../../help/bookmark_hint.dart';
 import '../../models/book_progress.dart';
 import '../../services/book_progress_sync.dart';
 import '../../services/book_reader_prefs.dart';
+import '../../services/bookmark_service.dart';
 import '../../services/click_action_prefs.dart';
 import '../../services/book_source_service.dart';
 import '../../services/read_book_config_prefs.dart';
 import '../../services/read_style_prefs.dart';
 import '../../services/reader_font_loader.dart';
+import '../../services/reader_image_cache.dart';
 import '../../services/reader_session_prefs.dart';
 import '../../services/simulated_reading_prefs.dart';
 import 'auto_read_panel.dart';
@@ -44,6 +44,8 @@ import 'click_region_tip_overlay.dart';
 import 'content_edit_dialog.dart';
 import 'more_settings_panel.dart';
 import 'reader_settings.dart';
+import 'reader_paginator.dart';
+import 'reader_markup.dart';
 import 'search_content_page.dart';
 import 'search_content_result.dart';
 import 'simulated_reading_dialog.dart';
@@ -90,15 +92,20 @@ class _ReaderPageState extends State<ReaderPage> {
   int? _pendingTargetPage; // 切换章节后要跳转到的页面索引
   int? _pendingChapterPos; // 章内字符偏移（优先于页索引）
   List<String> _pages = [];
+  List<ReaderPageSlice> _pageSlices = [];
   late ReaderSettings _settings;
   late ScrollController _scrollController;
   final GlobalKey<ReaderTurnViewState> _turnKey =
       GlobalKey<ReaderTurnViewState>();
   BookProvider? _bookProvider; // 缓存引用，避免 dispose 时 context.read 崩溃
-  DateTime? _sessionStart;
-  int _sessionChars = 0;
+  final _readingSession = ReadingSessionTracker();
+  late final DetailedReadingSessionTracker _detailedReadingSession;
   int _lastCountedChapterIndex = -1;
   int _contentRequestGeneration = 0;
+  ReaderImageCache? _readerImageCache;
+  Map<String, ReaderImageSize> _readerImageNaturalSizes = const {};
+  Map<String, String> _readerImageHeaders = const {};
+  int _imageSizeRequestGeneration = 0;
 
   /// UI-1: 顶/底 chrome 可见性（点击正文切换；进入后短延迟自动收起）
   bool _chromeVisible = true;
@@ -173,7 +180,11 @@ class _ReaderPageState extends State<ReaderPage> {
   @override
   void initState() {
     super.initState();
-    _sessionStart = DateTime.now();
+    _readingSession.start();
+    _detailedReadingSession = DetailedReadingSessionTracker(
+      bookName: widget.book.name,
+      readIteration: widget.book.readIteration,
+    )..start();
     _settings = const ReaderSettings();
     _scrollController = ScrollController();
     _currentIndex = widget.allChapters.indexOf(widget.chapter);
@@ -187,6 +198,7 @@ class _ReaderPageState extends State<ReaderPage> {
       _pendingTargetPage = widget.book.currentPageIndex;
     }
     _loadContent();
+    unawaited(_loadReaderImageCache());
     _scheduleAutoHide();
     _refreshBattery();
     _batteryTimer = Timer.periodic(
@@ -200,6 +212,146 @@ class _ReaderPageState extends State<ReaderPage> {
     unawaited(_loadClickActionPrefs());
     unawaited(_loadReaderSessionPrefs());
     unawaited(_loadBookReaderPrefs());
+  }
+
+  Future<void> _loadReaderImageCache() async {
+    try {
+      final cache = await ReaderImageCache.createDefault();
+      if (!mounted) return;
+      setState(() => _readerImageCache = cache);
+      unawaited(_loadReaderImageSizes());
+    } catch (_) {
+      // The reader keeps its existing Image.network fallback when cache setup
+      // is unavailable on a platform without application storage.
+    }
+  }
+
+  Future<void> _loadReaderImageSizes() async {
+    final cache = _readerImageCache;
+    if (cache == null) return;
+    final requestGeneration = ++_imageSizeRequestGeneration;
+    final contentGeneration = _contentRequestGeneration;
+    final sources = _displayDocument.images
+        .map((image) => image.source)
+        .toSet();
+    if (sources.isEmpty) return;
+
+    final sourceProvider = context.read<SourceProvider>();
+    final headers = await sourceProvider.imageHeadersForBook(widget.book);
+    if (!mounted ||
+        requestGeneration != _imageSizeRequestGeneration ||
+        contentGeneration != _contentRequestGeneration) {
+      return;
+    }
+
+    final results = await Future.wait(
+      sources.map(
+        (source) async =>
+            MapEntry(source, await cache.getSize(source, headers: headers)),
+      ),
+    );
+    if (!mounted ||
+        requestGeneration != _imageSizeRequestGeneration ||
+        contentGeneration != _contentRequestGeneration) {
+      return;
+    }
+    final naturalSizes = <String, ReaderImageSize>{};
+    for (final result in results) {
+      final size = result.value;
+      if (size != null) naturalSizes[result.key] = size;
+    }
+    setState(() {
+      _readerImageHeaders = headers;
+      _readerImageNaturalSizes = naturalSizes;
+    });
+    if (_isHorizontalPaged) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _isHorizontalPaged) _splitIntoPages();
+      });
+    }
+  }
+
+  String get _readerImageStyle {
+    final source = context.read<SourceProvider>().findSourceForBook(
+      widget.book,
+    );
+    final style = source?.ruleContentImageStyle.trim();
+    return style == null || style.isEmpty ? 'DEFAULT' : style.toUpperCase();
+  }
+
+  Map<String, Size> _displayImageSizes(double maxWidth, {double? maxHeight}) {
+    if (maxWidth <= 0) return const {};
+    final sizes = <String, Size>{};
+    for (final entry in _readerImageNaturalSizes.entries) {
+      final size = ReaderImageLayout.displaySize(
+        natural: Size(
+          entry.value.width.toDouble(),
+          entry.value.height.toDouble(),
+        ),
+        maxWidth: maxWidth,
+        maxHeight: maxHeight,
+        style: _readerImageStyle,
+      );
+      if (size != null) sizes[entry.key] = size;
+    }
+    for (final image in _displayDocument.images) {
+      final natural = _readerImageNaturalSizes[image.source];
+      if (natural == null) continue;
+      final size = ReaderImageLayout.displaySize(
+        natural: Size(natural.width.toDouble(), natural.height.toDouble()),
+        maxWidth: maxWidth,
+        maxHeight: maxHeight,
+        style: image.style ?? _readerImageStyle,
+        widthOverride: ReaderImageLayout.parseWidth(image.width, maxWidth),
+      );
+      if (size != null) sizes[image.key] = size;
+    }
+    return sizes;
+  }
+
+  double _readerImageMaxHeight() {
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) return double.infinity;
+    final pad = MediaQuery.of(context).padding;
+    final edgePadT = _settings.expandIntoCutout ? 0.0 : pad.top;
+    final edgePadB = _settings.expandIntoCutout ? 0.0 : pad.bottom;
+    const pageFooterHeight = 32.0;
+    final chapterTitleHeight = _settings.fontSize + 36.0;
+    return renderBox.size.height -
+        edgePadT -
+        edgePadB -
+        chapterTitleHeight -
+        pageFooterHeight -
+        _settings.paddingVertical * 2;
+  }
+
+  List<ReaderPaginatorPlaceholder> _imagePlaceholders(
+    ReaderMarkupDocument document,
+    Map<String, Size> displaySizes,
+  ) {
+    return [
+      for (final image in document.images)
+        if (displaySizes[image.key] ?? displaySizes[image.source]
+            case final size?)
+          ReaderPaginatorPlaceholder(
+            start: image.start,
+            end: image.end,
+            width: size.width,
+            height: size.height,
+          ),
+    ];
+  }
+
+  double _readerImageMaxWidth() {
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) return double.infinity;
+    final pad = MediaQuery.of(context).padding;
+    final edgePadL = _settings.expandIntoCutout ? 0.0 : pad.left;
+    final edgePadR = _settings.expandIntoCutout ? 0.0 : pad.right;
+    return renderBox.size.width -
+        _settings.paddingHorizontal * 2 -
+        edgePadL -
+        edgePadR;
   }
 
   Future<void> _loadBookReaderPrefs() async {
@@ -420,12 +572,15 @@ class _ReaderPageState extends State<ReaderPage> {
       return text;
     }
     final indent = _settings.paragraphIndentText;
-    final gapLines = (_settings.paragraphSpacing * 10).round().clamp(0, 20);
-    final gap = gapLines > 0 ? '\n' * gapLines : '';
     final paragraphs = text.split('\n');
     final out = StringBuffer();
     for (var i = 0; i < paragraphs.length; i++) {
       final p = paragraphs[i];
+      if (p.trim() == '[newpage]') {
+        out.write('[newpage]');
+        if (i < paragraphs.length - 1) out.write('\n');
+        continue;
+      }
       if (p.trim().isEmpty) {
         out.writeln();
         continue;
@@ -435,13 +590,23 @@ class _ReaderPageState extends State<ReaderPage> {
       out.write(body);
       if (i < paragraphs.length - 1) {
         out.write('\n');
-        if (gap.isNotEmpty) out.write(gap);
       }
     }
     return out.toString();
   }
 
-  String get _displayContent => _prepareDisplayText(_content);
+  String get _displayMarkup => _prepareDisplayText(_content);
+
+  String get _displayContent => ReaderMarkup.toPlainText(_displayMarkup);
+
+  ReaderMarkupDocument get _displayDocument =>
+      ReaderMarkup.parse(_displayMarkup);
+
+  ReaderMarkupDocument get _displayDocumentWithoutHardPageBreaks =>
+      ReaderMarkup.parse(_displayMarkup, removeHardPageBreaks: true);
+
+  String get _displayContentWithoutHardPageBreaks =>
+      _displayDocumentWithoutHardPageBreaks.plainText;
 
   @override
   void didChangeDependencies() {
@@ -453,6 +618,7 @@ class _ReaderPageState extends State<ReaderPage> {
   void dispose() {
     // 让 dispose 前已经发出的网络结果无法再提交到阅读器状态。
     _contentRequestGeneration++;
+    _imageSizeRequestGeneration++;
     _autoHideTimer?.cancel();
     _autoReadTimer?.cancel();
     _batteryTimer?.cancel();
@@ -466,7 +632,16 @@ class _ReaderPageState extends State<ReaderPage> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     unawaited(_applyKeepScreenOn(false));
     _saveProgress();
-    _recordReadingSession();
+    _flushReadingSession();
+    final detailed = _detailedReadingSession.stop();
+    if (detailed != null) {
+      ReadingRecordService.recordDetailedReadSession(
+        bookName: detailed.bookName,
+        startTime: detailed.startTime,
+        endTime: detailed.endTime,
+        readIteration: detailed.readIteration,
+      );
+    }
     _scrollController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -805,20 +980,20 @@ class _ReaderPageState extends State<ReaderPage> {
       return;
     }
     if (_currentIndex == _lastCountedChapterIndex) return;
-    _sessionChars += content.length;
+    _readingSession.addChars(content.length);
     _lastCountedChapterIndex = _currentIndex;
   }
 
-  void _recordReadingSession() {
-    if (_sessionStart == null || _sessionChars <= 0) return;
-    final duration = DateTime.now().difference(_sessionStart!).inSeconds;
-    if (duration <= 0) return;
-    ReadingRecordService.recordReading(
+  void _flushReadingSession() {
+    final delta = _readingSession.pending();
+    if (delta == null) return;
+    final committed = ReadingRecordService.recordReading(
       bookId: widget.book.id,
       bookName: widget.book.name,
-      chars: _sessionChars,
-      durationSeconds: duration,
+      chars: delta.chars,
+      durationSeconds: delta.durationSeconds,
     );
+    if (committed) _readingSession.commit(delta);
   }
 
   Future<void> _openNoteEditor(String selectedText) async {
@@ -885,6 +1060,7 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Future<void> _loadContent({bool forceRefresh = false}) async {
     final requestGeneration = ++_contentRequestGeneration;
+    _imageSizeRequestGeneration++;
     setState(() => _isLoading = true);
     try {
       final chapter = widget.allChapters[_currentIndex];
@@ -927,6 +1103,8 @@ class _ReaderPageState extends State<ReaderPage> {
           _content = content.contains('（加载失败')
               ? '⚠️ 加载失败，请检查网络\n\n$content'
               : content;
+          _readerImageNaturalSizes = const {};
+          _readerImageHeaders = const {};
           _isLoading = false;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted && _isHorizontalPaged) {
@@ -934,6 +1112,7 @@ class _ReaderPageState extends State<ReaderPage> {
             }
           });
         });
+        unawaited(_loadReaderImageSizes());
         final ok =
             !ReadBook.isEmptyContentPlaceholder(content) &&
             !content.contains('（加载失败') &&
@@ -994,15 +1173,12 @@ class _ReaderPageState extends State<ReaderPage> {
     final charIdx = _nthQueryIndex(text, q, occurrence);
     if (charIdx < 0) return;
     if (_isHorizontalPaged && _pages.isNotEmpty) {
-      var offset = 0;
-      for (var i = 0; i < _pages.length; i++) {
-        final end = offset + _pages[i].length;
-        if (charIdx < end || i == _pages.length - 1) {
+      for (var i = 0; i < _pageSlices.length; i++) {
+        final page = _pageSlices[i];
+        if (charIdx >= page.start && charIdx < page.end) {
           setState(() => _pageIndex = i);
           break;
         }
-        // 分页按段落拼接，页间可能无额外分隔；用页面字数累加即可
-        offset = end;
       }
     } else if (_scrollController.hasClients && text.isNotEmpty) {
       final max = _scrollController.position.maxScrollExtent;
@@ -1241,6 +1417,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (ReadBook.isEmptyContentPlaceholder(_content)) {
       setState(() {
         _pages = [];
+        _pageSlices = [];
         _pageIndex = 0;
       });
       return;
@@ -1262,7 +1439,8 @@ class _ReaderPageState extends State<ReaderPage> {
     final edgePadR = _settings.expandIntoCutout ? 0.0 : pad.right;
     final edgePadT = _settings.expandIntoCutout ? 0.0 : pad.top;
     final edgePadB = _settings.expandIntoCutout ? 0.0 : pad.bottom;
-    final display = _displayContent;
+    final displayDocument = _displayDocument;
+    final display = displayDocument.plainText;
     final hPad = _settings.paddingHorizontal * 2;
     final pageWidth = renderBox.size.width - hPad - edgePadL - edgePadR;
     // chrome 以 overlay 叠在正文上，分页按「无顶/底栏」可视高度估算
@@ -1276,67 +1454,55 @@ class _ReaderPageState extends State<ReaderPage> {
         chapterTitleHeight -
         pageFooterHeight -
         _settings.paddingVertical * 2;
+    final displayImageSizes = _displayImageSizes(
+      pageWidth,
+      maxHeight: pageHeight,
+    );
+    final imagePlaceholders = _imagePlaceholders(
+      displayDocument,
+      displayImageSizes,
+    );
 
-    final result = <String>[];
-    var totalHeight = 0.0;
-
+    final slices = <ReaderPageSlice>[];
     if (pageWidth <= 0 || pageHeight <= 0) {
-      result.add(display);
+      slices.add(ReaderPageSlice(text: display, start: 0, end: display.length));
     } else {
-      final tp = TextPainter(
-        text: TextSpan(
+      slices.addAll(
+        ReaderPaginator.paginate(
           text: display,
           style: ReaderFontLoader.contentTextStyle(
             settings: _settings,
             color: Colors.black,
           ),
+          maxWidth: pageWidth,
+          maxHeight: pageHeight,
+          textAlign: _readerTextAlign,
+          paragraphSpacingTenths: _settings.paragraphSpacing * 10,
+          placeholders: imagePlaceholders,
+          singleImageStyle: _readerImageStyle == 'SINGLE',
         ),
-        textDirection: TextDirection.ltr,
-        textAlign: _readerTextAlign,
       );
-      tp.layout(maxWidth: pageWidth);
-      totalHeight = tp.height;
-
-      if (totalHeight <= pageHeight) {
-        result.add(display);
-      } else {
-        int startOffset = 0;
-        int pageNum = 1;
-        while (startOffset < display.length) {
-          final targetY = pageNum * pageHeight;
-          if (targetY >= totalHeight) {
-            result.add(display.substring(startOffset));
-            break;
-          }
-          final pos = tp.getPositionForOffset(Offset(0.0, targetY));
-          if (pos.offset <= startOffset) {
-            result.add(display.substring(startOffset));
-            break;
-          }
-          result.add(display.substring(startOffset, pos.offset));
-          startOffset = pos.offset;
-          pageNum++;
-        }
-      }
     }
 
-    if (result.isEmpty) result.add(display);
+    if (slices.isEmpty) {
+      slices.add(ReaderPageSlice(text: display, start: 0, end: display.length));
+    }
+    final result = slices.map((page) => page.text).toList();
 
     final targetPage = _pendingChapterPos != null && _pendingChapterPos! >= 0
-        ? pageIndexForChapterPos(result, _pendingChapterPos!)
+        ? ReaderPaginator.pageIndexForPosition(slices, _pendingChapterPos!)
         : (_pendingTargetPage ?? 0);
-    final clampedPage = targetPage < 0
-        ? result.length - 1
-        : (targetPage >= result.length ? 0 : targetPage);
+    final clampedPage = targetPage.clamp(0, slices.length - 1);
 
     setState(() {
       _pages = result;
+      _pageSlices = slices;
       _pageIndex = clampedPage;
       _pendingTargetPage = null;
       _pendingChapterPos = null;
     });
     debugPrint(
-      '📖 分页完成: ${result.length} 页 (目标=$clampedPage, 总高度=$totalHeight, 页高=$pageHeight)',
+      '📖 分页完成: ${result.length} 页 (目标=$clampedPage, 页宽=$pageWidth, 页高=$pageHeight)',
     );
   }
 
@@ -1438,6 +1604,7 @@ class _ReaderPageState extends State<ReaderPage> {
       );
       return;
     }
+    _flushReadingSession();
     _saveProgress();
     if (_scrollController.hasClients) {
       _scrollController.jumpTo(0);
@@ -2032,7 +2199,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _addBookmark() async {
-    if (!NoteService.isReady) {
+    if (!BookmarkService.isReady) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('引擎未就绪，无法添加书签')));
@@ -2045,20 +2212,23 @@ class _ReaderPageState extends State<ReaderPage> {
     final preview = snippet.length > 80
         ? '${snippet.substring(0, 80)}…'
         : snippet;
-    final pageHint = _isHorizontalPaged && _pages.isNotEmpty
-        ? '第${_pageIndex + 1}/${_pages.length}页'
-        : '滚动位置';
     final chapterPos = _isHorizontalPaged && _pages.isNotEmpty
-        ? chapterPosForPageIndex(_pages, _pageIndex)
-        : -1;
-    NoteService.save(
-      id: const Uuid().v4(),
+        ? _pageSlices[_pageIndex].start
+        : chapterPosForScrollOffset(
+            offset: _scrollController.hasClients ? _scrollController.offset : 0,
+            maxScrollExtent: _scrollController.hasClients
+                ? _scrollController.position.maxScrollExtent
+                : 0,
+            contentLength: _displayContentWithoutHardPageBreaks.length,
+          );
+    BookmarkService.save(
       bookId: widget.book.id,
-      chapterTitle: chapter.title,
-      selectedText: preview.isEmpty ? chapter.title : preview,
-      noteContent: '书签 · $pageHint',
-      position: _currentIndex,
+      bookName: widget.book.name,
+      bookAuthor: widget.book.author,
+      chapterIndex: _currentIndex,
       chapterPos: chapterPos,
+      chapterName: chapter.title,
+      bookText: preview.isEmpty ? chapter.title : preview,
     );
     if (!mounted) return;
     ScaffoldMessenger.of(
@@ -2809,6 +2979,24 @@ class _ReaderPageState extends State<ReaderPage> {
     }
   }
 
+  Future<void> _openReaderLink(String rawUrl) async {
+    final uri = Uri.tryParse(rawUrl.trim());
+    if (uri == null ||
+        !(uri.hasScheme && (uri.isScheme('http') || uri.isScheme('https')))) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('正文链接不是有效的网页地址')));
+      return;
+    }
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('无法打开正文链接')));
+    }
+  }
+
   void _showBrightnessSheet() {
     _autoHideTimer?.cancel();
     showModalBottomSheet<void>(
@@ -2975,10 +3163,22 @@ class _ReaderPageState extends State<ReaderPage> {
     );
   }
 
-  Widget _buildPagedText(ReaderTheme theme, String text) {
+  Widget _buildPagedText(ReaderTheme theme, String text, int pageIndex) {
+    final style = _readerTextStyle(theme.text);
+    final slice = _pageSlices[pageIndex];
     final content = ReaderSelectableText(
       text: text,
-      style: _readerTextStyle(theme.text),
+      style: style,
+      markupDocument: _displayDocument,
+      markupStart: slice.start,
+      markupEnd: slice.end,
+      onOpenLink: _openReaderLink,
+      imageCache: _readerImageCache,
+      imageSizes: _displayImageSizes(
+        _readerImageMaxWidth(),
+        maxHeight: _isHorizontalPaged ? _readerImageMaxHeight() : null,
+      ),
+      imageHeaders: _readerImageHeaders,
       textAlign: _readerTextAlign,
       onWriteNote: _openNoteEditor,
     );
@@ -3077,9 +3277,10 @@ class _ReaderPageState extends State<ReaderPage> {
             mode: _pageAnim,
             pageIndex: _pageIndex,
             pageCount: _pages.length,
-            buildPage: (index) => _buildPagedText(theme, _pages[index]),
+            buildPage: (index) => _buildPagedText(theme, _pages[index], index),
             onPageChanged: (index) {
               setState(() => _pageIndex = index);
+              _flushReadingSession();
               _bumpScreenTimeout();
             },
             onTurnChapterPrev: () {
@@ -3111,8 +3312,13 @@ class _ReaderPageState extends State<ReaderPage> {
           vertical: _settings.paddingVertical,
         ),
         child: ReaderSelectableText(
-          text: _displayContent,
+          text: _displayContentWithoutHardPageBreaks,
           style: _readerTextStyle(theme.text),
+          markupDocument: _displayDocumentWithoutHardPageBreaks,
+          onOpenLink: _openReaderLink,
+          imageCache: _readerImageCache,
+          imageSizes: _displayImageSizes(_readerImageMaxWidth()),
+          imageHeaders: _readerImageHeaders,
           textAlign: _readerTextAlign,
           onWriteNote: _openNoteEditor,
         ),
@@ -3380,8 +3586,16 @@ class _ReaderPageState extends State<ReaderPage> {
                                     textColor: theme.text,
                                   ),
                                   ReaderSelectableText(
-                                    text: _displayContent,
+                                    text: _displayContentWithoutHardPageBreaks,
                                     style: _readerTextStyle(theme.text),
+                                    markupDocument:
+                                        _displayDocumentWithoutHardPageBreaks,
+                                    onOpenLink: _openReaderLink,
+                                    imageCache: _readerImageCache,
+                                    imageSizes: _displayImageSizes(
+                                      _readerImageMaxWidth(),
+                                    ),
+                                    imageHeaders: _readerImageHeaders,
                                     textAlign: _readerTextAlign,
                                     onWriteNote: _openNoteEditor,
                                   ),

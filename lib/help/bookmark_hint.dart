@@ -34,3 +34,14 @@ int chapterPosForPageIndex(List<String> pages, int pageIndex) {
   }
   return offset;
 }
+
+/// 从滚动容器位置估算章内字符偏移，供滚动模式书签恢复使用。
+int chapterPosForScrollOffset({
+  required double offset,
+  required double maxScrollExtent,
+  required int contentLength,
+}) {
+  if (contentLength <= 0 || maxScrollExtent <= 0) return 0;
+  final ratio = (offset / maxScrollExtent).clamp(0.0, 1.0);
+  return (contentLength * ratio).round().clamp(0, contentLength);
+}

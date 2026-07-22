@@ -84,8 +84,7 @@ pub fn parse_epub(data: &[u8]) -> Result<LocalBookInfo, String> {
         if text.trim().len() < 10 {
             continue;
         }
-        let title = chapter_title_from_html(&html)
-            .unwrap_or_else(|| format!("第{}章", idx + 1));
+        let title = chapter_title_from_html(&html).unwrap_or_else(|| format!("第{}章", idx + 1));
         chapters.push(LocalChapterItem {
             title,
             content: text,
@@ -212,10 +211,7 @@ fn parse_opf(xml: &str) -> Result<OpfMeta, String> {
     })
 }
 
-fn attr_value(
-    e: &quick_xml::events::BytesStart,
-    key: &str,
-) -> Option<String> {
+fn attr_value(e: &quick_xml::events::BytesStart, key: &str) -> Option<String> {
     e.attributes()
         .filter_map(|a| a.ok())
         .find(|a| a.key.as_ref() == key.as_bytes())
@@ -232,7 +228,11 @@ fn join_zip_path(base: &str, href: &str) -> String {
     if base.is_empty() {
         return href.replace('\\', "/");
     }
-    format!("{}/{}", base.trim_end_matches('/'), href.trim_start_matches('/'))
+    format!(
+        "{}/{}",
+        base.trim_end_matches('/'),
+        href.trim_start_matches('/')
+    )
 }
 
 fn html_to_plain(html: &str) -> String {

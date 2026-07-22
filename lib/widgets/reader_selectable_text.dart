@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import '../pages/reader/reader_markup.dart';
+import '../services/reader_image_cache.dart';
 
 /// 阅读器正文：对齐 Jingshiro —— 平时不可选中，仅长按进入选区。
 ///
@@ -10,6 +12,14 @@ import 'package:flutter/material.dart';
 class ReaderSelectableText extends StatefulWidget {
   final String text;
   final TextStyle style;
+  final InlineSpan? richText;
+  final ReaderMarkupDocument? markupDocument;
+  final int markupStart;
+  final int? markupEnd;
+  final ValueChanged<String>? onOpenLink;
+  final ReaderImageCache? imageCache;
+  final Map<String, Size>? imageSizes;
+  final Map<String, String> imageHeaders;
   final TextAlign textAlign;
   final void Function(String selectedText) onWriteNote;
 
@@ -17,6 +27,14 @@ class ReaderSelectableText extends StatefulWidget {
     super.key,
     required this.text,
     required this.style,
+    this.richText,
+    this.markupDocument,
+    this.markupStart = 0,
+    this.markupEnd,
+    this.onOpenLink,
+    this.imageCache,
+    this.imageSizes,
+    this.imageHeaders = const {},
     this.textAlign = TextAlign.start,
     required this.onWriteNote,
   });
@@ -32,6 +50,7 @@ class _ReaderSelectableTextState extends State<ReaderSelectableText> {
   Timer? _longPressTimer;
   Offset? _downLocal;
   int? _pointer;
+  final _linkRecognizers = <GestureRecognizer>[];
 
   @override
   void initState() {
@@ -56,6 +75,10 @@ class _ReaderSelectableTextState extends State<ReaderSelectableText> {
     _longPressTimer?.cancel();
     _controller.dispose();
     _focusNode.dispose();
+    for (final recognizer in _linkRecognizers) {
+      recognizer.dispose();
+    }
+    _linkRecognizers.clear();
     super.dispose();
   }
 
@@ -93,8 +116,19 @@ class _ReaderSelectableTextState extends State<ReaderSelectableText> {
   int _offsetForLocalPosition(Offset local) {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return 0;
+    final span =
+        widget.markupDocument?.spanForRange(
+          widget.style,
+          start: widget.markupStart,
+          end: widget.markupEnd,
+          imageCache: widget.imageCache,
+          imageSizes: widget.imageSizes,
+          imageHeaders: widget.imageHeaders,
+        ) ??
+        widget.richText ??
+        TextSpan(text: widget.text, style: widget.style);
     final painter = TextPainter(
-      text: TextSpan(text: widget.text, style: widget.style),
+      text: span,
       textAlign: widget.textAlign,
       textDirection: Directionality.of(context),
     )..layout(maxWidth: box.size.width);
@@ -111,10 +145,7 @@ class _ReaderSelectableTextState extends State<ReaderSelectableText> {
       _selectionEnabled = true;
       _controller.value = TextEditingValue(
         text: widget.text,
-        selection: TextSelection(
-          baseOffset: range.$1,
-          extentOffset: range.$2,
-        ),
+        selection: TextSelection(baseOffset: range.$1, extentOffset: range.$2),
       );
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -164,7 +195,23 @@ class _ReaderSelectableTextState extends State<ReaderSelectableText> {
 
   @override
   Widget build(BuildContext context) {
-    // Plain Text while reading: scroll/drag never selects (Jingshiro parity).
+    for (final recognizer in _linkRecognizers) {
+      recognizer.dispose();
+    }
+    _linkRecognizers.clear();
+    final richSpan =
+        widget.markupDocument?.spanForRange(
+          widget.style,
+          start: widget.markupStart,
+          end: widget.markupEnd,
+          onLink: widget.onOpenLink,
+          recognizers: _linkRecognizers,
+          imageCache: widget.imageCache,
+          imageSizes: widget.imageSizes,
+          imageHeaders: widget.imageHeaders,
+        ) ??
+        widget.richText;
+    // RichText keeps HTML styling visible; selection still uses plain text.
     if (!_selectionEnabled) {
       return Listener(
         behavior: HitTestBehavior.translucent,
@@ -172,11 +219,13 @@ class _ReaderSelectableTextState extends State<ReaderSelectableText> {
         onPointerMove: _onPointerMove,
         onPointerUp: _onPointerUpOrCancel,
         onPointerCancel: _onPointerUpOrCancel,
-        child: Text(
-          widget.text,
-          style: widget.style,
-          textAlign: widget.textAlign,
-        ),
+        child: richSpan == null
+            ? Text(
+                widget.text,
+                style: widget.style,
+                textAlign: widget.textAlign,
+              )
+            : Text.rich(richSpan, textAlign: widget.textAlign),
       );
     }
 

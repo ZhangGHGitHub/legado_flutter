@@ -21,6 +21,7 @@ dependencies:
 
   # ── 网络请求 ──
   dio: ^5.7.0
+  crypto: ^3.0.7
 
   # ── HTML 解析（用于书源规则） ──
   html: ^0.15.5
@@ -49,6 +50,7 @@ dependencies:
   mobile_scanner: ^7.2.1
   zxing2: ^0.2.4
   image: ^4.8.0
+  flutter_svg: ^2.0.17
   webview_flutter: ^4.13.0
   xml: ^6.5.0
   audioplayers: 6.1.0

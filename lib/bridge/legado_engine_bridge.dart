@@ -163,11 +163,16 @@ class LegadoEngineBridge {
       final i = entry.key;
       final item = entry.value;
       return Chapter(
-        id: '${book.id}_ch_$i',
+        id: Chapter.idFor(bookId: book.id, url: item.url, index: i),
         bookId: book.id,
         title: item.title,
         index: i,
         url: item.url,
+        isVolume: item.isVolume,
+        isVip: item.isVip,
+        isPay: item.isPay,
+        tag: item.tag,
+        baseUrl: item.baseUrl,
       );
     }).toList();
   }

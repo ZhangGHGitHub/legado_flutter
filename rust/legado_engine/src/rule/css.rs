@@ -2,14 +2,19 @@ use scraper::{ElementRef, Selector};
 
 /// CSS 选择器提取文本，支持 `selector@text` / `selector@href` 终端
 pub fn extract_text(element: &ElementRef<'_>, rule: &str) -> String {
+    extract_text_list(element, rule).join("\n")
+}
+
+pub fn extract_text_list(element: &ElementRef<'_>, rule: &str) -> Vec<String> {
     let (selector, terminal) = split_terminal(rule);
     if selector.is_empty() {
-        return String::new();
+        return Vec::new();
     }
 
     if let Ok(sel) = Selector::parse(&selector) {
-        if let Some(el) = element.select(&sel).next() {
-            return match terminal.as_str() {
+        let mut values = Vec::new();
+        for el in element.select(&sel) {
+            let value = match terminal.as_str() {
                 "text" | "ownText" | "" => el.text().collect::<String>().trim().to_string(),
                 "html" => el.html(),
                 "textNodes" => el.text().collect::<String>().trim().to_string(),
@@ -24,9 +29,13 @@ pub fn extract_text(element: &ElementRef<'_>, rule: &str) -> String {
                     }
                 }
             };
+            if !value.is_empty() {
+                values.push(value);
+            }
         }
+        return values;
     }
-    String::new()
+    Vec::new()
 }
 
 /// CSS 选择器提取属性

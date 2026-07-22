@@ -3,8 +3,6 @@ use crate::http;
 use crate::model::book_source::BookSource;
 use crate::rule;
 
-use crate::rule::js_engine;
-
 /// 发现页 / 分类页
 pub async fn explore(
     source_json: &str,
@@ -12,7 +10,6 @@ pub async fn explore(
     page: i32,
 ) -> Result<Vec<SearchItem>, String> {
     let source = BookSource::from_json(source_json)?;
-    let _ = js_engine::reset_cache();
     if source.needs_dart_js_for_explore() {
         return Err("书源含 JS 规则，需 Dart 引擎".to_string());
     }

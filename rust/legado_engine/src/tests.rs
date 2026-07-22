@@ -185,6 +185,7 @@ mod engine_tests {
     }
 
     #[test]
+    #[serial_test::serial(js_cache)]
     fn tomato_json_book_info_resolves_toc_url() {
         let raw = include_str!("../../../assets/builtin_sources/7497.json");
         let json = raw.trim_start_matches('\u{feff}');
@@ -212,6 +213,7 @@ mod engine_tests {
     }
 
     #[test]
+    #[serial_test::serial(js_cache)]
     fn tomato_json_toc_chapter_url_uses_list_base() {
         let _ = crate::rule::js_engine::reset_cache();
         let raw = include_str!("../../../assets/builtin_sources/7497.json");

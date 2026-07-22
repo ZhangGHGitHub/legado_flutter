@@ -11,56 +11,89 @@ pub fn resolve_field(
     js_lib: &str,
     base_url: &str,
 ) -> String {
+    resolve_field_list(data, rule, js_lib, base_url).join("\n")
+}
+
+/// Resolve a JSON rule without collapsing multiple values.
+pub fn resolve_field_list(
+    data: &Value,
+    rule: &str,
+    js_lib: &str,
+    base_url: &str,
+) -> Vec<String> {
     let parts: Vec<&str> = if js_engine::contains_js_block(rule) {
         vec![rule]
     } else {
         rule.split("||").collect()
     };
     for part in parts {
-        let s = resolve_field_single(data, part.trim(), js_lib, base_url);
-        if !s.is_empty() {
-            return s;
+        let values = resolve_field_single_list(data, part.trim(), js_lib, base_url);
+        if !values.is_empty() {
+            return values;
         }
     }
-    String::new()
+    Vec::new()
 }
 
-fn resolve_field_single(
+fn resolve_field_single_list(
     data: &Value,
     rule: &str,
     js_lib: &str,
     base_url: &str,
-) -> String {
+) -> Vec<String> {
     if rule.is_empty() {
-        return String::new();
+        return Vec::new();
     }
 
     if js_engine::contains_js_block(rule) && !rule.contains('\n') && rule.starts_with("<js>") {
         let input = serde_json::to_string(data).unwrap_or_else(|_| data.to_string());
         if let Some(script) = js_engine::extract_js_block(rule) {
             if let Ok(out) = js_engine::run_with_result(&script, &input, js_lib, base_url) {
-                return out;
+                return parse_structured_strings(&out);
             }
         }
-        return String::new();
+        return Vec::new();
     }
 
     let (json_part, js_part) = split_json_and_js(rule);
-    let mut result = if json_part.starts_with('$') || json_part.starts_with('@') {
-        json_util::resolve_string(data, json_part.trim())
+    let mut values = if json_part.starts_with('$') || json_part.starts_with('@') {
+        json_util::resolve_strings(data, json_part.trim())
     } else if !json_part.is_empty() {
-        json_part.to_string()
+        vec![json_part.to_string()]
     } else {
-        data.to_string()
+        vec![data.to_string()]
     };
 
     if let Some(script) = js_part {
-        if let Ok(out) = js_engine::run_with_result(&script, &result, js_lib, base_url) {
-            result = out;
+        let input = values.join("\n");
+        if let Ok(out) = js_engine::run_with_result(&script, &input, js_lib, base_url) {
+            values = parse_structured_strings(&out);
         }
     }
 
-    replace_regex::apply_rule_regex_suffix(rule, &result)
+    if rule.contains("##") {
+        values
+            .into_iter()
+            .map(|value| replace_regex::apply_rule_regex_suffix(rule, &value))
+            .filter(|value| !value.is_empty())
+            .collect()
+    } else {
+        values
+    }
+}
+
+fn parse_structured_strings(value: &str) -> Vec<String> {
+    if let Ok(json) = serde_json::from_str::<Value>(value) {
+        let values = json_util::value_to_strings(&json);
+        if !values.is_empty() {
+            return values;
+        }
+    }
+    if value.is_empty() {
+        Vec::new()
+    } else {
+        vec![value.to_string()]
+    }
 }
 
 fn split_json_and_js(rule: &str) -> (&str, Option<String>) {
@@ -77,4 +110,20 @@ fn split_json_and_js(rule: &str) -> (&str, Option<String>) {
         }
     }
     (rule, None)
+}
+
+#[cfg(test)]
+mod return_semantics_tests {
+    use super::*;
+
+    #[test]
+    fn json_string_rule_joins_multiple_values_like_legado_get_string() {
+        let data = serde_json::json!({
+            "items": [{"name": "第一项"}, {"name": "第二项"}]
+        });
+        assert_eq!(
+            resolve_field(&data, "$.items[*].name", "", ""),
+            "第一项\n第二项"
+        );
+    }
 }

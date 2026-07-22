@@ -3,12 +3,9 @@ use crate::http;
 use crate::model::book_source::BookSource;
 use crate::rule;
 
-use crate::rule::js_engine;
-
 /// 执行书源搜索
 pub async fn search(source_json: &str, keyword: &str) -> Result<Vec<SearchItem>, String> {
     let source = BookSource::from_json(source_json)?;
-    let _ = js_engine::reset_cache();
     if source.rule_search_url.is_empty() {
         return Ok(vec![]);
     }

@@ -16,7 +16,10 @@ pub fn resolve_search_request(
     let js_lib = source.js_lib.as_str();
     let base = source.book_source_url.as_str();
 
-    let resolved_raw = if raw.starts_with("@js:") || raw.starts_with("@Js:") {
+    let resolved_raw = if raw
+        .get(..4)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("@js:"))
+    {
         let script = raw[4..].trim();
         js_engine::run_search_js(script, keyword, js_lib, base, page)?
     } else if js_engine::contains_js_block(raw) {
@@ -136,6 +139,16 @@ mod tests {
         .unwrap();
         let cfg = resolve_search_request(&source, "斗破", 1).unwrap();
         assert_eq!(cfg.url, "http://test.example.com/search?q=斗破");
+    }
+
+    #[test]
+    fn resolve_at_js_prefix_is_case_insensitive() {
+        let source = BookSource::from_json(
+            r#"{"bookSourceUrl":"https://example.com","searchUrl":"@JS:'https://example.com/search?q='+key"}"#,
+        )
+        .unwrap();
+        let cfg = resolve_search_request(&source, "book", 1).unwrap();
+        assert_eq!(cfg.url, "https://example.com/search?q=book");
     }
 
     #[test]

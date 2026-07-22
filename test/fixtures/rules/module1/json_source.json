@@ -1,0 +1,31 @@
+{
+  "bookSourceUrl": "https://fixture.example/api/",
+  "bookSourceName": "Module 1 JSON fixture",
+  "ruleSearch": {
+    "bookList": "$.data.books[*]",
+    "name": "$.name",
+    "author": "$.author",
+    "bookUrl": "$.url",
+    "coverUrl": "$.cover",
+    "kind": "$.kind",
+    "intro": "$.note"
+  },
+  "ruleBookInfo": {
+    "name": "$.data.name",
+    "author": "$.data.author",
+    "coverUrl": "$.data.cover",
+    "intro": "$.data.intro",
+    "kind": "$.data.kind",
+    "lastChapter": "$.data.latest",
+    "tocUrl": "$.data.toc"
+  },
+  "ruleToc": {
+    "chapterList": "$.data.chapters[*]",
+    "chapterName": "$.title",
+    "chapterUrl": "https://fixture.example/read/{{$.id}}"
+  },
+  "ruleContent": {
+    "content": "$.data.content",
+    "replaceRegex": "<[^>]+>##"
+  }
+}

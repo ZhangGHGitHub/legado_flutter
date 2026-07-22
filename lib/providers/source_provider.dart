@@ -12,6 +12,7 @@ import '../services/book_source_service.dart';
 import '../services/check_source_prefs.dart';
 import '../services/source_group_catalog.dart';
 import '../services/source_group_tags.dart';
+import '../services/source_login_prefs.dart';
 import '../services/source_validation_store.dart';
 import 'source_order.dart';
 
@@ -43,7 +44,8 @@ class SourceProvider extends ChangeNotifier {
   SourceValidationResult? validationOf(String sourceUrl) =>
       _validationResults[sourceUrl];
 
-  String? validationProgressOf(String sourceUrl) => _validationProgress[sourceUrl];
+  String? validationProgressOf(String sourceUrl) =>
+      _validationProgress[sourceUrl];
 
   void _setValidationProgress(String sourceUrl, String? message) {
     if (message == null || message.isEmpty) {
@@ -510,7 +512,8 @@ class SourceProvider extends ChangeNotifier {
 
     if (enabledSources.isEmpty) {
       _isLoading = false;
-      _statusMessage = restrictSourceUrls != null && restrictSourceUrls.isNotEmpty
+      _statusMessage =
+          restrictSourceUrls != null && restrictSourceUrls.isNotEmpty
           ? '所选范围内没有启用的书源'
           : '没有启用的书源，请先导入书源';
       notifyListeners();
@@ -542,15 +545,16 @@ class SourceProvider extends ChangeNotifier {
     bool preciseName = false,
   }) async {
     try {
-      debugPrint(
-        '  ▶ 书源: ${source.bookSourceName} (${source.bookSourceUrl})',
-      );
+      debugPrint('  ▶ 书源: ${source.bookSourceName} (${source.bookSourceUrl})');
       final results = await _sourceService
           .search(source, keyword)
-          .timeout(const Duration(seconds: 20), onTimeout: () {
-        debugPrint('  ⚠ ${source.bookSourceName}: 搜索超时 (20s)');
-        return <Map<String, String>>[];
-      });
+          .timeout(
+            const Duration(seconds: 20),
+            onTimeout: () {
+              debugPrint('  ⚠ ${source.bookSourceName}: 搜索超时 (20s)');
+              return <Map<String, String>>[];
+            },
+          );
       debugPrint('  ✓ ${source.bookSourceName}: ${results.length} 个结果');
       if (results.isEmpty) {
         debugPrint('  ⚠ ${source.bookSourceName}: 搜索返回 0 结果（书源规则或网络问题）');
@@ -568,9 +572,7 @@ class SourceProvider extends ChangeNotifier {
         }
         if (preciseName) {
           final k = keyword.toLowerCase();
-          books = books
-              .where((b) => b.name.toLowerCase().contains(k))
-              .toList();
+          books = books.where((b) => b.name.toLowerCase().contains(k)).toList();
         }
         if (books.isEmpty) return;
         _searchResults[source.bookSourceUrl] = books;
@@ -598,6 +600,22 @@ class SourceProvider extends ChangeNotifier {
       if (book.sourceUrl.startsWith(s.bookSourceUrl)) return s;
     }
     return null;
+  }
+
+  /// Returns the request headers used for book-owned assets such as images.
+  /// Saved login headers override same-named source headers, matching the
+  /// source request pipeline.
+  Future<Map<String, String>> imageHeadersForSource(BookSource source) async {
+    final headers = <String, String>{...source.customHeaders};
+    final loginHeader = await SourceLoginPrefs.loadHeader(source.bookSourceUrl);
+    headers.addAll(SourceLoginPrefs.parseLoginHeader(loginHeader ?? ''));
+    return Map.unmodifiable(headers);
+  }
+
+  Future<Map<String, String>> imageHeadersForBook(Book book) async {
+    final source = findSourceForBook(book);
+    if (source == null) return const {};
+    return imageHeadersForSource(source);
   }
 
   /// 校验单个书源（搜索 → 发现 → 目录 → 正文）
@@ -650,15 +668,16 @@ class SourceProvider extends ChangeNotifier {
     });
 
     try {
-      final raw = await LegadoEngineBridge.validateSource(
-        source,
-        keyword: query,
-      ).timeout(
-        Duration(seconds: timeoutSec),
-        onTimeout: () {
-          throw TimeoutException('校验超时 (${timeoutSec}s)');
-        },
-      );
+      final raw =
+          await LegadoEngineBridge.validateSource(
+            source,
+            keyword: query,
+          ).timeout(
+            Duration(seconds: timeoutSec),
+            onTimeout: () {
+              throw TimeoutException('校验超时 (${timeoutSec}s)');
+            },
+          );
       final result = _applyCheckPrefsToResult(
         SourceValidationResult.fromRust(raw),
         checkSearch: checkSearch,

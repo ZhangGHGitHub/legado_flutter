@@ -7,6 +7,7 @@ pub struct WebDavEntry {
     pub path: String,
     pub is_dir: bool,
     pub size: i32,
+    pub last_modified: i64,
 }
 
 fn map_items(items: Vec<WebDavItem>) -> Vec<WebDavEntry> {
@@ -17,6 +18,7 @@ fn map_items(items: Vec<WebDavItem>) -> Vec<WebDavEntry> {
             path: i.path,
             is_dir: i.is_dir,
             size: i.size as i32,
+            last_modified: i.last_modified,
         })
         .collect()
 }
@@ -74,8 +76,5 @@ pub async fn webdav_delete(
     remote_path: String,
 ) -> Result<(), String> {
     let client = WebDavClient::new(&url, &username, &password).map_err(|e| e.to_string())?;
-    client
-        .delete(&remote_path)
-        .await
-        .map_err(|e| e.to_string())
+    client.delete(&remote_path).await.map_err(|e| e.to_string())
 }
