@@ -271,7 +271,7 @@
 
 验收：覆盖章节增删、改名、合卷、换源、缓存文件缺失、坏缓存、并发旧请求、同步时间冲突和重复导入；迁移后的章节及字符位置、缓存状态和阅读记录与原版一致。
 
-状态：模块 4 执行中；已完成章节进度迁移、缓存元数据一致性和数据库正文回落，阅读记录、书签和 WebDAV 冲突仍未开始。
+状态：模块 4 本地实现已完成至 4K-15；等待真实 WebDAV 服务器验证、跨设备并发冲突验证和模块 4 最终回归后再正式收尾。
 
 #### 模块 4A：目录刷新后的章节进度迁移
 
@@ -443,6 +443,79 @@
 - 验收结果：Rust workspace 测试与文档测试通过；Flutter 定向测试通过；Flutter 全量测试 310/310；Flutter analyze 保持仓库既有 47 条诊断；`git diff --check` 通过。
 - 当前边界：WebDAV 进度和备份的本地凭证门禁已完成；真实服务器认证交互、跨设备书签冲突和远端合并策略仍待后续独立子步骤，模块 4K 尚未整体完成。
 
+#### 模块 4K-8：书签 JSON 跨设备冲突合并核心
+
+- 原版对照依据：原版 `bookmark.json` 以 `time` 作为书签主键，导入按主键 upsert；同一主键再次写入时覆盖原记录。
+- 本地修改：`BookmarkService.mergeRemote()` 合并本地与远端书签并集，保留双方独有时间主键；同一 `time` 冲突时远端记录覆盖本地。`mergeRemoteJson()` 提供原版 JSON 输入输出，复用既有严格 `time` 校验。
+- 新增测试：`test/services/bookmark_migration_test.dart` 书签 JSON 定向测试 3/3；真实独立书签数据库集成测试 1/1，覆盖并集、远端冲突覆盖和既有存取删除行为。
+- 断行约束：本子步骤只处理书签元数据 JSON 合并，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：Flutter 全量测试 311/311；Rust workspace 测试与文档测试通过；Flutter analyze 保持仓库既有 47 条诊断；`git diff --check` 通过。
+- 当前边界：书签冲突决策核心已完成，但尚未接入 WebDAV 远端书签文件的读取、上传和同步时间管理，模块 4K 尚未整体完成。
+
+#### 模块 4K-9：WebDAV bookmark.json 读写与合并接入
+
+- 原版对照依据：沿用 4K-8 的 `bookmark.json` 时间主键 upsert 语义；远端书签文件缺失时首次上传本地内容，存在时先合并再写回，下载时合并后交给本地导入。
+- 本地修改：新增 `BookmarkSyncService`，使用 `/legado/bookmark.json` 路径；上传前读取远端并合并，HTTP 404 时按首次上传处理；下载后将合并 JSON 交给应用层导入；所有 WebDAV 调用和本地应用回调均可注入测试。7497 全量对齐改用固定 JSON 响应 fixture，仍保留原始 7497 书源规则和 `jsLib` 语义；真实 7497 测试改为 `RUN_ONLINE_SMOKE=1` 显式运行。
+- 新增测试：`test/services/bookmark_sync_service_test.dart` 4/4，覆盖远端合并上传、远端缺失首次创建、下载合并和不完整凭证拒绝。
+- 断行约束：本子步骤只处理书签 JSON 的 WebDAV 读写与元数据合并，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：Rust workspace 测试与文档测试通过；新增文件 `flutter analyze` 0 条诊断；Flutter phase3 离线对齐 9/9；Flutter 全量实际运行 312/312 通过，3 项 7497 在线 smoke 默认跳过；`git diff --check` 通过。在线 smoke 可单独运行：`$env:RUN_ONLINE_SMOKE='1'; flutter test test/integration/src_7497_smoke_test.dart`。
+- 当前边界：4K-9 的 WebDAV 书签读写和稳定离线验收已完成；跨设备同步入口的 UI 触发、真实 WebDAV 服务器回归仍待后续独立子步骤，模块 4K 尚未整体完成。
+
+#### 模块 4K-10：书签页 WebDAV 同步入口
+
+- 原版对照依据：书签文件交换应由用户操作触发，上传前合并远端内容，下载后合并并刷新本地书签列表；同步失败需要保留本地数据并反馈错误。
+- 本地修改：书签页 AppBar 新增“上传书签到 WebDAV”和“从 WebDAV 合并书签”入口，复用 `BookmarkSyncService`；同步期间禁用重复操作，成功后刷新列表并显示合并数量，失败显示错误提示。
+- 新增测试：书签页入口回归测试 1/1，确认两个同步操作控件存在；4K-9 同步服务测试 4/4 继续通过。
+- 断行约束：本子步骤只增加书签 WebDAV 操作入口、忙状态和提示，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：Rust workspace 测试与文档测试通过；Flutter 全量实际运行 312/312；3 个 7497 在线 smoke 默认跳过；Flutter analyze 保持仓库既有 47 条诊断；`git diff --check` 通过。
+- 当前边界：书签合并、WebDAV 读写和书签页入口已完成；真实 WebDAV 服务器回归及模块 4K 总体收尾仍待后续独立子步骤，模块 4K 尚未整体完成。
+
+#### 模块 4K-11：本地 TCP mock WebDAV 协议回归
+
+- 原版对照依据：WebDAV 书签交换要求使用目录枚举 `PROPFIND`、文件上传 `PUT` 和文件下载 `GET`；请求必须携带 Basic Auth，HTTP 非成功状态应保留操作类型和状态码。
+- 本地修改：`rust/legado-webdav` 增加基于本地 TCP listener 的协议回归测试，验证 `/remote/legado` 目录路径、`/remote/legado/bookmark.json` 文件路径、PROPFIND XML 解析、PUT/GET 往返和 Basic Auth 凭据；开发测试依赖补充 Tokio `net` 与 `io-util` 特性。认证头字段名按 HTTP 规范大小写不敏感匹配，认证方案和值仍精确校验。
+- 新增测试：`rust/legado-webdav` 测试 5/5，通过真实客户端与本地 mock 完成 PROPFIND、PUT、GET 协议请求；既有 HTTP 状态错误测试继续通过。
+- 断行约束：本子步骤只验证 WebDAV 传输协议，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：`cargo test --manifest-path rust/legado_engine/Cargo.toml` 通过（112 个库测试及全部非 ignored 集成/文档测试）；`cargo test --manifest-path rust/legado-webdav/Cargo.toml` 通过（5/5）；Flutter 全量实际运行 312/312，通过 3 个 7497 在线 smoke 默认跳过；`flutter analyze` 保持仓库既有 47 条诊断；`git diff --check` 通过。
+- 已知边界：本地 TCP mock 已覆盖协议层回归，但尚未替代真实 WebDAV 服务器的跨设备、TLS、代理和权限环境验证；7497 在线 smoke 仍需显式运行。Rust workspace manifest 位于 `rust/Cargo.toml`。
+
+#### 模块 4K-12：WebDAV 云端备份列表管理
+
+- 原版对照依据：`AppWebDav.getBackupFileList` 列出并按备份名排序，`deleteBackup` 使用 DELETE，`renameBackup` 使用 MOVE 并设置目标地址和 `Overwrite: F`；原版云端备份页支持恢复、删除和重命名，服务器不支持 MOVE 时提示用户。
+- 本地修改：`WebDavClient` 增加 `MOVE` 请求；FRB 增加 `webdavMove` 绑定；`BackupService` 增加云端备份删除和重命名，并拒绝空名称及路径分隔符；备份页增加云端列表刷新、点击恢复、重命名菜单和删除菜单，列表操作期间显示忙状态并刷新结果；原有 WebDAV 恢复入口复用同一列表数据。
+- 新增测试：WebDAV TCP mock 回归 5/5，覆盖 PROPFIND/PUT/MOVE/GET 和 `Destination`/`Overwrite`；备份服务与页面定向测试 4/4，覆盖完整引擎备份、凭证门禁、危险名称拒绝和管理入口。
+- 断行约束：本子步骤只处理云端备份文件的列出、恢复、删除和重命名，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：`cargo test --manifest-path rust/Cargo.toml` 通过（Rust engine 112 个库测试、全部非 ignored 集成/文档测试及 WebDAV 5/5）；release DLL 与 FRB 绑定重建成功；Flutter 定向测试 4/4；Flutter 全量实际运行 313/313 通过，3 个 7497 在线 smoke 默认跳过；Dart/Rust 格式检查通过；`flutter analyze` 保持仓库既有 47 条诊断；`git diff --check` 通过。
+- 已知边界：本地 mock 已验证 MOVE 协议和路径安全，但真实服务器的 MOVE 权限、405/501 兼容提示、TLS、代理和跨设备云端恢复仍需在线环境验证；7497 在线 smoke 仍需显式运行。
+
+#### 模块 4K-13：WebDAV 凭证检查与目录初始化
+
+- 原版对照依据：`AppWebDav.upConfig` 在有效账号密码存在时先对根目录执行凭证检查，再确保根目录、`bookProgress`、`books` 和 `background` 目录存在；缺少凭证时不建立远端会话。
+- 本地修改：`WebDavClient` 增加 `PROPFIND` 权限检查和 404 后 `MKCOL` 的目录确保逻辑；FRB 增加 `webdavCheck`、`webdavEnsureDir`；新增 `WebDavSetupService`，按原版顺序检查根目录并初始化四个目录；WebDAV 配置保存时，对完整凭证执行初始化，失败保留配置并在界面提示，凭证不完整时不发起网络请求。
+- 新增测试：WebDAV 本地 TCP mock 6/6，覆盖根目录检查、缺失目录的 PROPFIND→MKCOL 顺序和 Basic Auth；Dart 初始化服务 2/2，覆盖调用顺序、路径和凭证门禁；备份配置页面回归 1/1。
+- 断行约束：本子步骤只处理 WebDAV 配置验证和远端目录初始化，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：`cargo test --manifest-path rust/Cargo.toml` 通过（Rust engine 112 个库测试、全部非 ignored 集成/文档测试及 WebDAV 6/6）；release DLL 与 FRB 绑定重建成功；Flutter 定向测试 3/3；Flutter 全量实际运行 315/315 通过，3 个 7497 在线 smoke 默认跳过；Dart/Rust 格式检查通过；`flutter analyze` 保持仓库既有 47 条诊断；`git diff --check` 通过。
+- 已知边界：目录初始化已通过本地协议 mock 验证，但真实 WebDAV 服务的凭证权限、已有目录响应差异、TLS 和代理环境仍需在线验证；7497 在线 smoke 仍需显式运行。
+
+#### 模块 4K-14：WebDAV 缺失根目录初始化
+
+- 原版对照依据：原版先检查 WebDAV 授权，再由 `makeAsDir()` 对不存在的根目录执行创建；根目录不存在不应阻止后续 `MKCOL`。
+- 本地修改：将 WebDAV `PROPFIND 404` 解释为“服务可达但目录不存在”；`check` 保留该可达语义，`ensure_dir` 独立读取状态并在 404 时执行 `MKCOL`，避免检查阶段提前终止首次初始化。
+- 新增测试：`legado-webdav` 新增根目录缺失回归，严格验证 `PROPFIND 404 → PROPFIND 404 → MKCOL 201` 请求顺序和路径；WebDAV crate 测试共 7/7。
+- 断行约束：本子步骤只修复 WebDAV 根目录初始化状态处理，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：`cargo test --manifest-path rust/Cargo.toml` 通过（Rust engine 112 个库测试、全部非 ignored 集成/文档测试及 WebDAV 7/7）；release DLL 重建成功；Flutter 全量实际运行 315/315 通过，3 个 7497 在线 smoke 默认跳过；`flutter analyze` 保持仓库既有 47 条诊断；`git diff --check` 通过。
+- 已知边界：本步只处理根目录缺失，云端备份格式/路径、PROPFIND 命名空间和完整 URL 解码、代理注入、真实服务器权限与跨设备并发冲突仍待后续独立子步骤。
+
+#### 模块 4K-15：WebDAV 云端备份格式与根目录路径兼容
+
+- 原版对照依据：`reference/Jingshiro-legado/app/src/main/java/io/legado/app/help/storage/Backup.kt` 的 `getNowZipFileName`、备份 ZIP 构造和 `AppWebDav` 根目录上传/列表行为。原版文件名为 `backupYYYY-MM-DD[-设备名].zip`，备份文件直接位于 WebDAV 根目录。
+- 本地修改：`BackupService` 的新备份统一生成原版日期 ZIP 文件名；设备名只作为文件名后缀并净化非法文件名字符；本地备份写入 ZIP，WebDAV 上传改为根目录 ZIP；云端列表按根目录筛选 `backup*.zip`，同时保留旧 `.json` 条目；恢复入口同时支持 ZIP 内 `legado_backup.json` 载荷和历史 JSON 文件。
+- 兼容边界：ZIP 内暂存当前 Rust 数据库导出和 Flutter 设置的完整 JSON wrapper，能够保证重写版跨设备往返；尚未将数据库字段拆分为原版 `bookshelf.json`、`bookmark.json`、`bookSource.json` 等逐文件布局，因此原版生成的 ZIP 仍不能直接恢复到重写版。
+- 新增测试：备份服务定向测试 7/7，覆盖文件名、设备名净化、ZIP 创建/读取、WebDAV 根目录路径和旧 JSON 载荷兼容；与书签同步、WebDAV 初始化及备份页回归合计 15/15 通过。
+- 断行约束：本子步骤只修改备份容器、文件名、WebDAV 路径和恢复载荷识别，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：Rust workspace `112` 个引擎库测试及 WebDAV `7/7` 通过；Flutter 全量 `319/319` 通过，3 个在线 smoke 按既有配置跳过；`flutter analyze` 保持仓库基线 `47` 条诊断；`git diff --check` 通过。
+- 已知边界：真实 WebDAV 服务器的 ZIP 上传/下载、TLS、代理、权限和跨设备并发写入尚未验证；原版 ZIP 的逐文件数据映射留待后续独立子步骤，不以修改测试断言替代。
+
 ## 4. 每个模块的固定工作流
 
 1. 运行上一步全量测试，记录基线。
@@ -459,9 +532,16 @@
 每个模块至少执行：
 
 ```powershell
-cargo test --manifest-path rust/legado_engine/Cargo.toml
+cargo test --manifest-path rust/Cargo.toml
 flutter test
 flutter analyze
+git diff --check
+```
+
+7497 在线 smoke 默认跳过；需要显式验证时运行：
+
+```powershell
+$env:RUN_ONLINE_SMOKE='1'; flutter test test/integration/src_7497_smoke_test.dart
 ```
 
 涉及特定平台插件而无法在当前 Windows 环境执行的集成测试，应单独列出命令、失败阶段、平台依赖和建议运行环境；不得用修改测试的方式掩盖环境限制。

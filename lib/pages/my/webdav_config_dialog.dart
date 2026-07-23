@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/webdav_prefs.dart';
+import '../../services/webdav_setup_service.dart';
 
 /// WebDAV 配置 Dialog — 供「我的」与「远程书籍 → 服务器配置」复用。
 class WebDavConfigDialog extends StatefulWidget {
@@ -73,6 +74,18 @@ class _WebDavConfigDialogState extends State<WebDavConfigDialog> {
           : _device.text.trim(),
     );
     await WebDavPrefs.save(config);
+    if (config.isReady) {
+      try {
+        await WebDavSetupService.initialize(config);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('WebDAV 连接或目录初始化失败: $e')));
+        return;
+      }
+    }
     if (!mounted) return;
     Navigator.pop(context, config);
   }

@@ -84,6 +84,52 @@ impl WebDavClient {
         Ok(parse_propfind(&text, &target))
     }
 
+    pub async fn check(&self, path: &str) -> Result<()> {
+        let status = self.propfind_status(path).await?;
+        if status == reqwest::StatusCode::NOT_FOUND || status.is_success() {
+            // A missing path is still an authenticated WebDAV endpoint; the
+            // caller can create it with MKCOL.
+            return Ok(());
+        }
+        Err(http_status_error("PROPFIND", status))
+    }
+
+    async fn propfind_status(&self, path: &str) -> Result<reqwest::StatusCode> {
+        let target = self.join_path(path)?;
+        let resp = self
+            .client
+            .request(reqwest::Method::from_bytes(b"PROPFIND").unwrap(), target)
+            .headers(self.auth_headers()?)
+            .header("Depth", "0")
+            .header(CONTENT_TYPE, "application/xml; charset=utf-8")
+            .body(PROPFIND_BODY)
+            .send()
+            .await?;
+        Ok(resp.status())
+    }
+
+    pub async fn ensure_dir(&self, path: &str) -> Result<()> {
+        let status = self.propfind_status(path).await?;
+        if status.is_success() {
+            return Ok(());
+        }
+        if status != reqwest::StatusCode::NOT_FOUND {
+            return Err(http_status_error("PROPFIND", status));
+        }
+
+        let target = self.join_path(path)?;
+        let resp = self
+            .client
+            .request(reqwest::Method::from_bytes(b"MKCOL").unwrap(), target)
+            .headers(self.auth_headers()?)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(http_status_error("创建目录", resp.status()));
+        }
+        Ok(())
+    }
+
     pub async fn upload(&self, local: &[u8], remote: &str) -> Result<()> {
         let target = self.join_path(remote)?;
         let resp = self
@@ -127,6 +173,23 @@ impl WebDavClient {
         Ok(())
     }
 
+    pub async fn move_to(&self, remote: &str, destination: &str) -> Result<()> {
+        let target = self.join_path(remote)?;
+        let destination = self.join_path(destination)?;
+        let resp = self
+            .client
+            .request(reqwest::Method::from_bytes(b"MOVE").unwrap(), target)
+            .headers(self.auth_headers()?)
+            .header("Destination", destination.as_str())
+            .header("Overwrite", "F")
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(http_status_error("重命名", resp.status()));
+        }
+        Ok(())
+    }
+
     fn auth_headers(&self) -> Result<HeaderMap> {
         let mut headers = HeaderMap::new();
         if !self.username.is_empty() || !self.password.is_empty() {
@@ -161,6 +224,16 @@ fn http_status_error(operation: &'static str, status: reqwest::StatusCode) -> We
         status: status.as_u16(),
     }
 }
+
+const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:">
+  <d:prop>
+    <d:displayname/>
+    <d:getcontentlength/>
+    <d:getlastmodified/>
+    <d:resourcetype/>
+  </d:prop>
+</d:propfind>"#;
 
 fn parse_propfind(xml: &str, base: &Url) -> Vec<WebDavItem> {
     let mut reader = Reader::from_str(xml);
@@ -372,5 +445,159 @@ mod tests {
             http_status_error("下载", reqwest::StatusCode::BAD_GATEWAY).to_string(),
             "下载 失败: HTTP 502"
         );
+    }
+
+    #[tokio::test]
+    async fn check_and_ensure_dir_use_propfind_then_mkcol() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for _ in 0..3 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buffer = vec![0_u8; 8192];
+                let size = socket.read(&mut buffer).await.unwrap();
+                let request = String::from_utf8_lossy(&buffer[..size]).to_string();
+                let first_line = request.lines().next().unwrap_or_default();
+                let status = if first_line.starts_with("PROPFIND /remote/legado/bookProgress") {
+                    "404 Not Found"
+                } else if first_line.starts_with("MKCOL") {
+                    "201 Created"
+                } else {
+                    "207 Multi-Status"
+                };
+                let response =
+                    format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                socket.write_all(response.as_bytes()).await.unwrap();
+                requests.push(request);
+            }
+            requests
+        });
+
+        let client =
+            WebDavClient::new(&format!("http://{address}/remote"), "account", "password").unwrap();
+        client.check("/legado").await.unwrap();
+        client.ensure_dir("/legado/bookProgress").await.unwrap();
+
+        let requests = server.await.unwrap();
+        assert!(requests[0].starts_with("PROPFIND /remote/legado "));
+        assert!(requests[1].starts_with("PROPFIND /remote/legado/bookProgress "));
+        assert!(requests[2].starts_with("MKCOL /remote/legado/bookProgress "));
+        assert!(requests.iter().all(|request| {
+            request.to_ascii_lowercase().contains("authorization:")
+                && request.contains("Basic YWNjb3VudDpwYXNzd29yZA==")
+        }));
+    }
+
+    #[tokio::test]
+    async fn missing_root_check_allows_mkcol_creation() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for _ in 0..3 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buffer = vec![0_u8; 8192];
+                let size = socket.read(&mut buffer).await.unwrap();
+                let request = String::from_utf8_lossy(&buffer[..size]).to_string();
+                let first_line = request.lines().next().unwrap_or_default();
+                let status = if first_line.starts_with("MKCOL") {
+                    "201 Created"
+                } else {
+                    "404 Not Found"
+                };
+                let response =
+                    format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                socket.write_all(response.as_bytes()).await.unwrap();
+                requests.push(request);
+            }
+            requests
+        });
+
+        let client =
+            WebDavClient::new(&format!("http://{address}/remote"), "account", "password").unwrap();
+        client.check("/legado").await.unwrap();
+        client.ensure_dir("/legado").await.unwrap();
+
+        let requests = server.await.unwrap();
+        assert!(requests[0].starts_with("PROPFIND /remote/legado "));
+        assert!(requests[1].starts_with("PROPFIND /remote/legado "));
+        assert!(requests[2].starts_with("MKCOL /remote/legado "));
+    }
+
+    #[tokio::test]
+    async fn client_roundtrip_uses_webdav_paths_and_basic_auth() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for _ in 0..4 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buffer = vec![0_u8; 8192];
+                let size = socket.read(&mut buffer).await.unwrap();
+                let request = String::from_utf8_lossy(&buffer[..size]).to_string();
+                let first_line = request.lines().next().unwrap_or_default();
+                let (status, content_type, body) = if first_line.starts_with("PROPFIND") {
+                    (
+                        "207 Multi-Status",
+                        "application/xml",
+                        r#"<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote/legado/bookmark.json</d:href><d:propstat><d:prop><d:getcontentlength>2</d:getcontentlength></d:prop></d:propstat></d:response></d:multistatus>"#,
+                    )
+                } else if first_line.starts_with("PUT") {
+                    ("201 Created", "text/plain", "")
+                } else if first_line.starts_with("MOVE") {
+                    ("201 Created", "text/plain", "")
+                } else {
+                    ("200 OK", "application/json", "[]")
+                };
+                let response = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                socket.write_all(response.as_bytes()).await.unwrap();
+                requests.push(request);
+            }
+            requests
+        });
+
+        let client =
+            WebDavClient::new(&format!("http://{address}/remote"), "account", "password").unwrap();
+        let entries = client.list("/legado").await.unwrap();
+        assert_eq!(entries[0].name, "bookmark.json");
+        client.upload(b"[]", "/legado/bookmark.json").await.unwrap();
+        client
+            .move_to("/legado/bookmark.json", "/legado/legado_backup_latest.json")
+            .await
+            .unwrap();
+        assert_eq!(
+            client
+                .download("/legado/legado_backup_latest.json")
+                .await
+                .unwrap(),
+            b"[]"
+        );
+
+        let requests = server.await.unwrap();
+        assert!(requests.iter().all(|request| {
+            request.to_ascii_lowercase().contains("authorization:")
+                && request.contains("Basic YWNjb3VudDpwYXNzd29yZA==")
+        }));
+        assert!(requests[0].starts_with("PROPFIND /remote/legado "));
+        assert!(requests[1].starts_with("PUT /remote/legado/bookmark.json "));
+        assert!(requests[2].starts_with("MOVE /remote/legado/bookmark.json "));
+        let move_request = requests[2].to_ascii_lowercase();
+        assert!(move_request.contains("destination: http://"));
+        assert!(requests[2].contains("/remote/legado/legado_backup_latest.json"));
+        assert!(move_request.contains("overwrite: f"));
+        assert!(requests[3].starts_with("GET /remote/legado/legado_backup_latest.json "));
     }
 }

@@ -36,6 +36,30 @@ pub async fn webdav_list(
     Ok(map_items(items))
 }
 
+/// 验证 WebDAV 目录访问权限
+#[flutter_rust_bridge::frb]
+pub async fn webdav_check(
+    url: String,
+    username: String,
+    password: String,
+    path: String,
+) -> Result<(), String> {
+    let client = WebDavClient::new(&url, &username, &password).map_err(|e| e.to_string())?;
+    client.check(&path).await.map_err(|e| e.to_string())
+}
+
+/// 确保 WebDAV 目录存在
+#[flutter_rust_bridge::frb]
+pub async fn webdav_ensure_dir(
+    url: String,
+    username: String,
+    password: String,
+    path: String,
+) -> Result<(), String> {
+    let client = WebDavClient::new(&url, &username, &password).map_err(|e| e.to_string())?;
+    client.ensure_dir(&path).await.map_err(|e| e.to_string())
+}
+
 /// 上传文件到 WebDAV
 #[flutter_rust_bridge::frb]
 pub async fn webdav_upload(
@@ -77,4 +101,20 @@ pub async fn webdav_delete(
 ) -> Result<(), String> {
     let client = WebDavClient::new(&url, &username, &password).map_err(|e| e.to_string())?;
     client.delete(&remote_path).await.map_err(|e| e.to_string())
+}
+
+/// 重命名 WebDAV 文件
+#[flutter_rust_bridge::frb]
+pub async fn webdav_move(
+    url: String,
+    username: String,
+    password: String,
+    remote_path: String,
+    destination_path: String,
+) -> Result<(), String> {
+    let client = WebDavClient::new(&url, &username, &password).map_err(|e| e.to_string())?;
+    client
+        .move_to(&remote_path, &destination_path)
+        .await
+        .map_err(|e| e.to_string())
 }

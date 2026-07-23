@@ -22,6 +22,32 @@ Future<List<WebDavEntry>> webdavList({
   path: path,
 );
 
+/// 验证 WebDAV 目录访问权限
+Future<void> webdavCheck({
+  required String url,
+  required String username,
+  required String password,
+  required String path,
+}) => LegadoEngine.instance.api.crateApiWebdavWebdavCheck(
+  url: url,
+  username: username,
+  password: password,
+  path: path,
+);
+
+/// 确保 WebDAV 目录存在
+Future<void> webdavEnsureDir({
+  required String url,
+  required String username,
+  required String password,
+  required String path,
+}) => LegadoEngine.instance.api.crateApiWebdavWebdavEnsureDir(
+  url: url,
+  username: username,
+  password: password,
+  path: path,
+);
+
 /// 上传文件到 WebDAV
 Future<void> webdavUpload({
   required String url,
@@ -61,6 +87,21 @@ Future<void> webdavDelete({
   username: username,
   password: password,
   remotePath: remotePath,
+);
+
+/// 重命名 WebDAV 文件
+Future<void> webdavMove({
+  required String url,
+  required String username,
+  required String password,
+  required String remotePath,
+  required String destinationPath,
+}) => LegadoEngine.instance.api.crateApiWebdavWebdavMove(
+  url: url,
+  username: username,
+  password: password,
+  remotePath: remotePath,
+  destinationPath: destinationPath,
 );
 
 /// WebDAV 文件条目

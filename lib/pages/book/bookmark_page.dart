@@ -12,6 +12,7 @@ import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/bookmark_service.dart';
 import '../../services/bookmark_migration_service.dart';
+import '../../services/bookmark_sync_service.dart';
 import '../../services/note_service.dart';
 import '../../src/rust/api.dart' as rust_api;
 import '../../widgets/empty_state.dart';
@@ -77,6 +78,7 @@ class _BookmarkPageState extends State<BookmarkPage>
   late final TabController _tabs;
   List<_MarkItem> _all = [];
   bool _loading = true;
+  bool _syncing = false;
   final _shareKeys = <String, GlobalKey>{};
 
   List<_MarkItem> get _bookmarks {
@@ -198,6 +200,36 @@ class _BookmarkPageState extends State<BookmarkPage>
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('书签导入失败：$e')));
+    }
+  }
+
+  Future<void> _syncBookmarks({required bool upload}) async {
+    if (_syncing || !BookmarkService.isReady) return;
+    setState(() => _syncing = true);
+    try {
+      final local = BookmarkService.list();
+      final count = upload
+          ? await BookmarkSyncService.uploadMerged(local: local)
+          : await BookmarkSyncService.downloadAndMerge(
+              local: local,
+              apply: (json) async {
+                BookmarkService.importJson(json);
+              },
+            );
+      if (!upload) await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(upload ? '已上传并合并 $count 条书签' : '已合并 $count 条书签'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('WebDAV 书签同步失败：$e')));
+    } finally {
+      if (mounted) setState(() => _syncing = false);
     }
   }
 
@@ -422,6 +454,20 @@ class _BookmarkPageState extends State<BookmarkPage>
             tooltip: '导出书签 JSON',
             onPressed: BookmarkService.isReady ? _exportBookmarks : null,
             icon: const Icon(Icons.file_download_outlined),
+          ),
+          IconButton(
+            tooltip: '上传书签到 WebDAV',
+            onPressed: BookmarkService.isReady && !_syncing
+                ? () => _syncBookmarks(upload: true)
+                : null,
+            icon: const Icon(Icons.cloud_upload_outlined),
+          ),
+          IconButton(
+            tooltip: '从 WebDAV 合并书签',
+            onPressed: BookmarkService.isReady && !_syncing
+                ? () => _syncBookmarks(upload: false)
+                : null,
+            icon: const Icon(Icons.cloud_download_outlined),
           ),
           IconButton(
             tooltip: '导出 Obsidian Markdown',

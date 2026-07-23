@@ -6,6 +6,7 @@ import '../../bridge/legado_db_bridge.dart';
 import '../../bridge/legado_engine_bridge.dart';
 import '../../services/backup_service.dart';
 import '../../services/webdav_prefs.dart';
+import '../../src/rust/api/webdav.dart' as webdav_api;
 import '../../theme/legado_tokens.dart';
 
 /// 备份与恢复 — WebDAV + 本地（Phase 4.2）
@@ -21,6 +22,8 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
   bool _busy = false;
   WebDavConfig? _webdav;
   List<File> _localBackups = [];
+  List<webdav_api.WebDavEntry> _remoteBackups = [];
+  bool _remoteBusy = false;
 
   @override
   void initState() {
@@ -41,6 +44,26 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
         _webdav = webdav;
         _localBackups = local;
       });
+    }
+    if (webdav.isReady) {
+      await _refreshRemoteBackups(silent: true);
+    }
+  }
+
+  Future<void> _refreshRemoteBackups({bool silent = false}) async {
+    if (_webdav?.isReady != true) return;
+    if (mounted) setState(() => _remoteBusy = true);
+    try {
+      final items = await _service.listWebDavBackups();
+      if (mounted) setState(() => _remoteBackups = items);
+    } catch (e) {
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('列出备份失败: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _remoteBusy = false);
     }
   }
 
@@ -98,9 +121,9 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
     }
     setState(() => _busy = true);
     try {
-      final items = await _service.listWebDavBackups();
+      await _refreshRemoteBackups();
       if (!mounted) return;
-      if (items.isEmpty) {
+      if (_remoteBackups.isEmpty) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('WebDAV 上暂无备份文件')));
@@ -110,7 +133,7 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
         context: context,
         builder: (ctx) => SimpleDialog(
           title: const Text('选择 WebDAV 备份'),
-          children: items
+          children: _remoteBackups
               .map(
                 (e) => SimpleDialogOption(
                   onPressed: () => Navigator.pop(ctx, e.path),
@@ -121,6 +144,7 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
         ),
       );
       if (selected != null) {
+        if (mounted) setState(() => _busy = false);
         await _confirmRestore(() => _service.restoreFromWebDav(selected));
       }
     } catch (e) {
@@ -131,6 +155,90 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
       }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _deleteRemoteBackup(webdav_api.WebDavEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除备份'),
+        content: Text('确定删除「${entry.name}」？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _remoteBusy = true);
+    try {
+      await _service.deleteWebDavBackup(entry.path);
+      await _refreshRemoteBackups(silent: true);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('已删除 ${entry.name}')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('删除备份失败: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _remoteBusy = false);
+    }
+  }
+
+  Future<void> _renameRemoteBackup(webdav_api.WebDavEntry entry) async {
+    final controller = TextEditingController(text: entry.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重命名备份'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '新名称'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.trim() == entry.name || !mounted) return;
+    setState(() => _remoteBusy = true);
+    try {
+      await _service.renameWebDavBackup(entry.path, name);
+      await _refreshRemoteBackups(silent: true);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('重命名成功')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('重命名失败: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _remoteBusy = false);
     }
   }
 
@@ -213,7 +321,56 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
               ),
         ],
         const SizedBox(height: 20),
-        Text('WebDAV 备份', style: theme.textTheme.titleSmall),
+        Row(
+          children: [
+            Expanded(
+              child: Text('WebDAV 备份', style: theme.textTheme.titleSmall),
+            ),
+            IconButton(
+              tooltip: '刷新 WebDAV 备份',
+              onPressed: webdavOk && !_busy && !_remoteBusy
+                  ? _refreshRemoteBackups
+                  : null,
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        if (webdavOk && _remoteBusy)
+          const LinearProgressIndicator(minHeight: 2),
+        if (webdavOk && !_remoteBusy && _remoteBackups.isEmpty)
+          const ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.cloud_queue_outlined),
+            title: Text('暂无云端备份'),
+          ),
+        if (webdavOk && !_remoteBusy)
+          ..._remoteBackups.map(
+            (entry) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.cloud_outlined),
+              title: Text(entry.name),
+              subtitle: Text('${entry.size} B'),
+              onTap: !_busy
+                  ? () => _confirmRestore(
+                      () => _service.restoreFromWebDav(entry.path),
+                    )
+                  : null,
+              trailing: PopupMenuButton<String>(
+                tooltip: '备份操作',
+                onSelected: (action) {
+                  if (action == 'rename') {
+                    _renameRemoteBackup(entry);
+                  } else if (action == 'delete') {
+                    _deleteRemoteBackup(entry);
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'rename', child: Text('重命名')),
+                  PopupMenuItem(value: 'delete', child: Text('删除')),
+                ],
+              ),
+            ),
+          ),
         const SizedBox(height: 8),
         FilledButton.tonalIcon(
           onPressed: engineReady && webdavOk && !_busy

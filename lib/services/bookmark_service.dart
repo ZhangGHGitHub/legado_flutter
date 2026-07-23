@@ -67,6 +67,25 @@ class BookmarkService {
     return encodeJson(list(bookId: bookId));
   }
 
+  /// 合并本地与远端书签；时间主键冲突时保留远端记录。
+  static List<rust_api.BookmarkDto> mergeRemote(
+    Iterable<rust_api.BookmarkDto> local,
+    Iterable<rust_api.BookmarkDto> remote,
+  ) {
+    final merged = <int, rust_api.BookmarkDto>{
+      for (final bookmark in local) bookmark.time: bookmark,
+    };
+    for (final bookmark in remote) {
+      merged[bookmark.time] = bookmark;
+    }
+    return merged.values.toList(growable: false);
+  }
+
+  /// 合并原版 bookmark.json；重复时间主键按远端最后写入语义处理。
+  static String mergeRemoteJson(String localRaw, String remoteRaw) {
+    return encodeJson(mergeRemote(decodeJson(localRaw), decodeJson(remoteRaw)));
+  }
+
   /// 编码为原版 bookmark.json 的数组格式，并保留本地 bookId 扩展。
   static String encodeJson(Iterable<rust_api.BookmarkDto> bookmarks) {
     final items = bookmarks

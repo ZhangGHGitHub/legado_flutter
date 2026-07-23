@@ -12,6 +12,8 @@ void main() {
     }
 
     expect(find.text('书签与想法'), findsOneWidget);
+    expect(find.byTooltip('上传书签到 WebDAV'), findsOneWidget);
+    expect(find.byTooltip('从 WebDAV 合并书签'), findsOneWidget);
     // 默认 Tab 为「书签」；想法空态在第二 Tab
     expect(find.text('暂无书签'), findsOneWidget);
 

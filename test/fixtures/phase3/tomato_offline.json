@@ -1,0 +1,38 @@
+{
+  "/api/novel/search": {
+    "data": {
+      "items": [
+        {
+          "articleid": "1001",
+          "articlename": "离线番茄书",
+          "author": "离线作者",
+          "intro": "固定 JSON fixture",
+          "chapters": 1
+        }
+      ]
+    }
+  },
+  "/api/novel/detail/1001": {
+    "data": {
+      "articleid": "1001",
+      "articlename": "离线番茄书",
+      "author": "离线作者",
+      "intro": "固定 JSON fixture 详情",
+      "lastchapter": "第一章",
+      "chapters": 1
+    }
+  },
+  "/api/chapter/list/1001": {
+    "data": [
+      {
+        "chapterid": "2001",
+        "chaptername": "第一章"
+      }
+    ]
+  },
+  "/api/chapter/content/1001/2001": {
+    "data": {
+      "content": "<p>离线番茄正文第一段，用于验证 JSON 与 JS 清洗。</p><p>离线番茄正文第二段。</p>"
+    }
+  }
+}

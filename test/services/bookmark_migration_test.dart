@@ -57,4 +57,24 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('remote bookmark merge keeps the union and remote wins conflicts', () {
+    const local = '''[
+      {"time": 1, "bookName": "本地书签", "chapterIndex": 1},
+      {"time": 2, "bookName": "仅本地", "chapterIndex": 2}
+    ]''';
+    const remote = '''[
+      {"time": 1, "bookName": "远端更新", "chapterIndex": 3},
+      {"time": 3, "bookName": "仅远端", "chapterIndex": 4}
+    ]''';
+
+    final merged = BookmarkService.decodeJson(
+      BookmarkService.mergeRemoteJson(local, remote),
+    );
+
+    expect(merged, hasLength(3));
+    expect(merged.map((bookmark) => bookmark.time), [1, 2, 3]);
+    expect(merged.first.bookName, '远端更新');
+    expect(merged.first.chapterIndex, 3);
+  });
 }

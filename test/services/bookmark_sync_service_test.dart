@@ -1,0 +1,188 @@
+import 'dart:convert';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/services/bookmark_service.dart';
+import 'package:legado_flutter/services/bookmark_sync_service.dart';
+import 'package:legado_flutter/services/webdav_prefs.dart';
+import 'package:legado_flutter/src/rust/api.dart' as rust_api;
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  const local = [
+    rust_api.BookmarkDto(
+      time: 1,
+      bookId: 'book-1',
+      bookName: '测试书',
+      bookAuthor: '作者',
+      chapterIndex: 1,
+      chapterPos: 10,
+      chapterName: '第二章',
+      bookText: '本地',
+      content: '',
+    ),
+    rust_api.BookmarkDto(
+      time: 2,
+      bookId: 'book-1',
+      bookName: '测试书',
+      bookAuthor: '作者',
+      chapterIndex: 2,
+      chapterPos: 20,
+      chapterName: '第三章',
+      bookText: '仅本地',
+      content: '',
+    ),
+  ];
+  const remote = [
+    rust_api.BookmarkDto(
+      time: 1,
+      bookId: 'book-1',
+      bookName: '测试书',
+      bookAuthor: '作者',
+      chapterIndex: 3,
+      chapterPos: 30,
+      chapterName: '第四章',
+      bookText: '远端更新',
+      content: '',
+    ),
+    rust_api.BookmarkDto(
+      time: 3,
+      bookId: 'book-1',
+      bookName: '测试书',
+      bookAuthor: '作者',
+      chapterIndex: 4,
+      chapterPos: 40,
+      chapterName: '第五章',
+      bookText: '仅远端',
+      content: '',
+    ),
+  ];
+
+  test('upload merges remote bookmarks before writing bookmark.json', () async {
+    await WebDavPrefs.save(
+      const WebDavConfig(
+        url: 'https://dav.example.com/dav',
+        account: 'account',
+        password: 'password',
+        dir: '/legado',
+      ),
+    );
+    String? uploadedPath;
+    String? uploadedJson;
+
+    final count = await BookmarkSyncService.uploadMerged(
+      local: local,
+      download:
+          ({
+            required String url,
+            required String username,
+            required String password,
+            required String remotePath,
+          }) async {
+            return utf8.encode(BookmarkService.encodeJson(remote));
+          },
+      upload:
+          ({
+            required String url,
+            required String username,
+            required String password,
+            required String remotePath,
+            required List<int> data,
+          }) async {
+            uploadedPath = remotePath;
+            uploadedJson = utf8.decode(data);
+          },
+    );
+
+    expect(count, 3);
+    expect(uploadedPath, '/legado/bookmark.json');
+    final merged = BookmarkService.decodeJson(uploadedJson!);
+    expect(merged.map((bookmark) => bookmark.time), [1, 2, 3]);
+    expect(merged.first.bookText, '远端更新');
+  });
+
+  test('upload creates bookmark.json when remote file is missing', () async {
+    await WebDavPrefs.save(
+      const WebDavConfig(
+        url: 'https://dav.example.com/dav',
+        account: 'account',
+        password: 'password',
+        dir: '/legado',
+      ),
+    );
+    String? uploadedJson;
+
+    final count = await BookmarkSyncService.uploadMerged(
+      local: local,
+      download:
+          ({
+            required String url,
+            required String username,
+            required String password,
+            required String remotePath,
+          }) async {
+            throw StateError('下载失败: HTTP 404');
+          },
+      upload:
+          ({
+            required String url,
+            required String username,
+            required String password,
+            required String remotePath,
+            required List<int> data,
+          }) async {
+            uploadedJson = utf8.decode(data);
+          },
+    );
+
+    expect(count, 2);
+    expect(BookmarkService.decodeJson(uploadedJson!), local);
+  });
+
+  test('download merges remote bookmarks before applying locally', () async {
+    await WebDavPrefs.save(
+      const WebDavConfig(
+        url: 'https://dav.example.com/dav',
+        account: 'account',
+        password: 'password',
+        dir: '/legado',
+      ),
+    );
+    String? appliedJson;
+
+    final count = await BookmarkSyncService.downloadAndMerge(
+      local: local,
+      download:
+          ({
+            required String url,
+            required String username,
+            required String password,
+            required String remotePath,
+          }) async {
+            return utf8.encode(BookmarkService.encodeJson(remote));
+          },
+      apply: (json) async {
+        appliedJson = json;
+      },
+    );
+
+    expect(count, 3);
+    expect(BookmarkService.decodeJson(appliedJson!).first.bookText, '远端更新');
+  });
+
+  test('bookmark sync rejects incomplete WebDAV config', () async {
+    await WebDavPrefs.save(
+      const WebDavConfig(url: 'https://dav.example.com/dav'),
+    );
+    expect(
+      () => BookmarkSyncService.downloadAndMerge(
+        local: const [],
+        apply: (json) async {},
+      ),
+      throwsA(isA<StateError>()),
+    );
+  });
+}

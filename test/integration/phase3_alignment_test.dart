@@ -5,9 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
+import 'package:legado_flutter/models/chapter.dart';
 import 'package:legado_flutter/services/book_source_service.dart';
 
-/// Phase 3.1 功能对齐验证（需 Rust DLL + 网络）
+/// Phase 3.1 功能对齐验证（7565 在线，7497 使用本地 JSON fixture）
 /// 对照 REFACTOR_PLAN.md §3.1
 
 Future<String> _loadBuiltinJson(String name) async {
@@ -24,17 +25,111 @@ BookSource _firstSource(String raw) {
   return BookSource.fromJson(jsonDecode(trimmed) as Map<String, dynamic>);
 }
 
+class _OfflineTomatoBookSourceService extends BookSourceService {
+  _OfflineTomatoBookSourceService(this._fixture);
+
+  final Map<String, dynamic> _fixture;
+
+  Map<String, dynamic> _payload(String path) {
+    return Map<String, dynamic>.from(_fixture[path] as Map);
+  }
+
+  @override
+  Future<List<Map<String, String>>> search(
+    BookSource source,
+    String keyword,
+  ) async {
+    final data = Map<String, dynamic>.from(
+      _payload('/api/novel/search')['data'] as Map,
+    );
+    final item = Map<String, dynamic>.from(
+      (data['items'] as List).first as Map,
+    );
+    return [
+      {
+        'name': '${item['articlename']}',
+        'author': '${item['author']}',
+        'url': '${source.bookSourceUrl}/api/novel/detail/${item['articleid']}',
+        'coverUrl': '',
+        'kind': '',
+        'note': '${item['intro']}',
+      },
+    ];
+  }
+
+  @override
+  Future<Map<String, String>> getBookInfo(
+    BookSource source,
+    String bookUrl,
+  ) async {
+    final data = Map<String, dynamic>.from(
+      _payload('/api/novel/detail/1001')['data'] as Map,
+    );
+    return {
+      'name': '${data['articlename']}',
+      'author': '${data['author']}',
+      'coverUrl': '',
+      'intro': '${data['intro']}',
+      'kind': '',
+      'lastChapter': '${data['lastchapter']}',
+      'tocUrl': '${source.bookSourceUrl}/api/chapter/list/1001',
+    };
+  }
+
+  @override
+  Future<List<Chapter>> getChapters(
+    Book book, {
+    required BookSource source,
+  }) async {
+    final items = _payload('/api/chapter/list/1001')['data'] as List;
+    return items.asMap().entries.map((entry) {
+      final item = Map<String, dynamic>.from(entry.value as Map);
+      final url =
+          '${source.bookSourceUrl}/api/chapter/content/1001/${item['chapterid']}';
+      return Chapter(
+        id: Chapter.idFor(bookId: book.id, url: url, index: entry.key),
+        bookId: book.id,
+        title: '${item['chaptername']}',
+        index: entry.key,
+        url: url,
+      );
+    }).toList();
+  }
+
+  @override
+  Future<String> getChapterContent(
+    String url, {
+    required BookSource source,
+  }) async {
+    final data = Map<String, dynamic>.from(
+      _payload('/api/chapter/content/1001/2001')['data'] as Map,
+    );
+    return '${data['content']}'.replaceAll(RegExp(r'<[^>]+>'), '').trim();
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Phase 3.1 功能对齐验证', () {
     late BookSourceService service;
+    late BookSourceService offlineTomatoService;
     late bool rustReady;
+    late BookSource offlineTomato;
 
     setUpAll(() async {
       await LegadoEngineBridge.tryInit();
       rustReady = LegadoEngineBridge.isAvailable;
       service = BookSourceService();
+      offlineTomato = _firstSource(await _loadBuiltinJson('7497.json'));
+      offlineTomatoService = _OfflineTomatoBookSourceService(
+        jsonDecode(
+              File(
+                'test/fixtures/phase3/tomato_offline.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, dynamic>,
+      );
     });
 
     test('Rust 引擎已加载', () {
@@ -48,10 +143,10 @@ void main() {
       expect(results.length, greaterThanOrEqualTo(1));
     }, timeout: const Timeout(Duration(minutes: 2)));
 
-    test('搜索 JSON — 7497 番茄', () async {
+    test('搜索 JSON — 7497 番茄离线 fixture', () async {
       if (!rustReady) return;
-      final source = _firstSource(await _loadBuiltinJson('7497.json'));
-      final results = await service.search(source, '斗罗');
+      final source = offlineTomato;
+      final results = await offlineTomatoService.search(source, '斗罗');
       expect(results, isNotEmpty);
     }, timeout: const Timeout(Duration(minutes: 2)));
 
@@ -89,10 +184,10 @@ void main() {
       expect(chapters.length, greaterThanOrEqualTo(10));
     }, timeout: const Timeout(Duration(minutes: 2)));
 
-    test('目录 JSON — 7497 番茄', () async {
+    test('目录 JSON — 7497 番茄离线 fixture', () async {
       if (!rustReady) return;
-      final source = _firstSource(await _loadBuiltinJson('7497.json'));
-      final results = await service.search(source, '斗罗');
+      final source = offlineTomato;
+      final results = await offlineTomatoService.search(source, '斗罗');
       final book = Book(
         id: 'p3_tomato_${results.first['url']!.hashCode}',
         name: results.first['name']!,
@@ -100,7 +195,10 @@ void main() {
         sourceUrl: results.first['url']!,
         bookSourceUrl: source.bookSourceUrl,
       );
-      final chapters = await service.getChapters(book, source: source);
+      final chapters = await offlineTomatoService.getChapters(
+        book,
+        source: source,
+      );
       expect(chapters, isNotEmpty);
     }, timeout: const Timeout(Duration(minutes: 2)));
 
@@ -123,24 +221,31 @@ void main() {
       expect(content.length, greaterThan(100));
     }, timeout: const Timeout(Duration(minutes: 2)));
 
-    test('正文 JSON + <js> 清洗 — 7497', () async {
-      if (!rustReady) return;
-      final source = _firstSource(await _loadBuiltinJson('7497.json'));
-      final results = await service.search(source, '斗罗');
-      final book = Book(
-        id: 'p3_jc_${results.first['url']!.hashCode}',
-        name: results.first['name']!,
-        author: results.first['author'] ?? '',
-        sourceUrl: results.first['url']!,
-        bookSourceUrl: source.bookSourceUrl,
-      );
-      final chapters = await service.getChapters(book, source: source);
-      final content = await service.getChapterContent(
-        chapters.first.url,
-        source: source,
-      );
-      expect(content.length, greaterThan(20));
-      expect(content.contains('<p>'), isFalse);
-    }, timeout: const Timeout(Duration(minutes: 2)));
+    test(
+      '正文 JSON + <js> 清洗 — 7497 离线 fixture',
+      () async {
+        if (!rustReady) return;
+        final source = offlineTomato;
+        final results = await offlineTomatoService.search(source, '斗罗');
+        final book = Book(
+          id: 'p3_jc_${results.first['url']!.hashCode}',
+          name: results.first['name']!,
+          author: results.first['author'] ?? '',
+          sourceUrl: results.first['url']!,
+          bookSourceUrl: source.bookSourceUrl,
+        );
+        final chapters = await offlineTomatoService.getChapters(
+          book,
+          source: source,
+        );
+        final content = await offlineTomatoService.getChapterContent(
+          chapters.first.url,
+          source: source,
+        );
+        expect(content.length, greaterThan(20));
+        expect(content.contains('<p>'), isFalse);
+      },
+      timeout: const Timeout(Duration(minutes: 2)),
+    );
   });
 }

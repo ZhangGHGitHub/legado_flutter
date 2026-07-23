@@ -81,7 +81,7 @@ class LegadoEngine
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -1053075667;
+  int get rustContentHash => -1501441230;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -396,6 +396,13 @@ abstract class LegadoEngineApi extends BaseApi {
 
   WebApiStatus crateApiWebApiStatus();
 
+  Future<void> crateApiWebdavWebdavCheck({
+    required String url,
+    required String username,
+    required String password,
+    required String path,
+  });
+
   Future<void> crateApiWebdavWebdavDelete({
     required String url,
     required String username,
@@ -410,11 +417,26 @@ abstract class LegadoEngineApi extends BaseApi {
     required String remotePath,
   });
 
+  Future<void> crateApiWebdavWebdavEnsureDir({
+    required String url,
+    required String username,
+    required String password,
+    required String path,
+  });
+
   Future<List<WebDavEntry>> crateApiWebdavWebdavList({
     required String url,
     required String username,
     required String password,
     required String path,
+  });
+
+  Future<void> crateApiWebdavWebdavMove({
+    required String url,
+    required String username,
+    required String password,
+    required String remotePath,
+    required String destinationPath,
   });
 
   Future<void> crateApiWebdavWebdavUpload({
@@ -2761,6 +2783,44 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       const TaskConstMeta(debugName: "web_api_status", argNames: []);
 
   @override
+  Future<void> crateApiWebdavWebdavCheck({
+    required String url,
+    required String username,
+    required String password,
+    required String path,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(url, serializer);
+          sse_encode_String(username, serializer);
+          sse_encode_String(password, serializer);
+          sse_encode_String(path, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 78,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiWebdavWebdavCheckConstMeta,
+        argValues: [url, username, password, path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiWebdavWebdavCheckConstMeta => const TaskConstMeta(
+    debugName: "webdav_check",
+    argNames: ["url", "username", "password", "path"],
+  );
+
+  @override
   Future<void> crateApiWebdavWebdavDelete({
     required String url,
     required String username,
@@ -2778,7 +2838,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 78,
+            funcId: 79,
             port: port_,
           );
         },
@@ -2816,7 +2876,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 79,
+            funcId: 80,
             port: port_,
           );
         },
@@ -2838,6 +2898,45 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       );
 
   @override
+  Future<void> crateApiWebdavWebdavEnsureDir({
+    required String url,
+    required String username,
+    required String password,
+    required String path,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(url, serializer);
+          sse_encode_String(username, serializer);
+          sse_encode_String(password, serializer);
+          sse_encode_String(path, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 81,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiWebdavWebdavEnsureDirConstMeta,
+        argValues: [url, username, password, path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiWebdavWebdavEnsureDirConstMeta =>
+      const TaskConstMeta(
+        debugName: "webdav_ensure_dir",
+        argNames: ["url", "username", "password", "path"],
+      );
+
+  @override
   Future<List<WebDavEntry>> crateApiWebdavWebdavList({
     required String url,
     required String username,
@@ -2855,7 +2954,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 80,
+            funcId: 82,
             port: port_,
           );
         },
@@ -2873,6 +2972,46 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
   TaskConstMeta get kCrateApiWebdavWebdavListConstMeta => const TaskConstMeta(
     debugName: "webdav_list",
     argNames: ["url", "username", "password", "path"],
+  );
+
+  @override
+  Future<void> crateApiWebdavWebdavMove({
+    required String url,
+    required String username,
+    required String password,
+    required String remotePath,
+    required String destinationPath,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(url, serializer);
+          sse_encode_String(username, serializer);
+          sse_encode_String(password, serializer);
+          sse_encode_String(remotePath, serializer);
+          sse_encode_String(destinationPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 83,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiWebdavWebdavMoveConstMeta,
+        argValues: [url, username, password, remotePath, destinationPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiWebdavWebdavMoveConstMeta => const TaskConstMeta(
+    debugName: "webdav_move",
+    argNames: ["url", "username", "password", "remotePath", "destinationPath"],
   );
 
   @override
@@ -2895,7 +3034,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 81,
+            funcId: 84,
             port: port_,
           );
         },
