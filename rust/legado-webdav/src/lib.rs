@@ -13,6 +13,11 @@ pub enum WebDavError {
     Http(#[from] reqwest::Error),
     #[error("url: {0}")]
     Url(#[from] url::ParseError),
+    #[error("{operation} 失败: HTTP {status}")]
+    HttpStatus {
+        operation: &'static str,
+        status: u16,
+    },
     #[error("{0}")]
     Message(String),
 }
@@ -73,10 +78,7 @@ impl WebDavClient {
             .send()
             .await?;
         if !resp.status().is_success() {
-            return Err(WebDavError::Message(format!(
-                "PROPFIND 失败: {}",
-                resp.status()
-            )));
+            return Err(http_status_error("PROPFIND", resp.status()));
         }
         let text = resp.text().await?;
         Ok(parse_propfind(&text, &target))
@@ -92,7 +94,7 @@ impl WebDavClient {
             .send()
             .await?;
         if !resp.status().is_success() {
-            return Err(WebDavError::Message(format!("上传失败: {}", resp.status())));
+            return Err(http_status_error("上传", resp.status()));
         }
         Ok(())
     }
@@ -106,7 +108,7 @@ impl WebDavClient {
             .send()
             .await?;
         if !resp.status().is_success() {
-            return Err(WebDavError::Message(format!("下载失败: {}", resp.status())));
+            return Err(http_status_error("下载", resp.status()));
         }
         Ok(resp.bytes().await?.to_vec())
     }
@@ -120,7 +122,7 @@ impl WebDavClient {
             .send()
             .await?;
         if !resp.status().is_success() && resp.status().as_u16() != 404 {
-            return Err(WebDavError::Message(format!("删除失败: {}", resp.status())));
+            return Err(http_status_error("删除", resp.status()));
         }
         Ok(())
     }
@@ -150,6 +152,13 @@ impl WebDavClient {
         let mut url = self.base_url.clone();
         url.set_path(&format!("{}{}", url.path().trim_end_matches('/'), rel));
         Ok(url)
+    }
+}
+
+fn http_status_error(operation: &'static str, status: reqwest::StatusCode) -> WebDavError {
+    WebDavError::HttpStatus {
+        operation,
+        status: status.as_u16(),
     }
 }
 
@@ -347,5 +356,21 @@ mod tests {
         let base = Url::parse("https://dav.example.com/remote/legado/").unwrap();
         let items = parse_propfind(xml, &base);
         assert_eq!(items[0].last_modified, 0);
+    }
+
+    #[test]
+    fn http_status_errors_preserve_operation_and_code() {
+        assert_eq!(
+            http_status_error("PROPFIND", reqwest::StatusCode::UNAUTHORIZED).to_string(),
+            "PROPFIND 失败: HTTP 401"
+        );
+        assert_eq!(
+            http_status_error("上传", reqwest::StatusCode::FORBIDDEN).to_string(),
+            "上传 失败: HTTP 403"
+        );
+        assert_eq!(
+            http_status_error("下载", reqwest::StatusCode::BAD_GATEWAY).to_string(),
+            "下载 失败: HTTP 502"
+        );
     }
 }

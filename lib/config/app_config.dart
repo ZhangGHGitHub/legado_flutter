@@ -6,6 +6,7 @@ class AppConfig extends ChangeNotifier {
   static const _showDiscoveryKey = 'app_config_show_discovery';
   static const _showRssKey = 'app_config_show_rss';
   static const _defaultHomePageKey = 'app_config_default_home';
+  static const _syncBookProgressKey = 'app_config_sync_book_progress';
 
   static AppConfig? _instance;
   static AppConfig get instance => _instance ??= AppConfig._();
@@ -21,12 +22,14 @@ class AppConfig extends ChangeNotifier {
   bool _showDiscovery = true;
   bool _showRSS = true;
   String _defaultHomePage = 'bookshelf';
+  bool _syncBookProgress = true;
   bool _loaded = false;
   Future<void>? _loadFuture;
 
   bool get showDiscovery => _showDiscovery;
   bool get showRSS => _showRSS;
   String get defaultHomePage => _defaultHomePage;
+  bool get syncBookProgress => _syncBookProgress;
   bool get isLoaded => _loaded;
 
   Future<void> load() {
@@ -42,6 +45,7 @@ class AppConfig extends ChangeNotifier {
       _defaultHomePage = _normalizeHomePage(
         prefs.getString(_defaultHomePageKey) ?? 'bookshelf',
       );
+      _syncBookProgress = prefs.getBool(_syncBookProgressKey) ?? true;
       _loaded = true;
       notifyListeners();
     } finally {
@@ -72,6 +76,14 @@ class AppConfig extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_defaultHomePageKey, normalized);
+  }
+
+  Future<void> setSyncBookProgress(bool value) async {
+    if (_syncBookProgress == value) return;
+    _syncBookProgress = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_syncBookProgressKey, value);
   }
 
   static String _normalizeHomePage(String v) {

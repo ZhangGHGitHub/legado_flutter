@@ -16,7 +16,9 @@ void main() {
     await LegadoEngineBridge.tryInit();
     if (!LegadoEngineBridge.isAvailable) return;
 
-    final tempDir = await Directory.systemTemp.createTemp('legado_backup_test_');
+    final tempDir = await Directory.systemTemp.createTemp(
+      'legado_backup_test_',
+    );
     await LegadoDbBridge.init(
       dbPathOverride: p.join(tempDir.path, 'legado.db'),
     );
@@ -28,5 +30,22 @@ void main() {
     expect(map['database'], isA<Map>());
     expect(map['settings'], isA<Map>());
     expect((map['database'] as Map)['books'], isA<List>());
+  });
+
+  test('BackupService WebDAV actions require complete credentials', () async {
+    SharedPreferences.setMockInitialValues({
+      'webdav_url': 'https://dav.example.com/dav',
+    });
+
+    await expectLater(
+      BackupService().backupToWebDav(),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          '请先配置 WebDAV',
+        ),
+      ),
+    );
   });
 }

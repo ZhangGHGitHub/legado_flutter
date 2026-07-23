@@ -12,6 +12,7 @@ import '../help/content_processor.dart';
 import '../help/shelf_unread.dart';
 import '../model/read_book.dart';
 import '../services/book_source_service.dart';
+import '../services/book_progress_sync.dart';
 import '../services/chapter_progress_migrator.dart';
 import '../services/local_book_service.dart';
 import '../utils/site_busy_guard.dart';
@@ -1064,6 +1065,27 @@ class BookProvider extends ChangeNotifier {
     _books = await _dao.getAll();
     await _refreshShelfChapterMetaFor(bookId);
     notifyListeners();
+  }
+
+  /// 批量拉取 WebDAV 进度，并按原版规则只覆盖领先的本地书籍。
+  Future<int> downloadAllBookProgress() async {
+    final books = List<Book>.from(_books);
+    return BookProgressSync.downloadAllBookProgress(
+      books: books,
+      apply: (book, remote) async {
+        final total = book.totalChapterNum;
+        final progress = total > 0
+            ? ((remote.durChapterIndex + 1) / total).clamp(0.0, 1.0)
+            : book.progress;
+        await updateProgress(
+          book.id,
+          progress,
+          remote.durChapterTitle ?? book.currentChapter,
+          pageIndex: remote.durChapterPos,
+          durChapterIndex: remote.durChapterIndex,
+        );
+      },
+    );
   }
 
   /// 更新书籍分组

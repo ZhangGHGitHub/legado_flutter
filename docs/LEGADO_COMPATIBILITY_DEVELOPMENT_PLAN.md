@@ -387,6 +387,62 @@
 - 静态检查：本步未改变阅读正文和断行链路；Rust 仍仅有仓库既有 FRB 配置、未使用字段等警告。全量 `cargo fmt --all -- --check` 仍会被仓库其他既有未格式化文件阻断，本步涉及 Rust 文件已使用绝对路径 `rustfmt` 格式化。
 - 当前边界：本地 `syncTime` 存储、完整 `downloadAllBookProgress`、远端领先/本地领先决策和上传成功后的同步时间更新仍待下一独立子步骤，模块 4K 尚未完成。
 
+#### 模块 4K-2：本地同步时间与远端进度决策核心
+
+- 原版对照依据：`AppWebDav.uploadBookProgress()` 上传成功后写入 `Book.syncTime = System.currentTimeMillis()`；批量下载先跳过 `lastModify <= syncTime` 的远程文件，再仅在远端章节索引更大或同章位置更大时覆盖本地。
+- 本地修改：`BookProgressSync` 使用按书名/作者对应进度文件名隔离的 `SharedPreferences` 键保存本地同步时间；上传成功后记录当前毫秒时间；新增纯决策函数，严格按远程文件修改时间优先、章节索引和章内位置其次的顺序返回跳过、保留本地或应用远端结果。
+- 新增测试：`test/services/book_progress_sync_test.dart` 3/3，覆盖同步时间按书隔离持久化、远程文件未变化时优先跳过，以及远端新文件下的进度领先/不领先分支。
+- 断行约束：本子步骤只处理同步时间元数据和进度比较，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：Flutter 全量测试 305/305；Rust workspace 测试全部通过；Rust 文档测试通过；`git diff --check` 通过。
+- 静态检查：本步未新增 Rust/FRB 诊断；Flutter analyze 仍保持仓库既有 47 条诊断，未修改无关诊断或测试。
+- 当前边界：批量列出 `bookProgress/`、读取每本远程进度并覆盖本地书籍、下载后写回同步时间，以及真实 WebDAV 网络集成测试仍待下一独立子步骤，模块 4K 尚未完成。
+
+#### 模块 4K-3：批量 WebDAV 进度下载与本地书籍覆盖
+
+- 原版对照依据：`AppWebDav.downloadAllBookProgress()` 列出 `bookProgress/` 后按 `${name}_${author}.json` 匹配书籍；先比较远程 `lastModify` 与本地 `syncTime`，再读取远程进度，只覆盖章节索引或章内位置领先的书籍。
+- 本地修改：`BookProgressSync.downloadAllBookProgress()` 接入 WebDAV 列表和下载 API，按文件名过滤目录条目、按上一小步决策核心处理时间和位置，并在本地覆盖回调成功后保存同步时间；`BookProvider.downloadAllBookProgress()` 将远端章索引、章内位置、章节标题和全书进度映射回现有书籍字段。列表/下载函数可注入，便于离线验证。
+- 新增测试：批量固定 JSON/条目测试 1 项，连同同步决策定向测试共 4/4；覆盖远程文件匹配、路径、远端领先覆盖和下载后同步时间落盘。
+- 断行约束：本子步骤只处理 WebDAV 进度元数据和书籍进度字段回写，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：Rust workspace 与文档测试通过；Flutter 定向测试 4/4 通过；全量 Flutter 测试 306/306 通过；本次全量测试中 `phase3_alignment_test.dart` 与 `src_7497_smoke_test.dart` 的 7497 在线请求均通过；未修改测试。
+- 静态检查：`git diff --check` 通过；本子步骤未修改正文原文、净化顺序、中文禁则、断行或分页逻辑。
+- 当前边界：批量 WebDAV 进度下载和本地书籍覆盖已完成；WebDAV 上传前的配置就绪判定、上传调用可测试性和跨设备冲突收尾仍待下一独立子步骤。
+
+#### 模块 4K-4：WebDAV 进度上传配置门禁与成功落盘
+
+- 原版对照依据：`AppWebDav.upConfig()` 只有账号和密码均存在时才建立授权；`uploadBookProgress()` 在授权、同步开关和网络均可用后上传，上传成功才更新本地同步时间。
+- 本地修改：`BookProgressSync` 的单本读取、批量下载和上传统一要求 `WebDavConfig.isReady`（URL、账号、密码齐全）；上传 API 支持注入调用函数和当前时间，便于离线验证远程路径、JSON 载荷及成功后的同步时间持久化。
+- 新增测试：`test/services/book_progress_sync_test.dart` 6/6，覆盖不完整配置不触发 WebDAV、上传路径与认证参数、固定 JSON 载荷和成功后同步时间落盘。
+- 断行约束：本子步骤只处理 WebDAV 配置、上传载荷和同步时间元数据，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：Flutter 定向测试 6/6；Flutter 全量测试 308/308；Rust workspace 测试与文档测试通过；`git diff --check` 通过；Flutter analyze 仍为仓库既有 47 条诊断，未新增本步文件诊断。
+- 当前边界：WebDAV 进度读写链路已完成本地离线验收；真实 WebDAV 服务器认证、网络异常和跨设备书签冲突仍待后续独立子步骤，模块 4K 尚未整体完成。
+
+#### 模块 4K-5：阅读进度同步开关与上传门禁
+
+- 原版对照依据：`AppConfig.syncBookProgress` 默认值为 `true`；`AppWebDav.uploadBookProgress()` 在授权后先检查该开关，关闭时直接跳过上传。
+- 本地修改：`AppConfig` 新增持久化的 `syncBookProgress` 配置及读写方法，默认保持开启；`BookProgressSync.uploadBookProgress()` 加载该配置，关闭时不调用 WebDAV、不更新同步时间，开启时保持 4K-4 的认证和上传行为。
+- 新增测试：AppConfig 定向测试 2/2；WebDAV 进度同步定向测试 7/7，覆盖默认值、跨实例持久化，以及关闭开关时不上传不落盘。
+- 断行约束：本子步骤只处理阅读进度同步配置和 WebDAV 上传门禁，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：Flutter 全量测试首次因 `novel.cooks.tw` 校验请求瞬时 `502 Bad Gateway` 出现 2 个在线失败；未修改测试，单独重试后通过，最终全量 Flutter 测试 309/309；Rust workspace 测试与文档测试通过；`flutter analyze` 保持仓库既有 47 条诊断；`git diff --check` 通过。
+- 当前边界：阅读进度同步开关和本地上传门禁已完成；真实 WebDAV 服务器认证/网络异常以及跨设备书签冲突和远端合并策略仍待后续独立子步骤，模块 4K 尚未整体完成。
+
+#### 模块 4K-6：WebDAV HTTP 状态错误保留
+
+- 原版对照依据：WebDAV 操作失败由 `AppWebDav` 捕获并记录具体异常；本地 Rust WebDAV 层需要把列目录、上传、下载和删除的 HTTP 状态传回 Dart，供上层显示或记录。
+- 本地修改：`legado-webdav` 新增带操作名和 HTTP 状态码的 `HttpStatus` 错误变体；PROPFIND、上传、下载和删除不再把非 2xx 响应压成无结构普通消息，401/403/404/5xx 的状态码保留在错误文本中。
+- 新增测试：`legado-webdav` crate 定向测试 4/4，覆盖既有路径/XML 日期解析和 401、403、502 的操作与状态码映射。
+- 断行约束：本子步骤只处理 WebDAV HTTP 错误元数据传递，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：Rust engine 测试与文档测试通过；`legado-webdav` 定向测试 4/4；Flutter analyze 保持仓库既有 47 条诊断；7497 对齐测试 9/9；Flutter 全量 309/309；`git diff --check` 通过。此前在线 502 已恢复，未修改测试。
+- 当前边界：WebDAV HTTP 状态错误传递已完成；跨设备书签冲突和远端合并策略仍待后续独立子步骤，模块 4K 尚未整体完成。
+
+#### 模块 4K-7：WebDAV 备份凭证门禁
+
+- 原版对照依据：`AppWebDav.upConfig()` 只有账号和密码都存在且授权成功时才建立可用 WebDAV；备份上传、备份列表和恢复都依赖该授权状态。
+- 本地修改：`BackupService` 的 WebDAV 上传、列表和恢复统一要求 `WebDavConfig.isReady`；备份页的状态显示和恢复入口同步使用完整凭证状态，URL 单独存在时不再继续调用远端。
+- 新增测试：备份服务定向测试 2/2，覆盖完整备份 JSON 回归和缺少账号/密码时的本地拒绝；备份页回归测试 1/1。
+- 断行约束：本子步骤只处理 WebDAV 备份配置门禁，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：Rust workspace 测试与文档测试通过；Flutter 定向测试通过；Flutter 全量测试 310/310；Flutter analyze 保持仓库既有 47 条诊断；`git diff --check` 通过。
+- 当前边界：WebDAV 进度和备份的本地凭证门禁已完成；真实服务器认证交互、跨设备书签冲突和远端合并策略仍待后续独立子步骤，模块 4K 尚未整体完成。
+
 ## 4. 每个模块的固定工作流
 
 1. 运行上一步全量测试，记录基线。

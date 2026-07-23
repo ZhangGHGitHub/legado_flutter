@@ -30,7 +30,8 @@ class BackupService {
 
   Future<String> createFullBackupJson() async {
     _requireReady();
-    final database = jsonDecode(backup_api.exportBackup()) as Map<String, dynamic>;
+    final database =
+        jsonDecode(backup_api.exportBackup()) as Map<String, dynamic>;
     final settings = await SettingsBackup.collect();
     return const JsonEncoder.withIndent('  ').convert({
       'version': 1,
@@ -57,10 +58,7 @@ class BackupService {
     if (database is! Map) {
       throw const FormatException('备份缺少 database 字段');
     }
-    backup_api.restoreBackup(
-      json: jsonEncode(database),
-      replace: replace,
-    );
+    backup_api.restoreBackup(json: jsonEncode(database), replace: replace);
     final settings = root['settings'];
     if (settings is Map<String, dynamic>) {
       await SettingsBackup.apply(settings);
@@ -93,13 +91,15 @@ class BackupService {
 
   String _remotePath(WebDavConfig config, String filename) {
     final base = config.dir.endsWith('/') ? config.dir : '${config.dir}/';
-    final device = config.device.trim().isEmpty ? 'Legado Flutter' : config.device.trim();
+    final device = config.device.trim().isEmpty
+        ? 'Legado Flutter'
+        : config.device.trim();
     return '$base$device/$filename'.replaceAll('//', '/');
   }
 
   Future<void> backupToWebDav() async {
     final config = await WebDavPrefs.load();
-    if (!config.isConfigured) {
+    if (!config.isReady) {
       throw StateError('请先配置 WebDAV');
     }
     final json = await createFullBackupJson();
@@ -116,7 +116,7 @@ class BackupService {
 
   Future<List<webdav_api.WebDavEntry>> listWebDavBackups() async {
     final config = await WebDavPrefs.load();
-    if (!config.isConfigured) {
+    if (!config.isReady) {
       throw StateError('请先配置 WebDAV');
     }
     final remoteDir = _remotePath(config, '').replaceAll(RegExp(r'/+$'), '');
@@ -126,15 +126,16 @@ class BackupService {
       password: config.password,
       path: remoteDir.isEmpty ? config.dir : remoteDir,
     );
-    return items
-        .where((e) => !e.isDir && e.name.endsWith('.json'))
-        .toList()
+    return items.where((e) => !e.isDir && e.name.endsWith('.json')).toList()
       ..sort((a, b) => b.name.compareTo(a.name));
   }
 
-  Future<void> restoreFromWebDav(String remotePath, {bool replace = true}) async {
+  Future<void> restoreFromWebDav(
+    String remotePath, {
+    bool replace = true,
+  }) async {
     final config = await WebDavPrefs.load();
-    if (!config.isConfigured) {
+    if (!config.isReady) {
       throw StateError('请先配置 WebDAV');
     }
     final bytes = await webdav_api.webdavDownload(

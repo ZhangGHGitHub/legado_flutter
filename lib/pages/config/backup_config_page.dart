@@ -51,13 +51,15 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
       await action();
       await _load();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(success)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(success)));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('操作失败: $e')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -71,8 +73,14 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
         title: const Text('确认恢复'),
         content: const Text('将用备份覆盖当前书架、书源与设置，是否继续？'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('恢复')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('恢复'),
+          ),
         ],
       ),
     );
@@ -82,10 +90,10 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
   }
 
   Future<void> _restoreFromWebDavList() async {
-    if (_webdav?.isConfigured != true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先在「我的」配置 WebDAV')),
-      );
+    if (_webdav?.isReady != true) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先在「我的」配置 WebDAV')));
       return;
     }
     setState(() => _busy = true);
@@ -93,9 +101,9 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
       final items = await _service.listWebDavBackups();
       if (!mounted) return;
       if (items.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('WebDAV 上暂无备份文件')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('WebDAV 上暂无备份文件')));
         return;
       }
       final selected = await showDialog<String>(
@@ -113,15 +121,13 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
         ),
       );
       if (selected != null) {
-        await _confirmRestore(
-          () => _service.restoreFromWebDav(selected),
-        );
+        await _confirmRestore(() => _service.restoreFromWebDav(selected));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('列出备份失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('列出备份失败: $e')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -131,8 +137,9 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final engineReady = LegadoEngineBridge.isAvailable && LegadoDbBridge.isReady;
-    final webdavOk = _webdav?.isConfigured ?? false;
+    final engineReady =
+        LegadoEngineBridge.isAvailable && LegadoDbBridge.isReady;
+    final webdavOk = _webdav?.isReady ?? false;
 
     return ListView(
       padding: const EdgeInsets.all(LegadoTokens.spacingMd),
@@ -150,7 +157,9 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
           child: ListTile(
             leading: Icon(
               webdavOk ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
-              color: webdavOk ? theme.colorScheme.primary : theme.colorScheme.outline,
+              color: webdavOk
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline,
             ),
             title: const Text('WebDAV'),
             subtitle: Text(
@@ -164,9 +173,9 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
         FilledButton.icon(
           onPressed: engineReady && !_busy
               ? () => _run(() async {
-                    final f = await _service.backupToLocalFile();
-                    debugPrint('saved ${f.path}');
-                  }, '已保存到应用文档/backups/')
+                  final f = await _service.backupToLocalFile();
+                  debugPrint('saved ${f.path}');
+                }, '已保存到应用文档/backups/')
               : null,
           icon: const Icon(Icons.save_alt),
           label: const Text('一键本地备份'),
@@ -175,8 +184,8 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
         OutlinedButton.icon(
           onPressed: engineReady && !_busy
               ? () => _confirmRestore(() async {
-                    await _service.pickAndRestore();
-                  })
+                  await _service.pickAndRestore();
+                })
               : null,
           icon: const Icon(Icons.restore),
           label: const Text('从文件恢复'),
@@ -184,19 +193,24 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
         if (_localBackups.isNotEmpty) ...[
           const SizedBox(height: 12),
           Text('最近本地备份', style: theme.textTheme.labelMedium),
-          ..._localBackups.take(3).map(
-            (f) => ListTile(
-              dense: true,
-              title: Text(f.uri.pathSegments.last, style: const TextStyle(fontSize: 13)),
-              subtitle: Text(f.path, style: const TextStyle(fontSize: 11)),
-              onTap: engineReady && !_busy
-                  ? () => _confirmRestore(() async {
-                        final raw = await f.readAsString();
-                        await _service.restoreFromJson(raw);
-                      })
-                  : null,
-            ),
-          ),
+          ..._localBackups
+              .take(3)
+              .map(
+                (f) => ListTile(
+                  dense: true,
+                  title: Text(
+                    f.uri.pathSegments.last,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  subtitle: Text(f.path, style: const TextStyle(fontSize: 11)),
+                  onTap: engineReady && !_busy
+                      ? () => _confirmRestore(() async {
+                          final raw = await f.readAsString();
+                          await _service.restoreFromJson(raw);
+                        })
+                      : null,
+                ),
+              ),
         ],
         const SizedBox(height: 20),
         Text('WebDAV 备份', style: theme.textTheme.titleSmall),
