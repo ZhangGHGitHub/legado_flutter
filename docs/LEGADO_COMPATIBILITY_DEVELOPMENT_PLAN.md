@@ -247,7 +247,14 @@
 - 当前结果：Flutter 仍仅识别 Windows、Chrome、Edge；雷电实例 `dnplayer.exe`/`ldconsole` 正在运行。雷电界面显示的 `emulator-5554` 是设备序列号；直接连接 `127.0.0.1:5554` 被拒绝，实际 `127.0.0.1:5555` 端口已找到，但 `D:\Android\platform-tools\adb.exe` 与雷电自带 ADB 均报告设备 `offline`；`flutter emulators` 仍返回无可用 AVD。
 - 结论：当前失败点是雷电 ADB 握手，不是业务测试失败；本子步骤无法完成真实 SVG 像素和 Android 逐页快照验收，也没有修改测试断言或用浏览器结果替代 Android 结果。
 - 恢复方案：在雷电中重启该实例，或关闭并重新开启“本地调试/ADB 调试”后，确认 `D:\Android\platform-tools\adb.exe devices` 显示 `127.0.0.1:5555 device`；随后重新执行 SVG 图片挂载、截图像素检查及固定字体/DPR/视口逐页快照对比。
-- 当前状态：环境阻塞，代码保持此前已通过的离线实现；模块 3 尚不能标记完成。
+- 当前状态：原雷电实例仍处于 ADB `offline`，但已重新启动独立 Android 设备 `emulator-5556`，设备状态为 `device`，720x1280、DPI 320、系统已启动。模块 3 尚不能标记完成。
+
+#### 模块 3A Android 在线设备定向回归
+
+- 当前设备：Flutter 识别 `emulator-5556`（Android 9 / API 28）；旧 `127.0.0.1:5555` 仍为 `offline`，未用于测试。
+- 定向测试：在 Android 设备上运行分页器、`ReaderMarkup`、`ReaderSelectableText` 和 SVG 图片组件测试 `21/21`，全部通过；覆盖中文/混排分页、图片占位尺寸、`[newpage]`、HTML 样式/链接、选择渲染和 SVG 失败回退。
+- APK 图形检查：`flutter build apk --debug` 在 Gradle `assembleDebug` 阶段超过 5 分钟无产出并被终止，未生成 APK，未进行应用安装截图；该失败属于 Android 构建环境阻塞，不修改业务断言或用桌面渲染替代。
+- 当前边界：仍缺少原版与重写版固定字体、DPR、内容区域、章节边界的逐页快照契约，21/21 定向测试不能替代最终逐页文本/字符范围/截图对比。
 
 ### 模块 4：进度迁移、缓存与同步一致性
 
