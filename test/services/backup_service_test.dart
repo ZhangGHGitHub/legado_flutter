@@ -34,6 +34,126 @@ void main() {
     expect(BackupService.extractJson(bytes), raw);
   });
 
+  test('BackupService emits the original app JSON file subset', () {
+    final raw = jsonEncode({
+      'version': 1,
+      'database': {
+        'books': [
+          {
+            'id': 'book-1',
+            'name': '测试书',
+            'author': '作者',
+            'bookSourceUrl': 'https://source.test',
+            'totalChapterNum': 10,
+            'durChapterIndex': 3,
+          },
+        ],
+        'sources': [
+          {'bookSourceUrl': 'https://source.test', 'bookSourceName': '测试源'},
+        ],
+        'bookmarks': [
+          {'time': 1, 'bookName': '测试书', 'bookAuthor': '作者'},
+        ],
+        'replaceRules': [
+          {'id': '7', 'pattern': '旧', 'replacement': '新'},
+        ],
+        'detailedReadRecords': [
+          {
+            'bookName': '测试书',
+            'sessions': [
+              {'startTime': 1, 'endTime': 2, 'readIteration': 0},
+            ],
+          },
+        ],
+      },
+    });
+
+    final archive = ZipDecoder().decodeBytes(BackupService.archiveJson(raw));
+    final names = archive.map((entry) => entry.name).toSet();
+    expect(
+      names,
+      containsAll([
+        'legado_backup.json',
+        'bookshelf.json',
+        'bookmark.json',
+        'bookSource.json',
+        'replaceRule.json',
+        'readRecord_detail.json',
+      ]),
+    );
+
+    final bookshelf = archive.firstWhere(
+      (entry) => entry.name == 'bookshelf.json',
+    );
+    final book =
+        (jsonDecode(utf8.decode(bookshelf.readBytes()!)) as List).single;
+    expect(book['bookUrl'], 'book-1');
+    expect(book['origin'], 'https://source.test');
+    expect(book['durChapterIndex'], 3);
+
+    final rule = archive.firstWhere(
+      (entry) => entry.name == 'replaceRule.json',
+    );
+    expect(
+      (jsonDecode(utf8.decode(rule.readBytes()!)) as List).single['id'],
+      7,
+    );
+  });
+
+  test('BackupService reads original app JSON files into the Rust wrapper', () {
+    final archive = Archive()
+      ..add(
+        ArchiveFile.string(
+          'backup/bookshelf.json',
+          jsonEncode([
+            {
+              'bookUrl': 'book-1',
+              'name': '测试书',
+              'author': '作者',
+              'origin': 'https://source.test',
+              'totalChapterNum': 10,
+              'durChapterIndex': 3,
+              'durChapterPos': 12,
+            },
+          ]),
+        ),
+      )
+      ..add(
+        ArchiveFile.string(
+          'backup/bookSource.json',
+          jsonEncode([
+            {'bookSourceUrl': 'https://source.test', 'bookSourceName': '测试源'},
+          ]),
+        ),
+      )
+      ..add(
+        ArchiveFile.string(
+          'backup/bookmark.json',
+          jsonEncode([
+            {
+              'time': 1,
+              'bookName': '测试书',
+              'bookAuthor': '作者',
+              'chapterIndex': 3,
+              'chapterPos': 12,
+            },
+          ]),
+        ),
+      );
+
+    final root =
+        jsonDecode(BackupService.extractJson(ZipEncoder().encodeBytes(archive)))
+            as Map<String, dynamic>;
+    final database = root['database'] as Map<String, dynamic>;
+    expect((database['books'] as List).single['id'], 'book-1');
+    expect((database['books'] as List).single['currentPageIndex'], 12);
+    expect(
+      (database['sources'] as List).single['bookSourceUrl'],
+      'https://source.test',
+    );
+    expect((database['bookmarks'] as List).single['bookId'], '');
+  });
+
   test(
     'BackupService uploads cloud backups directly under the WebDAV root',
     () {

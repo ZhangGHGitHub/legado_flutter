@@ -2,7 +2,7 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
-use reqwest::Client;
+use reqwest::{Client, Proxy};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use url::Url;
@@ -33,6 +33,14 @@ pub struct WebDavItem {
     pub last_modified: i64,
 }
 
+/// Proxy settings shared with the engine's NetworkConfig.
+#[derive(Debug, Clone)]
+pub struct WebDavProxy {
+    pub url: String,
+    pub username: String,
+    pub password: String,
+}
+
 pub struct WebDavClient {
     base_url: Url,
     username: String,
@@ -42,15 +50,34 @@ pub struct WebDavClient {
 
 impl WebDavClient {
     pub fn new(url: &str, username: &str, password: &str) -> Result<Self> {
+        Self::new_with_proxy(url, username, password, None)
+    }
+
+    pub fn new_with_proxy(
+        url: &str,
+        username: &str,
+        password: &str,
+        proxy: Option<&WebDavProxy>,
+    ) -> Result<Self> {
         let mut base = Url::parse(url.trim())?;
         if base.path().is_empty() {
             base.set_path("/");
         }
+
+        let mut builder = Client::builder().no_proxy();
+        if let Some(proxy_config) = proxy {
+            let mut proxy = Proxy::all(&proxy_config.url)?;
+            if !proxy_config.username.is_empty() {
+                proxy = proxy.basic_auth(&proxy_config.username, &proxy_config.password);
+            }
+            builder = builder.proxy(proxy);
+        }
+
         Ok(Self {
             base_url: base,
             username: username.to_string(),
             password: password.to_string(),
-            client: Client::builder().build()?,
+            client: builder.build()?,
         })
     }
 
@@ -239,61 +266,66 @@ fn parse_propfind(xml: &str, base: &Url) -> Vec<WebDavItem> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut items = Vec::new();
-    let mut in_response = false;
-    let mut href = String::new();
-    let mut size: i64 = 0;
-    let mut last_modified: i64 = 0;
-    let mut is_dir = false;
-    let mut in_collection = false;
+    let mut response: Option<ResponseBuilder> = None;
+    let mut field: Option<ResponseField> = None;
+    let mut field_text = String::new();
 
     loop {
         match reader.read_event() {
             Ok(Event::Start(e)) => {
-                let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                if name.ends_with("response") {
-                    in_response = true;
-                    href.clear();
-                    size = 0;
-                    last_modified = 0;
-                    is_dir = false;
-                    in_collection = false;
-                } else if in_response && name.ends_with("collection") {
-                    in_collection = true;
+                let raw_name = e.name();
+                let name = local_name(raw_name.as_ref());
+                if name == b"response" {
+                    response = Some(ResponseBuilder::default());
+                    field = None;
+                    field_text.clear();
+                } else if let Some(current) = response.as_mut() {
+                    if name == b"collection" {
+                        current.is_dir = true;
+                    }
+                    if let Some(next_field) = ResponseField::from_local_name(name) {
+                        field = Some(next_field);
+                        field_text.clear();
+                    }
                 }
             }
             Ok(Event::Text(t)) => {
-                if !in_response {
-                    continue;
+                if response.is_some() && field.is_some() {
+                    field_text.push_str(&t.unescape().unwrap_or_default());
                 }
-                let text = t.unescape().unwrap_or_default().to_string();
-                // href captured on End
-                let _ = text;
+            }
+            Ok(Event::CData(t)) => {
+                if response.is_some() && field.is_some() {
+                    field_text.push_str(&String::from_utf8_lossy(t.as_ref()));
+                }
             }
             Ok(Event::End(e)) => {
-                let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                if name.ends_with("href") && in_response {
-                    // quick-xml doesn't give us text on End easily; use a simpler approach below
-                } else if name.ends_with("getcontentlength") {
-                    // handled via regex fallback
-                } else if name.ends_with("response") {
-                    if !href.is_empty() {
-                        if let Some(item) = item_from_href(
-                            &href,
-                            base,
-                            is_dir || in_collection,
-                            size,
-                            last_modified,
-                        ) {
+                let raw_name = e.name();
+                let name = local_name(raw_name.as_ref());
+                if let Some(current_field) = field {
+                    if current_field.matches(name) {
+                        if let Some(current) = response.as_mut() {
+                            current.set_field(current_field, field_text.trim());
+                        }
+                        field = None;
+                        field_text.clear();
+                    }
+                }
+                if name == b"response" {
+                    if let Some(current) = response.take() {
+                        if let Some(item) = current.into_item(base) {
                             items.push(item);
                         }
                     }
-                    in_response = false;
+                    field = None;
+                    field_text.clear();
                 }
             }
             Ok(Event::Empty(e)) => {
-                let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                if name.ends_with("collection") {
-                    in_collection = true;
+                if let Some(current) = response.as_mut() {
+                    if local_name(e.name().as_ref()) == b"collection" {
+                        current.is_dir = true;
+                    }
                 }
             }
             Ok(Event::Eof) => break,
@@ -301,41 +333,70 @@ fn parse_propfind(xml: &str, base: &Url) -> Vec<WebDavItem> {
             _ => {}
         }
     }
-
-    if items.is_empty() {
-        items = parse_propfind_regex(xml, base);
-    }
     items
 }
 
-fn parse_propfind_regex(xml: &str, base: &Url) -> Vec<WebDavItem> {
-    let mut items = Vec::new();
-    let chunks: Vec<&str> = xml.split("<d:response").collect();
-    for chunk in chunks.iter().skip(1) {
-        let href = extract_tag(chunk, "d:href").or_else(|| extract_tag(chunk, "href"));
-        let Some(href) = href else { continue };
-        let is_dir = chunk.contains("<d:collection") || chunk.contains(":collection");
-        let size = extract_tag(chunk, "d:getcontentlength")
-            .or_else(|| extract_tag(chunk, "getcontentlength"))
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
-        let last_modified = extract_tag(chunk, "d:getlastmodified")
-            .or_else(|| extract_tag(chunk, "getlastmodified"))
-            .and_then(|s| parse_http_date_millis(&s))
-            .unwrap_or(0);
-        if let Some(item) = item_from_href(&href, base, is_dir, size, last_modified) {
-            items.push(item);
+#[derive(Debug, Default)]
+struct ResponseBuilder {
+    href: String,
+    display_name: String,
+    size: i64,
+    last_modified: i64,
+    is_dir: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ResponseField {
+    Href,
+    DisplayName,
+    ContentLength,
+    LastModified,
+}
+
+impl ResponseField {
+    fn from_local_name(name: &[u8]) -> Option<Self> {
+        match name {
+            b"href" => Some(Self::Href),
+            b"displayname" => Some(Self::DisplayName),
+            b"getcontentlength" => Some(Self::ContentLength),
+            b"getlastmodified" => Some(Self::LastModified),
+            _ => None,
         }
     }
-    items
+
+    fn matches(self, name: &[u8]) -> bool {
+        matches!(
+            (self, name),
+            (Self::Href, b"href")
+                | (Self::DisplayName, b"displayname")
+                | (Self::ContentLength, b"getcontentlength")
+                | (Self::LastModified, b"getlastmodified")
+        )
+    }
 }
 
-fn extract_tag(xml: &str, tag: &str) -> Option<String> {
-    let open = format!("<{tag}>");
-    let close = format!("</{tag}>");
-    let start = xml.find(&open)? + open.len();
-    let end = xml[start..].find(&close)? + start;
-    Some(xml[start..end].trim().to_string())
+impl ResponseBuilder {
+    fn set_field(&mut self, field: ResponseField, value: &str) {
+        match field {
+            ResponseField::Href => self.href = value.to_string(),
+            ResponseField::DisplayName => self.display_name = value.to_string(),
+            ResponseField::ContentLength => self.size = value.parse().unwrap_or(0),
+            ResponseField::LastModified => {
+                self.last_modified = parse_http_date_millis(value).unwrap_or(0)
+            }
+        }
+    }
+
+    fn into_item(self, base: &Url) -> Option<WebDavItem> {
+        item_from_href(
+            &self.href,
+            base,
+            self.is_dir,
+            self.size,
+            self.last_modified,
+            (!self.display_name.trim().is_empty()).then_some(self.display_name),
+        )
+    }
 }
 
 fn item_from_href(
@@ -344,17 +405,30 @@ fn item_from_href(
     is_dir: bool,
     size: i64,
     last_modified: i64,
+    display_name: Option<String>,
 ) -> Option<WebDavItem> {
-    let decoded = urlencoding_simple(href);
-    let path = if let Ok(u) = Url::parse(&decoded) {
-        u.path().to_string()
-    } else {
-        decoded
-    };
-    if path == base.path() || path.is_empty() {
+    let href = href.trim();
+    if href.is_empty() {
         return None;
     }
-    let name = path.trim_end_matches('/').rsplit('/').next()?.to_string();
+    let href_url = resolve_href(href, base)?;
+    let raw_path = href_url.path();
+    if same_path(raw_path, base.path()) || raw_path.is_empty() {
+        return None;
+    }
+    let mut path = raw_path.to_string();
+    if is_dir && !path.ends_with('/') {
+        path.push('/');
+    }
+    let href_name = raw_path
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .filter(|name| !name.is_empty())?;
+    let name = display_name
+        .filter(|name| !name.trim().is_empty())
+        .map(|name| percent_decode(&name))
+        .unwrap_or_else(|| percent_decode(href_name));
     if name.is_empty() {
         return None;
     }
@@ -367,16 +441,80 @@ fn item_from_href(
     })
 }
 
+fn local_name(name: &[u8]) -> &[u8] {
+    name.rsplit(|byte| *byte == b':').next().unwrap_or(name)
+}
+
+fn resolve_href(href: &str, base: &Url) -> Option<Url> {
+    if let Ok(url) = Url::parse(href) {
+        return Some(url);
+    }
+
+    let mut base_dir = base.clone();
+    let base_path = base.path();
+    let directory_path = if base_path.ends_with('/') {
+        base_path.to_string()
+    } else {
+        format!("{base_path}/")
+    };
+    base_dir.set_path(&directory_path);
+
+    if href.starts_with('/') {
+        let mut absolute_path = base.clone();
+        absolute_path.set_path(href);
+        Some(absolute_path)
+    } else {
+        base_dir.join(href).ok()
+    }
+}
+
+fn percent_decode(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            if let (Some(high), Some(low)) =
+                (hex_value(bytes[index + 1]), hex_value(bytes[index + 2]))
+            {
+                decoded.push((high << 4) | low);
+                index += 3;
+                continue;
+            }
+        }
+        decoded.push(bytes[index]);
+        index += 1;
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
+}
+
+fn hex_value(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn same_path(left: &str, right: &str) -> bool {
+    trim_trailing_slash(left) == trim_trailing_slash(right)
+}
+
+fn trim_trailing_slash(path: &str) -> &str {
+    if path == "/" {
+        path
+    } else {
+        path.trim_end_matches('/')
+    }
+}
+
 fn parse_http_date_millis(value: &str) -> Option<i64> {
     let duration = httpdate::parse_http_date(value)
         .ok()?
         .duration_since(std::time::UNIX_EPOCH)
         .ok()?;
     i64::try_from(duration.as_millis()).ok()
-}
-
-fn urlencoding_simple(s: &str) -> String {
-    s.replace("%20", " ")
 }
 
 #[cfg(test)]
@@ -388,6 +526,25 @@ mod tests {
         let client = WebDavClient::new("https://dav.example.com/remote", "u", "p").unwrap();
         let url = client.join_path("/legado/backup.json").unwrap();
         assert!(url.as_str().contains("backup.json"));
+    }
+
+    #[test]
+    fn client_constructs_with_http_and_socks5_proxy_auth() {
+        let http_proxy = WebDavProxy {
+            url: "http://127.0.0.1:7890".into(),
+            username: "http-user".into(),
+            password: "http-pass".into(),
+        };
+        WebDavClient::new_with_proxy("https://dav.example.com/", "", "", Some(&http_proxy))
+            .unwrap();
+
+        let socks5_proxy = WebDavProxy {
+            url: "socks5://127.0.0.1:1080".into(),
+            username: "socks-user".into(),
+            password: "socks-pass".into(),
+        };
+        WebDavClient::new_with_proxy("https://dav.example.com/", "", "", Some(&socks5_proxy))
+            .unwrap();
     }
 
     #[test]
@@ -414,6 +571,64 @@ mod tests {
             .unwrap();
         assert_eq!(item.size, 1024);
         assert_eq!(item.last_modified, 1_445_412_480_000);
+    }
+
+    #[test]
+    fn parse_propfind_is_namespace_agnostic_and_decodes_hrefs() {
+        let xml = r#"<?xml version="1.0"?>
+<multistatus xmlns="DAV:" xmlns:x="urn:server-dav">
+  <response>
+    <href><![CDATA[https://dav.example.com/remote/legado/dir%20name]]></href>
+    <propstat><prop>
+      <displayname>dir%20name</displayname>
+      <resourcetype><x:collection/></resourcetype>
+    </prop></propstat>
+  </response>
+  <response>
+    <href>https://dav.example.com/remote/legado/a%2Fb%20name%26v.json?download=1&amp;raw=true</href>
+    <propstat><prop>
+      <getcontentlength>42</getcontentlength>
+    </prop></propstat>
+  </response>
+</multistatus>"#;
+        let base = Url::parse("https://dav.example.com/remote/legado").unwrap();
+
+        let items = parse_propfind(xml, &base);
+
+        let directory = items.iter().find(|item| item.is_dir).unwrap();
+        assert_eq!(directory.name, "dir name");
+        assert_eq!(directory.path, "/remote/legado/dir%20name/");
+
+        let file = items.iter().find(|item| !item.is_dir).unwrap();
+        assert_eq!(file.name, "a/b name&v.json");
+        assert_eq!(file.path, "/remote/legado/a%2Fb%20name%26v.json");
+        assert_eq!(file.size, 42);
+
+        let client = WebDavClient::new("https://dav.example.com/", "", "").unwrap();
+        let request_url = client.join_path(&file.path).unwrap();
+        assert_eq!(request_url.path(), "/remote/legado/a%2Fb%20name%26v.json");
+    }
+
+    #[test]
+    fn parse_propfind_resolves_relative_href_and_skips_base_response() {
+        let xml = r#"<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/remote/legado/</D:href>
+    <D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype></D:prop></D:propstat>
+  </D:response>
+  <D:response>
+    <D:href>backup%20&amp;%20one.json</D:href>
+    <D:propstat><D:prop><D:displayname/></D:prop></D:propstat>
+  </D:response>
+</D:multistatus>"#;
+        let base = Url::parse("https://dav.example.com/remote/legado/").unwrap();
+
+        let items = parse_propfind(xml, &base);
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].name, "backup & one.json");
+        assert_eq!(items[0].path, "/remote/legado/backup%20&%20one.json");
+        assert!(!items[0].is_dir);
     }
 
     #[test]

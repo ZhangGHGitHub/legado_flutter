@@ -20,6 +20,15 @@ class BackupService {
 
   static const _archivePayloadName = 'legado_backup.json';
 
+  // These files are the stable subset whose JSON shape is shared with the
+  // original app. The wrapper remains the lossless payload for Rust-only data
+  // such as chapters and Flutter settings.
+  static const _legacyBookshelfName = 'bookshelf.json';
+  static const _legacyBookmarkName = 'bookmark.json';
+  static const _legacySourceName = 'bookSource.json';
+  static const _legacyReplaceRuleName = 'replaceRule.json';
+  static const _legacyDetailedRecordName = 'readRecord_detail.json';
+
   void _requireReady() {
     if (!LegadoEngineBridge.isAvailable || !LegadoDbBridge.isReady) {
       throw StateError('Rust 引擎或数据库未就绪');
@@ -41,6 +50,29 @@ class BackupService {
   static Uint8List archiveJson(String json) {
     final archive = Archive()
       ..add(ArchiveFile.string(_archivePayloadName, json));
+    final root = _decodeMap(json);
+    final database = root?['database'];
+    if (database is Map) {
+      _addLegacyJsonArray(
+        archive,
+        _legacyBookshelfName,
+        database['books'],
+        transform: _toOriginalBook,
+      );
+      _addLegacyJsonArray(archive, _legacyBookmarkName, database['bookmarks']);
+      _addLegacyJsonArray(archive, _legacySourceName, database['sources']);
+      _addLegacyJsonArray(
+        archive,
+        _legacyReplaceRuleName,
+        database['replaceRules'],
+        transform: _toOriginalReplaceRule,
+      );
+      _addLegacyJsonArray(
+        archive,
+        _legacyDetailedRecordName,
+        database['detailedReadRecords'],
+      );
+    }
     return ZipEncoder().encodeBytes(archive);
   }
 
@@ -49,14 +81,19 @@ class BackupService {
 
     try {
       final archive = ZipDecoder().decodeBytes(bytes);
-      final payload = archive.firstWhere(
-        (entry) =>
-            entry.isFile &&
-            (entry.name == _archivePayloadName ||
-                entry.name.toLowerCase().endsWith('.json')),
+      final payload = _findArchiveEntry(archive, _archivePayloadName);
+      if (payload != null) {
+        return utf8.decode(payload.readBytes() ?? const <int>[]);
+      }
+
+      final legacyPayload = _legacyZipToWrapper(archive);
+      if (legacyPayload != null) return jsonEncode(legacyPayload);
+
+      final fallback = archive.firstWhere(
+        (entry) => entry.isFile && entry.name.toLowerCase().endsWith('.json'),
         orElse: () => throw const FormatException('ZIP 备份缺少 JSON 数据'),
       );
-      return utf8.decode(payload.readBytes() ?? const <int>[]);
+      return utf8.decode(fallback.readBytes() ?? const <int>[]);
     } on FormatException {
       rethrow;
     } catch (error) {
@@ -77,6 +114,249 @@ class BackupService {
         .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+  }
+
+  static Map<String, dynamic>? _decodeMap(String raw) {
+    try {
+      final value = jsonDecode(raw);
+      return value is Map ? Map<String, dynamic>.from(value) : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  static List<dynamic>? _decodeList(String raw, String fileName) {
+    try {
+      final value = jsonDecode(raw);
+      if (value is! List) {
+        throw FormatException('$fileName 必须是 JSON 数组');
+      }
+      return value;
+    } on FormatException {
+      rethrow;
+    } catch (error) {
+      throw FormatException('$fileName JSON 无效: $error');
+    }
+  }
+
+  static Map<String, dynamic>? _asMap(Object? value) {
+    return value is Map ? Map<String, dynamic>.from(value) : null;
+  }
+
+  static String _asString(Object? value, [String fallback = '']) {
+    return value is String ? value : value?.toString() ?? fallback;
+  }
+
+  static int _asInt(Object? value, [int fallback = 0]) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? fallback;
+  }
+
+  static void _addLegacyJsonArray(
+    Archive archive,
+    String fileName,
+    Object? value, {
+    Map<String, dynamic> Function(Object value)? transform,
+  }) {
+    if (value is! List || value.isEmpty) return;
+    final items = value
+        .map((item) => transform?.call(item) ?? item)
+        .toList(growable: false);
+    archive.add(ArchiveFile.string(fileName, jsonEncode(items)));
+  }
+
+  static Map<String, dynamic> _toOriginalBook(Object value) {
+    final book = _asMap(value) ?? const <String, dynamic>{};
+    final total = _asInt(book['totalChapterNum']);
+    final index = _asInt(book['durChapterIndex']);
+    final origin = book['bookSourceUrl'] ?? book['sourceUrl'];
+    return {
+      'bookUrl': book['bookUrl'] ?? book['id'] ?? '',
+      'tocUrl': book['tocUrl'] ?? '',
+      'origin': origin ?? 'local',
+      'originName': book['originName'] ?? book['sourceName'] ?? '',
+      'name': book['name'] ?? '',
+      'author': book['author'] ?? '',
+      'kind': book['kind'],
+      'customTag': book['customTag'],
+      'coverUrl': book['coverUrl'],
+      'customCoverUrl': book['customCoverUrl'],
+      'intro': book['description'] ?? book['intro'],
+      'customIntro': book['customIntro'],
+      'charset': book['charset'],
+      'type': _legacyBookType(book['type']),
+      'group': book['group'] ?? book['bookGroup'] ?? 0,
+      'latestChapterTitle': book['latestChapterTitle'] ?? book['lastChapter'],
+      'latestChapterTime': book['latestChapterTime'] ?? 0,
+      'lastCheckTime': book['lastCheckTime'] ?? 0,
+      'lastCheckCount': book['lastCheckCount'] ?? 0,
+      'totalChapterNum': total,
+      'durChapterTitle': book['durChapterTitle'] ?? book['currentChapter'],
+      'durChapterIndex': index,
+      'durChapterPos': book['durChapterPos'] ?? book['currentPageIndex'] ?? 0,
+      'durChapterTime': book['durChapterTime'] ?? 0,
+      'wordCount': book['wordCount'],
+      'canUpdate': book['canUpdate'] ?? true,
+      'order': book['order'] ?? 0,
+      'originOrder': book['originOrder'] ?? 0,
+      'variable': book['variable'],
+      'readConfig': book['readConfig'],
+      'syncTime': book['syncTime'] ?? 0,
+      'readIteration': book['readIteration'] ?? 0,
+      'addTime': book['addTime'] ?? 0,
+      'preReadNote': book['preReadNote'],
+      'finishTime': book['finishTime'] ?? 0,
+      'postReadNote': book['postReadNote'],
+      'bookRating': book['bookRating'] ?? 0,
+    };
+  }
+
+  static Map<String, dynamic> _toOriginalReplaceRule(Object value) {
+    final rule = _asMap(value) ?? const <String, dynamic>{};
+    final id = rule['id'];
+    return {
+      ...rule,
+      if (id is String && int.tryParse(id) != null) 'id': int.parse(id),
+    };
+  }
+
+  static int _legacyBookType(Object? value) {
+    if (value is num) return value.toInt();
+    switch (value?.toString().toLowerCase()) {
+      case 'audio':
+        return 1;
+      case 'image':
+        return 2;
+      case 'file':
+        return 3;
+      case 'video':
+        return 4;
+      default:
+        return int.tryParse(value?.toString() ?? '') ?? 0;
+    }
+  }
+
+  static ArchiveFile? _findArchiveEntry(Archive archive, String fileName) {
+    final target = fileName.toLowerCase();
+    for (final entry in archive) {
+      if (entry.isFile &&
+          _archiveBaseName(entry.name).toLowerCase() == target) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  static String _archiveBaseName(String path) {
+    final slash = path.lastIndexOf('/');
+    return slash == -1 ? path : path.substring(slash + 1);
+  }
+
+  static String? _archiveEntryText(Archive archive, String fileName) {
+    final entry = _findArchiveEntry(archive, fileName);
+    if (entry == null) return null;
+    return utf8.decode(entry.readBytes() ?? const <int>[]);
+  }
+
+  static Map<String, dynamic>? _legacyZipToWrapper(Archive archive) {
+    final database = <String, dynamic>{};
+    var found = false;
+
+    final bookshelf = _archiveEntryText(archive, _legacyBookshelfName);
+    if (bookshelf != null) {
+      found = true;
+      database['books'] = _decodeList(
+        bookshelf,
+        _legacyBookshelfName,
+      )?.map((item) => _fromOriginalBook(item)).toList(growable: false);
+    }
+    final bookmarks = _archiveEntryText(archive, _legacyBookmarkName);
+    if (bookmarks != null) {
+      found = true;
+      database['bookmarks'] = _decodeList(
+        bookmarks,
+        _legacyBookmarkName,
+      )?.map((item) => _fromOriginalBookmark(item)).toList(growable: false);
+    }
+    final sources = _archiveEntryText(archive, _legacySourceName);
+    if (sources != null) {
+      found = true;
+      database['sources'] = _decodeList(sources, _legacySourceName);
+    }
+    final rules = _archiveEntryText(archive, _legacyReplaceRuleName);
+    if (rules != null) {
+      found = true;
+      database['replaceRules'] = _decodeList(
+        rules,
+        _legacyReplaceRuleName,
+      )?.map((item) => _fromOriginalReplaceRule(item)).toList(growable: false);
+    }
+    final detailed = _archiveEntryText(archive, _legacyDetailedRecordName);
+    if (detailed != null) {
+      found = true;
+      database['detailedReadRecords'] = _decodeList(
+        detailed,
+        _legacyDetailedRecordName,
+      );
+    }
+    if (!found) return null;
+
+    return {
+      'version': 1,
+      'database': database,
+      'settings': <String, dynamic>{},
+    };
+  }
+
+  static Map<String, dynamic> _fromOriginalBook(Object value) {
+    final book = _asMap(value) ?? const <String, dynamic>{};
+    final total = _asInt(book['totalChapterNum']);
+    final index = _asInt(book['durChapterIndex']);
+    final origin = book['origin'] ?? book['bookSourceUrl'];
+    return {
+      'id': book['bookUrl'] ?? book['id'] ?? '',
+      'name': book['name'] ?? '',
+      'author': book['author'] ?? '',
+      'coverUrl': book['coverUrl'] ?? '',
+      'type': _currentBookType(book['type']),
+      'progress': total > 0 ? index / total : 0,
+      'currentChapter': book['durChapterTitle'],
+      'lastChapter': book['latestChapterTitle'] ?? '',
+      'totalChapterNum': total,
+      'durChapterIndex': index,
+      'currentPageIndex': book['durChapterPos'] ?? 0,
+      'isFavorite': true,
+      'sourceUrl': origin ?? '',
+      'description': book['intro'] ?? '',
+      'bookSourceUrl': origin ?? '',
+      'group': book['group'] ?? '',
+      'readIteration': book['readIteration'] ?? 0,
+      'simReadEnabled': false,
+      'simReadStartDate': '',
+      'simReadStartChapter': 0,
+      'simReadDailyChapters': 3,
+    };
+  }
+
+  static Map<String, dynamic> _fromOriginalBookmark(Object value) {
+    final bookmark = _asMap(value) ?? const <String, dynamic>{};
+    return {...bookmark, 'bookId': bookmark['bookId'] ?? ''};
+  }
+
+  static Map<String, dynamic> _fromOriginalReplaceRule(Object value) {
+    final rule = _asMap(value) ?? const <String, dynamic>{};
+    return {
+      ...rule,
+      'id': _asString(rule['id']),
+      'isEnabled': rule['isEnabled'] ?? true,
+      'isRegex': rule['isRegex'] ?? true,
+    };
+  }
+
+  static String _currentBookType(Object? value) {
+    if (value is String) return value;
+    return _asInt(value).toString();
   }
 
   Future<String> createFullBackupJson() async {

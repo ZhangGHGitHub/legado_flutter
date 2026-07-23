@@ -9,16 +9,79 @@ import '../../services/webdav_prefs.dart';
 import '../../src/rust/api/webdav.dart' as webdav_api;
 import '../../theme/legado_tokens.dart';
 
+enum BackupOperation { other, list, upload, restore, delete, rename }
+
+String backupOperationErrorMessage(
+  Object error, {
+  required BackupOperation operation,
+}) {
+  final raw = error.toString();
+  final message = raw.toLowerCase();
+  final unsupported =
+      message.contains('405') ||
+      message.contains('501') ||
+      message.contains('method not allowed') ||
+      message.contains('not implemented');
+  final permission =
+      message.contains('401') ||
+      message.contains('403') ||
+      message.contains('unauthorized') ||
+      message.contains('forbidden') ||
+      message.contains('permission') ||
+      message.contains('access denied') ||
+      message.contains('无权限') ||
+      message.contains('权限') ||
+      message.contains('拒绝');
+
+  if (unsupported) {
+    switch (operation) {
+      case BackupOperation.delete:
+        return '服务器不支持删除（HTTP 405/501）。原备份未删除，仍可使用；请在服务器端启用 DELETE，或通过服务器管理界面删除。';
+      case BackupOperation.rename:
+        return '服务器不支持重命名（HTTP 405/501）。原备份未删除，仍可使用；请在服务器端启用 MOVE，或保留原名称。';
+      case BackupOperation.restore:
+        return '服务器不支持下载（HTTP 405/501）。当前数据未修改；请检查 WebDAV 读取能力后重试。';
+      case BackupOperation.list:
+        return '服务器不支持列出目录（HTTP 405/501）。云端原文件未改变；请检查 WebDAV 目录访问能力。';
+      case BackupOperation.upload:
+      case BackupOperation.other:
+        return '服务器不支持此 WebDAV 操作（HTTP 405/501）。本地备份仍保留；请检查服务器能力后重试。';
+    }
+  }
+
+  if (permission) {
+    switch (operation) {
+      case BackupOperation.delete:
+        return 'WebDAV 账号没有删除权限。原备份未删除，仍可使用；请改用有删除权限的账号或联系管理员。';
+      case BackupOperation.rename:
+        return 'WebDAV 账号没有重命名权限。原备份未删除，仍可使用；请改用有写入权限的账号或保留原名称。';
+      case BackupOperation.restore:
+        return 'WebDAV 账号没有读取权限。当前数据未修改；请检查账号权限和备份目录后重试。';
+      case BackupOperation.list:
+        return 'WebDAV 账号没有读取目录权限。云端原文件未改变；请检查账号权限和备份目录。';
+      case BackupOperation.upload:
+        return 'WebDAV 账号没有写入权限。本地备份仍保留；请改用有写入权限的账号或检查备份目录。';
+      case BackupOperation.other:
+        return 'WebDAV 账号权限不足。现有备份和本地数据未删除；请检查账号权限后重试。';
+    }
+  }
+
+  return '操作失败：$raw';
+}
+
 /// 备份与恢复 — WebDAV + 本地（Phase 4.2）
 class BackupConfigPage extends StatefulWidget {
-  const BackupConfigPage({super.key});
+  const BackupConfigPage({super.key, this.service});
+
+  @visibleForTesting
+  final BackupService? service;
 
   @override
   State<BackupConfigPage> createState() => _BackupConfigPageState();
 }
 
 class _BackupConfigPageState extends State<BackupConfigPage> {
-  final _service = BackupService();
+  late final BackupService _service = widget.service ?? BackupService();
   bool _busy = false;
   WebDavConfig? _webdav;
   List<File> _localBackups = [];
@@ -58,16 +121,24 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
       if (mounted) setState(() => _remoteBackups = items);
     } catch (e) {
       if (!silent && mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('列出备份失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              backupOperationErrorMessage(e, operation: BackupOperation.list),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _remoteBusy = false);
     }
   }
 
-  Future<void> _run(Future<void> Function() action, String success) async {
+  Future<void> _run(
+    Future<void> Function() action,
+    String success, {
+    BackupOperation operation = BackupOperation.other,
+  }) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
@@ -80,16 +151,21 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('操作失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(backupOperationErrorMessage(e, operation: operation)),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _confirmRestore(Future<void> Function() restore) async {
+  Future<void> _confirmRestore(
+    Future<void> Function() restore, {
+    BackupOperation operation = BackupOperation.restore,
+  }) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -108,7 +184,7 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
       ),
     );
     if (ok == true) {
-      await _run(restore, '恢复完成');
+      await _run(restore, '恢复完成', operation: operation);
     }
   }
 
@@ -149,9 +225,13 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('列出备份失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              backupOperationErrorMessage(e, operation: BackupOperation.list),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -188,9 +268,13 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('删除备份失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              backupOperationErrorMessage(e, operation: BackupOperation.delete),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _remoteBusy = false);
@@ -233,9 +317,13 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('重命名失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              backupOperationErrorMessage(e, operation: BackupOperation.rename),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _remoteBusy = false);
@@ -313,8 +401,9 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
                   subtitle: Text(f.path, style: const TextStyle(fontSize: 11)),
                   onTap: engineReady && !_busy
                       ? () => _confirmRestore(() async {
-                          final raw = await f.readAsString();
-                          await _service.restoreFromJson(raw);
+                          await _service.restoreFromBytes(
+                            await f.readAsBytes(),
+                          );
                         })
                       : null,
                 ),
@@ -353,6 +442,7 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
               onTap: !_busy
                   ? () => _confirmRestore(
                       () => _service.restoreFromWebDav(entry.path),
+                      operation: BackupOperation.restore,
                     )
                   : null,
               trailing: PopupMenuButton<String>(
@@ -374,7 +464,11 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
         const SizedBox(height: 8),
         FilledButton.tonalIcon(
           onPressed: engineReady && webdavOk && !_busy
-              ? () => _run(_service.backupToWebDav, '已上传到 WebDAV')
+              ? () => _run(
+                  _service.backupToWebDav,
+                  '已上传到 WebDAV',
+                  operation: BackupOperation.upload,
+                )
               : null,
           icon: const Icon(Icons.cloud_upload_outlined),
           label: const Text('上传到 WebDAV'),

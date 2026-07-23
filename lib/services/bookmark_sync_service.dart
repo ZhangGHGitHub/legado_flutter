@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import '../src/rust/api.dart' as rust_api;
@@ -26,6 +27,9 @@ typedef BookmarkWebDavUploadInvoker =
 class BookmarkSyncService {
   BookmarkSyncService._();
 
+  // Keep the full read/merge/write operation ordered within this app process.
+  static Future<void> _syncTail = Future<void>.value();
+
   static String remotePath(WebDavConfig config) {
     final base = config.dir.endsWith('/') ? config.dir : '${config.dir}/';
     return '${base}bookmark.json'.replaceAll(RegExp(r'/{2,}'), '/');
@@ -36,32 +40,34 @@ class BookmarkSyncService {
     BookmarkWebDavDownloadInvoker download = webdav_api.webdavDownload,
     BookmarkWebDavUploadInvoker upload = webdav_api.webdavUpload,
   }) async {
-    final config = await _readyConfig();
-    final localItems = local.toList(growable: false);
-    var merged = localItems;
-    try {
-      final bytes = await download(
+    return _withSyncLock(() async {
+      final config = await _readyConfig();
+      final localItems = local.toList(growable: false);
+      var merged = localItems;
+      try {
+        final bytes = await download(
+          url: config.url,
+          username: config.account,
+          password: config.password,
+          remotePath: remotePath(config),
+        );
+        merged = BookmarkService.mergeRemote(
+          localItems,
+          BookmarkService.decodeJson(utf8.decode(bytes)),
+        );
+      } catch (error) {
+        if (!_isNotFound(error)) rethrow;
+      }
+      final json = BookmarkService.encodeJson(merged);
+      await upload(
         url: config.url,
         username: config.account,
         password: config.password,
         remotePath: remotePath(config),
+        data: utf8.encode(json),
       );
-      merged = BookmarkService.mergeRemote(
-        localItems,
-        BookmarkService.decodeJson(utf8.decode(bytes)),
-      );
-    } catch (error) {
-      if (!_isNotFound(error)) rethrow;
-    }
-    final json = BookmarkService.encodeJson(merged);
-    await upload(
-      url: config.url,
-      username: config.account,
-      password: config.password,
-      remotePath: remotePath(config),
-      data: utf8.encode(json),
-    );
-    return merged.length;
+      return merged.length;
+    });
   }
 
   static Future<int> downloadAndMerge({
@@ -69,19 +75,33 @@ class BookmarkSyncService {
     required Future<void> Function(String mergedJson) apply,
     BookmarkWebDavDownloadInvoker download = webdav_api.webdavDownload,
   }) async {
-    final config = await _readyConfig();
-    final bytes = await download(
-      url: config.url,
-      username: config.account,
-      password: config.password,
-      remotePath: remotePath(config),
-    );
-    final merged = BookmarkService.mergeRemote(
-      local,
-      BookmarkService.decodeJson(utf8.decode(bytes)),
-    );
-    await apply(BookmarkService.encodeJson(merged));
-    return merged.length;
+    return _withSyncLock(() async {
+      final config = await _readyConfig();
+      final bytes = await download(
+        url: config.url,
+        username: config.account,
+        password: config.password,
+        remotePath: remotePath(config),
+      );
+      final merged = BookmarkService.mergeRemote(
+        local,
+        BookmarkService.decodeJson(utf8.decode(bytes)),
+      );
+      await apply(BookmarkService.encodeJson(merged));
+      return merged.length;
+    });
+  }
+
+  static Future<T> _withSyncLock<T>(Future<T> Function() action) async {
+    final previous = _syncTail;
+    final release = Completer<void>();
+    _syncTail = release.future;
+    await previous;
+    try {
+      return await action();
+    } finally {
+      release.complete();
+    }
   }
 
   static Future<WebDavConfig> _readyConfig() async {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -184,5 +185,130 @@ void main() {
       ),
       throwsA(isA<StateError>()),
     );
+  });
+
+  test('concurrent uploads are serialized within the app process', () async {
+    await WebDavPrefs.save(
+      const WebDavConfig(
+        url: 'https://dav.example.com/dav',
+        account: 'account',
+        password: 'password',
+        dir: '/legado',
+      ),
+    );
+    final firstDownloadEntered = Completer<void>();
+    final releaseFirstDownload = Completer<void>();
+    var downloadCalls = 0;
+    var activeOperations = 0;
+    var maximumActiveOperations = 0;
+
+    Future<void> enterOperation() async {
+      activeOperations++;
+      if (activeOperations > maximumActiveOperations) {
+        maximumActiveOperations = activeOperations;
+      }
+    }
+
+    Future<void> leaveOperation() async {
+      activeOperations--;
+    }
+
+    Future<List<int>> download({
+      required String url,
+      required String username,
+      required String password,
+      required String remotePath,
+    }) async {
+      downloadCalls++;
+      await enterOperation();
+      if (downloadCalls == 1) {
+        firstDownloadEntered.complete();
+        await releaseFirstDownload.future;
+      }
+      await leaveOperation();
+      return utf8.encode(BookmarkService.encodeJson(const []));
+    }
+
+    Future<void> upload({
+      required String url,
+      required String username,
+      required String password,
+      required String remotePath,
+      required List<int> data,
+    }) async {
+      await enterOperation();
+      await Future<void>.delayed(Duration.zero);
+      await leaveOperation();
+    }
+
+    final first = BookmarkSyncService.uploadMerged(
+      local: const [],
+      download: download,
+      upload: upload,
+    );
+    await firstDownloadEntered.future;
+    final second = BookmarkSyncService.uploadMerged(
+      local: const [],
+      download: download,
+      upload: upload,
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(downloadCalls, 1);
+
+    releaseFirstDownload.complete();
+    await Future.wait([first, second]);
+    expect(downloadCalls, 2);
+    expect(maximumActiveOperations, 1);
+  });
+
+  test('sync gate releases after an operation fails', () async {
+    await WebDavPrefs.save(
+      const WebDavConfig(
+        url: 'https://dav.example.com/dav',
+        account: 'account',
+        password: 'password',
+        dir: '/legado',
+      ),
+    );
+    var downloadCalls = 0;
+
+    Future<List<int>> download({
+      required String url,
+      required String username,
+      required String password,
+      required String remotePath,
+    }) async {
+      downloadCalls++;
+      if (downloadCalls == 1) {
+        throw StateError('模拟失败');
+      }
+      return utf8.encode(BookmarkService.encodeJson(const []));
+    }
+
+    Future<void> upload({
+      required String url,
+      required String username,
+      required String password,
+      required String remotePath,
+      required List<int> data,
+    }) async {}
+
+    await expectLater(
+      BookmarkSyncService.uploadMerged(
+        local: const [],
+        download: download,
+        upload: upload,
+      ),
+      throwsA(isA<StateError>()),
+    );
+    await expectLater(
+      BookmarkSyncService.uploadMerged(
+        local: const [],
+        download: download,
+        upload: upload,
+      ),
+      completion(0),
+    );
+    expect(downloadCalls, 2);
   });
 }
