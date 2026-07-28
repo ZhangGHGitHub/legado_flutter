@@ -1858,3 +1858,19 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - 旧 `pages/search` 路径引用扫描：无残留。
 
 边界结论：Search 页面已进入 `features/search` 功能域；R6 仍需继续收敛字典、替换、TXT 目录和漫画等过渡页面，并完成 UI/发布验收。
+
+## 87. 2026-07-29：R6 DictRule 功能域收敛
+
+迁移范围：
+
+- 将 `lib/pages/dict/dict_rule_page.dart` 迁移至 `lib/features/my/dict_rule_page.dart`，更新“我的”页入口。
+- 保持字典规则的加载、启用、编辑、删除、导入导出和规则测试行为不变；未修改字典查询、网络请求或阅读正文行为。
+- 涉及 Flutter app，无 Rust crate；未修改原版基线。
+
+测试结果：
+
+- 相关入口 `flutter analyze --no-pub`：无诊断。
+- 字典规则服务与查询面板定向测试：`10/10` 通过。
+- 旧 `pages/dict` 路径引用扫描：无残留。
+
+边界结论：DictRule 页面已进入 `features/my` 功能域；R6 仍需继续收敛替换、TXT 目录和漫画等过渡页面，并完成 UI/发布验收。
