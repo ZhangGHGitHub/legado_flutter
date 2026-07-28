@@ -1938,3 +1938,19 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - 旧 `pages/about` 路径引用扫描：无残留。
 
 边界结论：Donate 页面已进入 `features/my` 功能域；R6 仍需处理启动页及跨功能共享页面，并完成 UI/发布验收。
+
+## 92. 2026-07-29：R6 Welcome 启动功能域收敛
+
+迁移范围：
+
+- 将 `lib/pages/welcome/welcome_page.dart` 迁移至 `lib/features/main/welcome_page.dart`，更新 App 启动入口和 Welcome Widget 测试导入。
+- 保持启动闪屏时长、首帧后计时、完成回调、隐私键和品牌展示行为不变；未修改 MainShell、隐私流程或阅读行为。
+- 涉及 Flutter app，无 Rust crate；未修改原版基线。
+
+测试结果：
+
+- App 与启动页 `flutter analyze --no-pub`：无诊断。
+- Welcome 页面 Widget 测试：`5/5` 通过。
+- 旧 `pages/welcome` 路径引用扫描：无残留。
+
+边界结论：Welcome 页面已进入 `features/main` 功能域；R6 仍需处理跨功能共享页面，并完成 UI/发布验收。

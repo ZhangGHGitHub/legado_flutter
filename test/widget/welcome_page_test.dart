@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/welcome/welcome_page.dart';
+import 'package:legado_flutter/features/main/welcome_page.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
