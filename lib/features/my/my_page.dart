@@ -22,7 +22,7 @@ import '../../pages/replace/replace_page.dart';
 import '../../features/sources/sources_page.dart';
 import '../../pages/about/donate_page.dart';
 import 'dict_rule_page.dart';
-import '../../pages/txt_toc/txt_toc_rule_page.dart';
+import 'txt_toc_rule_page.dart';
 import 'file_manage_page.dart';
 import 'read_record_page.dart';
 import 'reading_skill_page.dart';

@@ -1874,3 +1874,19 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - 旧 `pages/dict` 路径引用扫描：无残留。
 
 边界结论：DictRule 页面已进入 `features/my` 功能域；R6 仍需继续收敛替换、TXT 目录和漫画等过渡页面，并完成 UI/发布验收。
+
+## 88. 2026-07-29：R6 TXT 目录规则功能域收敛
+
+迁移范围：
+
+- 将 `lib/pages/txt_toc/txt_toc_rule_page.dart` 迁移至 `lib/features/my/txt_toc_rule_page.dart`，更新“我的”页入口。
+- 保持 TXT 目录规则的加载、启用、编辑、删除和导入导出行为不变；未修改 TXT 目录解析、章节顺序、章节身份或阅读位置行为。
+- 涉及 Flutter app，无 Rust crate；未修改原版基线。
+
+测试结果：
+
+- 相关入口 `flutter analyze --no-pub`：无诊断。
+- TXT 目录规则偏好定向测试：`3/3` 通过。
+- 旧 `pages/txt_toc` 路径引用扫描：无残留。
+
+边界结论：TXT 目录规则页面已进入 `features/my` 功能域；R6 仍需继续收敛替换和漫画等过渡页面，并完成 UI/发布验收。
