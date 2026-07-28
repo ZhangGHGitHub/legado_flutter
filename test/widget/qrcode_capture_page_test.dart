@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/qrcode/qrcode_capture_page.dart';
+import 'package:legado_flutter/features/sources/qrcode_capture_page.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

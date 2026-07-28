@@ -1954,3 +1954,19 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - 旧 `pages/welcome` 路径引用扫描：无残留。
 
 边界结论：Welcome 页面已进入 `features/main` 功能域；R6 仍需处理跨功能共享页面，并完成 UI/发布验收。
+
+## 93. 2026-07-29：R6 二维码导入功能域收敛
+
+迁移范围：
+
+- 将 `lib/pages/qrcode/qrcode_capture_page.dart` 迁移至 `lib/features/sources/qrcode_capture_page.dart`，更新书源和 RSS 入口及 Widget 测试导入。
+- 保持相机扫码、图库识别、桌面端回退、结果校验和页面返回值行为不变；未修改书源导入、RSS 导入或平台权限语义。
+- 涉及 Flutter app，无 Rust crate；未修改原版基线。
+
+测试结果：
+
+- 书源、RSS 和二维码相关 `flutter analyze --no-pub`：无诊断。
+- 二维码页面 Widget 测试：`2/2` 通过。
+- 旧 `pages/qrcode` 路径引用扫描：无残留。
+
+边界结论：二维码页面已进入 `features/sources` 功能域；R6 仍需处理通用 WebView、AI、Obsidian 等共享页面，并完成 UI/发布验收。

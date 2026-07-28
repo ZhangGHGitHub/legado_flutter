@@ -9,7 +9,7 @@ import '../../services/rss_source_transfer_port.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/legado_popup_menu.dart';
-import '../../pages/qrcode/qrcode_capture_page.dart';
+import '../sources/qrcode_capture_page.dart';
 import 'rss_source_edit_page.dart';
 
 /// 订阅源管理 — 对齐 Jingshiro [RssSourceActivity] /
