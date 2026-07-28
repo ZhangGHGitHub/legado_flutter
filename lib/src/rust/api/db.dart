@@ -12,6 +12,19 @@ void dbInit({required String path}) =>
 
 int dbSchemaVersion() => LegadoEngine.instance.api.crateApiDbDbSchemaVersion();
 
+String dbProbeLegacyRoomDatabase({required String path}) =>
+    LegadoEngine.instance.api.crateApiDbDbProbeLegacyRoomDatabase(path: path);
+
+String dbImportLegacyRoomDatabase({
+  required String path,
+  String? backupPath,
+  required bool replace,
+}) => LegadoEngine.instance.api.crateApiDbDbImportLegacyRoomDatabase(
+  path: path,
+  backupPath: backupPath,
+  replace: replace,
+);
+
 void dbInsertBook({required String bookJson}) =>
     LegadoEngine.instance.api.crateApiDbDbInsertBook(bookJson: bookJson);
 

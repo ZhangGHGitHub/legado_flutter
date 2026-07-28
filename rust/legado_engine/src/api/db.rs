@@ -12,6 +12,20 @@ pub fn db_schema_version() -> Result<i32, String> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn db_probe_legacy_room_database(path: String) -> Result<String, String> {
+    db::db_probe_legacy_room_database(path)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn db_import_legacy_room_database(
+    path: String,
+    backup_path: Option<String>,
+    replace: bool,
+) -> Result<String, String> {
+    db::db_import_legacy_room_database(path, backup_path, replace)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn db_insert_book(book_json: String) -> Result<(), String> {
     db::db_insert_book(book_json)
 }

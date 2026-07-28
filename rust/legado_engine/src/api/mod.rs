@@ -478,9 +478,9 @@ pub async fn get_rss_content(source_json: String, article_link: String) -> Resul
 pub use db::{
     db_clear_replace_rules, db_delete_book, db_delete_replace_rule, db_delete_source, db_get_books,
     db_get_chapters, db_get_replace_rules, db_get_sources, db_init, db_insert_book,
-    db_insert_chapters, db_save_chapter_content, db_schema_version, db_toggle_replace_rule,
-    db_toggle_source, db_update_book_cover, db_update_book_group, db_update_book_progress,
-    db_upsert_replace_rule, db_upsert_source,
+    db_insert_chapters, db_probe_legacy_room_database, db_save_chapter_content, db_schema_version,
+    db_toggle_replace_rule, db_toggle_source, db_update_book_cover, db_update_book_group,
+    db_update_book_progress, db_upsert_replace_rule, db_upsert_source,
 };
 
 /// HTTP 请求并返回解码后的文本（调试用）

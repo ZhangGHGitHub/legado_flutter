@@ -4,10 +4,14 @@ use once_cell::sync::OnceCell;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
 use std::sync::Mutex;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i32 = 15;
+pub(crate) mod room_import;
+
+const SCHEMA_VERSION: i32 = 17;
 
 static DB: OnceCell<Mutex<EngineDb>> = OnceCell::new();
 
@@ -54,12 +58,14 @@ impl EngineDb {
                sourceUrl TEXT DEFAULT '',
                description TEXT DEFAULT '',
                bookSourceUrl TEXT DEFAULT '',
+               tocUrl TEXT DEFAULT '',
                bookGroup TEXT DEFAULT '',
                readIteration INTEGER DEFAULT 0,
                simReadEnabled INTEGER DEFAULT 0,
                simReadStartDate TEXT DEFAULT '',
                simReadStartChapter INTEGER DEFAULT 0,
                simReadDailyChapters INTEGER DEFAULT 3,
+               readConfig TEXT DEFAULT '{}',
                updatedAt TEXT DEFAULT (datetime('now'))
              );
              CREATE TABLE IF NOT EXISTS book_sources (
@@ -111,6 +117,14 @@ impl EngineDb {
                replacement TEXT DEFAULT '',
                isEnabled INTEGER DEFAULT 1,
                isRegex INTEGER DEFAULT 1
+             );
+             CREATE TABLE IF NOT EXISTS legacy_room_imports (
+               fingerprint TEXT PRIMARY KEY,
+               room_version INTEGER NOT NULL,
+               room_identity_hash TEXT,
+               raw_snapshot_json TEXT NOT NULL,
+               mapped_backup_json TEXT NOT NULL,
+               imported_at TEXT NOT NULL DEFAULT (datetime('now'))
              );",
         )?;
         let current: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -218,6 +232,17 @@ impl EngineDb {
                    ON bookmarks(book_name, book_author, chapter_index, chapter_pos);",
             )?;
         }
+        if current < 16 {
+            // Per-book reader settings are stored as the same nested JSON
+            // object used by the original app's Book.readConfig.
+            let _ = conn.execute(
+                "ALTER TABLE books ADD COLUMN readConfig TEXT DEFAULT '{}'",
+                [],
+            );
+        }
+        if current < 17 {
+            let _ = conn.execute("ALTER TABLE books ADD COLUMN tocUrl TEXT DEFAULT ''", []);
+        }
         if current < SCHEMA_VERSION {
             conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
         }
@@ -230,6 +255,131 @@ impl EngineDb {
             .query_row("PRAGMA user_version", [], |r| r.get(0))?)
     }
 
+    #[cfg(test)]
+    fn legacy_room_import_count(&self) -> Result<i64, DbError> {
+        Ok(self
+            .conn
+            .query_row("SELECT COUNT(*) FROM legacy_room_imports", [], |row| {
+                row.get(0)
+            })?)
+    }
+
+    pub fn import_legacy_room_database(
+        &self,
+        source_path: &str,
+        backup_path: Option<&str>,
+        replace: bool,
+    ) -> Result<room_import::LegacyRoomImportReport, DbError> {
+        let snapshot = room_import::extract_legacy_room_database(source_path)?;
+        let mapping = room_import::map_legacy_room_snapshot(&snapshot)?;
+        let fingerprint = room_import::snapshot_fingerprint(&snapshot);
+        let already_imported = self.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM legacy_room_imports WHERE fingerprint=?1)",
+            params![fingerprint],
+            |row| row.get::<_, i64>(0),
+        )? == 1;
+
+        let normalized_backup_path = backup_path
+            .filter(|path| !path.trim().is_empty())
+            .map(str::to_string);
+        if already_imported && !replace {
+            let archive_only_tables = mapping.archive_only_tables.clone();
+            let mut warnings = mapping.warnings;
+            warnings.push(format!(
+                "legacy Room snapshot already imported; skipped duplicate: {fingerprint}"
+            ));
+            return Ok(room_import::LegacyRoomImportReport {
+                source_room_version: snapshot.user_version,
+                source_room_identity_hash: snapshot.room_identity_hash,
+                fingerprint,
+                replaced: false,
+                skipped_duplicate: true,
+                backup_path: normalized_backup_path,
+                backup_written: false,
+                counts: mapping.counts,
+                conflict_counts: BTreeMap::new(),
+                preserved_rows: snapshot
+                    .tables
+                    .iter()
+                    .map(|(table, rows)| (table.clone(), rows.len()))
+                    .collect(),
+                archive_only_tables,
+                warnings,
+                unmapped_columns: mapping.unmapped_columns,
+            });
+        }
+
+        let backup_path = normalized_backup_path
+            .as_deref()
+            .ok_or_else(|| DbError::Message("首次 Room 导入必须提供导入前备份路径".to_string()))?;
+        let backup_json = self.export_backup_json()?;
+        write_import_backup(backup_path, &backup_json)?;
+        let conflict_counts = if replace {
+            BTreeMap::new()
+        } else {
+            import_conflict_counts(&self.conn, &mapping.backup_json)?
+        };
+
+        self.conn.execute_batch("BEGIN IMMEDIATE")?;
+        let result = (|| {
+            if replace {
+                self.clear_all_for_restore()?;
+            }
+            self.restore_backup_json(&mapping.backup_json.to_string(), false)?;
+            self.conn.execute(
+                "INSERT INTO legacy_room_imports
+                 (fingerprint, room_version, room_identity_hash, raw_snapshot_json, mapped_backup_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(fingerprint) DO UPDATE SET
+                   room_version=excluded.room_version,
+                   room_identity_hash=excluded.room_identity_hash,
+                   raw_snapshot_json=excluded.raw_snapshot_json,
+                   mapped_backup_json=excluded.mapped_backup_json,
+                   imported_at=datetime('now')",
+                params![
+                    fingerprint,
+                    snapshot.user_version,
+                    snapshot.room_identity_hash,
+                    room_import::snapshot_json(&snapshot).to_string(),
+                    mapping.backup_json.to_string(),
+                ],
+            )?;
+            Ok::<(), DbError>(())
+        })();
+
+        match result {
+            Ok(()) => match self.conn.execute_batch("COMMIT") {
+                Ok(()) => Ok(room_import::LegacyRoomImportReport {
+                    source_room_version: snapshot.user_version,
+                    source_room_identity_hash: snapshot.room_identity_hash,
+                    fingerprint,
+                    replaced: replace,
+                    skipped_duplicate: false,
+                    backup_path: normalized_backup_path,
+                    backup_written: true,
+                    counts: mapping.counts,
+                    conflict_counts,
+                    preserved_rows: snapshot
+                        .tables
+                        .iter()
+                        .map(|(table, rows)| (table.clone(), rows.len()))
+                        .collect(),
+                    archive_only_tables: mapping.archive_only_tables,
+                    warnings: mapping.warnings,
+                    unmapped_columns: mapping.unmapped_columns,
+                }),
+                Err(error) => {
+                    let _ = self.conn.execute_batch("ROLLBACK");
+                    Err(DbError::Sqlite(error))
+                }
+            },
+            Err(error) => {
+                let _ = self.conn.execute_batch("ROLLBACK");
+                Err(error)
+            }
+        }
+    }
+
     pub fn insert_book_json(&self, book_json: &str) -> Result<(), DbError> {
         let v: Value = serde_json::from_str(book_json)
             .map_err(|e| DbError::Message(format!("book JSON 无效: {e}")))?;
@@ -237,9 +387,9 @@ impl EngineDb {
         self.conn.execute(
             "INSERT INTO books (id, name, author, coverUrl, type, progress, currentChapter,
               lastChapter, totalChapterNum, durChapterIndex, currentPageIndex, isFavorite,
-              sourceUrl, description, bookSourceUrl, bookGroup, readIteration, simReadEnabled,
-              simReadStartDate, simReadStartChapter, simReadDailyChapters)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)
+              sourceUrl, description, bookSourceUrl, tocUrl, bookGroup, readIteration, simReadEnabled,
+              simReadStartDate, simReadStartChapter, simReadDailyChapters, readConfig)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23)
              ON CONFLICT(id) DO UPDATE SET
                name=excluded.name, author=excluded.author, coverUrl=excluded.coverUrl,
                type=excluded.type, progress=excluded.progress, currentChapter=excluded.currentChapter,
@@ -247,10 +397,11 @@ impl EngineDb {
                durChapterIndex=excluded.durChapterIndex, currentPageIndex=excluded.currentPageIndex,
                isFavorite=excluded.isFavorite, sourceUrl=excluded.sourceUrl,
                description=excluded.description, bookSourceUrl=excluded.bookSourceUrl,
-               bookGroup=excluded.bookGroup, readIteration=excluded.readIteration,
+               tocUrl=excluded.tocUrl, bookGroup=excluded.bookGroup, readIteration=excluded.readIteration,
                simReadEnabled=excluded.simReadEnabled, simReadStartDate=excluded.simReadStartDate,
                simReadStartChapter=excluded.simReadStartChapter,
                simReadDailyChapters=excluded.simReadDailyChapters,
+               readConfig=excluded.readConfig,
                updatedAt=datetime('now')",
             params![
                 id,
@@ -268,6 +419,7 @@ impl EngineDb {
                 str_field(&v, "sourceUrl").unwrap_or_default(),
                 str_field(&v, "description").unwrap_or_default(),
                 str_field(&v, "bookSourceUrl").unwrap_or_default(),
+                str_field(&v, "tocUrl").unwrap_or_default(),
                 str_field(&v, "group").or_else(|_| str_field(&v, "bookGroup")).unwrap_or_default(),
                 i64_field(&v, "readIteration"),
                 // 缺省 false / 3，避免 bool_field 缺键时默认 true、日更被 clamp 成 1
@@ -286,6 +438,7 @@ impl EngineDb {
                         }
                     })
                     .unwrap_or(3),
+                read_config_json(&v),
             ],
         )?;
         Ok(())
@@ -295,12 +448,13 @@ impl EngineDb {
         let mut stmt = self.conn.prepare(
             "SELECT id, name, author, coverUrl, type, progress, currentChapter, lastChapter,
                     totalChapterNum, durChapterIndex, currentPageIndex, isFavorite, sourceUrl,
-                    description, bookSourceUrl, bookGroup, readIteration, simReadEnabled,
-                    simReadStartDate, simReadStartChapter, simReadDailyChapters, updatedAt
+                    description, bookSourceUrl, tocUrl, bookGroup, readIteration, simReadEnabled,
+                    simReadStartDate, simReadStartChapter, simReadDailyChapters, readConfig,
+                    updatedAt
              FROM books ORDER BY updatedAt DESC",
         )?;
         let rows = stmt.query_map([], |row| {
-            let daily_raw = row.get::<_, Option<i64>>(20)?.unwrap_or(3);
+            let daily_raw = row.get::<_, Option<i64>>(21)?.unwrap_or(3);
             let daily = if daily_raw < 1 { 3 } else { daily_raw.min(999) };
             Ok(json!({
                 "id": row.get::<_, String>(0)?,
@@ -318,13 +472,15 @@ impl EngineDb {
                 "sourceUrl": row.get::<_, String>(12)?,
                 "description": row.get::<_, String>(13)?,
                 "bookSourceUrl": row.get::<_, String>(14)?,
-                "group": row.get::<_, String>(15)?,
-                "readIteration": row.get::<_, Option<i64>>(16)?.unwrap_or(0),
-                "simReadEnabled": row.get::<_, Option<i64>>(17)?.unwrap_or(0) == 1,
-                "simReadStartDate": row.get::<_, Option<String>>(18)?.unwrap_or_default(),
-                "simReadStartChapter": row.get::<_, Option<i64>>(19)?.unwrap_or(0).max(0),
+                "tocUrl": row.get::<_, Option<String>>(15)?.unwrap_or_default(),
+                "group": row.get::<_, String>(16)?,
+                "readIteration": row.get::<_, Option<i64>>(17)?.unwrap_or(0),
+                "simReadEnabled": row.get::<_, Option<i64>>(18)?.unwrap_or(0) == 1,
+                "simReadStartDate": row.get::<_, Option<String>>(19)?.unwrap_or_default(),
+                "simReadStartChapter": row.get::<_, Option<i64>>(20)?.unwrap_or(0).max(0),
                 "simReadDailyChapters": daily,
-                "updatedAt": row.get::<_, Option<String>>(21)?.unwrap_or_default(),
+                "readConfig": parse_read_config(row.get::<_, Option<String>>(22)?),
+                "updatedAt": row.get::<_, Option<String>>(23)?.unwrap_or_default(),
             }))
         })?;
         rows.map(|r| {
@@ -1087,6 +1243,22 @@ impl EngineDb {
             .into_iter()
             .filter_map(|s| serde_json::from_str(&s).ok())
             .collect();
+        let mut legacy_stmt = self.conn.prepare(
+            "SELECT fingerprint, room_version, room_identity_hash,
+                    raw_snapshot_json, mapped_backup_json
+             FROM legacy_room_imports ORDER BY fingerprint ASC",
+        )?;
+        let legacy_room_imports: Vec<Value> = legacy_stmt
+            .query_map([], |row| {
+                Ok(json!({
+                    "fingerprint": row.get::<_, String>(0)?,
+                    "roomVersion": row.get::<_, i64>(1)?,
+                    "roomIdentityHash": row.get::<_, Option<String>>(2)?,
+                    "rawSnapshotJson": row.get::<_, String>(3)?,
+                    "mappedBackupJson": row.get::<_, String>(4)?,
+                }))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(json!({
             "version": 1,
@@ -1099,6 +1271,7 @@ impl EngineDb {
             "detailedReadRecords": detailed_read_records,
             "notes": notes,
             "bookmarks": bookmarks,
+            "legacyRoomImports": legacy_room_imports,
         })
         .to_string())
     }
@@ -1112,7 +1285,8 @@ impl EngineDb {
              DELETE FROM reading_records;
              DELETE FROM detailed_read_records;
              DELETE FROM notes;
-             DELETE FROM bookmarks;",
+             DELETE FROM bookmarks;
+             DELETE FROM legacy_room_imports;",
         )?;
         Ok(())
     }
@@ -1207,6 +1381,28 @@ impl EngineDb {
         )
     }
 
+    fn restore_legacy_room_import(&self, entry: &Value) -> Result<(), DbError> {
+        self.conn.execute(
+            "INSERT INTO legacy_room_imports
+             (fingerprint, room_version, room_identity_hash, raw_snapshot_json, mapped_backup_json)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(fingerprint) DO UPDATE SET
+               room_version=excluded.room_version,
+               room_identity_hash=excluded.room_identity_hash,
+               raw_snapshot_json=excluded.raw_snapshot_json,
+               mapped_backup_json=excluded.mapped_backup_json,
+               imported_at=datetime('now')",
+            params![
+                str_field(entry, "fingerprint")?,
+                i64_field(entry, "roomVersion"),
+                opt_str_field(entry, "roomIdentityHash"),
+                str_field(entry, "rawSnapshotJson")?,
+                str_field(entry, "mappedBackupJson")?,
+            ],
+        )?;
+        Ok(())
+    }
+
     pub fn restore_backup_json(&self, raw: &str, replace: bool) -> Result<(), DbError> {
         let v: Value = serde_json::from_str(raw)
             .map_err(|e| DbError::Message(format!("备份 JSON 无效: {e}")))?;
@@ -1274,7 +1470,85 @@ impl EngineDb {
                 self.restore_bookmark(item)?;
             }
         }
+        if let Some(arr) = v.get("legacyRoomImports").and_then(|x| x.as_array()) {
+            for item in arr {
+                self.restore_legacy_room_import(item)?;
+            }
+        }
         Ok(())
+    }
+}
+
+fn write_import_backup(path: &str, backup_json: &str) -> Result<(), DbError> {
+    let destination = Path::new(path);
+    if destination.exists() {
+        return Err(DbError::Message(format!(
+            "导入前备份路径已存在，为避免覆盖拒绝写入: {path}"
+        )));
+    }
+    let parent = destination
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty());
+    if let Some(parent) = parent {
+        if !parent.exists() {
+            return Err(DbError::Message(format!(
+                "导入前备份目录不存在: {}",
+                parent.display()
+            )));
+        }
+    }
+    let temporary = format!("{path}.tmp-{}", std::process::id());
+    fs::write(&temporary, backup_json)
+        .map_err(|error| DbError::Message(format!("写入导入前备份失败: {error}")))?;
+    if let Err(error) = fs::rename(&temporary, destination) {
+        let _ = fs::remove_file(&temporary);
+        return Err(DbError::Message(format!("完成导入前备份失败: {error}")));
+    }
+    Ok(())
+}
+
+fn import_conflict_counts(
+    conn: &Connection,
+    backup: &Value,
+) -> Result<BTreeMap<String, usize>, DbError> {
+    let mappings = [
+        ("books", "books", "id"),
+        ("sources", "book_sources", "bookSourceUrl"),
+        ("chapters", "chapters", "id"),
+        ("replaceRules", "replace_rules", "id"),
+        ("bookmarks", "bookmarks", "time"),
+    ];
+    let mut conflicts = BTreeMap::new();
+    for (json_key, table, key) in mappings {
+        let Some(rows) = backup.get(json_key).and_then(Value::as_array) else {
+            continue;
+        };
+        let mut count = 0usize;
+        for row in rows {
+            let Some(value) = row.get(key) else {
+                continue;
+            };
+            let exists: i64 = conn.query_row(
+                &format!("SELECT EXISTS(SELECT 1 FROM {table} WHERE {key}=?1)"),
+                [sqlite_param(value)],
+                |result| result.get(0),
+            )?;
+            count += usize::from(exists == 1);
+        }
+        if count > 0 {
+            conflicts.insert(json_key.to_string(), count);
+        }
+    }
+    Ok(conflicts)
+}
+
+fn sqlite_param(value: &Value) -> String {
+    match value {
+        Value::String(value) => value.clone(),
+        Value::Number(value) => value.to_string(),
+        Value::Bool(value) => value.to_string(),
+        Value::Null => String::new(),
+        other => other.to_string(),
     }
 }
 
@@ -1304,6 +1578,34 @@ pub fn db_init(path: String) -> Result<(), String> {
 
 pub fn db_schema_version() -> Result<i32, String> {
     with_db(|db| db.schema_version())
+}
+
+pub fn db_probe_legacy_room_database(path: String) -> Result<String, String> {
+    room_import::probe_legacy_room_database(&path)
+        .map(|probe| {
+            json!({
+                "userVersion": probe.user_version,
+                "currentRoomVersion": room_import::KOTLIN_ROOM_CURRENT_VERSION,
+                "roomIdentityHash": probe.room_identity_hash,
+                "hasRequiredCoreShape": probe.has_required_core_shape(),
+                "needsKotlinRoomMigration": probe.needs_kotlin_room_migration(),
+                "missingTables": probe.missing_tables,
+                "missingColumns": probe.missing_columns,
+            })
+            .to_string()
+        })
+        .map_err(|e| e.to_string())
+}
+
+pub fn db_import_legacy_room_database(
+    path: String,
+    backup_path: Option<String>,
+    replace: bool,
+) -> Result<String, String> {
+    with_db(|db| {
+        let report = db.import_legacy_room_database(&path, backup_path.as_deref(), replace)?;
+        serde_json::to_string(&report).map_err(|e| DbError::Message(e.to_string()))
+    })
 }
 
 pub fn db_insert_book(book_json: String) -> Result<(), String> {
@@ -1581,6 +1883,34 @@ fn i64_field_idx(v: &Value, key: &str) -> i64 {
         .unwrap_or(0)
 }
 
+fn read_config_json(v: &Value) -> String {
+    let mut config = match v.get("readConfig") {
+        Some(Value::Object(map)) => Value::Object(map.clone()),
+        _ => json!({}),
+    };
+    if let Value::Object(map) = &mut config {
+        if !map.contains_key("reverseToc") {
+            let reverse = v
+                .get("reverseToc")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            map.insert("reverseToc".to_string(), json!(reverse));
+        }
+    }
+    config.to_string()
+}
+
+fn parse_read_config(raw: Option<String>) -> Value {
+    let mut config = raw
+        .and_then(|value| serde_json::from_str::<Value>(&value).ok())
+        .filter(Value::is_object)
+        .unwrap_or_else(|| json!({}));
+    if let Value::Object(map) = &mut config {
+        map.entry("reverseToc").or_insert_with(|| json!(false));
+    }
+    config
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1606,6 +1936,12 @@ mod tests {
             book.get("simReadDailyChapters").and_then(|x| x.as_i64()),
             Some(3)
         );
+        assert_eq!(
+            book.get("readConfig")
+                .and_then(|x| x.get("reverseToc"))
+                .and_then(|x| x.as_bool()),
+            Some(false)
+        );
 
         db.insert_book_json(
             r#"{"id":"b1","name":"斗破","author":"土豆","sourceUrl":"http://x/1",
@@ -1630,6 +1966,172 @@ mod tests {
         assert_eq!(
             book2.get("simReadDailyChapters").and_then(|x| x.as_i64()),
             Some(5)
+        );
+
+        db.insert_book_json(
+            r#"{"id":"b1","name":"斗破","readConfig":{"reverseToc":true,"pageAnim":2}}"#,
+        )
+        .unwrap();
+        let books3 = db.get_books_json().unwrap();
+        let book3: Value = serde_json::from_str(&books3[0]).unwrap();
+        assert_eq!(
+            book3
+                .get("readConfig")
+                .and_then(|x| x.get("reverseToc"))
+                .and_then(|x| x.as_bool()),
+            Some(true)
+        );
+        assert_eq!(
+            book3
+                .get("readConfig")
+                .and_then(|x| x.get("pageAnim"))
+                .and_then(|x| x.as_i64()),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn read_config_survives_database_reopen() {
+        let path = std::env::temp_dir().join(format!(
+            "legado-read-config-{}-{}.db",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let path_str = path.to_string_lossy().to_string();
+        {
+            let db = EngineDb::open(&path_str).unwrap();
+            db.insert_book_json(
+                r#"{"id":"reopen-book","name":"重启测试","readConfig":{"reverseToc":true}}"#,
+            )
+            .unwrap();
+        }
+        {
+            let db = EngineDb::open(&path_str).unwrap();
+            let books = db.get_books_json().unwrap();
+            let book: Value = serde_json::from_str(&books[0]).unwrap();
+            assert_eq!(
+                book.get("readConfig")
+                    .and_then(|x| x.get("reverseToc"))
+                    .and_then(|x| x.as_bool()),
+                Some(true)
+            );
+        }
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn legacy_v7_schema_migrates_to_current_without_losing_book_rows() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE books (
+               id TEXT PRIMARY KEY,
+               name TEXT NOT NULL,
+               author TEXT DEFAULT '',
+               sourceUrl TEXT DEFAULT ''
+             );
+             CREATE TABLE book_sources (
+               bookSourceUrl TEXT PRIMARY KEY,
+               bookSourceName TEXT NOT NULL
+             );
+             CREATE TABLE chapters (
+               id TEXT PRIMARY KEY,
+               bookId TEXT NOT NULL,
+               title TEXT NOT NULL,
+               idx INTEGER NOT NULL,
+               url TEXT DEFAULT ''
+             );
+             CREATE TABLE replace_rules (
+               id TEXT PRIMARY KEY,
+               pattern TEXT NOT NULL
+             );
+             CREATE TABLE notes (
+               id TEXT PRIMARY KEY,
+               book_id TEXT NOT NULL,
+               selected_text TEXT NOT NULL
+             );
+             INSERT INTO books (id, name, author, sourceUrl)
+               VALUES ('legacy-book', '旧书', '旧作者', 'https://example.test/book');
+             PRAGMA user_version = 7;",
+        )
+        .unwrap();
+
+        EngineDb::init_schema(&conn).unwrap();
+
+        let version: i32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+        let book: (String, String, String) = conn
+            .query_row(
+                "SELECT id, name, author FROM books WHERE id = 'legacy-book'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(book, ("legacy-book".into(), "旧书".into(), "旧作者".into()));
+
+        for (table, column) in [
+            ("books", "readIteration"),
+            ("books", "simReadEnabled"),
+            ("books", "totalChapterNum"),
+            ("books", "durChapterIndex"),
+            ("books", "readConfig"),
+            ("books", "tocUrl"),
+            ("notes", "chapter_pos"),
+        ] {
+            let exists: i32 = conn
+                .query_row(
+                    &format!(
+                        "SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = '{column}'"
+                    ),
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(exists, 1, "missing migrated column {table}.{column}");
+        }
+
+        conn.execute(
+            "UPDATE books SET tocUrl = ?1 WHERE id = 'legacy-book'",
+            params!["https://example.test/book/toc"],
+        )
+        .unwrap();
+        let toc_url: String = conn
+            .query_row(
+                "SELECT tocUrl FROM books WHERE id = 'legacy-book'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(toc_url, "https://example.test/book/toc");
+    }
+
+    #[test]
+    fn book_toc_url_json_roundtrip() {
+        let db = EngineDb::open_in_memory().unwrap();
+        db.insert_book_json(
+            r#"{"id":"toc-book","name":"目录书","tocUrl":"https://example.test/toc"}"#,
+        )
+        .unwrap();
+
+        let books = db.get_books_json().unwrap();
+        let book: Value = serde_json::from_str(&books[0]).unwrap();
+        assert_eq!(
+            book.get("tocUrl").and_then(|value| value.as_str()),
+            Some("https://example.test/toc")
+        );
+
+        db.insert_book_json(
+            r#"{"id":"toc-book","name":"目录书","tocUrl":"https://example.test/toc?page=2"}"#,
+        )
+        .unwrap();
+        let updated: Value = serde_json::from_str(&db.get_books_json().unwrap()[0]).unwrap();
+        assert_eq!(
+            updated.get("tocUrl").and_then(|value| value.as_str()),
+            Some("https://example.test/toc?page=2")
         );
     }
 
@@ -1839,7 +2341,7 @@ mod tests {
     #[test]
     fn bookmarks_roundtrip_fields_and_original_order() {
         let db = EngineDb::open_in_memory().unwrap();
-        assert_eq!(db.schema_version().unwrap(), 15);
+        assert_eq!(db.schema_version().unwrap(), SCHEMA_VERSION);
         db.upsert_bookmark(
             200,
             "b1",

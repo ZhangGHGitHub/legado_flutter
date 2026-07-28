@@ -1,0 +1,1678 @@
+# Legado Flutter 架构重构基线
+
+状态：R0-R4 已完成；R5 本地开发退出门禁已完成，发布前正式/主流 WebDAV 验收待执行；R6 已完成 UI 状态直连清理，并已迁移 main、bookshelf、reader、book、sources、rss、settings、my 功能域；sync 无独立 UI 页面，阶段退出门禁尚未完成
+日期：2026-07-27
+依据：当前工作区代码、`docs/REFACTOR_PLAN.md`、根目录 `legado-main/`
+
+## 1. 目的
+
+本文记录重构开始前的真实工程边界、入口和依赖问题。它不是目标架构的设计稿，也不把目录名称当作模块边界；后续每个重构阶段都必须更新“迁移前/迁移后”和对应测试证据。
+
+原版目录边界：根目录 `legado-main/` 是只读的原版核对基线，用于行为、数据结构、UI
+和错误语义对照；它不是主源码目录，不参与本工程的 Flutter/Rust/Gradle/CI 构建，任何
+原版差异必须在当前工程中通过契约、集成测试或文档记录处理。
+
+## 2. 当前工程形态
+
+### Flutter 侧
+
+| 当前位置 | 实际职责 | 主要问题 |
+|---|---|---|
+| `lib/pages/` | 页面、交互、部分业务编排 | 页面存在直接依赖 bridge、Rust API 和数据库的入口 |
+| `lib/providers/` | Provider 状态、目录/书架/书源编排 | Provider 同时承担用例、持久化和远程请求协调 |
+| `lib/services/` | 网络、缓存、同步、偏好、备份、书源服务 | “Service”既可能是领域服务，也可能是基础设施适配器，边界不统一 |
+| `lib/models/`、`lib/model/` | 书籍、章节、阅读会话和配置模型 | `model` 与 `models` 并存，领域模型和展示/配置模型未清晰分离 |
+| `lib/database/`、`lib/bridge/` | Rust 数据库与引擎调用 | bridge 既是平台适配，又承载业务 DTO 转换和状态同步 |
+| `lib/src/rust/` | FRB 生成代码和 Rust API 类型 | 生成层被业务代码直接引用，替换 FRB 或测试困难 |
+| `lib/help/`、`lib/utils/` | 正文、缓存、解析和通用工具 | 领域逻辑、基础设施逻辑和纯函数混放 |
+| `lib/pages/reader/`、`lib/widgets/` | 阅读器分页、富文本、图片和手势 | 阅读会话、排版输入、Flutter 渲染和平台能力耦合在页面/Widget 链路 |
+
+### Rust 侧
+
+| 当前位置 | 实际职责 | 主要问题 |
+|---|---|---|
+| `src/api/` | FRB 出口、书源用例、数据库、WebDAV 和本地书解析 | API 出口和业务/基础设施实现混在同一命名空间 |
+| `src/rule/` | CSS/XPath/JSONPath/Legado DSL/JS/正则 | 核心规则能力相对集中，是可优先稳定的核心域 |
+| `src/http/` | HTTP、Cookie、登录头、代理、限速、SSRF | 基础设施边界清晰，但由 api 直接编排 |
+| `src/db/` | SQLite schema、迁移、实体读写和 JSON 映射 | 数据库 schema、存储模型和对外 DTO 仍有混合 |
+| `src/lib.rs` | FRB 注册、公共 DTO、初始化、API 转发 | 根模块承载过多公共类型和入口函数 |
+| `src/frb_generated.rs` | FRB 生成代码 | 必须保持生成文件隔离，不作为业务层依赖目标 |
+| `legado-webdav/` | WebDAV 客户端 | 可作为基础设施 crate，但同步冲突编排仍在 engine/Flutter 多处存在 |
+
+## 3. 当前关键入口和数据流
+
+### 应用启动
+
+```text
+main.dart
+  -> EngineConfig / AppConfig
+  -> LegadoEngineBridge.tryInit()
+  -> LegadoDbBridge.init()
+  -> NetworkPrefs.restoreToEngine()
+  -> WebApiService.restoreIfEnabled()
+  -> BookProvider.loadBooks()
+  -> BookProvider.downloadAllBookProgress()
+  -> MultiProvider -> LegadoApp
+```
+
+问题：应用入口直接知道引擎初始化、数据库初始化、网络配置、Web API、书架加载和同步顺序。目标是迁移为 `AppBootstrap` 用例，由 infrastructure 提供适配器，UI 只接收完成后的应用状态。
+
+### 在线目录
+
+```text
+BookInfoPage / TocSheet
+  -> BookProvider / BookSourceService
+  -> LegadoEngineBridge
+  -> generated FRB API
+  -> Rust api::get_toc / api::get_book_info
+  -> http + rule + db/cache
+```
+
+当前已确认的结构性风险：`BookSourceService._fetchChaptersOnce` 会先调用 `getBookInfo` 再取目录；目录 UI、字数元数据、书签和当前章定位也由同一页面链路触发。它们属于 R4 的重构对象，但在 R0 不直接修改行为。
+
+### 阅读正文
+
+```text
+ReaderPage
+  -> ReadBook / BookProvider
+  -> BookSourceService / CacheService
+  -> Rust get_content or local chapter cache
+  -> ContentProcessor / ReaderMarkup
+  -> ReaderPaginator / ReaderSelectableText
+```
+
+第 3 条行为约束要求正文字符范围、中文断行、分页和章节边界不可因结构迁移改变，因此 R3 必须先建立旧链路与新链路的快照契约，再迁移调用者。
+
+## 4. 重构目标边界
+
+```text
+features        页面和交互，只依赖 application/domain
+application     用例、任务、状态转换和错误呈现策略
+domain          纯模型、值对象、Repository/Port 接口
+infrastructure  Rust/FRB、数据库、HTTP、文件缓存、WebDAV、平台适配
+engine          Rust 规则、网络和数据库核心实现
+generated       FRB 生成文件，只能被 infrastructure 适配层引用
+```
+
+依赖方向固定为：
+
+```text
+features -> application -> domain
+infrastructure -> domain
+application -> domain ports
+Rust engine -> Rust domain/core
+FRB generated <- infrastructure adapter only
+```
+
+禁止方向：页面 -> `lib/src/rust`、页面 -> SQL/文件路径、domain -> Flutter/FRB、Rust 核心 -> Flutter UI、Provider -> 多个具体基础设施实现。
+
+## 5. 当前领域模型与数据所有权
+
+| 对象 | 当前定义 | 当前持久化/修改入口 | 重构后所有权 |
+|---|---|---|---|
+| `Book` | `lib/models/book.dart` | `DatabaseHelper`、`BookDao`、`BookProvider`，部分页面直接更新 | `domain/book`；由 `BookRepository` 持久化 |
+| `Chapter` | `lib/models/chapter.dart` | `DatabaseHelper`、`BookDao`、`BookSourceService`、`TocSheet` | `domain/chapter`；目录 Repository 负责身份和 index |
+| `BookSource` | `lib/models/book_source.dart` | `SourceDao`、`SourceProvider`、`BookSourceService`、导入页面 | `domain/source`；解析/序列化与存储映射分离 |
+| 阅读进度 | `Book` 字段 + `BookProgress` + `ReadBook` | `BookProvider`、`ReadBook`、进度同步服务、Rust DB | `domain/reading`；本地/远端由不同 Repository 实现 |
+| 书签/想法 | Rust `BookmarkDto`/`NoteDto` + Flutter service/page | `BookmarkService`、`NoteService`、同步服务、页面/Widget | `domain/annotation`；同步策略不进入 Widget |
+| 章节正文缓存 | `Chapter.content`、文件缓存、Rust `chapters.content` | `BookHelp`、`CacheService`、`DatabaseHelper`、`ReadBook` | `domain/content` 接口；文件/SQLite 是 infrastructure |
+| 阅读配置 | `services/*prefs.dart`、`models/read_style_config.dart` | SharedPreferences、ReaderPage、配置页 | `domain/reader_config`；平台存储由 adapter 实现 |
+| 书源规则执行结果 | FRB generated DTO + `LegadoEngineBridge` Map/Flutter model | `LegadoEngineBridge`、各页面/Service | Rust engine DTO + Flutter application mapper，禁止页面直接拿 generated DTO |
+
+当前最重要的所有权冲突是：`Book`/`Chapter` 同时被当作 UI 状态、数据库行、网络结果和缓存对象；重构时不能简单移动文件，必须先定义不可变领域字段和持久化映射。
+
+## 6. 数据库访问调用清单
+
+当前数据库入口集中在 Rust SQLite，但调用边界已泄漏到多个 Flutter 层：
+
+| 调用者 | 直接依赖 | 当前用途 | R1 迁移目标 |
+|---|---|---|---|
+| `lib/main.dart` | `LegadoDbBridge.init` | 启动初始化数据库 | `AppBootstrap` 注入 `DatabasePort` |
+| `lib/database/database_helper.dart` | FRB `api/db.dart` | 书籍、章节、书源、进度、缓存和配置 CRUD | `infrastructure/rust_database_repository` |
+| `lib/database/dao/book_dao.dart` | `DatabaseHelper` | 书籍/章节 DAO 薄封装 | 领域 `BookRepository`/`ChapterRepository` 的具体实现 |
+| `lib/database/dao/source_dao.dart` | `DatabaseHelper` | 书源 CRUD | `BookSourceRepository` 的具体实现 |
+| `lib/providers/book_provider.dart` | `DatabaseHelper`、`BookDao`、Service | 书架、目录刷新、阅读进度和章节缓存编排 | `BookShelfUseCases`，Provider 只订阅状态 |
+| `lib/model/read_book.dart` | `DatabaseHelper` | 阅读会话中直接读写书籍/章节 | `ReadingSession` + `ReadingRepository` |
+| `lib/pages/book/book_info_page.dart` | `DatabaseHelper` | 详情页直接保存书籍/章节 | 通过 `BookDetailsUseCases` |
+| `lib/pages/main/main_shell.dart` | `DatabaseHelper` | 页面层读取书架统计/数据 | 通过应用查询用例 |
+| `lib/pages/book/bookmark_page.dart`、`toc_sheet.dart` | Rust DTO/Service/数据库间接链路 | 书签和目录元数据 | 通过 `BookmarkQuery`/`TocQuery` |
+| `lib/services/*` | 多个 FRB API 和 Bridge | 备份、笔记、同步、阅读记录、WebDAV | 各自 infrastructure adapter + application use case |
+
+R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必须先补齐字段映射和旧数据库迁移测试；不能先把文件移动到 `domain/` 造成“看起来分层、实际仍直连数据库”。
+
+## 7. 迁移顺序
+
+1. R0：保留当前实现，建立入口、所有权、依赖和行为基线。
+2. R1：先统一领域模型和 Repository 接口，再迁移数据库调用；不先移动页面。
+3. R2：以书源用例为第一个跨 Rust/Flutter 适配边界，集中 FRB 依赖。
+4. R3：迁移阅读会话和正文/缓存链路，使用第 3 条逐页契约保护断行分页。
+5. R4：迁移目录 Repository、顺序持久化、可见行元数据和列表渲染；执行兼容性子计划 2A/2B。
+6. R5：迁移同步、备份和 WebDAV 冲突编排。
+7. R6：最后按功能域收拢页面、Provider 和平台实现，避免 UI 移动反复返工。
+
+## 8. R0 退出门禁
+
+- [x] 已扫描 Flutter、Rust、FRB、数据库、服务和页面的实际目录。
+- [x] 已记录启动、目录、正文三条主要链路。
+- [x] 已确认重复模型/混合职责/生成层泄漏/页面直连基础设施等问题。
+- [x] 已定义目标依赖方向和禁止依赖方向。
+- [x] 为 R1 建立领域模型字段与数据所有权表。
+- [x] 为 R1 建立当前数据库访问调用清单；迁移测试仍待 R1 建立。
+- [x] 运行并记录 R0 全量测试基线：Rust `114` 个库测试及非 ignored 集成/文档测试通过；Flutter `383` 通过，3 个既有在线 smoke 跳过；`git diff --check` 通过。
+- [x] 记录 `flutter analyze` 基线：命令退出码为 1，共 47 条既有诊断（4 warning、43 info）；本轮只修改文档，未新增 Dart 诊断。
+
+因此，R0 的架构盘点和可重复测试基线已完成；`flutter analyze` 的 47 条既有诊断作为已知基线保留，不因本轮文档变更扩大。下一步进入 R1 的第一个最小边界：书籍/章节 Repository 接口化；迁移测试通过前不移动其他领域模型或页面。
+
+## 9. R1 第一边界迁移记录：书籍/章节 Repository
+
+日期：2026-07-25
+
+实现：
+
+- 新增 `lib/domain/repositories/book_repository.dart`，定义书籍、章节、进度和章节缓存所需的领域存储端口。
+- `lib/database/dao/book_dao.dart` 保留为 Rust SQLite 的具体适配器，并实现 `BookRepository`；没有移动数据库实现或改变字段映射。
+- `BookProvider` 的内部字段改为 `BookRepository`，所有书籍/章节存储调用改走接口；`dao:` 构造参数暂时保留，作为迁移期间的兼容注入入口。
+- 新增 `test/domain/book_repository_contract_test.dart`，验证 SQLite 适配器满足领域端口。
+
+行为验证：
+
+- Provider 定向测试：`6/6` 通过，覆盖并发目录加载、旧源结果隔离、目录刷新进度迁移和章节缓存一致性。
+- Rust 全量：`114` 通过；首次并行重跑曾因测试进程继承失效 `127.0.0.1:1080` 代理导致本地 fixture 失败，清除测试进程代理变量后重跑通过；未修改测试或业务代理逻辑。
+- Flutter 全量：`384` 通过，3 个既有在线 smoke 跳过。
+- 相关 Dart 静态检查：无新增诊断；全仓 `flutter analyze` 仍为既有 `47` 条诊断。
+- `dart format --set-exit-if-changed` 和 `git diff --check`：通过。
+
+边界结论：本步只完成 Provider 到 Repository 的依赖反转，数据库、ReadBook、页面直连和其他模型尚未迁移；下一步仍属于 R1，先建立数据库字段映射/迁移契约，再决定是否迁移 `DatabaseHelper`。
+
+## 10. R1 第二边界迁移记录：数据库记录映射与旧 schema 契约
+
+日期：2026-07-25
+
+实现：
+
+- 新增 `lib/infrastructure/database/database_record_codec.dart`，集中 `Book`/`Chapter` 与 Rust SQLite JSON 记录之间的编码、解码和章节缓存清除标记。
+- `DatabaseHelper` 的书籍和章节读写改用 `DatabaseRecordCodec`；书源、替换规则和其他业务暂不迁移，保持本边界单一。
+- Rust 数据库新增 `legacy_v7_schema_migrates_to_current_without_losing_book_rows`，验证旧 v7 表升级到当前 v15 后保留书籍数据，并补齐代表性迁移列。
+
+验收：
+
+- 数据库编解码定向测试：`3/3` 通过。
+- Rust 迁移定向测试：`1/1` 通过。
+- Rust 全量：`115` 通过；3 个需网络的 ignored 测试保持跳过。
+- Flutter 全量：`387` 通过，3 个既有在线 smoke 跳过。
+- 相关 Dart 静态检查：无诊断；全仓 `flutter analyze` 仍为既有 `47` 条诊断。
+- `dart format --set-exit-if-changed`、`git diff --check`：通过。
+
+边界结论：数据库字段映射已从 `DatabaseHelper` 中集中，但 `DatabaseHelper` 仍直接依赖 FRB 生成 API；下一步 R1-3 才处理 `RustDatabasePort`/FRB 适配边界，不在本步继续迁移其他数据对象。
+
+## 11. R1 第三边界迁移记录：RustDatabasePort 与 FRB 适配隔离
+
+日期：2026-07-25
+
+实现：
+
+- 新增 `lib/infrastructure/database/rust_database_port.dart`，定义数据库基础设施端口。
+- 新增 `lib/infrastructure/database/frb_rust_database_port.dart`，集中实现 `LegadoDbBridge` ready 检查和全部 FRB `api/db.dart` 调用。
+- `DatabaseHelper` 改为依赖 `RustDatabasePort`；生产默认使用 `FrbRustDatabasePort`，测试可通过 `DatabaseHelper.forPort` 注入 fake。
+- `DatabaseHelper` 已不再直接导入 `legado_db_bridge.dart` 或 `src/rust/api/db.dart`。
+- 新增 `test/infrastructure/rust_database_port_test.dart`，验证数据库管理器可以在不加载 FRB 数据库 API 的情况下使用端口。
+
+验收：
+
+- R1-3 定向测试：`5/5` 通过（含前两项数据库契约回归）。
+- Rust 全量：`115` 通过；3 个需网络的 ignored 测试保持跳过。
+- Flutter 全量：`388` 通过，3 个既有在线 smoke 跳过。
+- 相关 Dart 静态检查：无诊断；全仓 `flutter analyze` 仍为既有 `47` 条诊断。
+- `dart format --set-exit-if-changed`、`git diff --check`：通过。
+
+边界结论：FRB 数据库调用已从 `DatabaseHelper` 隔离，但页面、`ReadBook`、Provider 和其他 Service 仍可直接构造 `DatabaseHelper`；下一步 R1-4 迁移这些调用到应用/领域 Repository，先处理 `BookProvider` 之外的书籍读写入口。
+
+## 12. R1-4a：ReadBook 阅读会话 Repository 注入
+
+日期：2026-07-25
+
+实现：
+
+- `BookRepository` 增加章节正文读取契约 `getChapterContent`，由 `BookDao` 转发到现有数据库适配器。
+- `ReadBook` 移除对 `DatabaseHelper` 的直接依赖，改为通过 `BookRepository` 读取数据库正文，并通过同一接口写入章节和正文。
+- `BookProvider` 将自身已有的 `_repository` 注入 `ReadBook`，不再为阅读会话单独构造 `DatabaseHelper`。
+- 数据库正文回落测试改为注入 `BookDao`，验证真实存储适配器仍满足阅读会话契约。
+
+行为验证：
+
+- R1-4a 定向测试：`10/10` 通过，覆盖 DB 正文回落、占位正文网络重试、旧会话结果隔离、预加载令牌隔离和 Provider 目录/进度回归。
+- 正文读取顺序保持：文件缓存 -> 数据库正文 -> 网络；未改变正文处理、缓存跳过和失败占位语义。
+- `dart format`、`git diff --check`：通过。
+
+边界结论：`ReadBook` 已不再直接构造或依赖 `DatabaseHelper`；页面和其他 Service 的直接数据库调用仍保留，下一步只迁移其中一个调用者，完成后再复验全量门禁。
+
+## 13. R1-4b：LocalBookService Repository 注入
+
+日期：2026-07-25
+
+实现：
+
+- `LocalBookService` 移除 `DatabaseHelper` 依赖，改为要求注入 `BookRepository`。
+- `BookProvider` 将自身的 Repository 传入默认创建的 `LocalBookService`；自定义 `localService` 的测试注入入口保留。
+- 本地 TXT 导入测试增加 Repository 记录适配器，验证书籍和章节落库都经过领域端口。
+
+行为验证：
+
+- R1-4b 定向测试：`13/13` 通过，覆盖 TXT 导入、Provider 目录并发/缓存一致性/进度迁移，以及 ReadBook 数据库回落。
+- Flutter 全量：`389` 通过，3 个既有在线 smoke 跳过。
+- 本步未修改 Rust；上一边界 Rust 全量 `115` 通过，3 个网络 ignored 测试保持跳过。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+
+边界结论：本地书籍导入已通过领域 Repository 持久化；剩余直接构造 `DatabaseHelper` 的调用者为页面、`main_shell` 和 `ReplaceProvider`，下一步继续逐个迁移。
+
+## 14. R1-4c：ReplaceProvider 替换规则 Repository 注入
+
+日期：2026-07-25
+
+实现：
+
+- 新增 `lib/domain/repositories/replace_rule_repository.dart`，定义替换规则查询、写入、更新、启停、删除和清空端口。
+- 新增 `ReplaceRuleDao`，把现有 `DatabaseHelper` 替换规则 CRUD 收敛到具体 DAO 适配器。
+- `ReplaceProvider` 改为依赖 `ReplaceRuleRepository`，保留默认 DAO 和测试注入入口；默认规则初始化、ContentProcessor 同步和预设去重逻辑不变。
+- 新增 Provider Repository 契约测试，覆盖默认规则初始化和规则增删改、启停流程。
+
+行为验证：
+
+- R1-4c 定向测试：`12/12` 通过。
+- Flutter 全量：`390` 通过，3 个既有在线 smoke 跳过。
+- 本步未修改 Rust；上一边界 Rust 全量 `115` 通过，3 个网络 ignored 测试保持跳过。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+
+边界结论：替换规则 Provider 已不再直接构造 `DatabaseHelper`；剩余直接数据库调用集中在书籍详情页、`MainShell` 和其他页面/服务边界，下一步继续逐个迁移。
+
+## 15. R1-4d：BookInfoPage 书籍 Repository 注入
+
+日期：2026-07-25
+
+实现：
+
+- `BookProvider` 暴露领域级 `BookRepository` 查询入口，保持具体 DAO 不向页面泄漏。
+- `BookInfoPage` 的封面更新和编辑书籍保存改为通过 `BookProvider.repository` 写入，不再直接构造 `DatabaseHelper`。
+- 页面构造签名和现有路由保持不变，目录加载、书源请求和阅读位置逻辑未修改。
+
+行为验证：
+
+- 详情页相关定向回归：`10/10` 通过，包含 MainShell、Provider 目录/进度和 Repository 契约测试。
+- Flutter 全量：`390` 通过，3 个既有在线 smoke 跳过。
+- 本步未修改 Rust；上一边界 Rust 全量 `115` 通过，3 个网络 ignored 测试保持跳过。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+
+边界结论：`BookInfoPage` 已不再直接依赖数据库实现；剩余直接数据库调用集中在 `MainShell`、其他页面和服务边界，下一步继续逐个迁移。
+
+## 16. R1-4e：MainShell 书源 Repository 注入
+
+日期：2026-07-25
+
+实现：
+
+- 新增 `BookSourceRepository` 领域端口，定义书源查询、写入、更新、启停和删除契约。
+- `SourceDao` 实现该端口，继续作为现有 SQLite/Rust 适配器。
+- `SourceProvider` 暴露领域级书源 Repository，`MainShell` 的内置书源检查和初始化改为通过该端口完成，不再直接构造 `DatabaseHelper`。
+- 书源 Provider 的完整 CRUD、搜索和校验链路未在本步改动。
+
+行为验证：
+
+- MainShell/书源定向测试：`10/10` 通过，包含启动框架、书源导入和书源 Repository 契约。
+- Flutter 全量：`391` 通过，3 个既有在线 smoke 跳过。
+- 本步未修改 Rust；上一边界 Rust 全量 `115` 通过，3 个网络 ignored 测试保持跳过。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+
+边界结论：`MainShell` 已不再直接依赖数据库管理器；剩余直接数据库调用集中在 SourceProvider、其他页面和服务边界，下一步继续逐个迁移。
+
+## 17. R1-4f：SourceProvider 书源 Repository 注入
+
+日期：2026-07-25
+
+实现：
+
+- `SourceProvider` 增加 `BookSourceRepository` 注入入口，内部所有书源加载、写入、更新、启停、删除和启用书源查询均通过接口调用。
+- 默认实现仍为 `SourceDao`，生产行为和旧构造方式保持兼容。
+- 新增 SourceProvider Repository 测试，验证加载和新增书源使用注入适配器。
+- 搜索、书源校验、分组、导入和书源顺序算法未改变。
+
+行为验证：
+
+- SourceProvider/MainShell 定向测试：`11/11` 通过。
+- Flutter 全量：`392` 通过，3 个既有在线 smoke 跳过。
+- 本步未修改 Rust；上一边界 Rust 全量 `115` 通过，3 个网络 ignored 测试保持跳过。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+
+边界结论：书源 Provider 已不再依赖具体 DAO 类型进行业务操作；剩余直接数据库调用集中在其他页面和服务边界，下一步继续逐个迁移。
+
+## 18. R1-5：AppBootstrap 启动编排
+
+日期：2026-07-25
+
+实现：
+
+- 新增 `lib/application/app_bootstrap.dart`，集中编排 `EngineConfig`、应用配置、Rust/数据库初始化、网络/Web API 配置、书架初始加载和主题加载。
+- `main.dart` 只负责 Flutter binding、Provider 组装和 `runApp`；不再直接编排基础设施启动顺序。
+- 保留 `loadStartupBookProgress` 的导出兼容入口，启动同步失败仍只记录并降级为未应用进度，不阻塞首屏。
+- 本步未改变 Provider 注册、书源初始化、目录顺序、阅读位置或正文处理行为。
+
+行为验证：
+
+- 启动/Widget 定向测试：`8/8` 通过。
+- Flutter 全量：`392` 通过，3 个既有在线 smoke 跳过。
+- 本步未修改 Rust；上一边界 Rust 全量 `115` 通过，3 个网络 ignored 测试保持跳过。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+
+边界结论：应用入口已将启动基础设施编排移入 application 层；R1 的主要数据库调用边界已完成，下一步进入 R2/R3 的书源用例与阅读会话进一步收敛。
+
+## 19. R2-1：书源搜索入口端口化
+
+日期：2026-07-25
+
+实现：
+
+- 新增 `BookSourceSearchPort`，定义搜索入口所需的最小 Rust 引擎契约。
+- 新增 `FrbBookSourceSearchPort`，集中把搜索调用转发到现有 `LegadoEngineBridge`，并保留 Rust 未加载错误语义。
+- `BookSourceService.search` 改为依赖可注入搜索端口；详情、目录、正文和发现入口暂留在原链路，控制本步行为范围。
+- 新增搜索端口注入测试，确认 Service 不需要直接加载 FRB 即可测试搜索编排。
+
+行为验证：
+
+- R2-1 书源链路定向测试：`16/16` 通过，包含 Rust 搜索→详情→目录→正文和离线 JS fixture 回归。
+- Flutter 全量：`393` 通过，3 个既有在线 smoke 跳过。
+- 本步未修改 Rust；Rust 全量基线 `115` 通过，3 个网络 ignored 测试保持跳过。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+
+边界结论：搜索入口已隔离到 infrastructure 适配器；下一步逐个迁移书源详情、目录和正文入口，保持目录顺序与正文处理行为不变。
+
+## 20. R2-2：书源详情入口端口化
+
+日期：2026-07-25
+
+实现：
+
+- 新增 `BookSourceBookInfoPort`，定义书源详情入口所需的最小 Rust 引擎契约。
+- 新增 `FrbBookSourceBookInfoPort`，集中把详情调用转发到现有 `LegadoEngineBridge`，并保留 Rust 未加载错误语义。
+- `BookSourceService.getBookInfo` 改为依赖可注入详情端口；搜索、目录、正文和发现入口未在本步改变。
+- 新增详情端口注入测试，验证详情请求的书源、URL 和返回字段由 Service 原样编排。
+
+行为验证：
+
+- R2-2 定向测试：`14` 个通过，包含详情端口契约、R2-1 搜索端口和 Rust 搜索→详情→目录→正文链路；`1` 个既有在线 smoke 跳过。
+- Flutter 全量：`394` 通过，3 个既有在线 smoke 跳过。
+- Rust workspace：`115` 通过，3 个网络测试 ignored。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+- `flutter analyze`：既有 `47` 条诊断，本步新增文件和修改没有新增诊断。
+
+边界结论：书源搜索和详情入口已隔离到 infrastructure 适配器；目录加载顺序、章节 index、正文内容、中文断行和分页行为本步未修改。下一步继续逐个迁移目录入口，并在迁移中保持原 App 的断行规则。
+
+## 21. R2-3：书源目录入口端口化
+
+日期：2026-07-25
+
+实现：
+
+- 新增 `BookSourceTocPort`，定义目录请求所需的最小 Rust 引擎契约。
+- 新增 `FrbBookSourceTocPort`，集中把目录调用转发到现有 `LegadoEngineBridge`，并保留 Rust 未加载错误语义。
+- `BookSourceService.getChapters` 改为通过注入的目录端口获取章节；详情预热、`tocUrl` 重定位、同书源请求去重和源站繁忙重试编排保持不变。
+- 新增目录端口契约测试，验证传入书籍、`tocUrl` 重定位、章节顺序和 0-based `index` 均保持原行为。
+
+行为验证：
+
+- R2-3 定向测试：`25` 个通过，包含目录/详情/搜索端口和 Rust 搜索→详情→目录→正文链路；`1` 个既有在线 smoke 跳过。
+- Flutter 全量：`395` 通过，3 个既有在线 smoke 跳过。
+- Rust workspace 串行测试：核心 crate `115` 通过，其余已执行 workspace 测试通过；现有网络/人工场景保持 ignored。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+- `flutter analyze`：既有 `47` 条诊断，本步新增文件和修改没有新增诊断。
+- 并行 Rust 全量曾出现 1 个既有目录 fixture 因共享全局网络代理配置而失败；该用例单独 `1/1` 通过，使用 `--test-threads=1` 的 workspace 全量通过。未修改测试断言。
+
+边界结论：书源搜索、详情和目录入口已隔离到 infrastructure 适配器；目录返回顺序、章节身份和 `index` 未被重排，正文内容、中文断行和分页行为本步未修改。下一步继续迁移书源正文入口。
+
+## 22. R2-4：书源正文入口端口化
+
+日期：2026-07-25
+
+实现：
+
+- 新增 `BookSourceContentPort`，定义书源正文请求所需的最小 Rust 引擎契约。
+- 新增 `FrbBookSourceContentPort`，集中把正文调用转发到现有 `LegadoEngineBridge`，并保留 Rust 未加载错误语义。
+- `BookSourceService.getChapterContent` 改为通过可注入正文端口获取文本；日志、异常重新抛出和调用参数保持不变。
+- 新增正文端口契约测试，验证书源、章节 URL 和包含 `CRLF/LF` 的正文文本均原样传递，不在 Service 层引入换行、清洗或分页逻辑。
+
+行为验证：
+
+- R2-4 定向测试：`26` 个通过，包含正文/目录/详情/搜索端口、离线 JSON/JS 正文和 Rust 搜索→详情→目录→正文链路；`1` 个既有在线 smoke 跳过。
+- Flutter 全量：`396` 通过，3 个既有在线 smoke 跳过。
+- Rust workspace 串行测试：核心 crate `115` 通过，其余已执行 workspace 测试通过；现有网络/人工场景保持 ignored。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+- `flutter analyze`：既有 `47` 条诊断，本步新增文件和修改没有新增诊断。
+
+边界结论：书源搜索、详情、目录和正文入口已隔离到 infrastructure 适配器；正文文本、中文断行、分页输入和错误传播本步未改变。下一步继续迁移发现入口或进入阅读会话边界，仍按固定顺序逐项推进。
+
+## 23. R2-5：书源发现入口端口化
+
+日期：2026-07-25
+
+实现：
+
+- 新增 `BookSourceExplorePort`，定义发现请求所需的最小 Rust 引擎契约。
+- 新增 `FrbBookSourceExplorePort`，集中把发现调用转发到现有 `LegadoEngineBridge`，并保留 Rust 未加载错误语义。
+- `BookSourceService.explore` 改为通过可注入发现端口转发书源、发现 URL 和页码；发现分类解析和页面分页逻辑未改变。
+- 新增发现端口契约测试，验证页码、请求参数和结果列表由 Service 原样编排。
+- 书源搜索、详情、目录、正文和发现五个 Rust 入口完成第一轮端口化后，移除 Service 中已无调用点的旧 Rust 前置检查和桥接依赖。
+
+行为验证：
+
+- R2-5 定向测试：`13` 个通过，`1` 个既有在线 smoke 跳过；发现端口、既有四个入口端口和 Rust 搜索→详情→目录→正文链路均通过。
+- Flutter 全量：`397` 通过，3 个既有在线 smoke 跳过。
+- Rust workspace 串行测试：核心 crate `115` 通过，其余已执行 workspace 测试通过；现有网络/人工场景保持 ignored。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+- `flutter analyze`：既有 `47` 条诊断，本步最终代码没有新增诊断；中途发现的 `_requireRust` 未使用诊断已删除。
+
+边界结论：书源搜索、详情、目录、正文和发现入口已隔离到 infrastructure 适配器；正文内容、目录顺序、中文断行、分页输入和现有错误语义未改变。下一步进入书源校验用例或阅读会话边界，继续按固定顺序逐项重构。
+
+## 24. R2-6：书源校验入口端口化
+
+日期：2026-07-25
+
+实现：
+
+- 新增 `BookSourceValidationPort` 和纯 Dart `BookSourceValidationSnapshot`，隔离 FRB 生成的 `SourceValidation` 类型。
+- 新增 `FrbBookSourceValidationPort`，集中把校验调用转发到现有 `LegadoEngineBridge`，并保留 Rust 可用性和错误语义。
+- `SourceProvider.validateSource` 改为通过注入校验端口获取结果；关键词选择、超时、阶段进度、校验偏好裁剪、结果持久化、响应时间回写和 UI 状态更新未改变。
+- 新增 SourceProvider 校验端口契约测试，验证书源、关键词、结果字段和错误列表均按原流程传递。
+
+行为验证：
+
+- R2-6 定向测试：`9` 个通过，3 个既有在线 smoke 跳过；校验端口、SourceProvider Repository、结果持久化和 Rust 调试链路通过。
+- Flutter 全量：`398` 通过，3 个既有在线 smoke 跳过。
+- Rust workspace 串行测试：核心 crate `115` 通过，其余已执行 workspace 测试通过；现有网络/人工场景保持 ignored。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+- `flutter analyze`：既有 `47` 条诊断，本步最终代码没有新增诊断。
+
+边界结论：书源搜索、详情、目录、正文、发现和校验入口已隔离到 infrastructure 适配器；校验步骤顺序、超时、状态更新、错误列表和阅读相关断行/分页行为未改变。下一步进入阅读会话或其他 Rust 业务入口，继续按固定顺序逐项重构。
+
+## 25. R2-7：书源调试入口端口化
+
+日期：2026-07-25
+
+实现：
+
+- 新增 `BookSourceDebugPort`、`BookSourceDebugSnapshot`、`BookSourceDebugStep` 和 `BookSourceDebugItem`，把调试搜索、调试目录和 URL 请求定义为纯 Dart 领域边界。
+- 新增 `FrbBookSourceDebugPort`，集中把调试入口转发到现有 `LegadoEngineBridge`，并在适配层将 FRB `DebugResult` 映射为领域快照；Rust 不可用时保留原错误语义。
+- `SourceDebugPage` 改为依赖可注入调试端口；搜索、章节调试、URL 测试的请求顺序、参数、加载状态和错误日志保持原行为。
+- `SourceDebugPanel` 和 `formatDebugLog` 改为消费纯 Dart 快照，页面展示层不再直接导入 FRB 生成的 `DebugResult`/`DebugItem`。
+- 新增调试端口契约测试，并保留原日志字段、规则步骤、结果上限和响应预览格式；未引入正文清洗、中文断行、分页或目录排序逻辑。
+
+行为验证：
+
+- R2-7 定向测试：`3` 个通过，包含调试端口可替换契约、Rust 不可用错误语义和日志格式化回归。
+- Flutter 全量：`400` 个通过，`3` 个既有在线 smoke 跳过。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+- `flutter analyze`：既有 `47` 条诊断，本步没有新增诊断；命令仍因既有诊断返回非零。
+
+边界结论：书源搜索、详情、目录、正文、发现、校验和调试入口均已隔离到 infrastructure 适配器；调试请求和日志展示不再把 FRB 类型扩散到页面，原 App 的目录顺序、章节 `index`、正文内容、中文断行和分页行为未改变。下一步进入 R3 阅读会话、正文处理与缓存链路。
+
+## 25.1 R1-6：SourceDebugPage FRB Feature 边界复验
+
+日期：2026-07-27
+
+范围：
+
+- 原版只读核对文件：`legado-main/app/src/main/java/io/legado/app/ui/book/source/debug/BookSourceDebugActivity.kt`、`BookSourceDebugModel.kt` 与 `model/Debug.kt`。
+- 当前工程将 `BookSourceDebugPort` 的 FRB 实现创建责任收敛到 `lib/main.dart` 根组合层；`lib/features/sources/source_debug_page.dart` 只接收领域端口，不再导入或构造 `FrbBookSourceDebugPort`。
+- 新增 `test/features/sources/source_debug_page_test.dart`，以 fake port 验证搜索调用参数、引擎不可用时不发起调用、调试失败时保留错误日志。
+
+不做事项与已知缺口：
+
+- Kotlin 原版为统一调试工作流，支持五种输入路径、增量状态和取消；当前 Rust 仅有独立的 `debug_search` 与 `debug_toc`，没有统一会话事件流或取消 API。本单元不改变 Rust API，也不把当前三标签 Flutter 页面误记为与原版统一流程等价。
+- `SourceDebugPage` 的 `dart:io` 同步日志保存仍是独立的平台文件操作迁移项。
+- 未触及目录排序、章节身份、正文内容、中文断行、分页或阅读位置。
+
+验证：
+
+- `flutter test --no-pub test/features/sources/source_debug_page_test.dart test/infrastructure/engine/frb_book_source_debug_port_test.dart test/services/source_debug_formatter_test.dart`：`6` 通过。
+- `flutter analyze --no-pub lib/main.dart lib/features/sources/source_debug_page.dart test/features/sources/source_debug_page_test.dart`：`No issues found`。
+- 静态边界脚本由 `21` 项降至 `19` 项；其非零退出码仍代表未迁移 backlog，不能作为本单元失败或 R6 退出结论。
+
+边界结论：本单元仅消除了 Feature 对 FRB adapter 的两处直接依赖，端口的组装仍限于受控应用启动组合层。原版统一调试会话能力保留为后续 Rust R2 迁移条件。
+
+## 25.2 R1-7：TocSheet 数据与缓存依赖边界复验
+
+日期：2026-07-27
+
+范围：
+
+- 原版只读核对文件：`legado-main/app/src/main/java/io/legado/app/ui/book/toc/TocViewModel.kt`。其中 `reverseToc` 先翻转已保存章节并连续重写 `index`，再保存书籍的 `reverseToc`。
+- `lib/features/book/toc_sheet.dart` 不再导入 `BookDao` 或 `FileChapterContentCache`，也不在 Feature 内构造它们；`TocSheet.show` 从可用的 `BookProvider` 取得 `BookRepository` 和 `ChapterContentCachePort`，直接构造的离线预览保持可用但不猜测基础设施实现。
+- `lib/providers/book_provider.dart` 公开既有缓存端口的只读 getter，未修改缓存文件布局、缓存命中、网络加载或目录首帧策略。
+
+不做事项：
+
+- 不改目录默认顺序、`reverseToc`、章节身份、0-based `index`、缓存字数计算、正文、中文断行、分页或阅读位置。
+- 不迁移 `BookProvider` 自身的 DAO/缓存默认组装；该 Provider 越界项留在后续 R1/R3 调用者迁移单元。
+
+验证：
+
+- `dart format --output=none --set-exit-if-changed lib/providers/book_provider.dart lib/features/book/toc_sheet.dart`：通过。
+- `flutter analyze --no-pub lib/providers/book_provider.dart lib/features/book/toc_sheet.dart test/pages/book/toc_order_test.dart`：`No issues found`。
+- `flutter test --no-pub test/pages/book/toc_order_test.dart`：`5` 通过，覆盖原顺序、界面翻转、持久化翻转与连续重编号、远端目录 0-based 归一化、`reverseToc` 序列化。测试 fixture 会记录 SharedPreferences/Rust 未初始化的既有正文回退日志，但不影响目录契约断言，未将其视为集成通过。
+
+边界结论：目录 Feature 不再直接控制 DAO 或文件缓存适配器；原版目录翻转和索引顺序保持由既有契约覆盖。
+
+## 25.3 R1-8：ReplaceProvider Repository 组合边界复验
+
+日期：2026-07-27
+
+范围：
+
+- 原版只读核对文件：`legado-main/app/src/main/java/io/legado/app/data/dao/ReplaceRuleDao.kt`。其规则查询保持 `sortOrder` 顺序，插入、更新、删除和启停均是持久化行为。
+- `lib/providers/replace_provider.dart` 改为要求 `ReplaceRuleRepository`，不再导入或默认构造 `ReplaceRuleDao`。
+- `lib/main.dart` 根组合层创建 `ReplaceRuleDao` 并传入 Provider；默认规则首次初始化、载入 `ReplaceService` 和 `ContentProcessor` 的顺序不变。
+
+不做事项：
+
+- 不改规则匹配、替换执行、内容净化、正文字符、中文断行、分页、目录或 Rust API。
+- 不迁移 `ContentProcessor` 与 `ReplaceService` 的 Dart 规则执行；它们仍是 R3 的 Rust 唯一事实来源迁移项。
+
+验证：
+
+- `dart format --output=none --set-exit-if-changed lib/providers/replace_provider.dart lib/main.dart test/widget/main_shell_test.dart`：通过。
+- `flutter analyze --no-pub lib/main.dart lib/providers/replace_provider.dart test/providers/replace_provider_repository_test.dart test/widget/main_shell_test.dart`：`No issues found`。
+- `flutter test --no-pub test/providers/replace_provider_repository_test.dart test/widget/main_shell_test.dart`：`3` 通过，覆盖替换规则 Repository CRUD 与 MainShell 入口；测试加载 Rust 引擎成功。
+- `git diff --check`：通过。
+
+边界结论：Provider 只依赖领域仓储；DAO 实例仅在受控根组合层创建。原版规则排序和 CRUD 语义由既有契约测试保持。
+
+## 25.4 R1-9：BookProvider 数据与缓存组合边界复验
+
+日期：2026-07-27
+
+范围：
+
+- 原版只读核对文件：`legado-main/app/src/main/java/io/legado/app/data/dao/BookDao.kt`。书籍和章节的读取、替换插入、删除与进度更新属于持久化层；书架页面状态不拥有数据库实现。
+- Rust 现状：`rust/legado_engine/src/api/db.rs` 与 `rust/legado_engine/src/db/mod.rs` 已提供书籍、章节存取；本单元不改变其 schema、FRB API 或事务。
+- `lib/providers/book_provider.dart` 改为要求 `BookRepository` 和 `ChapterContentCachePort`，不再导入或默认构造 `BookDao`、`FileChapterContentCache`。
+- `lib/application/app_bootstrap.dart` 是受控启动组合点，显式创建既有 DAO/cache adapter；`ReadBook.instance.configure` 的 source service、repository、正文处理与缓存注入顺序不变。
+- 所有测试构造点显式传入既有 adapter 或 fake，覆盖 Android 阅读器集成测试的编译入口。
+
+不做事项：
+
+- 不改 Rust 书籍/章节 schema、DAO 查询语义、目录合并、章节 `index`、缓存文件布局、缓存生命周期、正文内容、中文断行、分页或阅读位置。
+- 不迁移 `BookSourceService` 的 Dart 网络责任；该项仍按 R2 的 Rust 网络迁移处理。
+
+验证：
+
+- `flutter analyze --no-pub`（AppBootstrap、BookProvider、所有更新的 unit/widget/integration 测试文件）：`No issues found`。
+- 定向串行回归覆盖目录顺序与翻转、书架排列、BookProvider 并发目录/自动换源/缓存一致性/缓存端口/进度迁移/tocUrl、书架空态和 MainShell：`22` 通过。
+- `flutter test --no-pub --concurrency=1`：`519` 通过、`3` 个既有在线 smoke 跳过。
+- `dart format --output=none --set-exit-if-changed` 与 `git diff --check`：通过。
+- 静态边界检查由 `13` 降至 `9` 项；未归零的退出码继续表示分阶段 backlog，不是本单元失败。
+
+边界结论：BookProvider 仅编排领域仓储和缓存端口；生产依赖只在启动组合层创建。原版书架数据职责、目录/缓存/阅读行为保持不变。
+
+## 25.5 R1-10：SourceProvider Repository 组合边界复验
+
+日期：2026-07-27
+
+范围：
+
+- 原版只读核对文件：`legado-main/app/src/main/java/io/legado/app/data/dao/BookSourceDao.kt`。书源按 `customOrder` 排序，启用状态、分组查询和批量写入属于存储层。
+- Rust 现状：`rust/legado_engine/src/db/mod.rs` 保留书源表的插入、更新、删除与查询；`api/validate.rs` 是独立的 R2 校验能力。本单元不修改 Rust、schema、校验或 FRB。
+- `lib/providers/source_provider.dart` 改为要求 `BookSourceRepository`，不再导入或默认构造 `SourceDao`；内置书源空库导入、分组同步和失败传播顺序不变。
+- `lib/main.dart` 根组合层显式创建既有 `SourceDao`。校验 port 的 FRB 默认组装保留，作为 R2 的单独迁移项。
+
+不做事项：
+
+- 不改书源排序、启用状态、分组标签、内置源内容、导入/导出、网络请求、规则解析、校验结果、正文断行或分页。
+- 不移动 `FrbBookSourceValidationPort`；它是 R2 引擎适配器边界，不能借 R1 DAO 清理提前改变。
+
+验证：
+
+- `flutter analyze --no-pub`（main、SourceProvider、所有更新的 unit/widget/integration 测试文件）：`No issues found`。
+- 定向串行回归覆盖图片 header、书源 repository CRUD、空库内置源导入、非空库跳过、启动失败传播、校验 fake、书架排列与 MainShell：`11` 通过。
+- `flutter test --no-pub --concurrency=1`：`519` 通过、`3` 个既有在线 smoke 跳过。
+- `dart format --output=none --set-exit-if-changed` 与 `git diff --check`：通过。
+- 静态边界检查由 `9` 降至 `7` 项；其中 SourceProvider 剩余的两项 FRB validation 违规明确登记为 R2，而非 R1 遗漏。
+
+边界结论：SourceProvider 的存储依赖已收敛到领域仓储和根组合层；原版书源持久化语义与内置源启动策略保持不变。
+
+## 25.6 R1-11：SourceProvider 校验 FRB 组合边界复验
+
+日期：2026-07-27
+
+范围：
+
+- `lib/providers/source_provider.dart` 改为要求 `BookSourceValidationPort`，不再导入或构造 `FrbBookSourceValidationPort`。
+- `lib/main.dart` 根组合层创建 `FrbBookSourceValidationPort` 并注入 SourceProvider；校验快照、未初始化状态、超时和错误展示逻辑未改。
+- 原版只读核对路径：`legado-main/app/src/main/java/io/legado/app/data/dao/BookSourceDao.kt` 负责书源持久化；规则校验并非由页面持有数据库/FRB 实现。
+
+验证：
+
+- `flutter analyze --no-pub`：`No issues found`。
+- 定向书源/主壳回归：`11` 通过；校验测试继续以 fake port 验证请求与快照映射。
+- `flutter test --no-pub --concurrency=1`：`519` 通过、`3` 个既有在线 smoke 跳过。
+- `cargo test --workspace`：Rust 核心 `117` 通过；既有网络 e2e 保持 ignored，编译输出保留现有 FRB macro warning。
+- `dart format --output=none --set-exit-if-changed` 与 `git diff --check`：通过。
+- 静态边界检查由 `7` 降至 `5` 项；剩余项为 R2 RSS Dart HTTP、R3 reader cache adapter、R4 remote WebDAV adapter 和备份文件 adapter。
+
+边界结论：SourceProvider 只依赖领域仓储和校验 port，FRB 仅留在 infrastructure adapter 与根组合层。
+
+## 25.7 R1 退出审计（当前工作树）
+
+日期：2026-07-27
+
+通过证据：
+
+- 数据模型与 port：Book/Chapter codec、BookRepository、BookSourceRepository 和 Rust database port 契约通过。
+- 旧 schema：Rust `db::tests::legacy_v7_schema_migrates_to_current_without_losing_book_rows` 证明本工程 Rust v7 schema 可升级至 v17、保留书籍行并可写入新增字段。
+- 章节身份与位置：章节 URL 优先、标题回退、删章重置、0-based index 重排、页位置半开区间和 UTF-16 位置映射由 `chapter_progress_migrator`、BookProvider 和 reading position mapper 契约覆盖；定向集合 `26` 通过。
+- 质量门禁：全仓 analyze 无诊断、串行 Flutter 全量 `519` 通过且 `3` 个既有在线 smoke 跳过、Rust workspace 通过。
+
+范围限制：
+
+- Kotlin 原版当前 Room schema 在 `legado-main/app/src/main/java/io/legado/app/data/AppDatabase.kt` 中为 v99；手写迁移链在 `DatabaseMigrations.kt` 覆盖 10→43，随后由 Room auto migration 覆盖 43→99。当前 Rust legacy fixture 是本工程 Rust v7 schema，不是 Kotlin Room 数据库文件。
+- 2026-07-27 用户已确认必须支持原版 Kotlin Room 数据库迁移。因此“可读写旧数据库”仅对本工程 Rust 旧 schema 成立；不得宣称已经支持原版 Android 数据库文件迁移。
+- 从已安装 Kotlin 原版直接迁移数据库需单独定义导入范围、表映射、冲突策略、备份/回滚与真实 Room fixture，不得把该工作混入 R2 网络迁移。
+
+判定：R1 领域/FRB 边界在当前工程 schema 范围内技术退出就绪；但 R1 因 Kotlin Room v99 数据迁移门禁重新打开，完成 R1-12 前不得进入新的 R2 实现或宣称 R1 最终退出。
+
+## 25.8 R1-12：Kotlin Room v99 初始探针记录（历史）
+
+日期：2026-07-28
+
+实现范围：
+
+- `rust/legado_engine/src/db/room_import.rs` 提供只读 Room 探针、稳定快照和 Rust v17 映射，覆盖
+  `books`、`book_sources`、`chapters`、`bookmarks`、`readRecord`、`detailedReadRecord`、
+  `replace_rules` 七张核心表；探针读取 `user_version`、identity hash、表和列形状。
+- 建立 Room → Rust 映射：`bookUrl` → `Book.id/sourceUrl`、`origin` → `bookSourceUrl`、
+  `durChapterPos` → UTF-16 章内 `currentPageIndex`；书源规则 JSON 解析为嵌套对象并保留
+  `rawSourceJson`；章节 ID 使用与 Flutter `Chapter.idFor` 一致的 UTF-16 FNV-1a；详细阅读记录按书籍
+  聚合，`readRecord` 暂不猜测含义并登记 warning。
+- 书签只在书名和作者唯一匹配时填写 `bookId`，冲突时留空并报警；Rust v17 新增
+  `legacy_room_imports` 原始快照归档与 fingerprint，保留完整源行和未映射列。
+- 导入包含导入前备份、单事务写入、失败回滚、重复 fingerprint 幂等，并返回导入计数、冲突、警告和
+  未映射列。FRB 2.11.1 绑定、Dart application port/service 和备份页触发入口已接入。
+- 本轮未修改正文、目录顺序、章节身份规则、分页输入、中文断行规则或 `legado-main/`。
+
+验证：
+
+- `cargo fmt -p legado_engine`：通过。
+- `cargo test -p legado_engine db::room_import::tests -- --nocapture`：`9/9` 通过，覆盖探针、核心字段
+  映射、阅读位置、书源规则、章节身份、详细阅读记录、书签歧义、备份/回滚和重复导入。
+- `cargo test -p legado_engine`：`126` 个 Rust 测试通过；既有网络 ignored 测试保持原规则。
+- `flutter analyze --no-pub`：通过，`No issues found!`；Dart/备份页定向测试 `6/6` 通过。
+- `flutter test --no-pub --concurrency=1`：`521` 通过，3 个既有在线测试跳过。首次全量 release DLL
+  content hash 过期，重建 release DLL 后重跑通过；没有修改测试断言。
+- 对真实 `original_legado.db` 的只读探测得到 Room v99、identity hash
+  `90980f1d0da029cf3254f354b227a2fe`；七张核心表均存在但当前均为 0 行。
+
+限制与边界结论：
+
+- 没有真实非空 Room 数据或非空等价 fixture 的逐字段迁移证据。
+- 原版迁移范围内的非核心 Room 扩展表尚未纳入导入范围。
+- 尚未在 Android 设备上验收真实文件导入、重启后继续写入以及再次备份/恢复。
+
+因此，25.8 仅记录 2026-07-28 的初始探针状态；其后续结果由 25.9 的最终退出记录取代，
+不能单独作为当前 R1-12 判定。
+
+## 25.9 R1-12：Kotlin Room v99 数据库迁移门禁退出（2026-07-29）
+
+本节修订 25.8 的初始探针记录，记录最终实现和退出证据。实现位于
+` rust/legado_engine/src/db/room_import.rs`，原版 `legado-main/` 仍只读。
+
+实现范围：
+
+- 按原版 Room v99 schema 抽取全部 23 个实体表的稳定列和值；`book_sources_part` 是 schema 定义的只读 view，
+  不作为独立实体迁移。
+- 七张核心表映射到 Rust v17；章节 ID 保持 UTF-16 FNV-1a，`durChapterPos` 保持 UTF-16 章内位置语义，
+  书源规则 JSON 解析为嵌套对象并保留原始字符串，书签身份冲突留空并报警。
+- `legacy_room_imports` 保存全部实体表原始快照、列和值、fingerprint 和未映射字段；非核心表采用 archive-only
+  保存，章节附加字段和替换规则 `group/scope` 等不会静默丢失。
+- 导入前备份、单事务写入、失败回滚、重复 fingerprint 幂等、冲突统计、迁移报告、FRB 2.11.1、Dart
+  application port/service 和备份页入口均已接入。
+
+验证结果：
+
+- `cargo fmt -p legado_engine`：通过。
+- `cargo test -p legado_engine db::room_import::tests -- --nocapture`：`10/10` 通过。
+- `cargo test -p legado_engine`：`127` 个 Rust 测试通过；既有网络 ignored 测试保持原规则。
+- `flutter analyze --no-pub`：`No issues found!`；Dart/备份页定向测试 `6/6` 通过。
+- `flutter test --no-pub --concurrency=1`：`521` 通过，3 个既有在线测试跳过。
+- 真实 `original_legado.db`：Room v99，identity hash 为
+  `90980f1d0da029cf3254f354b227a2fe`，23 个实体表存在但当前均为空；非空等价 fixture 已覆盖核心字段、
+  阅读位置、规则 JSON、章节身份、详细记录、书签歧义和非核心原始行。
+- Android `emulator-5556` 两阶段 Driver smoke 通过：真实文件导入及导入后写入；强制停止/新进程后读取、
+  重复导入幂等、本地备份、清空和恢复。
+  实际命令包含：
+  `adb push original_legado.db /data/local/tmp/r1_original_legado.db`；
+  `adb shell run-as com.legado.legado_flutter cp /data/local/tmp/r1_original_legado.db files/r1/original_legado.db`；
+  `flutter drive --target=integration_test/r1_android_room_import_smoke_test.dart --driver=test_driver/integration_test.dart
+  -d emulator-5556 --dart-define=R1_ROOM_PHASE=import --keep-app-running`；
+  `adb shell am force-stop com.legado.legado_flutter`；
+  再以 `R1_ROOM_PHASE=verify` 执行同一 Driver 命令。
+
+退出结论：R1-12 数据库迁移门禁通过。非核心表产品业务 port 和真实非空原版数据的补充采集属于后续独立
+工作；本轮没有推进新的 R2-R6 实现，也没有修改正文、目录、分页、章节身份或断行规则。
+
+## 26. R3-1：阅读会话正文处理与章节文件缓存端口化
+
+日期：2026-07-25
+
+实现：
+
+- 新增 `ChapterContentCachePort` 与 `FileChapterContentCache`，将章节文件正文的读取、保存和删除从 `ReadBook` 中的静态 `BookHelp` 调用隔离到 infrastructure 适配器；适配器复用原有文件路径、ID 清洗、空内容和异常处理语义。
+- 新增 `ContentProcessingPort` 与 `ContentProcessorAdapter`，将正文清洗 API 及书源级替换规则映射隔离到 infrastructure；领域端口不依赖 `lib/help`。
+- `ReadBook` 改为注入章节文件缓存端口和正文处理端口，同时保留旧 `processor: ContentProcessor` 参数作为兼容入口，默认适配器仍使用现有单例处理器。
+- 缓存顺序保持为：内存 → 文件 → 数据库正文 → 网络 → 正文处理 → 原文文件缓存；预加载世代、旧请求失效、失败占位不缓存和数据库回落行为未改变。
+- 新增缓存端口、正文处理适配器和 `ReadBook` 注入契约测试；未改 `ReaderPaginator`、中文断行、分页字符范围或目录排序。
+
+行为验证：
+
+- R3-1 定向测试：`14` 个通过，包含缓存端口 `5` 个、正文处理适配器 `3` 个、ReadBook 缓存注入 `2` 个及既有阅读会话/数据库回落 `4` 个。
+- Flutter 全量：`410` 个通过，`3` 个既有在线 smoke 跳过。
+- Rust workspace 串行测试：核心 crate `115` 个通过，其余 workspace 测试通过；既有网络/人工场景保持 ignored。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+- `flutter analyze`：既有 `47` 条诊断，本步最终没有新增诊断；中途发现的 R2-7 适配器多余 cast 已修正。
+
+边界结论：阅读会话的正文处理和单章文件缓存已经可替换，数据库回落、正文内容、缓存命中语义、中文断行和分页输入未改变。下一步处理 `ReaderPage` 的单章原文缓存旁路和目录缓存元数据端口，仍不修改 R4 的目录顺序/首帧策略。
+
+## 27. R3-2：阅读器与缓存管理调用者端口化
+
+日期：2026-07-25
+
+实现：
+
+- `ReaderPage` 的原文编辑、重置重拉、缓存读取和缓存章节列表改为通过 `ReadBook`/`ChapterContentCachePort`，不再直接访问 `BookHelp`；`ContentEditDialog` 移除重复的静态文件写入，保存责任归还阅读会话。
+- `TocSheet`、`SearchContentPage`、`BookProvider`、`CacheBookPage`、`BookCacheExportService` 和 `CacheService` 均支持注入缓存端口，默认适配器仍为 `FileChapterContentCache`。
+- 缓存端口补齐章节列表、ID 规范化、字数统计、体积统计、清理全部/单书/无效目录和存在性查询；原 `BookHelp` 文件布局、UTF-8 字节统计、缓存标记和空内容语义保持不变。
+- 下载筛选的章节 ID 规范化改为由调用者传入，消除 `download_helpers.dart` 的 `BookHelp` 依赖。
+- 目录缓存字数改为首帧后按可见章节请求，减少整本缓存文件扫描；本步没有修改 `_reversed` 默认值、书源 `+/-` 规则、章节顺序、`index` 或分页器。
+
+行为验证：
+
+- R3-2 定向缓存/调用者测试：全部通过，覆盖端口实现、ReaderPage、目录/全文搜索、Provider、缓存管理和正文回归。
+- Flutter 全量：`420` 个通过，`3` 个既有在线 smoke 跳过。
+- Rust workspace 串行测试：核心 crate `115` 个通过，其余 workspace 测试通过；既有网络/人工场景保持 ignored。
+- `dart format --output=none --set-exit-if-changed`、`git diff --check`：通过。
+- `flutter analyze`：既有 `47` 条诊断，本步没有新增诊断。
+
+边界结论：Flutter 侧除 infrastructure 适配器外已无直接 `BookHelp` 缓存调用；缓存链路可替换且正文原文、数据库回落、章节身份、中文断行和分页输入未改变。R4 仍需独立完成书籍级 `reverseToc`、连续 0-based `index`、持久化顺序和目录首帧性能契约。
+
+## 28. R3-3：阅读位置映射与阅读记录端口化
+
+日期：2026-07-25
+
+实现：
+
+- 新增纯 Dart `ReadingPositionMapper` 和 `ReadingPageRange`，统一页范围 `[start, end)` 与 Dart UTF-16 offset 的位置转换；分页仍由 Flutter `TextPainter` 负责，没有迁移或重写原 App 的中文断行和字符宽度算法。
+- 新增 `ReadingRecordPort` 及 `FrbReadingRecordPort`，`ReadingRecordService` 的阅读记录写入和详细阅读会话记录改为通过可注入端口编排，FRB 生成类型保留在 infrastructure 适配层。
+- `ReaderPage` 的分页目标改用位置 mapper；本地 `currentPageIndex` 继续保持页索引语义，云端 `durChapterPos` 修正为章内 UTF-16 字符位置，不再误当作页索引。
+- `[newpage]` 仍作为布局间隙处理，不进入显示文本；图片占位 `U+FFFC` 和长 URL 布局副本的原文范围映射规则保持不变。
+- 滚动模式的真实位置映射尚未完成，目前仍返回位置 `0`；本项也未处理 R4 的目录倒序、持久化顺序、章节 `index` 或目录首帧性能。
+
+行为验证：
+
+- R3-3 定向测试：`33` 个通过，覆盖位置 mapper、分页、快照、书签 hint、进度同步、书签同步和阅读记录集成。
+- 阅读记录端口、tracker 和格式化定向测试：`10` 个通过。
+- `flutter analyze`：仍为既有 `47` 条诊断，未发现新增诊断。
+- Flutter 全量、Rust workspace 串行测试、`dart format --output=none --set-exit-if-changed` 和 `git diff --check`：R3-3 修改后尚未复跑，因此本边界暂不记录为全量门禁完成。
+
+边界结论：阅读记录写入和云端阅读位置语义已隔离并完成全量回归；第 3 条断行规则继续由原有 `TextPainter` 分页链路保证。纯 Dart `ReadingScrollPositionMapper` 已作为独立基础设施建立并通过 6 个定向测试，但尚未接入 ReaderPage，因为原版 `TextChapter.getPageIndexByCharIndex` 使用已排版页面首行章内位置二分查找，滚动模式还依赖可视页首/底行，而不是简单线性比例。下一步补齐排版行范围映射和分页输入边界；R4 的目录顺序 2A 已完成，2B 性能继续独立验收。
+
+## 29. R3-4：独立书签端口化与原版源码核对
+
+日期：2026-07-25
+
+实现：
+
+- 新增纯 Dart `BookmarkSnapshot`、`BookmarkPort` 和 `FrbBookmarkPort`；`BookmarkService` 的列表、保存、删除、JSON 导入导出继续保持原有 DTO 外部兼容，FRB 访问集中到 infrastructure。
+- 新增 `BookReadConfig`，将 `reverseToc` 放入 `Book.readConfig`，与原版 `Book.kt` 的 `ReadConfig.reverseToc` 结构一致；Rust 数据库 schema 增加 `readConfig` JSON 列并覆盖旧库迁移、重启读取和备份路径。
+- `BookChapterList.kt` 对照结果：书源 `chapterList` 的 `-`/`+` 前缀处理、书籍级 `reverseToc`、去重和最终连续 `index` 必须分层执行；Flutter Provider 已在远端/本地目录展示与落库边界归一化 index。
+- `TocViewModel.reverseToc` 对照结果：切换配置的同时反转持久化目录并重新编号；Flutter `TocSheet` 已在切换时同步反转章节记录、重写 index 并保存 `readConfig`。
+
+行为验证：
+
+- 书签端口定向测试：5 个通过。
+- 目录顺序/持久化/首帧契约测试：6 个通过。
+- Flutter 全量测试、Rust workspace 串行测试（核心库 116 个通过）、`flutter analyze`、格式检查和 `git diff --check` 均通过；在线 smoke 仍按既有规则跳过。
+
+## 30. R6-1：Web API 设置页面端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增纯 Dart `WebApiStatus` 和 `WebApiPort`，定义本地 Web API 状态查询、启动和停止边界。
+- 新增 `FrbWebApiPort`，集中完成 FRB `WebApiStatus` 映射以及引擎/数据库可用性检查。
+- `WebApiService` 改为依赖可替换端口，保留端口、Token、启停配置持久化和不可用时不调用底层的原有语义。
+- `WebApiSettingsCard` 移除对桥接层和 FRB 状态类型的直接依赖，页面只消费领域状态和应用服务。
+- 新增端口替换测试，覆盖启动持久化、停止持久化和不可用门禁。
+
+行为验证：
+
+- R6-1 定向测试：`7/7` 通过，包含 Web API 端口测试、偏好回归和备份配置页面回归。
+- 修改文件定向 `flutter analyze`：无诊断。
+- `git diff --check`：通过。
+- 断行约束：本步只迁移 Web API 生命周期的依赖方向，不修改正文原文、中文断行、分页输入、章节位置映射或阅读器 TTS 行为。
+
+边界结论：Web API 设置页已不再直接依赖 FRB 生成状态或引擎/数据库桥接；FRB 仅保留在 `infrastructure/web_api` 适配器。下一步继续按页面直接依赖清单迁移一个 UI/服务边界，先从可替换端口建立再迁移调用者。
+
+## 31. R6-2：阅读记录统计页面端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增纯 Dart `ReadingStats`/`DailyReadingStat`，并扩展 `ReadingRecordPort` 覆盖统计查询、普通导出和详细记录导出。
+- `FrbReadingRecordPort` 集中将 FRB 统计 DTO 映射为领域快照；`ReadingRecordService` 不再直接调用生成的统计/导出 API。
+- `ReadRecordPage` 和阅读统计图表改为消费领域快照，保留原有范围切换、数值格式化、CSV/JSON 导出和空数据展示。
+- 新增端口测试覆盖统计查询与两种导出，既有阅读记录服务和页面回归继续保留。
+
+行为验证：
+
+- R6-2 定向测试：`6/6` 通过。
+- 修改文件定向 `flutter analyze`：无诊断。
+- `git diff --check`：通过。
+- 断行约束：本步只迁移阅读统计查询/导出和图表 DTO 依赖，不修改正文原文、中文断行、分页输入、章节位置映射或阅读器 TTS 行为。
+
+边界结论：阅读记录页面及图表已不再直接依赖 FRB 统计类型；FRB 映射集中在 `infrastructure/engine/frb_reading_record_port.dart`。下一步继续迁移一个仍直接依赖生成 DTO 的页面边界。
+
+## 32. R6-3：阅读小票统计端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增纯 Dart `BookReadingStats` 和 `BookplatePort`，定义书籍阅读统计查询边界。
+- 新增 `FrbBookplatePort`，集中映射生成的 `BookReadingStats`；`BookplateService` 支持端口替换并保留原有默认 FRB 实现。
+- `BookplateOverlay` 和小票组装逻辑改用领域统计快照，评分、章节进度、时长、字数和完成日期语义不变。
+- 新增端口替换测试，既有小票服务和 Widget 回归继续通过。
+
+行为验证：
+
+- R6-3 定向测试：`7/7` 通过。
+- 修改文件定向 `flutter analyze`：无诊断。
+- `git diff --check`：通过。
+- 断行约束：本步只迁移阅读小票统计 DTO 依赖，不修改正文原文、中文断行、分页输入、章节位置映射或阅读器 TTS 行为。
+
+边界结论：小票服务和展示组件已不再直接依赖生成的阅读统计类型；FRB 映射集中在 `infrastructure/engine/frb_bookplate_port.dart`。下一步继续迁移一个仍直接依赖生成 DTO 的页面或 Widget 边界。
+
+## 33. R6-4：想法/笔记页面端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增纯 Dart `NoteSnapshot` 与 `NotePort`，集中定义想法列表、保存、删除和 Markdown 导出边界。
+- 新增 `FrbNotePort`，将 notes 表的 FRB DTO 映射限制在 infrastructure；`NoteService` 改为端口编排并保留不可用时的空值/空列表语义。
+- 书签页、目录书签 Tab、想法编辑器和分享卡片改用领域 `NoteSnapshot`；书签编辑器和书签页展示改用领域 `BookmarkSnapshot`，同步服务的旧 JSON/FRB 兼容接口保留。
+- 新增领域版旧书签前缀迁移入口，复用时间主键、书籍元数据、章节位置和重复迁移语义；旧 FRB 迁移入口保留给兼容调用者。
+- 新增 `note_port_test.dart`，并迁移书签编辑器 fixture 到领域快照；所有原有字段断言保留。
+
+行为验证：
+
+- R6-4 定向测试：`9/9` 通过，覆盖 NotePort 全操作、旧书签迁移、书签页、书签编辑器和 Markdown 导出。
+- 修改文件定向 `flutter analyze`：无诊断。
+- `git diff --check`：通过。
+- 断行约束：本步只迁移注释/书签 UI 的 DTO 和持久化端口，不修改正文原文、中文断行、分页输入、章节位置映射或阅读器 TTS 行为。
+
+边界结论：书签/想法 UI 已不再直接依赖 FRB `NoteDto`，FRB 仅保留在 `infrastructure/engine/frb_note_port.dart` 和既有同步兼容接口。下一步继续迁移一个仍直接依赖生成 DTO 的页面或 Widget 边界。
+
+## 34. R6-5：RSS 服务端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增纯 Dart `RssPort` 和 `RssArticlesResult`，定义 RSS 文章列表、分页 URL 和正文请求边界。
+- 新增 `FrbRssPort`，集中完成 RSS 文章字段映射、来源默认值和 FRB 调用；`RssService` 改为端口编排。
+- 保留原有行为：引擎不可用时文章请求抛出状态错误；无正文规则时直接返回文章已有正文/描述；文章来源、类型、空字段和 `nextUrl` 语义不变。
+- `RssSortUrls` 的 JS 分类解析及缓存仍保持独立边界，未在本步混入。
+- 新增端口替换测试，覆盖文章分页转发、正文转发和无规则正文回退。
+
+行为验证：
+
+- R6-5 定向测试：`3/3` 通过，包含 RSS 端口测试和 RSS 页面回归。
+- 修改文件定向 `flutter analyze`：无诊断。
+- `git diff --check`：通过。
+- 断行约束：本步只迁移 RSS 请求与 DTO 映射依赖，不修改正文原文、中文断行、分页输入、章节位置映射或阅读器 TTS 行为。
+
+边界结论：RSS 服务已不再直接依赖 FRB 生成文章类型，FRB 映射集中在 `infrastructure/engine/frb_rss_port.dart`。下一步继续处理 RSS 分类 JS 或其他剩余 Service 直连边界。
+
+## 35. R6-6：RSS 分类 JS 端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增纯 Dart `RssSortUrlJsPort`，定义 RSS `sortUrl` 脚本执行边界。
+- 新增 `FrbRssSortUrlJsPort`，集中完成 `evalJs`、`jsLib` 和 `baseUrl` 传递；`RssSortUrls` 支持端口替换。
+- 保留原有行为：`@js:`/`<js>` 提取大小写语义、`&&`/换行分类分隔、SharedPreferences 缓存、缓存清理和异常时回退到源 URL。
+- 新增测试覆盖 JS 首次执行与缓存命中、普通分类 URL 跳过 JS、引擎不可用回退。
+
+行为验证：
+
+- R6-6 定向测试：`5/5` 通过，包含 RSS 分类端口、RSS 文章端口和 RSS 页面回归。
+- 修改文件定向 `flutter analyze`：无诊断。
+- `git diff --check`：通过。
+- 断行约束：本步只迁移 RSS 分类脚本执行依赖，不修改正文原文、中文断行、分页输入、章节位置映射或阅读器 TTS 行为。
+
+边界结论：RSS 服务及分类 JS 已不再直接依赖 FRB；相关绑定集中在 `infrastructure/engine` 适配器。下一步继续检查剩余 Service 层直连边界，Web/WASM/PWA 与 TTS 仍暂停。
+
+## 36. R6-7：网络偏好引擎端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增纯 Dart `NetworkEnginePort`，定义网络代理/DNS 配置下发所需的最小契约。
+- 新增 `FrbNetworkEnginePort`，集中完成引擎可用性判断和 FRB `setNetworkConfig` 调用。
+- `NetworkPrefs` 不再直接依赖引擎桥接或生成网络 API，支持测试端口替换；不可用时保持原有静默返回语义。
+- 保留 SharedPreferences 键名、默认值、保存/加载和启动恢复行为，不改变网络请求参数内容。
+
+行为验证：
+
+- R6-7 定向测试：网络偏好原有回归和端口测试通过。
+- 断行约束：本步只迁移网络配置适配依赖，不修改正文原文、中文断行、分页输入、章节位置映射或阅读器 TTS 行为。
+
+边界结论：`NetworkPrefs` 已不再直接依赖 FRB；绑定集中在 `infrastructure/engine/frb_network_engine_port.dart`。缓存服务的引擎缓存清理仍是独立剩余边界，Web/WASM/PWA 与 TTS 仍暂停。
+
+## 37. R6-8：书源调试日志格式化器领域化
+
+日期：2026-07-26
+
+实现：
+
+- `formatDebugLog` 收紧为只接收领域 `BookSourceDebugSnapshot`，移除 Service 层对 FRB `DebugResult`、`RuleDebugStep` 和 `DebugItem` 的兼容转换。
+- 调试页面原有 `BookSourceDebugPort` 链路和日志格式保持不变，FRB DTO 映射继续集中在 `FrbBookSourceDebugPort`。
+- 测试 fixture 改用领域快照，保留请求、步骤、结果和响应预览的全部字段断言。
+
+行为验证：
+
+- R6-8 定向测试覆盖领域格式化器和 FRB 调试端口适配器回归。
+- 断行约束：本步只迁移调试结果 DTO 的依赖方向，不修改正文原文、中文断行、分页输入、章节位置映射或阅读器 TTS 行为。
+
+边界结论：书源调试日志 Service 已不再直接依赖 FRB；调试结果映射集中在 `infrastructure/engine/frb_book_source_debug_port.dart`。剩余 Service 直连继续逐项处理，Web/WASM/PWA 与 TTS 仍暂停。
+
+## 38. R6-9：缓存服务引擎清理端口化
+
+日期：2026-07-26
+
+实现：
+
+- 扩展 `NetworkEnginePort` 的引擎缓存清理契约，由 `FrbNetworkEnginePort` 集中调用 FRB `clearEngineCache`。
+- `CacheService` 改为注入网络引擎端口，移除对 `LegadoEngineBridge` 和生成网络 API 的直接依赖。
+- 保留引擎不可用时不调用底层、仍输出清理完成日志的原有语义；文件缓存和备份清理流程不变。
+- 新增缓存服务端口转发测试，验证引擎缓存清理不会绕过端口。
+
+行为验证：
+
+- R6-9 定向测试覆盖缓存统计、文件清理、备份清理、引擎清理端口转发和网络偏好回归。
+- 断行约束：本步只迁移引擎缓存清理适配依赖，不修改正文原文、中文断行、分页输入、章节位置映射或阅读器 TTS 行为。
+
+边界结论：`CacheService` 与 `NetworkPrefs` 的 FRB 网络依赖已集中在 `infrastructure/engine/frb_network_engine_port.dart`。剩余 Service 直连继续逐项处理，Web/WASM/PWA 与 TTS 仍暂停。
+
+## 39. R6-10：登录 JS 执行端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增纯 Dart `JsEvalPort`，定义登录 UI、`loginUrl` 和按钮脚本共用的裸 JS 执行契约。
+- 新增 `FrbJsEvalPort`，集中完成引擎可用性判断和 FRB `evalJs` 参数转发。
+- `SourceLoginService` 改为依赖可替换 JS 端口；登录脚本包装、宿主命令收集、JSON 解析和 Clipboard/浏览器回调逻辑均保持不变。
+- 新增端口测试，验证脚本、JS 库和 base URL 原样传递，以及引擎不可用错误由端口边界保留。
+
+行为验证：
+
+- R6-10 定向测试覆盖 JS 端口转发、不可用错误和既有登录偏好回归。
+- 断行约束：本步只迁移登录 JS 执行适配依赖，不修改正文原文、中文断行、分页输入、章节位置映射或阅读器 TTS 行为。
+
+边界结论：`SourceLoginService` 已不再直接依赖 FRB 生成 API；登录 JS 绑定集中在 `infrastructure/engine/frb_js_eval_port.dart`。剩余 Service 直连继续逐项处理，Web/WASM/PWA 与 TTS 仍暂停。
+
+## 40. R6-11：笔记文件导出领域化
+
+日期：2026-07-26
+
+实现：
+
+- `NoteExportService.exportPerNoteFiles` 改为接收领域 `NoteSnapshot`，移除 Service 层对 FRB `NoteDto` 的直接依赖。
+- 保留 Markdown 文件名非法字符替换、选中文本引用的逐行前缀、创建时间和书籍 ID 元数据格式。
+- 生产导出对话框使用的 `NoteService.exportMarkdown` 链路不变；FRB Note DTO 映射仍集中在 `FrbNotePort`。
+- 导出测试 fixture 改用领域快照，保留文件生成和正文内容断言。
+
+行为验证：
+
+- R6-11 定向测试覆盖逐笔 Markdown 文件导出和既有 NotePort 相关回归。
+- 断行约束：本步只迁移笔记导出 DTO 依赖，不修改正文原文、中文断行、分页输入、章节位置映射或阅读器 TTS 行为。
+
+边界结论：笔记文件导出 Service 已不再直接依赖 FRB `NoteDto`；剩余 FRB 兼容入口仅限同步/迁移等明确兼容边界，Web/WASM/PWA 与 TTS 仍暂停。
+
+## 41. R6-12：本地书籍解析端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增纯 Dart `LocalBookParserPort`、`LocalBookChapterSnapshot` 和 `LocalBookEpubSnapshot`，定义 TXT 分章与 EPUB 元数据/章节解析契约。
+- 新增 `FrbLocalBookParserPort`，集中完成 `LegadoEngineBridge` 结果到领域快照的映射。
+- `LocalBookService` 改为注入解析端口；Rust 不可用或解析失败时继续使用原有 TXT Dart 分章和 EPUB 占位书籍回退。
+- 保留本地文件大小限制、书籍 ID、章节 ID、仓储写入顺序和章节正文内容，不触及阅读器断行/分页链路。
+
+行为验证：
+
+- R6-12 定向测试覆盖 TXT/EPUB 解析端口转发和本地导入限制回归。
+- 断行约束：本步只迁移本地书籍解析适配依赖，不修改正文原文、中文断行、分页输入、章节位置映射或阅读器 TTS 行为。
+
+边界结论：`LocalBookService` 已不再直接依赖 `LegadoEngineBridge`；本地书籍 Rust 绑定集中在 `infrastructure/engine/frb_local_book_parser_port.dart`。剩余 FRB 兼容入口继续按旧数据格式单独处理，Web/WASM/PWA 与 TTS 仍暂停。
+
+## 42. R6-13：页面引擎状态端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增纯 Dart `EngineStatusPort` 与 `EngineStatusService`，定义页面所需的引擎可用状态和版本查询。
+- 新增 `FrbEngineStatusPort`，集中完成 FRB Bridge 状态读取和不可用时的空版本语义。
+- `MyPage` 和 `OtherSettingsCard` 移除对 `LegadoEngineBridge` 的直接依赖，保留 Web API/缓存按钮的可用性、关于页版本展示和未就绪提示。
+- `MyPage` 仍保留数据库就绪检查；备份编排继续通过 `BackupService`，本步不改变备份格式或 WebDAV 行为。
+
+行为验证：
+
+- R6-13 定向测试：引擎状态服务、`MyPage` 和 `OtherSettingsCard` 共 `4/4` 通过。
+- 断行约束：本步只迁移页面引擎状态依赖，不修改正文原文、中文断行、分页输入、章节位置映射或阅读器 TTS 行为。
+
+边界结论：两个页面已不再直接依赖引擎 Bridge；页面状态读取集中在 `services/engine_status_service.dart` 和 `infrastructure/engine/frb_engine_status_port.dart`。Web/WASM/PWA 与 TTS 仍暂停。
+
+## 43. R6-14：SettingsBackup 存储端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增 `SettingsStore` 端口和 `SharedPreferencesSettingsStore` 生产适配器。
+- `SettingsBackup.collect/apply` 支持注入替代存储，默认 SharedPreferences 行为保持不变。
+- 新增设置备份收集/恢复测试，覆盖字符串、整数和布尔值。
+
+行为验证：
+
+- 代码已完成，但 `flutter test test/services/settings_backup_test.dart` 首次运行在 Windows 沙箱启动阶段超时。
+- 延长运行窗口的重试被终端审批服务以 `503 Service Unavailable` 拒绝，尚未取得通过或失败的测试结果。
+- 因此本边界暂不标记为完成；不得用历史测试结果替代本次门禁。
+
+边界结论：存储依赖方向已隔离，但必须在终端权限恢复后先重跑定向测试、`flutter analyze` 和格式检查，再进入下一个依赖该边界的任务。
+
+## 44. R6-15：RSS 源管理文件传输端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增 RSS 文件/剪贴板传输端口及平台适配器。
+- `RssSourceManagePage` 移除对 `FilePicker`、`dart:io` 和 `Clipboard` 的直接依赖，改为注入传输端口。
+- 保留原有 RSS 导入和复制行为；未修改阅读器、目录、分页或中文断行链路。
+
+行为验证：
+
+- `dart format`：通过。
+- `flutter test test/pages/rss_source_manage_page_test.dart test/widget/rss_tab_test.dart`：`2/2` 通过。
+- `flutter analyze`（涉及文件）：`No issues found`。
+- `git diff --check`：通过，仅有既有 LF/CRLF 警告。
+
+## 45. R5-1：WebDAV 设置 Repository 端口化
+
+日期：2026-07-26
+
+实现：
+
+- `WebDavSetupService` 改为依赖 `WebDavRepository` 端口。
+- FRB 具体实现下沉到 infrastructure 默认适配器，保留原有静态调用和回调兼容性。
+- 保留 WebDAV 配置持久化、目录初始化顺序和错误传播语义。
+- 测试使用 fake 只验证端口契约，没有替代真实 WebDAV 验收。
+
+行为验证：
+
+- `flutter test test/services/webdav_setup_service_test.dart`：`7/7` 通过。
+- `flutter analyze`（涉及文件）：`No issues found`。
+- `dart format --set-exit-if-changed`：通过。
+- `git diff --check`：通过，仅有既有 LF/CRLF 警告。
+- 未执行在线 WebDAV smoke；当前没有可用的真实 WebDAV 服务端点。
+
+边界结论：WebDAV 设置编排已与 FRB 适配器隔离；真实服务端验收仍是 R5 外部门禁。
+
+## 46. R5-2：阅读进度同步存储端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增 `BookProgressSyncStore` 持久化端口和 SharedPreferences 适配器。
+- `BookProgressSync` 支持注入存储实现；WebDAV、ETag/412 重试、冲突决策、章节位置和 `durChapterPos` 序列化语义保持不变。
+- WebDAV 网络端口已存在，本步只迁移同步时间存储边界。
+
+行为验证：
+
+- `flutter test test/services/book_progress_sync_test.dart test/services/startup_book_progress_sync_test.dart`：相关同步用例通过；合并回归共 `23/23` 通过。
+- `flutter analyze`（涉及文件）：`No issues found`。
+- `dart format --set-exit-if-changed`：通过。
+- `git diff --check`：通过，仅有既有 LF/CRLF 警告。
+
+边界结论：同步时间持久化已可替换，进度位置、冲突和失败降级行为未改变。
+
+## 47. R6-16：RSS 源编辑保存端口化
+
+日期：2026-07-26
+
+实现：
+
+- `RssSourceEditPage` 新增可注入 `RssSourceEditPort`。
+- 默认适配器仍使用现有 `RssProvider` 保存，UI 和原有保存行为保持不变。
+- 本步没有修改 RSS 源管理页面、ReaderPage、目录、分页或中文断行链路。
+
+行为验证：
+
+- `flutter test test/pages/rss_source_edit_page_test.dart`：`1/1` 通过。
+- `flutter analyze`（涉及文件）：`No issues found`。
+- `dart format --set-exit-if-changed`：通过。
+- `git diff --check`：通过，仅有既有 LF/CRLF 警告。
+
+边界结论：RSS 源编辑页面的保存编排已与具体 Provider 隔离。
+
+## 48. R5/R6 合并回归门禁
+
+日期：2026-07-26
+
+本轮 R5-1、R5-2、R6-14、R6-15 和 R6-16 合并后的验证：
+
+- `flutter test`：`494` 个通过，`3` 个既有在线 smoke 跳过。
+- `flutter analyze`：退出码 `1`，报告 `46` 条既有诊断；本轮涉及文件定向分析为 `No issues found`，没有新增诊断。
+- 相关 16 个 Dart 文件：`dart format --output=none --set-exit-if-changed` 报告 `0 changed`。
+- `git diff --check`：通过，仅有既有 LF/CRLF 警告。
+- 真实 WebDAV 在线 smoke 仍未执行，原因是当前没有可用服务端点；端口契约测试不替代该外部验收。
+
+## 49. R6-17：备份配置页面本地文件端口化
+
+日期：2026-07-26
+
+实现：
+
+- `BackupConfigPage` 移除对 `dart:io File` 的直接依赖，改为注入本地备份文件端口。
+- 新增本地备份条目模型、端口和生产文件系统适配器。
+- 保留备份配置、导入导出和错误提示行为；`BackupService` 未在本步修改。
+
+行为验证：
+
+- `flutter test test/widget/backup_config_page_test.dart`：`4/4` 通过。
+- `flutter analyze`（涉及文件）：`No issues found`。
+- `dart format --set-exit-if-changed`：通过。
+- `git diff --check`：通过，仅有既有 LF/CRLF 警告。
+
+边界结论：备份配置页面的本地文件依赖已收敛到适配器，备份业务服务和 WebDAV 真实验收范围未扩大。
+
+## 50. R6-18：捐赠页面剪贴板端口化
+
+日期：2026-07-26
+
+实现：
+
+- `DonatePage` 移除对 Clipboard 的直接依赖，改为注入剪贴板端口。
+- 保留复制内容、提示文本和 UI 行为不变。
+
+行为验证：
+
+- `flutter test test/widget/donate_page_test.dart`：`2/2` 通过。
+- `flutter analyze`（涉及文件）：`No issues found`。
+- `dart format --set-exit-if-changed`：通过。
+- `git diff --check`：通过，仅有既有 LF/CRLF 警告。
+
+边界结论：捐赠页面的平台剪贴板依赖已可替换，未触及阅读器或正文链路。
+
+## 51. R6-19：书架排列页面偏好端口化
+
+日期：2026-07-26
+
+实现：
+
+- `BookshelfArrangePage` 移除对 SharedPreferences 的直接依赖，改为注入排列偏好端口。
+- 保留 `openBookInfoByClickTitle` 键名以及排序、分组、布局偏好持久化语义。
+
+行为验证：
+
+- `flutter test test/pages/bookshelf_arrange_page_test.dart`：`2/2` 通过。
+- `flutter analyze`（涉及文件）：`No issues found`。
+- `dart format --set-exit-if-changed`：通过。
+- `git diff --check`：通过，仅有既有 LF/CRLF 警告。
+
+边界结论：书架排列页面的偏好存储已可替换，现有键名和用户设置行为未改变。
+
+## 52. R6-17 至 R6-19 合并回归门禁
+
+日期：2026-07-26
+
+- `flutter test`：`498` 个通过，`3` 个既有在线 smoke 跳过。
+- 新增页面相关文件 `dart format --output=none --set-exit-if-changed`：`0 changed`。
+- 新增页面相关文件 `flutter analyze`：`No issues found`。
+- `git diff --check`：通过，仅有既有 LF/CRLF 警告。
+
+## 53. R6-20：BookGroupStore 偏好端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增 `BookGroupPrefsPort` 和 SharedPreferences 适配器。
+- `BookGroupStore` 移除对 SharedPreferences 的直接依赖，支持注入和重置端口。
+- 保留 `book_groups_v1` 键名、JSON 格式、默认分组、空值、排序和异常传播行为。
+
+行为验证：
+
+- `flutter test test/services/book_group_store_test.dart`：`4/4` 通过。
+- `flutter analyze`（涉及文件）：`No issues found`。
+- `dart format --set-exit-if-changed`：通过。
+- `git diff --check`：通过，仅有既有 LF/CRLF 警告。
+
+边界结论：书架分组偏好存储已可替换，数据格式和用户可见行为未改变。
+
+## 54. R6-21：CodeEditPrefs 偏好端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增 `CodeEditPrefsStore` 和 SharedPreferences 适配器。
+- `CodeEditPrefs` 移除对 SharedPreferences 的直接依赖，保留键名、默认值、日志上限和读写语义。
+- SourceEditorPage 未在本步修改。
+
+行为验证：
+
+- `flutter test test/services/code_edit_prefs_test.dart test/widget/code_edit_page_test.dart`：相关回归通过，分别覆盖 `4/4` 和 `4/4`。
+- `flutter analyze`（涉及文件）：`No issues found`。
+- `dart format --set-exit-if-changed`：通过。
+- `git diff --check`：通过，仅有既有 LF/CRLF 警告。
+
+边界结论：代码编辑器偏好存储已可替换，编辑器页面行为未改变。
+
+## 55. R6-22：日志/主题页面剪贴板端口化
+
+日期：2026-07-26
+
+实现：
+
+- 新增通用 `ClipboardPort`。
+- `AppLogPage` 和 `ThemeConfigPage` 的复制/粘贴操作统一通过端口执行。
+- 保留日志复制、主题导入导出、提示文本和 UI 行为；未修改 DonatePage 的独立兼容端口。
+
+行为验证：
+
+- `flutter test test/pages/bookshelf/app_log_page_test.dart test/widget/theme_config_page_test.dart`：`8/8` 通过。
+- `flutter analyze`（涉及文件）：`No issues found`。
+- `dart format --set-exit-if-changed`：通过。
+- `git diff --check`：通过，仅有既有 LF/CRLF 警告。
+
+边界结论：日志和主题页面的平台剪贴板依赖已集中到通用端口，导入导出行为未改变。
+
+## 56. R6-20 至 R6-22 合并回归门禁
+
+日期：2026-07-26
+
+- 合并定向回归：`19/19` 通过。
+- `flutter test`：`509` 个通过，`3` 个既有在线 smoke 跳过。
+- 新增相关 13 个 Dart 文件 `dart format --output=none --set-exit-if-changed`：`0 changed`。
+- 新增相关文件 `flutter analyze`：`No issues found`。
+- `git diff --check`：通过，仅有既有 LF/CRLF 警告。
+
+边界结论：本轮三个页面/服务边界均完成端口化，未修改阅读器、目录、分页或断行链路。
+
+## 57. 2026-07-27 当前门禁与 R5/R4 核查
+
+本节是只读审计记录，不代表 R5 阶段已退出，也不替代真实 WebDAV 应用验收。
+
+### 已实际执行并通过
+
+- `cargo test --manifest-path rust/Cargo.toml`：退出 `0`；核心库 `117` 个测试通过，既有网络/人工场景按测试定义 ignored；编译输出包含既有 FRB 宏和 dead-code warnings。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_js_compat.ps1`：退出 `0`；Rust `js_compatibility` `18/18`，Flutter JS 分析/集成 `4/4`；7565 在线探测按既有策略因 HTTP `400` 跳过。
+- `flutter test` 最近全量结果：`509` 通过，`3` 个既有在线 smoke 跳过；全仓 `flutter analyze` 当前退出 `1`，`46` 条既有诊断；本轮涉及文件定向 analyze 无诊断。
+- `flutter test integration_test/module2_android_toc_performance_test.dart -d emulator-5556`：通过。2000 章合成目录连续 index、首尾可见性、冷/热构建和滚动帧证据均输出；冷首帧 P50/P95 约 `48.8/415.1 ms`，热首帧约 `13.9/44.4 ms`，冷/热滚动均未出现 jank。
+- `flutter test integration_test/module3_android_reader_page_snapshot_test.dart integration_test/module3_android_reader_page_multichapter_snapshot_test.dart -d emulator-5556`：`2/2` 通过；单章字符范围、`[newpage]` 隐藏、双章隔离、章节切换和 PNG 产物门禁通过。
+- 本地 WebDAV Node 服务 `http://127.0.0.1:19080/`：认证、PUT `201`、GET `200`、ETag 存在、过期 `If-Match` `412`、MOVE `201`、移动后内容一致、DELETE `204` 均通过。该结果是协议层 smoke，不是 Flutter 应用端到端验收。
+
+### 当前 R5 缺证据
+
+- R5-A 已在雷电 `emulator-5556` 上完成：使用 `http://192.168.100.52:19080/`（雷电不可达标准模拟器地址 `10.0.2.2`）通过真实 FRB WebDAV 入口完成隔离目录初始化、书签上传/合并下载、阅读进度上传/读取，以及 `BackupConfigPage` 点击上传并在远端列出 ZIP 备份。
+- 尚未用两个独立客户端/数据库对同一 WebDAV 文件执行 ETag 条件写入、412 重试、远端较新进度/书签合并和并发冲突结果核验。
+- 尚未验证真实外部 WebDAV 服务的 TLS、代理、权限、服务器 ETag、MOVE/ZIP 往返差异；本地 Node 服务只能证明当前实现覆盖的协议基本动作。
+- 因此 R5 只能称为“本地实现和协议 smoke 完成，应用/跨设备验收进行中”，不能标记阶段退出或发布。
+
+## 60. 2026-07-27：R5-C 外部 WebDAV 验收夹具
+
+实现范围：
+
+- 新增 `integration_test/r5_external_webdav_smoke_test.dart`，通过 `dart-define`
+  注入外部服务地址、账号、密码和可选代理；未提供外部地址时明确跳过。
+- 验收夹具覆盖真实服务的认证目录访问、可选错误密码权限失败、服务端 ETag、旧
+  ETag 条件写入 `412`、MOVE，以及 ZIP 备份字节上传/下载和恢复解析。
+- 只新增验收入口和文档，不修改 `legado-main`、正文清洗、中文断行、分页、章节位置
+  映射或生产同步冲突策略。
+
+验收依据：
+
+- 运行说明见 `docs/LOCAL_WEBDAV.md` 的 “External R5-C Gate”。
+- 本地 WebDAV 可作为 R5 开发退出门禁；它不能替代发布前正式或主流 WebDAV 服务的真实验收证据。
+
+当前状态：
+
+- 代码夹具已建立；本地开发退出门禁已完成。正式或主流 WebDAV 发布前验收尚未执行，
+  因此只能标记 R5 开发完成，不能标记发布验收完成。
+
+## 61. 2026-07-27：R5 备份恢复与失败策略 Android smoke
+
+实现范围：
+
+- 新增 `integration_test/r5_android_webdav_backup_restore_failure_test.dart`，使用临时
+  Rust 数据库写入已知书籍和书源，执行 WebDAV ZIP 上传、清空后恢复以及损坏/缺字段/404
+  失败后的本地数据保护检查。
+- 新增 `test/services/backup_failure_policy_test.dart`，覆盖 HTTP 401/403/404/405/501
+  的用户可见失败策略，不修改生产错误映射。
+- 本步不修改 ZIP 格式、同步冲突、正文内容、中文断行、分页或章节位置。
+
+测试结果：
+
+- `flutter analyze integration_test/r5_android_webdav_backup_restore_failure_test.dart
+  test/services/backup_failure_policy_test.dart`：无诊断。
+- `flutter test test/services/backup_service_test.dart test/services/backup_failure_policy_test.dart
+  test/widget/backup_config_page_test.dart`：`17/17` 通过。
+- `flutter test integration_test/r5_android_webdav_backup_restore_failure_test.dart
+  -d emulator-5556 --dart-define=R5_WEBDAV_URL=http://192.168.100.52:19080/`：`1/1` 通过。
+- R5-A、R5-B、本测试三项 Android 合并门禁均为 `1/1`；串行 Flutter 全量为 `512` 通过、
+  `3` 个既有在线 smoke 跳过；Rust workspace 和 JS 兼容返回 `0`；`git diff --check` 通过。
+- 真实外部 WebDAV 仍因缺少 URL、账号、密码和代理凭证待执行；该项是发布前门禁，不阻塞后续 R6 重构，但发布前必须补齐。
+
+本地验收结果：
+
+- `flutter test test/services/backup_service_test.dart test/services/backup_failure_policy_test.dart
+  test/widget/backup_config_page_test.dart`：`17/17` 通过。
+- `flutter test integration_test/r5_android_webdav_backup_restore_failure_test.dart
+  -d emulator-5556 --dart-define=R5_WEBDAV_URL=http://192.168.100.52:19080/`：`1/1` 通过。
+- 本地 smoke 使用临时 Rust 数据库验证书籍/书源 ZIP 上传、清空后恢复、损坏 ZIP、缺少
+  `database` 字段和远端 404 失败时本地数据保持不变；该结果不替代真实外部 WebDAV 证据。
+
+## 58. 2026-07-27：R5-A Android 应用 WebDAV smoke
+
+实现范围：
+
+- 新增 `integration_test/r5_android_webdav_application_smoke_test.dart`，只增加设备验收夹具，不改变生产同步、备份、书签或正文逻辑。
+- 测试使用 `R5_WEBDAV_URL` `dart-define` 注入地址；标准 Android Emulator 可使用 `http://10.0.2.2:19080/`，当前雷电环境使用宿主机 `http://192.168.100.52:19080/`。
+- 使用隔离 WebDAV 根目录和临时数据库，避免覆盖既有本地数据及其他测试文件。
+
+行为证据：
+
+- Rust 引擎在 Android 加载成功。
+- `WebDavSetupService.initialize` 的真实 FRB 请求完成根目录、`bookProgress`、`books`、`background` 初始化。
+- `BookmarkSyncService` 完成书签上传、远端读取和合并下载。
+- `BookProgressSync` 完成阅读进度上传和读取。
+- `BackupConfigPage` 在真实页面层级下点击“上传到 WebDAV”成功，远端列表可见生成的 ZIP 备份。
+
+测试结果：
+
+- `flutter test integration_test/r5_android_webdav_application_smoke_test.dart -d emulator-5556 --dart-define=R5_WEBDAV_URL=http://192.168.100.52:19080/`：`1/1` 通过；APK 构建和安装成功。
+- R5 相关 Flutter 定向回归：`52/52` 通过。
+- `cargo test --manifest-path rust/Cargo.toml`：`117` 通过，既有 ignored 场景保持 ignored。
+- `scripts/run_js_compat.ps1`：Rust JS `18/18`、Flutter JS `4/4`，7565 可选在线探测因 HTTP `400` 跳过。
+- `flutter analyze`（新增集成测试）：`No issues found`；`git diff --check` 通过。
+- 并发普通 `flutter test` 曾有 7 个既有 7565 在线链路失败：搜索阶段出现 HTTP `400`/空结果并导致详情、目录、正文断言连锁失败；未修改测试。随后单独串行 7565 测试恢复 HTTP `200`，完整 `flutter test --concurrency=1` 通过，结果为 `509` 通过、`3` 个既有在线 smoke 跳过。
+
+边界结论：R5-A 应用入口、R5-B 双客户端 ETag/412 冲突和本地备份恢复证据已补齐；R5 开发退出门禁满足。真实外部 WebDAV 的 TLS/代理/权限验收保留为发布前门禁。
+
+## 59. 2026-07-27：R5-B 双客户端 ETag/412 冲突 smoke
+
+实现范围：
+
+- 新增 `integration_test/r5_android_webdav_cross_client_conflict_test.dart`，使用同一真实 WebDAV 服务器上的独立临时根目录模拟两个客户端状态。
+- 客户端 A 和客户端 B 各自保存旧 ETag；A 先条件写入，B 使用旧 ETag 写入必须收到 `412`，随后 B 重读远端内容和新 ETag，再按现有合并/冲突策略写回。
+- 书签验证 `time` 主键并集和远端写入结果；阅读进度验证 `SyncConflictPolicy.concurrentConflict/requireMerge` 以及新 ETag 写回。
+
+测试结果：
+
+- `flutter test integration_test/r5_android_webdav_cross_client_conflict_test.dart -d emulator-5556 --dart-define=R5_WEBDAV_URL=http://192.168.100.52:19080/`：`1/1` 通过，Android APK 构建/安装成功。
+- `cargo test --manifest-path rust/Cargo.toml`：`117` 通过。
+- `flutter test --concurrency=1`：`509` 通过，`3` 个既有在线 smoke 跳过。
+- `scripts/run_js_compat.ps1`：Rust JS `18/18`、Flutter JS `4/4`；7565 可选在线探测按既有策略跳过。
+- 新增冲突测试定向 `flutter analyze`：无诊断；`git diff --check`：通过。
+
+边界结论：R5-B 本地真实服务器双客户端冲突证据已完成；真实外部 WebDAV 服务器的 TLS、代理、权限和服务端 ETag 差异保留为发布前门禁，不影响 R5 开发退出。
+
+## 63. 2026-07-27：R6 book 功能域目录迁移
+
+迁移范围：
+
+- 将 `lib/pages/book/` 的 `BookInfoPage`、`BookmarkPage`、`ChangeCoverPage`、`ChangeSourcePage` 和 `TocSheet` 移至 `lib/features/book/`。
+- 更新 bookshelf、reader、manga、search、explore 和 my 调用方的导入路径；`manga`、`obsidian` 等尚未迁移的功能继续保留在 `lib/pages/` 过渡目录，不扩大本步范围。
+- 未改变书籍详情、目录顺序、书签身份、正文、断行、分页或章节位置行为。
+
+测试结果：
+
+- `flutter analyze lib/features/book test/pages/book/toc_order_test.dart test/widget/bookmark_page_test.dart test/widget/bookmark_editor_sheet_test.dart`：`No issues found`。
+- `flutter test test/pages/book/toc_order_test.dart test/widget/bookmark_page_test.dart test/widget/bookmark_editor_sheet_test.dart`：`8/8` 通过。
+- 全仓旧 `pages/book` 和旧相对 `../book` 导入扫描：无残留。
+- 调用方联合 analyze 仍有 8 条既有 Radio 弃用诊断，位于 `lib/pages/my/my_page.dart` 和 `lib/pages/search/search_page.dart`；已登记到 R6 统一 analyze 批次，未 suppress、未修改测试。
+- `git diff --check`：通过。
+
+边界结论：`book` 功能域迁移完成，可以进入下一功能域；R6 阶段仍未退出。
+
+## 64. 2026-07-27：R6 sources 功能域目录迁移
+
+迁移范围：
+
+- 将 `lib/pages/sources/` 的规则补全、书源调试、编辑、登录、市场和书源列表页面移至 `lib/features/sources/`。
+- 更新 `app.dart`、`MyPage`、RSS 登录入口和规则补全测试的导入路径；代码编辑、二维码、搜索、发现和 WebView 页面仍保留在 `lib/pages/` 过渡目录，不扩大本步范围。
+- 未改变书源数据、规则补全、登录、调试、市场和书源列表行为，也未改变正文、断行、分页或章节位置规则。
+
+测试结果：
+
+- `flutter analyze lib/features/sources test/pages/sources/rule_complete_test.dart`：生产代码路径和类型错误已清零；剩余 2 条既有诊断位于 `lib/features/sources/sources_page.dart`，分别为 `use_null_aware_elements` 和 `use_build_context_synchronously`。
+- `flutter test test/pages/sources/rule_complete_test.dart`：`4/4` 通过。
+- 迁移后相关旧 `pages/sources` 导入已清理；保留的过渡目录仅为本步明确未迁移的被依赖页面。
+- `git diff --check`：通过。
+
+边界结论：`sources` 功能域迁移完成，可以进入下一功能域；R6 阶段仍未退出。
+
+## 65. 2026-07-27：R6 rss 功能域目录迁移
+
+迁移范围：
+
+- 将 `lib/pages/rss/` 的 RSS 标签页、文章、收藏、阅读、来源编辑、来源管理和来源列表组件移至 `lib/features/rss/`。
+- 更新 `MainShell`、RSS 测试及过渡目录中 WebView、二维码、阅读记录和规则订阅页面的导入路径；这些被依赖页面仍保留在 `lib/pages/`，不扩大本步范围。
+- 未改变 RSS 搜索、收藏、阅读、来源编辑/导入和来源登录行为，也未改变正文、断行、分页或章节位置规则。
+
+测试结果：
+
+- `flutter analyze lib/features/rss test/pages/rss_source_edit_page_test.dart test/pages/rss_source_manage_page_test.dart test/widget/rss_tab_test.dart`：`No issues found`。
+- `flutter test test/pages/rss_source_edit_page_test.dart test/pages/rss_source_manage_page_test.dart test/widget/rss_tab_test.dart`：`3/3` 通过。
+- 迁移后相关旧 `pages/rss` 导入已清理；RSS 组件目录已收敛到 `lib/features/rss`。
+- `git diff --check`：通过。
+
+边界结论：`rss` 功能域迁移完成，可以进入下一功能域；R6 阶段仍未退出。
+
+## 66. 2026-07-27：R6 settings 功能域目录迁移
+
+迁移范围：
+
+- 将 `lib/pages/config/` 的备份、配置、主题、其他设置、Web API 设置和占位页面，以及 `lib/pages/settings/settings_page.dart` 移至 `lib/features/settings/`。
+- 更新 `MyPage`、备份失败策略测试、设置 Widget 测试和 R5 Android 应用 smoke 的导入路径；不改变备份、WebDAV、主题、缓存、网络和引擎状态行为。
+- 未改变正文、中文断行、分页或章节位置规则。
+
+测试结果：
+
+- `flutter analyze lib/features/settings test/services/backup_failure_policy_test.dart test/widget/backup_config_page_test.dart test/widget/other_settings_card_test.dart test/widget/theme_config_page_test.dart`：`No issues found`。
+- `flutter test test/services/backup_failure_policy_test.dart test/widget/backup_config_page_test.dart test/widget/other_settings_card_test.dart test/widget/theme_config_page_test.dart test/widget/my_page_test.dart`：`17/17` 通过。
+- `git diff --check`：通过。
+
+边界结论：`settings` 功能域迁移完成，可以进入下一功能域；R6 阶段仍未退出。
+
+## 67. 2026-07-27：R6 my 功能域目录迁移与 sync 边界核查
+
+迁移范围：
+
+- 将 `lib/pages/my/` 的我的页面、文件管理、阅读记录、阅读技巧和 WebDAV 配置对话框移至 `lib/features/my/`。
+- 更新 `app.dart`、MainShell、RSS、settings、bookshelf 和 MyPage 测试调用方；AI、缓存、替换、字典、文本目录、Obsidian 等仍保留在 `lib/pages/` 过渡目录。
+- 核查 `sync`：当前没有独立 `lib/pages/sync` UI；同步实现继续由 application 启动编排、domain 端口和 services 过渡服务承载，本步不创建空目录、不重排共享同步服务。
+- 未改变状态服务、备份/WebDAV、阅读记录、正文、断行、分页或章节位置行为。
+
+测试结果：
+
+- `flutter analyze lib/features/my test/widget/my_page_test.dart test/widget/read_record_page_test.dart`：除 `MyPage` 原有 2 条 Radio 弃用诊断外无新增诊断；该 2 条进入统一 R6 analyze 批次。
+- `flutter test test/widget/my_page_test.dart test/widget/read_record_page_test.dart`：`2/2` 通过。
+- `flutter test --no-pub --concurrency=1`：`516` 通过，`3` 个既有在线 smoke 按既有条件跳过。
+- `flutter analyze --no-pub`：无 error，保留 `46` 条既有 warning/info；未新增迁移诊断。
+- 旧 `pages/my` 导入扫描：无残留；`git diff --check`：通过。
+
+边界结论：`my` 功能域迁移完成，`sync` 无 UI 迁移项；R6 进入统一 analyze、平台构建和 UI 对照退出门禁准备阶段。
+
+## 68. 2026-07-27：R6 机械 lint 清理批次
+
+实现范围：
+
+- 移除 `legado_db_bridge.dart` 未使用 import，使用等价 `contains` 替换 `indexOf != -1`，为 JSON 规则判断补齐花括号。
+- 修正文档注释中的 HTML-like 文本、library doc comment 和 null-aware collection 元素。
+- 删除 `ReaderSettings` 中未引用的私有主题排版方法；补充异步导入后的 `context.mounted` 保护。
+- 未修改正文、中文断行、分页、章节位置、目录顺序或同步冲突行为。
+
+测试结果：
+
+- `flutter analyze lib/bridge/legado_db_bridge.dart lib/help/content_help.dart lib/models/book_source.dart lib/services/js_compat_analyzer.dart lib/services/source_group_tags.dart lib/widgets/legado_list_tile.dart`：`No issues found`。
+- `flutter analyze lib/features/sources/sources_page.dart lib/features/reader/reader_settings.dart test/integration/js_compatibility_test.dart`：`No issues found`。
+- `flutter test --no-pub test/pages/sources/rule_complete_test.dart test/services/read_book_config_prefs_test.dart test/services/reader_font_loader_test.dart`：`14/14` 通过。
+- 组合命令包含 JS 测试时断言 `16/16` 已通过，但进程收尾超过工具 120 秒；全量回归和拆分本地测试均未受影响。
+- 全仓 `flutter analyze --no-pub`：无 error，剩余 `33` 条既有诊断，主要为 RadioGroup 弃用和 flutter_tts 子包 lints 配置缺失。
+- `git diff --check`：通过。
+
+边界结论：机械 lint 批次完成，可以进入 RadioGroup/生命周期批次；R6 阶段仍未退出。
+
+## 69. 2026-07-27：R6 RadioGroup 迁移批次
+
+实现范围：
+
+- 将 `BookshelfConfigDialog` 的视图、排序和书名三个独立选择组迁移到 `RadioGroup<int>`。
+- 将 `MyPage` 主题模式和 `ReaderPage` 翻页动画选择迁移到 `RadioGroup<int>`；子项仅保留 `value`，选中值和回调语义保持不变。
+- 未修改阅读正文、中文断行、分页、章节位置、目录顺序或同步冲突策略。
+
+测试结果：
+
+- `flutter analyze lib/features/bookshelf/bookshelf_config_dialog.dart lib/features/my/my_page.dart test/widget/main_shell_test.dart test/widget/my_page_test.dart`：`No issues found`。
+- `flutter test --no-pub test/widget/main_shell_test.dart test/widget/my_page_test.dart test/widget_test.dart`：`4/4` 通过。
+- `flutter analyze lib/features/reader/reader_page.dart`：`No issues found`。
+- `flutter test --no-pub test/pages/reader/turn test/pages/reader_markup_test.dart test/pages/reader_paginator_test.dart`：`41/41` 通过。
+- 全仓 `flutter analyze --no-pub`：无 error，剩余 `23` 条诊断，集中在 cache、manga、obsidian、search 和 flutter_tts 子包配置。
+- `git diff --check`：通过。
+
+边界结论：bookshelf、my、reader 的 RadioGroup 迁移完成，可以继续处理过渡页面中的剩余 Radio 组；R6 阶段仍未退出。
+
+## 70. 2026-07-27：R6 analyze 门禁清零
+
+实现范围：
+
+- 将 `download_choice_dialog.dart`、`search_page.dart`、`manga_reader_page.dart` 和 `obsidian_export_dialog.dart` 的 Radio 选择迁移到 `RadioGroup`，保持下载范围、搜索范围、页脚方向和 Obsidian 导出方式的状态语义。
+- 将 vendored `packages/flutter_tts/analysis_options.yaml` 改为自身 strict analyzer 配置，移除无法在独立子包上下文解析的 lint include；未修改 TTS 运行代码，也未执行真实 Android TTS 验收。
+- 未修改正文、中文断行、分页、章节位置、目录顺序、同步冲突或 ZIP 格式。
+
+测试结果：
+
+- `flutter analyze --no-pub`：`No issues found`。
+- cache 单元回归：`9/9` 通过；search、manga、obsidian 文件 analyze：无诊断。
+- `flutter test --no-pub --concurrency=1`：`516` 通过，`3` 个既有在线 smoke 按既有条件跳过。
+- `git diff --check`：通过。
+
+边界结论：R6 analyze 诊断门禁完成；剩余退出条件为平台构建矩阵、UI 对照记录、过渡页面边界收敛和发布前正式/主流 WebDAV 真实验收。
+
+## 71. 2026-07-27：R6 Android/Windows 本机平台构建矩阵
+
+测试结果：
+
+- `flutter build apk --debug`：通过，产物 `build/app/outputs/flutter-apk/app-debug.apk`。
+- `flutter build windows --debug`：通过，产物 `build/windows/x64/runner/Debug/legado_flutter.exe`。
+- `D:\leidian\LDPlayer9\adb.exe devices -l`：`emulator-5556` 为 `device`。
+- `adb -s emulator-5556 install -r build/app/outputs/flutter-apk/app-debug.apk`：`Success`。
+- `adb -s emulator-5556 shell monkey -p com.legado.legado_flutter 1`：启动事件成功；`dumpsys activity` 确认 `MainActivity` 在前台任务。
+
+平台边界：
+
+- iOS/macOS 需要 macOS/Xcode，本机 Windows 不执行。
+- Linux 暂不作为本机门禁，需 GTK/toolchain 环境后执行。
+- Web/WASM/PWA 和真实 Android TTS 继续按计划暂停，不标记为完成。
+- 本步未改变正文、断行、分页、章节位置或 WebDAV 外部验收结论。
+
+边界结论：Android/Windows 本机构建与安装启动门禁完成；R6 仍需 UI 对照记录、过渡页面收敛和发布前正式/主流 WebDAV 真实验收。
+
+## 72. 2026-07-27：R6 Android UI 对照初测
+
+- 新增 [`UI_COMPARISON_RECORD.md`](./UI_COMPARISON_RECORD.md)，记录原版 `io.legado.app.debug` 与重构版
+  `com.legado.legado_flutter` 在 `emulator-5556`、`720x1280`、DPI `320`、DPR `2` 下的书架首屏采集。
+- 已实际采集原版已有书籍、重构版首次启动隐私协议和重构版同意协议后的空书架截图；由于数据、主题和启动状态不一致，当前只登记结构差异和证据缺口，不标记像素验收通过。
+- 原版源码仍以根目录 `legado-main/` 为只读核对基线，本步未修改；截图保存在用户临时目录，不进入仓库。
+
+边界结论：UI 对照采集链路已验证，最终同数据/同主题对照仍待补齐；R6 阶段尚未退出。
+
+## 73. 2026-07-27：R6 Android 我的页面 UI 对照
+
+- 在 `emulator-5556` 上分别启动原版和重构版，点击同一底部“我的”入口采集截图。
+- 两端页面层级、快捷入口区域、设置列表和底部四 Tab 结构基本一致。
+- 已记录棕色/蓝色主题差异、品牌图标差异、快捷入口图标语义差异、`Web 服务` 文本空格差异和设置项集合差异。
+- 该结果只证明对照采集和差异分类可执行，不代表 UI 1:1 通过；原版和重构版仍需统一主题、资源和目标版本功能集合后复验。
+
+## 74. 2026-07-27：R6 Android 书源管理 UI 对照
+
+- 原版和重构版均在 `emulator-5556` 进入书源管理页面；重构版首次进入的帮助弹窗已单独采集并关闭后复采。
+- 两端工具栏、书源列表和底部批量操作结构相近，但当前书源数量不同，且主题色、排序/分组图标、书源名称截断、列表行密度和按钮布局存在差异。
+- 结果已写入 `UI_COMPARISON_RECORD.md`，当前仅作为差异证据，未标记 UI 1:1 通过。
+
+## 62. 2026-07-27：R6 UI 数据库/桥接状态直连清理
+
+实现范围：
+
+- `MainShell` 移除 `DatabaseHelper()`，空库内置书源初始化改由 `SourceProvider` 的
+  Repository 用例负责；新增空库、非空库和 Repository 失败测试。
+- 新增 `DatabaseStatusPort`、`FrbDatabaseStatusPort` 和 `DatabaseStatusService`；
+  `BackupConfigPage`、`MyPage` 改为依赖状态服务，FRB/Bridge 读取集中到基础设施适配器。
+- 未修改正文、中文断行、分页、章节位置或 TTS。
+
+测试结果：
+
+- SourceProvider/MainShell 定向测试：`6/6` 通过。
+- 数据库/引擎状态、备份页、我的页定向测试：`9/9` 通过。
+- 相关新端口、Provider 和 MainShell 定向 analyze：无诊断；`MyPage` 仍有原有 2 条
+  `RadioGroup` 弃用提示，转入 R6 analyze 批次。
+- 页面源码检索未发现 `DatabaseHelper()`、`LegadoDbBridge` 或 `LegadoEngineBridge` 直接调用。
+
+### 并行边界约束
+
+- R5 应用端到端验证、跨设备冲突验证和文档证据整理可以并行，但必须使用独立数据目录/客户端状态，不能共享会改变结果的远端文件。
+- 任何修改 `BackupService`、`BookProgressSync`、`BookmarkSyncService`、`WebDavRepository` 或 WebDAV 配置入口的任务都必须串行执行，并在修改后重跑 R5 全套门禁。
+- R4/R3 当前没有新的实现任务；目录或阅读器代码只有在新证据暴露回归时才能重新开启，并必须重新执行 2A/2B 或模块 3 第 3 条断行/分页门禁。
+
+## 75. 2026-07-27：R0 重基线与静态边界检查
+
+实现范围：
+
+- 新增 `R0_REBASELINE.md`，固定当前原版基线、历史资料定位、Flutter 残留业务清单、工件分类和
+  R0-R6 重新判定。
+- 新增 `scripts/check_architecture_boundaries.ps1`，扫描 `lib/features`、`lib/widgets` 和
+  `lib/providers` 中的 Bridge、FRB、DAO、生成 Rust API、Dio 和业务 HTTP 客户端直接依赖。
+- `legado-main/`、原版数据库和本地探针加入忽略规则；本步没有删除、移动、暂存或提交既有工作树内容。
+- 文档索引、开发流程和兼容性计划统一将 `legado-main/` 作为活跃只读基线，历史 UI/Phase 资料不再
+  定义当前重构执行顺序。
+- 未修改的 `UI_REPLICATION_PLAN.md` 已移动到 `docs/archive/`；含既有未提交内容的
+  `docs/superpowers/` 与 `.superpowers/sdd` 只登记为原位归档候选，尚未物理移动。
+- 新增 `R0_WORKTREE_GROUPS.md`，将当前大工作树拆分为 R0、R1、R3、R4-R5、R6、生成/供应商和
+  文档追溯候选组；本步不暂存、不提交、不推送，也不宣称历史改动已经重新验证。
+
+测试结果：
+
+- `scripts/check_architecture_boundaries.ps1`：可执行，退出 `1` 并列出 `21` 项现存架构违规；结果作为
+  R1-R6 迁移 backlog，不标记为通过。
+- `flutter analyze --no-pub`：`No issues found`。
+- `git diff --check`：通过；仅有现有文件的 LF/CRLF 警告。
+
+边界结论：R0 已建立当前残留业务和静态越界的可重复证据，基线退出就绪，等待确认进入 R1。历史
+资料中含既有未提交内容的部分仅登记为原位归档候选；现有工作树的可追溯提交拆分与 `21` 项违规的
+逐项迁移属于后续 R1-R6 最小迁移单元，不阻塞 R0 基线退出。
