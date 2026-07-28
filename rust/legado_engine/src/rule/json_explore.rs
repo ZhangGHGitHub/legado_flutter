@@ -4,7 +4,10 @@ use crate::rule::json_search::JsonSearchResult;
 use crate::rule::json_util;
 use serde_json::Value;
 
-pub fn parse_json_explore(data: &Value, source: &BookSource) -> Result<Vec<JsonSearchResult>, String> {
+pub fn parse_json_explore(
+    data: &Value,
+    source: &BookSource,
+) -> Result<Vec<JsonSearchResult>, String> {
     let rule_explore = source
         .rule_explore_obj
         .as_ref()
@@ -26,7 +29,10 @@ pub fn parse_json_explore(data: &Value, source: &BookSource) -> Result<Vec<JsonS
     for item in items {
         let name = json_rule::resolve_field(
             &item,
-            rule_explore.get("name").and_then(|v| v.as_str()).unwrap_or(""),
+            rule_explore
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(""),
             js_lib,
             base,
         );

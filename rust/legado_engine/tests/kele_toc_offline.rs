@@ -82,16 +82,10 @@ fn kele_toc_url_js_without_ajax_still_rewrites_path() {
 fn kele_sql_error_body_yields_zero_chapters() {
     let source = BookSource::from_json(&kele_source_json()).unwrap();
     let err_body = "数据库连接失败:SQLSTATE[08004] [1040] Too many connections";
-    let chapters = html_toc::parse_html_toc_at(
-        err_body,
-        &source,
-        "https://www.kelexs.com/chapter/ABC.html",
-    )
-    .unwrap();
-    assert!(
-        chapters.is_empty(),
-        "SQL error page must not fake chapters"
-    );
+    let chapters =
+        html_toc::parse_html_toc_at(err_body, &source, "https://www.kelexs.com/chapter/ABC.html")
+            .unwrap();
+    assert!(chapters.is_empty(), "SQL error page must not fake chapters");
 
     // 若站方恢复正常 HTML，离线 chapList fixture 仍保证管道 N>0
     let ok = html_toc::parse_html_toc_at(

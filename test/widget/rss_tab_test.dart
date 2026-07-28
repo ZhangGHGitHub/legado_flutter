@@ -3,15 +3,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:legado_flutter/pages/rss/rss_tab_page.dart';
+import 'package:legado_flutter/features/rss/rss_tab_page.dart';
 import 'package:legado_flutter/providers/rss_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   SharedPreferences.setMockInitialValues({});
 
-  testWidgets('RssTabPage shows search bar and rule subscription tile',
-      (tester) async {
+  testWidgets('RssTabPage shows search bar and rule subscription tile', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MultiProvider(
         providers: [

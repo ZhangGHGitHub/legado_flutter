@@ -1,4 +1,4 @@
-# Legado Flutter — 开发流程
+# Legado Flutter — Jingshiro/legado Rust + Flutter 重构开发流程
 
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-07-15
@@ -6,6 +6,8 @@
 ---
 
 ## 官方 UI 对标目标
+
+本项目的总体目标是将 [Jingshiro/legado](https://github.com/Jingshiro/legado) 的 Android/Kotlin 实现重构为 Rust + Flutter 跨平台实现。Jingshiro/legado 源码用于行为、数据格式和 UI 的兼容性验收；UI 复刻只是其中一个验收维度。
 
 | 项 | 值 |
 |----|-----|
@@ -24,7 +26,7 @@
 
 | 类别 | 资产 |
 |------|------|
-| 技术路线图 | `REFACTOR_PLAN.md`、`UI_REPLICATION_PLAN.md` |
+| 技术路线图 | `REFACTOR_PLAN.md`；历史 UI 功能库存见 `archive/UI_REPLICATION_PLAN.md` |
 | Phase 设计 | `superpowers/specs/`、`superpowers/plans/` |
 | 发布说明 | `RELEASE.md` |
 | 专题文档 | `JS_COMPAT.md`、`LEGADO_ARCH_REFERENCE.md` |
@@ -39,7 +41,7 @@
 | **无统一流程文档** | 每人/每次 AI 会话做法不一致，容易跳步 |
 | **无文档索引** | 计划散落，不知道先看哪份 |
 | **无质量门禁** | 合并前跑什么测试、什么叫「做完」不明确 |
-| **无 CONTRIBUTING / CHANGELOG** | 协作与版本追溯困难 |
+| **无 CONTRIBUTING.md** | 贡献入口和协作约定仍需单独整理 |
 | **无 Issue/PR 模板** | 需求描述、测试说明格式不统一 |
 | **CI 不完整** | 仅 Apple Build，Windows/Android 测试无自动跑 |
 | **Phase 完成标准模糊** | REFACTOR / UI 计划里的 checkbox 与代码状态易脱节 |
@@ -53,19 +55,20 @@
 | 文档 | 谁维护 | 何时更新 |
 |------|--------|----------|
 | `REFACTOR_PLAN.md` | 负责人 | 引擎版本变更、大功能完成/新增、多平台状态变化 |
-| `UI_REPLICATION_PLAN.md` | 负责人 | UI Task 完成、优先级调整、新差距发现 |
+| `archive/UI_REPLICATION_PLAN.md` | 归档 | 历史 UI Task 与旧差距记录，不作为新重构任务入口 |
 | `superpowers/specs/*.md` | 设计阶段 | **新 Phase 或大改前**写规格，批准后不动（除非变更） |
 | `superpowers/plans/*.md` | 实施阶段 | 拆 Task、记步骤；可与 UI/REFACTOR 计划合并维护 |
 | `JS_COMPAT.md` 等专题 | 专题负责人 | 该主题测试/规则变化时 |
 | `DEVELOPMENT_PROCESS.md` | 全员 | 流程本身变更时 |
-| `CHANGELOG.md`（待建） | 发布负责人 | **每次对外发布**或引擎大版本 bump |
+| `CHANGELOG.md` | 负责人 | **每个逻辑变更完成时**更新；对外发布时整理为版本条目 |
 
 ### 2.2 单一事实来源
 
 - **引擎能力与版本** → `REFACTOR_PLAN.md` + `rust/legado_engine` 中 `engine_version()`
-- **UI 任务与验收** → `UI_REPLICATION_PLAN.md`（布局看 Jingshiro，功能看语雀 Wiki）
+- **当前 UI/架构验收** → `REFACTOR_PLAN.md` 的 R0-R6、`LEGADO_COMPATIBILITY_DEVELOPMENT_PLAN.md` 和 `R0_REBASELINE.md`；`UI_REPLICATION_PLAN.md` 仅保留历史功能库存。
 - **怎么开发** → 本文档
 - **怎么发布** → `RELEASE.md`
+- **每次变更记录** → `CHANGELOG.md`
 
 避免在 README 里维护长进度表；README 只保留快速开始 + 指向 `docs/README.md`。
 
@@ -83,7 +86,7 @@
 
 ### Step 1 — 选题
 
-1. 在 `UI_REPLICATION_PLAN.md` 或 `REFACTOR_PLAN.md` 中找到 **Task ID**（如 `UI-1`）。
+1. 在 `REFACTOR_PLAN.md` 的当前 R0-R6 阶段中找到迁移单元；历史 `UI-*` Task ID 只能用于追溯已有功能。
 2. 确认依赖已满足（例如 UI-2 依赖 UI-1 底栏骨架）。
 3. 大功能（新 Phase、跨 Rust+Flutter）先查 `superpowers/specs/` 是否已有规格；没有则先写简短设计再动手。
 
@@ -127,9 +130,23 @@
 
 ### Step 5 — 记录
 
-1. 更新对应计划文档中的 Task 状态（`UI_REPLICATION_PLAN.md` § 四 或 `REFACTOR_PLAN.md`）。
+1. 更新对应阶段记录（`REFACTOR_PLAN.md`、`R0_REBASELINE.md` 或专题兼容计划）；不再以历史 UI Task 清单声明重构完成。
 2. 若行为/用法变化，更新专题 doc（如 `JS_COMPAT.md`）。
-3. 引擎 bump 时准备 `CHANGELOG.md` 条目（文件待建）。
+3. 按本文“变更可追溯规则”更新 `CHANGELOG.md`，写明变更、测试和已知限制。
+
+### Step 5A — 变更可追溯规则（强制）
+
+以下规则适用于代码、测试、配置、文档、数据库 schema、Rust 引擎和 Flutter UI 的每一个逻辑变更；“只改了一点”不能豁免。
+
+1. **先确认范围。** 开始工作前确认当前分支和工作区状态；已有未提交修改必须保留、识别归属，不能把无关修改混入本次变更。
+2. **必须记录计划。** 在 `REFACTOR_PLAN.md`、`R0_REBASELINE.md` 或对应专题文档中更新当前迁移状态。未完成项、平台限制和外部依赖必须明确写出，不能只写“完成”。
+3. **必须更新日志。** 每个逻辑变更都在根目录 `CHANGELOG.md` 的 `[Unreleased]` 下记录，至少包含：变更内容、影响范围、验证命令/结果、已知限制。修复问题还要写明问题表现和修复结果。
+4. **必须可由 Git 追溯。** 每个可交付逻辑变更应形成独立 Git commit，commit message 必须能说明 Task/模块和结果。未获得提交授权时，不得擅自 commit；此时必须明确报告“未提交”，并提供拟提交文件和 commit message。
+5. **测试结果必须和变更绑定。** 报告“已完成”前必须列出实际执行的测试/构建命令及结果；跳过、失败和环境限制必须原样记录，不能用历史结果冒充当前结果。
+6. **发布必须有版本标识。** 对外发布前必须递增 `pubspec.yaml` 的 App 版本，核对 Rust engine/schema 版本，更新 `CHANGELOG.md` 的版本条目，并创建对应 Git tag。没有版本号和 tag 的工作区只能称为开发中或未发布版本。
+7. **禁止虚假完成。** 脏工作区、未更新日志、未记录测试、存在未披露失败门禁或未完成外部验收时，不得把本次变更描述为“全部完成”或“已发布”。
+
+本规则优先于旧文档中“CHANGELOG 待建”“发布时再记录”等过渡性描述；旧文档与本规则冲突时，以本规则为准。
 
 ### Step 6 — 合并
 
@@ -212,7 +229,7 @@ Phase 不是「写了很多代码」，而是满足**退出标准**才能进下�
 
 1. `flutter test` + 相关 `cargo test` 通过
 2. 目标平台构建成功
-3. `CHANGELOG.md` 更新（待建）
+3. `CHANGELOG.md` 已更新，版本条目与 `pubspec.yaml`、引擎版本和 schema 一致
 4. 打 tag（若对外发布）
 
 ---
@@ -222,7 +239,7 @@ Phase 不是「写了很多代码」，而是满足**退出标准**才能进下�
 ### UI 改动
 
 1. **布局**：[Jingshiro/legado](https://github.com/Jingshiro/legado) 的 `app/src/main/res/layout/` + `app/src/main/java/io/legado/app/ui/`（或本地 `reference/Jingshiro-legado/` 同路径）
-2. **功能完整性**：[语雀 Wiki](https://www.yuque.com/legado/wiki) 对应章节（见 `UI_REPLICATION_PLAN.md` § 参考文档）
+2. **功能完整性**：[语雀 Wiki](https://www.yuque.com/legado/wiki) 对应章节（历史对照库存见 `archive/UI_REPLICATION_PLAN.md`）
 3. **截图对比**：同一状态（书架/阅读器/设置）并排对比
 
 ### 引擎改动
@@ -242,7 +259,7 @@ Phase 不是「写了很多代码」，而是满足**退出标准**才能进下�
 | P0 | ✅ `docs/README.md` | 文档索引 |
 | P0 | ✅ `docs/DEVELOPMENT_PROCESS.md` | 本文档 |
 | P1 | `CONTRIBUTING.md` | 贡献者入口，链到本文档 |
-| P1 | `CHANGELOG.md` | 版本变更记录 |
+| P1 | ✅ `CHANGELOG.md` | 版本变更记录 |
 | P1 | `.github/workflows/ci.yml` | `flutter test` + `cargo test` on push/PR |
 | P2 | `.github/pull_request_template.md` | Task ID + 测试说明 |
 | P2 | `.github/ISSUE_TEMPLATE/` | bug / feature 模板 |
@@ -256,7 +273,7 @@ Phase 不是「写了很多代码」，而是满足**退出标准**才能进下�
 
 ```
 Day 1  流程文档 ✅（本文 + docs/README）
-       CONTRIBUTING.md + CHANGELOG.md 初稿
+       CHANGELOG.md ✅；CONTRIBUTING.md 初稿
        基础 CI（flutter test + cargo test）
 
 Day 2  PR/Issue 模板
@@ -268,4 +285,4 @@ Day 2  PR/Issue 模板
 
 ---
 
-> 相关：[文档索引](./README.md) | [UI 复刻计划](./UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)
+> 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)

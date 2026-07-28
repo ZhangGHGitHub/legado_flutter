@@ -57,16 +57,22 @@ async fn fetch_user_chapter_and_parse() {
     }
 
     let script = js_engine::extract_js_block(&bs.rule_content).expect("js block");
-    let js_out = js_engine::run_html_js(&script, &body, &bs.js_lib, &bs.book_source_url)
-        .expect("js run");
+    let js_out =
+        js_engine::run_html_js(&script, &body, &bs.js_lib, &bs.book_source_url).expect("js run");
     assert!(
         js_out.len() > 50,
         "live JS content empty: len={} next_hint",
         js_out.len()
     );
 
-    let content = get_content(source, url.to_string()).await.expect("get_content");
-    assert!(content.len() > 50, "get_content too short: {}", content.len());
+    let content = get_content(source, url.to_string())
+        .await
+        .expect("get_content");
+    assert!(
+        content.len() > 50,
+        "get_content too short: {}",
+        content.len()
+    );
     println!(
         "ok len={} head={:?}",
         content.len(),

@@ -1,4 +1,5 @@
-import '../src/rust/api/webdav.dart' as webdav_api;
+import '../domain/ports/webdav_repository.dart';
+import '../infrastructure/webdav/default_webdav_repository.dart';
 import 'webdav_prefs.dart';
 
 typedef WebDavCheckInvoker =
@@ -23,8 +24,9 @@ abstract final class WebDavSetupService {
 
   static Future<void> initialize(
     WebDavConfig config, {
-    WebDavCheckInvoker check = webdav_api.webdavCheck,
-    WebDavEnsureDirInvoker ensureDir = webdav_api.webdavEnsureDir,
+    WebDavRepository repository = defaultWebDavRepository,
+    WebDavCheckInvoker? check,
+    WebDavEnsureDirInvoker? ensureDir,
   }) async {
     if (!config.isReady) {
       throw StateError('请先配置 WebDAV');
@@ -35,20 +37,22 @@ abstract final class WebDavSetupService {
       username: config.account,
       password: config.password,
     );
-    await check(
+    final checkInvoker = check ?? repository.check;
+    final ensureDirInvoker = ensureDir ?? repository.ensureDir;
+    await checkInvoker(
       url: args.url,
       username: args.username,
       password: args.password,
       path: config.rootDir,
     );
-    await ensureDir(
+    await ensureDirInvoker(
       url: args.url,
       username: args.username,
       password: args.password,
       path: config.rootDir,
     );
     for (final directory in _directories) {
-      await ensureDir(
+      await ensureDirInvoker(
         url: args.url,
         username: args.username,
         password: args.password,

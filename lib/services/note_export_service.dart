@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../domain/annotation/note_snapshot.dart';
 import '../services/app_paths.dart';
-import '../src/rust/api.dart' as rust_api;
 import 'note_service.dart';
 
 /// Obsidian / 本地 Markdown 导出（Phase 4.5）
@@ -29,14 +29,17 @@ class NoteExportService {
     return file.path;
   }
 
-  static Future<List<String>> exportPerNoteFiles(List<rust_api.NoteDto> notes) async {
+  static Future<List<String>> exportPerNoteFiles(
+    List<NoteSnapshot> notes,
+  ) async {
     final dir = await exportDir();
     final paths = <String>[];
     for (final note in notes) {
-      final safeName = note.chapterTitle.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-      final file = File(
-        p.join(dir.path, '${note.id}_$safeName.md'),
+      final safeName = note.chapterTitle.replaceAll(
+        RegExp(r'[\\/:*?"<>|]'),
+        '_',
       );
+      final file = File(p.join(dir.path, '${note.id}_$safeName.md'));
       final body = StringBuffer()
         ..writeln('# ${note.chapterTitle}')
         ..writeln()

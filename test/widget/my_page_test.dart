@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:legado_flutter/pages/my/my_page.dart';
+import 'package:legado_flutter/features/my/my_page.dart';
 import 'package:legado_flutter/theme/app_theme.dart';
 
 void main() {

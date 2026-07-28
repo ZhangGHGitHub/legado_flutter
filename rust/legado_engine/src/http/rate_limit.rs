@@ -67,7 +67,10 @@ impl RateLimiter {
         };
 
         let now = now_ms();
-        let times = self.request_times.entry(source_url.to_string()).or_default();
+        let times = self
+            .request_times
+            .entry(source_url.to_string())
+            .or_default();
 
         if config.interval_ms > 0 {
             if let Some(&last) = times.last() {
@@ -92,7 +95,10 @@ impl RateLimiter {
     }
 
     fn record_request(&mut self, source_url: &str) {
-        let times = self.request_times.entry(source_url.to_string()).or_default();
+        let times = self
+            .request_times
+            .entry(source_url.to_string())
+            .or_default();
         times.push(now_ms());
         if times.len() > 100 {
             let cutoff = now_ms().saturating_sub(60_000);
@@ -101,8 +107,7 @@ impl RateLimiter {
     }
 }
 
-static RATE_LIMITER: Lazy<Mutex<RateLimiter>> =
-    Lazy::new(|| Mutex::new(RateLimiter::new()));
+static RATE_LIMITER: Lazy<Mutex<RateLimiter>> = Lazy::new(|| Mutex::new(RateLimiter::new()));
 
 static HOST_SEMAPHORES: Lazy<Mutex<HashMap<String, Arc<Semaphore>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));

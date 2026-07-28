@@ -63,7 +63,10 @@ fn register_host_apis(ctx: &Ctx<'_>) -> Result<(), String> {
         move |ctx: Ctx<'_>, transformation: String, key: String, iv: String, data: String| {
             match super::js_crypto::encrypt_base64(&transformation, &key, &iv, &data) {
                 Ok(s) => Ok(s),
-                Err(e) => Err(Exception::throw_message(&ctx, &format!("AES encrypt 失败: {e}"))),
+                Err(e) => Err(Exception::throw_message(
+                    &ctx,
+                    &format!("AES encrypt 失败: {e}"),
+                )),
             }
         }
     })
@@ -76,7 +79,10 @@ fn register_host_apis(ctx: &Ctx<'_>) -> Result<(), String> {
         move |ctx: Ctx<'_>, transformation: String, key: String, iv: String, data: String| {
             match super::js_crypto::decrypt_str(&transformation, &key, &iv, &data) {
                 Ok(s) => Ok(s),
-                Err(e) => Err(Exception::throw_message(&ctx, &format!("AES decrypt 失败: {e}"))),
+                Err(e) => Err(Exception::throw_message(
+                    &ctx,
+                    &format!("AES decrypt 失败: {e}"),
+                )),
             }
         }
     })
@@ -201,25 +207,20 @@ fn value_to_string<'js>(ctx: &Ctx<'js>, v: Value<'js>) -> Result<String, String>
     }
     if v.is_string() {
         if let Some(s) = v.as_string() {
-            return s
-                .to_string()
-                .map_err(|e| format!("JS 字符串转换失败: {e}"));
+            return s.to_string().map_err(|e| format!("JS 字符串转换失败: {e}"));
         }
         return Ok(String::new());
     }
     if v.is_number() {
-        return Ok(v
-            .as_number()
-            .map(|n| n.to_string())
-            .unwrap_or_default());
+        return Ok(v.as_number().map(|n| n.to_string()).unwrap_or_default());
     }
     if v.is_bool() {
-        return Ok(v
-            .as_bool()
-            .map(|b| b.to_string())
-            .unwrap_or_default());
+        return Ok(v.as_bool().map(|b| b.to_string()).unwrap_or_default());
     }
-    match ctx.json_stringify(v).map_err(|e| format!("JS JSON 序列化失败: {e}"))? {
+    match ctx
+        .json_stringify(v)
+        .map_err(|e| format!("JS JSON 序列化失败: {e}"))?
+    {
         Some(s) => s
             .to_string()
             .map_err(|e| format!("JS JSON 字符串转换失败: {e}")),
@@ -381,7 +382,12 @@ pub fn is_plain_property_rule(rule: &str) -> bool {
 }
 
 /// 对 HTML 执行 `<js>` 脚本并返回变换后的 HTML/文本
-pub fn run_html_js(script: &str, html: &str, js_lib: &str, base_url: &str) -> Result<String, String> {
+pub fn run_html_js(
+    script: &str,
+    html: &str,
+    js_lib: &str,
+    base_url: &str,
+) -> Result<String, String> {
     run_with_result(script, html, js_lib, base_url)
 }
 
@@ -400,7 +406,11 @@ fn login_check_js_from_source_json(source_json: &str) -> String {
 fn js_lib_from_source_json(source_json: &str) -> String {
     serde_json::from_str::<serde_json::Value>(source_json)
         .ok()
-        .and_then(|v| v.get("jsLib").and_then(|x| x.as_str()).map(|s| s.to_string()))
+        .and_then(|v| {
+            v.get("jsLib")
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string())
+        })
         .unwrap_or_default()
 }
 
@@ -455,10 +465,7 @@ fn header_map_from_source_json(source_json: &str) -> std::collections::HashMap<S
     map
 }
 
-fn merge_login_into_map(
-    map: &mut std::collections::HashMap<String, String>,
-    login_header: &str,
-) {
+fn merge_login_into_map(map: &mut std::collections::HashMap<String, String>, login_header: &str) {
     let t = login_header.trim();
     if t.is_empty() {
         return;
@@ -564,16 +571,10 @@ fn register_login_check_host_apis(ctx: &Ctx<'_>) -> Result<(), String> {
                             .or_else(|| v.get("cookie"))
                             .and_then(|x| x.as_str())
                         {
-                            crate::http::client::replace_cookie_for_source(
-                                &ctx.source_key,
-                                cookie,
-                            );
+                            crate::http::client::replace_cookie_for_source(&ctx.source_key, cookie);
                         }
                     } else if header.contains('=') {
-                        crate::http::client::replace_cookie_for_source(
-                            &ctx.source_key,
-                            &header,
-                        );
+                        crate::http::client::replace_cookie_for_source(&ctx.source_key, &header);
                     }
                     AJAX_LOGIN_HEADER.with(|r| *r.borrow_mut() = header);
                 }
@@ -928,9 +929,7 @@ if (typeof java !== 'undefined') {
             .catch(&ctx)
             .map_err(|e| format_caught_err("loginCheckJs 失败", e))?;
         let v = if v.is_undefined() || v.is_null() {
-            ctx.globals()
-                .get::<_, Value>("result")
-                .unwrap_or(v)
+            ctx.globals().get::<_, Value>("result").unwrap_or(v)
         } else {
             v
         };
@@ -1084,9 +1083,7 @@ fn value_to_js_string<'js>(ctx: &Ctx<'js>, v: Value<'js>) -> Result<String, Stri
         return value_to_string(ctx, v);
     }
     if v.is_array() {
-        let array: Array<'js> = v
-            .get()
-            .map_err(|e| format!("JS 数组转换失败: {e}"))?;
+        let array: Array<'js> = v.get().map_err(|e| format!("JS 数组转换失败: {e}"))?;
         let mut values = Vec::with_capacity(array.len());
         for item in array.iter::<Value<'js>>() {
             values.push(value_to_js_string(
@@ -1292,7 +1289,9 @@ el ? el.html() : '';
         let out = run_html_js(script, html, "", "").unwrap();
         assert!(!out.contains("<article"), "html() 应为 inner: {out}");
         assert!(
-            out.contains("甲") && out.contains("乙") && out.find("甲").unwrap() < out.find("乙").unwrap(),
+            out.contains("甲")
+                && out.contains("乙")
+                && out.find("甲").unwrap() < out.find("乙").unwrap(),
             "文本与 br 须保序: {out}"
         );
         assert!(
@@ -1320,11 +1319,9 @@ crypto.encryptBase64(key);
     fn run_kele_search_url_template_js() {
         let template = r#"<js>var keyStr='lzxHpH8PLGXcrCIQ';var key32=keyStr;while(key32.length < 32){key32 += String.fromCharCode(0);}var crypto=java.createSymmetricCrypto('AES/CBC/PKCS5Padding',key32,keyStr);var enc=crypto.encryptBase64(key);var url='https://www.rrssk.com/k-'+enc+'.html';if(page>1)url='https://www.rrssk.com/k-'+enc+'-'+page+'.html';url</js>"#;
         let out = run_url_template_js(template, "重生之", "", "https://www.rrssk.com/", 1).unwrap();
-        assert_eq!(
-            out,
-            "https://www.rrssk.com/k-breUSzu0dAfgrP33wtpsvg==.html"
-        );
-        let out2 = run_url_template_js(template, "重生之", "", "https://www.rrssk.com/", 2).unwrap();
+        assert_eq!(out, "https://www.rrssk.com/k-breUSzu0dAfgrP33wtpsvg==.html");
+        let out2 =
+            run_url_template_js(template, "重生之", "", "https://www.rrssk.com/", 2).unwrap();
         assert_eq!(
             out2,
             "https://www.rrssk.com/k-breUSzu0dAfgrP33wtpsvg==-2.html"
@@ -1384,8 +1381,8 @@ crypto.encryptBase64(key);
         .unwrap();
         assert_eq!(put, "abc123");
         // 新 Runtime 仍能读到
-        let got = run_with_result("cache.get('kelexs_key')", "", "", "https://www.kelexs.com/")
-            .unwrap();
+        let got =
+            run_with_result("cache.get('kelexs_key')", "", "", "https://www.kelexs.com/").unwrap();
         assert_eq!(got, "abc123");
         let _ = reset_cache();
         assert_eq!(

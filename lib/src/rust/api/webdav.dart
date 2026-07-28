@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `map_items`
+// These functions are ignored because they are not marked as `pub`: `build_webdav_proxy`, `map_items`, `new_webdav_client`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
 
 /// 列出 WebDAV 目录
@@ -63,6 +63,23 @@ Future<void> webdavUpload({
   data: data,
 );
 
+/// 按 ETag 条件上传文件，避免覆盖其他设备的更新。
+Future<void> webdavUploadIfMatch({
+  required String url,
+  required String username,
+  required String password,
+  required String remotePath,
+  required List<int> data,
+  String? etag,
+}) => LegadoEngine.instance.api.crateApiWebdavWebdavUploadIfMatch(
+  url: url,
+  username: username,
+  password: password,
+  remotePath: remotePath,
+  data: data,
+  etag: etag,
+);
+
 /// 从 WebDAV 下载文件
 Future<Uint8List> webdavDownload({
   required String url,
@@ -111,6 +128,7 @@ class WebDavEntry {
   final bool isDir;
   final int size;
   final PlatformInt64 lastModified;
+  final String? etag;
 
   const WebDavEntry({
     required this.name,
@@ -118,6 +136,7 @@ class WebDavEntry {
     required this.isDir,
     required this.size,
     required this.lastModified,
+    this.etag,
   });
 
   @override
@@ -126,7 +145,8 @@ class WebDavEntry {
       path.hashCode ^
       isDir.hashCode ^
       size.hashCode ^
-      lastModified.hashCode;
+      lastModified.hashCode ^
+      etag.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -137,5 +157,6 @@ class WebDavEntry {
           path == other.path &&
           isDir == other.isDir &&
           size == other.size &&
-          lastModified == other.lastModified;
+          lastModified == other.lastModified &&
+          etag == other.etag;
 }

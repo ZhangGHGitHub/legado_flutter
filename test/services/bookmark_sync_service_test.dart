@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/domain/annotation/bookmark_snapshot.dart';
 import 'package:legado_flutter/services/bookmark_service.dart';
 import 'package:legado_flutter/services/bookmark_sync_service.dart';
 import 'package:legado_flutter/services/webdav_prefs.dart';
-import 'package:legado_flutter/src/rust/api.dart' as rust_api;
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -14,7 +14,7 @@ void main() {
   });
 
   const local = [
-    rust_api.BookmarkDto(
+    BookmarkSnapshot(
       time: 1,
       bookId: 'book-1',
       bookName: '测试书',
@@ -25,7 +25,7 @@ void main() {
       bookText: '本地',
       content: '',
     ),
-    rust_api.BookmarkDto(
+    BookmarkSnapshot(
       time: 2,
       bookId: 'book-1',
       bookName: '测试书',
@@ -38,7 +38,7 @@ void main() {
     ),
   ];
   const remote = [
-    rust_api.BookmarkDto(
+    BookmarkSnapshot(
       time: 1,
       bookId: 'book-1',
       bookName: '测试书',
@@ -49,7 +49,7 @@ void main() {
       bookText: '远端更新',
       content: '',
     ),
-    rust_api.BookmarkDto(
+    BookmarkSnapshot(
       time: 3,
       bookId: 'book-1',
       bookName: '测试书',

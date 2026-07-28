@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:legado_flutter/pages/sources/rule_complete.dart';
+import 'package:legado_flutter/features/sources/rule_complete.dart';
 
 void main() {
   test('currentToken extracts trailing rule fragment', () {

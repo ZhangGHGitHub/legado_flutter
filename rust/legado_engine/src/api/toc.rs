@@ -4,8 +4,13 @@ use crate::http;
 use crate::model::book_source::BookSource;
 use crate::rule;
 use std::collections::{HashSet, VecDeque};
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 use crate::rule::js_engine;
+
+/// 独立目录分页的任务上限；HTTP 层仍会按主机并发闸门进一步限制实际请求数。
+const TOC_PAGE_CONCURRENCY: usize = 4;
 
 /// 获取目录
 pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterItem>, String> {
@@ -41,7 +46,7 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
     if let Some(article_id) = extract_tomato_article_id(&current_url) {
         crate::rule::js_cache::put("articleid", &article_id, 0);
     }
-    let max_pages = 50;
+    let max_pages: usize = 50;
     let mut last_body = String::new();
 
     for _page in 0..max_pages {
@@ -64,55 +69,69 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
                 .await?;
         last_body = body.clone();
 
-        let batch = if let Ok(data) = serde_json::from_str::<serde_json::Value>(&body) {
-            if source.is_json_api() {
-                rule::json_toc::parse_json_toc(&data, &source, &current_url)?
-                    .into_iter()
-                    .map(|c| ChapterItem {
-                        title: c.title,
-                        url: if c.is_volume {
-                            c.url
-                        } else {
-                            http::client::resolve_url(&c.url, &page_base_url)
-                        },
-                        is_volume: c.is_volume,
-                        is_vip: c.is_vip,
-                        is_pay: c.is_pay,
-                        tag: c.tag,
-                        base_url: c.base_url,
-                    })
-                    .collect()
-            } else {
-                parse_html_toc_items(&body, &source, &page_base_url, &current_url)?
-            }
-        } else {
-            parse_html_toc_items(&body, &source, &page_base_url, &current_url)?
-        };
+        let batch = parse_toc_page(&body, &source, &current_url)?;
 
-        let mut added = 0;
         for ch in batch {
             if seen.insert(ch.url.clone()) {
                 merged.push(ch);
-                added += 1;
             }
         }
 
-        let next_urls = if let Ok(data) = serde_json::from_str::<serde_json::Value>(&body) {
-            if source.is_json_api() {
-                let next =
-                    rule::json_toc::extract_json_next_url(&data, &source.rule_toc_next_toc_url);
-                if next.is_empty() {
-                    Vec::new()
+        let next_urls = extract_toc_next_urls(&body, &source, &current_url)?;
+
+        // 对齐原版多 nextTocUrl 分支：独立 GET 分页并发请求，但按输入顺序解析和合并，
+        // 这样不会改变章节顺序、去重优先级或最终 index。
+        if next_urls.len() > 1
+            && next_urls.iter().all(|raw| {
+                let (_, method, _) = split_analyze_url(raw);
+                method.eq_ignore_ascii_case("GET")
+            })
+        {
+            let remaining = max_pages.saturating_sub(_page + 1);
+            let mut requests = Vec::new();
+            for raw in &next_urls {
+                let (url, _, _) = split_analyze_url(raw);
+                let resolved = if url.starts_with("http") {
+                    url
                 } else {
-                    vec![next]
+                    http::client::resolve_url(&url, &page_base_url)
+                };
+                if !visited_pages.insert(resolved.clone()) {
+                    continue;
                 }
-            } else {
-                Vec::new()
+                requests.push((resolved, "GET".to_string(), None));
             }
-        } else {
-            let book_url_guess = current_url.replace("/chapter/", "/book/");
-            rule::html_toc::extract_next_toc_urls_at(&body, &source, &current_url, &book_url_guess)?
-        };
+            requests.truncate(remaining);
+
+            if !requests.is_empty() {
+                let pages = fetch_toc_pages_concurrently(&source, requests).await?;
+                for (page_url, page_body) in pages {
+                    last_body = page_body.clone();
+                    let page_batch = parse_toc_page(&page_body, &source, &page_url)?;
+                    for ch in page_batch {
+                        if seen.insert(ch.url.clone()) {
+                            merged.push(ch);
+                        }
+                    }
+                    for raw in extract_toc_next_urls(&page_body, &source, &page_url)? {
+                        let (url, method, _) = split_analyze_url(&raw);
+                        if !method.eq_ignore_ascii_case("GET") {
+                            continue;
+                        }
+                        let resolved = if url.starts_with("http") {
+                            url
+                        } else {
+                            http::client::resolve_url(&url, &http::client::base_url(&page_url))
+                        };
+                        if !visited_pages.contains(&resolved) {
+                            pending_urls.push_back(resolved);
+                        }
+                    }
+                }
+                current_url = pending_urls.pop_front().unwrap_or_default();
+                continue;
+            }
+        }
 
         if next_urls.is_empty() {
             current_url = pending_urls.pop_front().unwrap_or_default();
@@ -221,10 +240,117 @@ pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterIte
         }
     }
 
-    if !reverse {
+    // `BookChapterList` first normalizes the source rule and then applies the
+    // book-level `reverseToc` setting. The rewritten Book model currently
+    // uses the reference default (`reverseToc = false`), so the final output
+    // keeps source order unless the rule explicitly starts with `-`.
+    if reverse {
         merged.reverse();
     }
     Ok(merged)
+}
+
+fn parse_toc_page(
+    body: &str,
+    source: &BookSource,
+    page_url: &str,
+) -> Result<Vec<ChapterItem>, String> {
+    let page_base_url = http::client::base_url(page_url);
+    if let Ok(data) = serde_json::from_str::<serde_json::Value>(body) {
+        if source.is_json_api() {
+            return Ok(rule::json_toc::parse_json_toc(&data, source, page_url)?
+                .into_iter()
+                .map(|c| ChapterItem {
+                    title: c.title,
+                    url: if c.is_volume {
+                        c.url
+                    } else {
+                        http::client::resolve_url(&c.url, &page_base_url)
+                    },
+                    is_volume: c.is_volume,
+                    is_vip: c.is_vip,
+                    is_pay: c.is_pay,
+                    tag: c.tag,
+                    base_url: c.base_url,
+                })
+                .collect());
+        }
+    }
+    parse_html_toc_items(body, source, &page_base_url, page_url)
+}
+
+fn extract_toc_next_urls(
+    body: &str,
+    source: &BookSource,
+    page_url: &str,
+) -> Result<Vec<String>, String> {
+    if let Ok(data) = serde_json::from_str::<serde_json::Value>(body) {
+        if source.is_json_api() {
+            let next = rule::json_toc::extract_json_next_url(&data, &source.rule_toc_next_toc_url);
+            return Ok(if next.is_empty() {
+                Vec::new()
+            } else {
+                vec![next]
+            });
+        }
+        return Ok(Vec::new());
+    }
+    let book_url_guess = page_url.replace("/chapter/", "/book/");
+    rule::html_toc::extract_next_toc_urls_at(body, source, page_url, &book_url_guess)
+}
+
+async fn fetch_toc_pages_concurrently(
+    source: &BookSource,
+    requests: Vec<(String, String, Option<String>)>,
+) -> Result<Vec<(String, String)>, String> {
+    let limit = TOC_PAGE_CONCURRENCY.min(requests.len()).max(1);
+    let semaphore = Arc::new(Semaphore::new(limit));
+    let mut tasks = Vec::with_capacity(requests.len());
+
+    for (index, (url, method, body)) in requests.into_iter().enumerate() {
+        let permit = Arc::clone(&semaphore);
+        let source_key = source.book_source_url.clone();
+        let source_json = source.raw_json.clone();
+        tasks.push(tokio::spawn(async move {
+            let _permit = permit
+                .acquire_owned()
+                .await
+                .map_err(|_| "目录分页并发闸损坏".to_string())?;
+            http::rate_limit::wait_if_needed(&source_key).await?;
+            let body = http::client::fetch_with_source(
+                &url,
+                &method,
+                body.as_deref(),
+                "UTF-8",
+                &source_json,
+            )
+            .await?;
+            Ok::<(usize, String, String), String>((index, url, body))
+        }));
+    }
+
+    let mut completed = Vec::with_capacity(tasks.len());
+    let mut first_error = None;
+    for task in tasks {
+        match task.await {
+            Ok(Ok(result)) => completed.push(result),
+            Ok(Err(error)) => {
+                first_error.get_or_insert(error);
+            }
+            Err(error) => {
+                first_error.get_or_insert(format!("目录分页任务失败: {error}"));
+            }
+        };
+    }
+    if let Some(error) = first_error {
+        return Err(error);
+    }
+
+    completed.sort_by_key(|(index, _, _)| *index);
+    Ok(completed
+        .into_iter()
+        .map(|(_, url, body)| (url, body))
+        .collect())
 }
 
 /// 站点返回错误页 / 明文异常时，避免静默「目录 0 条」
@@ -505,8 +631,8 @@ mod http_fixture_tests {
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
     use std::sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Mutex,
     };
     use std::thread;
     use std::time::Duration;
@@ -514,6 +640,8 @@ mod http_fixture_tests {
     struct FixtureServer {
         base_url: String,
         stop: Arc<AtomicBool>,
+        requests: Arc<Mutex<Vec<String>>>,
+        max_active_requests: Arc<AtomicUsize>,
     }
 
     impl FixtureServer {
@@ -523,13 +651,29 @@ mod http_fixture_tests {
             let port = listener.local_addr().unwrap().port();
             let stop = Arc::new(AtomicBool::new(false));
             let thread_stop = Arc::clone(&stop);
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            let thread_requests = Arc::clone(&requests);
+            let active_requests = Arc::new(AtomicUsize::new(0));
+            let max_active_requests = Arc::new(AtomicUsize::new(0));
+            let thread_active_requests = Arc::clone(&active_requests);
+            let thread_max_active_requests = Arc::clone(&max_active_requests);
 
             thread::spawn(move || {
                 while !thread_stop.load(Ordering::Relaxed) {
                     match listener.accept() {
                         Ok((stream, _)) => {
                             // reqwest 可能分片发送请求头；每个连接独立处理，避免一个慢连接阻塞后续请求。
-                            thread::spawn(|| handle_request(stream));
+                            let requests = Arc::clone(&thread_requests);
+                            let active_requests = Arc::clone(&thread_active_requests);
+                            let max_active_requests = Arc::clone(&thread_max_active_requests);
+                            thread::spawn(|| {
+                                handle_request(
+                                    stream,
+                                    requests,
+                                    active_requests,
+                                    max_active_requests,
+                                )
+                            });
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                             thread::sleep(Duration::from_millis(1));
@@ -542,6 +686,8 @@ mod http_fixture_tests {
             Self {
                 base_url: format!("http://127.0.0.1:{port}"),
                 stop,
+                requests,
+                max_active_requests,
             }
         }
 
@@ -597,6 +743,14 @@ mod http_fixture_tests {
         fn url(&self, path: &str) -> String {
             format!("{}{}", self.base_url, path)
         }
+
+        fn request_paths(&self) -> Vec<String> {
+            self.requests.lock().unwrap().clone()
+        }
+
+        fn max_active_requests(&self) -> usize {
+            self.max_active_requests.load(Ordering::Relaxed)
+        }
     }
 
     impl Drop for FixtureServer {
@@ -605,7 +759,12 @@ mod http_fixture_tests {
         }
     }
 
-    fn handle_request(mut stream: TcpStream) {
+    fn handle_request(
+        mut stream: TcpStream,
+        requests: Arc<Mutex<Vec<String>>>,
+        active_requests: Arc<AtomicUsize>,
+        max_active_requests: Arc<AtomicUsize>,
+    ) {
         let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
         let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
         let mut request = Vec::with_capacity(4096);
@@ -634,6 +793,12 @@ mod http_fixture_tests {
             .next()
             .and_then(|l| l.split_whitespace().nth(1))
             .unwrap_or("/");
+        requests.lock().unwrap().push(path.to_string());
+        let active = active_requests.fetch_add(1, Ordering::Relaxed) + 1;
+        max_active_requests.fetch_max(active, Ordering::Relaxed);
+        if matches!(path, "/module2/toc/multi-2" | "/module2/toc/multi-3") {
+            thread::sleep(Duration::from_millis(40));
+        }
 
         let (status, body) = match path {
             "/toc" => (
@@ -712,6 +877,7 @@ mod http_fixture_tests {
         );
         let _ = stream.write_all(response.as_bytes());
         let _ = stream.flush();
+        active_requests.fetch_sub(1, Ordering::Relaxed);
     }
 
     fn module2_fixture(name: &str) -> String {
@@ -728,8 +894,8 @@ mod http_fixture_tests {
         let chapters = get_toc(&source, &fixture.url("/toc")).await.unwrap();
 
         assert_eq!(chapters.len(), 4);
-        assert_eq!(chapters[0].title, "第四章");
-        assert!(chapters[3].url.ends_with("/c/1"));
+        assert_eq!(chapters[0].title, "第一章");
+        assert!(chapters[3].url.ends_with("/c/4"));
 
         let error = get_toc(&source, &fixture.url("/empty"))
             .await
@@ -769,8 +935,8 @@ mod http_fixture_tests {
 
         let chapters = get_toc(&source, &fixture.url("/json/toc")).await.unwrap();
         assert_eq!(chapters.len(), 3);
-        assert_eq!(chapters[0].title, "JSON 第三章");
-        assert!(chapters[2].url.ends_with("/json/c/1"));
+        assert_eq!(chapters[0].title, "JSON 第一章");
+        assert!(chapters[2].url.ends_with("/json/c/3"));
 
         let content_text = content::get_content(&source, &fixture.url("/json/content/1"))
             .await
@@ -787,10 +953,15 @@ mod http_fixture_tests {
         let chapters = get_toc(&source, &toc_url).await.unwrap();
 
         assert_eq!(chapters.len(), 3);
-        assert_eq!(chapters[0].title, "第一章");
+        assert_eq!(chapters[0].title, "第二章");
         assert_eq!(chapters[1].title, "卷一");
         assert_eq!(chapters[1].url, "卷一1");
-        assert_eq!(chapters[2].title, "第二章");
+        assert_eq!(chapters[2].title, "第一章");
+
+        let reverse_source = fixture.module2_source_json("-.chapters li");
+        let reverse = get_toc(&reverse_source, &toc_url).await.unwrap();
+        assert_eq!(reverse[0].title, "第一章");
+        assert_eq!(reverse[2].title, "第二章");
 
         let plus_source = fixture.module2_source_json("+.chapters li");
         let plus_url = fixture.url("/module2/toc/plus");
@@ -809,6 +980,13 @@ mod http_fixture_tests {
         assert_eq!(chapters.len(), 3);
         assert!(chapters.iter().any(|chapter| chapter.title == "第二页"));
         assert!(chapters.iter().any(|chapter| chapter.title == "第三页"));
+
+        let paths = fixture.request_paths();
+        assert_eq!(paths.len(), 3, "目录分页请求次数应为首屏 + 两个独立分页");
+        assert!(paths.contains(&"/module2/toc/multi".to_string()));
+        assert!(paths.contains(&"/module2/toc/multi-2".to_string()));
+        assert!(paths.contains(&"/module2/toc/multi-3".to_string()));
+        assert!(fixture.max_active_requests() >= 2, "两个独立分页应重叠请求");
     }
 
     #[tokio::test]

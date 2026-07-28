@@ -30,14 +30,8 @@ fn parse_note_json(raw: &str) -> Result<NoteDto, String> {
             .and_then(|x| x.as_str())
             .unwrap_or_default()
             .to_string(),
-        position: v
-            .get("position")
-            .and_then(|x| x.as_i64())
-            .unwrap_or(0) as i32,
-        chapter_pos: v
-            .get("chapterPos")
-            .and_then(|x| x.as_i64())
-            .unwrap_or(-1) as i32,
+        position: v.get("position").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+        chapter_pos: v.get("chapterPos").and_then(|x| x.as_i64()).unwrap_or(-1) as i32,
         created_at: v
             .get("createdAt")
             .and_then(|x| x.as_str())

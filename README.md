@@ -1,18 +1,23 @@
 # Legado Flutter
 
-Legado 阅读器的 Flutter 复刻版，书源引擎使用 Rust 实现。
+将 [Jingshiro/legado](https://github.com/Jingshiro/legado) 重构为 Rust + Flutter 的跨平台版本；Jingshiro/legado 是行为、数据和 UI 兼容性的参照基线。
+
+根目录 `legado-main/` 是只读的原版核对目录，仅用于行为、数据结构、UI 和错误语义对照；它不是主源码目录，不参与 Flutter/Rust/Gradle/CI 构建，也不得直接修改。
 
 **文档入口：** [docs/README.md](docs/README.md) · **开发流程：** [docs/DEVELOPMENT_PROCESS.md](docs/DEVELOPMENT_PROCESS.md)
 
 ## 架构
 
 ```
-Flutter UI → Provider → BookSourceService (Dart 编排)
-                              ↓ FFI
-                    legado_engine (Rust 核心)
-                      ├── HTTP + Cookie + 限速
-                      ├── CSS/JSONPath 规则
-                      └── search API
+Flutter pages/providers
+        ↓ application/domain ports
+infrastructure adapters → FRB generated bindings
+        ↓
+legado_engine (Rust core)
+  ├── HTTP + Cookie + rate limiting
+  ├── CSS/JSONPath/Legado rules
+  ├── SQLite database and backup
+  └── WebDAV client and Web API
 ```
 
 ## 快速开始
@@ -68,19 +73,25 @@ cargo build --release
 
 ```
 rust/legado_engine/     # Rust 书源引擎 crate
-lib/bridge/             # Dart FFI 桥接层
-lib/config/             # AppConfig / EngineConfig
-lib/services/           # BookSourceService（Rust 门面）
+lib/application/        # 用例编排和任务生命周期
+lib/domain/              # 领域模型、Repository 和 Port 接口
+lib/infrastructure/      # FRB、数据库、缓存、WebDAV 适配器
+lib/pages/               # 过渡期页面目录，R6 再按功能域迁移
+lib/services/            # 过渡期服务；新边界优先使用 domain/application
+lib/bridge/              # 兼容桥接层
+lib/src/rust/            # FRB 生成代码，仅由适配层和兼容桥使用
 ```
 
 ## Phase 进度
 
-- [x] Phase 0: Rust crate + FRB 配置
-- [x] Phase 1: HTTP + Cookie + 限速 + 基础搜索（Rust）
-- [x] Phase 1: Dart 双轨改造 + 设置页开关
-- [x] Phase 2A: AnalyzeRule 通用规则管道（Dart）
-- [x] Phase 2B: FRB 绑定 + LegadoEngineBridge 对接（搜索）
-- [x] Phase 2C: Rust 目录/正文 + 分页/JSON/JS 规则基础链路
-- [x] Phase 2C (partial): 翻页引擎 Jingshiro parity（仿真/滑动/覆盖翻页）
-- [~] Phase 2C follow-up: Rust 目录/正文 fixture、FFI 契约和阅读缓存回归
-- [ ] Phase 3: 移除 Dart 规则引擎残余兼容层
+重构阶段进度以 [docs/REFACTOR_PLAN.md](docs/REFACTOR_PLAN.md) 的 R0-R6 为准：
+
+- [x] R0: 架构盘点与行为基线
+- [ ] R1: 领域模型与数据访问边界；Kotlin Room v99 数据迁移门禁已重新打开，当前完成只读探针
+- [ ] R2: 书源引擎与 FRB 适配边界；已有历史迁移记录，需在 R1-12 完成后复验
+- [ ] R3: 阅读会话、正文处理与缓存链路；已有历史迁移记录，需在 R1-12 完成后复验
+- [ ] R4: 目录顺序、章节身份和性能边界；已有历史 2A/2B 证据，需在 R1-12 完成后复验
+- [ ] R5: 同步、备份和远端存储开发门禁；本地 WebDAV/Android 回归已有记录，发布前仍需正式或主流 WebDAV 服务真实验收
+- [ ] R6: Feature UI 与平台适配收敛
+
+当前执行焦点是 R1-12：原版 Kotlin Room v99 数据库迁移。Web/WASM/PWA 和真实 Android 系统 TTS 验收按项目文档暂停。

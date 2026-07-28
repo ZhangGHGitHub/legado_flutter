@@ -6,18 +6,14 @@ import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../src/rust/api.dart' as rust_api;
+import '../domain/annotation/note_snapshot.dart';
 
 /// 想法分享卡片（Phase 4.5）
 class NoteShareCard extends StatelessWidget {
-  final rust_api.NoteDto note;
+  final NoteSnapshot note;
   final String bookName;
 
-  const NoteShareCard({
-    super.key,
-    required this.note,
-    required this.bookName,
-  });
+  const NoteShareCard({super.key, required this.note, required this.bookName});
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +33,11 @@ class NoteShareCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.lightbulb_outline, size: 18, color: theme.colorScheme.primary),
+                Icon(
+                  Icons.lightbulb_outline,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -64,10 +64,7 @@ class NoteShareCard extends StatelessWidget {
                 color: theme.colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(
-                note.selectedText,
-                style: theme.textTheme.bodyMedium,
-              ),
+              child: Text(note.selectedText, style: theme.textTheme.bodyMedium),
             ),
             if (note.noteContent.isNotEmpty) ...[
               const SizedBox(height: 10),

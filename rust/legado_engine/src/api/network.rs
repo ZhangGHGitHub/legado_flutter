@@ -44,6 +44,18 @@ pub fn clear_engine_cache() -> Result<(), String> {
     Ok(())
 }
 
+/// 开启一次 debug HTTP 请求轨迹采集。
+#[flutter_rust_bridge::frb(sync)]
+pub fn start_http_request_trace() -> Result<(), String> {
+    client::start_request_trace()
+}
+
+/// 停止并取出 debug HTTP 请求轨迹 JSON。
+#[flutter_rust_bridge::frb(sync)]
+pub fn drain_http_request_trace() -> String {
+    client::drain_request_trace()
+}
+
 /// 当前网络配置
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_network_config() -> NetworkConfigDto {

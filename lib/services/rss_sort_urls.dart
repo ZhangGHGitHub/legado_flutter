@@ -1,13 +1,25 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../bridge/legado_engine_bridge.dart';
+import '../domain/ports/rss_sort_url_js_port.dart';
+import '../infrastructure/engine/frb_rss_sort_url_js_port.dart';
 import '../models/rss_source.dart';
-import '../src/rust/api.dart' as rust_api;
 
 /// 对齐 Jingshiro [RssSourceExtensions.sortUrls]
 class RssSortUrls {
   RssSortUrls._();
+
+  static RssSortUrlJsPort _jsPort = FrbRssSortUrlJsPort();
+
+  @visibleForTesting
+  static void configureJsPort(RssSortUrlJsPort port) {
+    _jsPort = port;
+  }
+
+  @visibleForTesting
+  static void resetJsPort() {
+    _jsPort = FrbRssSortUrlJsPort();
+  }
 
   static String _cacheKey(RssSource source) {
     final raw = '${source.sourceUrl}|${source.sortUrl}';
@@ -38,8 +50,7 @@ class RssSortUrls {
     try {
       var str = sortUrl;
       final lower = sortUrl.toLowerCase();
-      final isJs =
-          lower.startsWith('<js>') || lower.startsWith('@js:');
+      final isJs = lower.startsWith('<js>') || lower.startsWith('@js:');
       if (isJs) {
         final prefs = await SharedPreferences.getInstance();
         final key = _cacheKey(source);
@@ -47,14 +58,10 @@ class RssSortUrls {
         if (cached != null && cached.trim().isNotEmpty) {
           str = cached;
         } else {
-          if (!LegadoEngineBridge.isAvailable) {
+          if (!_jsPort.isAvailable) {
             throw StateError('Rust 引擎不可用，无法执行 sortUrl JS');
           }
-          str = rust_api.evalJs(
-            script: _extractJs(sortUrl),
-            jsLib: source.jsLib,
-            baseUrl: source.sourceUrl,
-          );
+          str = _jsPort.evaluate(source: source, script: _extractJs(sortUrl));
           await prefs.setString(key, str);
         }
       }

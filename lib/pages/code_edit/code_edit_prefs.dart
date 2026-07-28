@@ -1,4 +1,5 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../domain/ports/code_edit_prefs_store.dart';
+import '../../infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
 
 /// 代码编辑器偏好 — 对齐 Jingshiro [PreferKey] / [AppConfig] 编辑项。
 abstract final class CodeEditPrefs {
@@ -21,8 +22,8 @@ abstract final class CodeEditPrefs {
   static const defaultThemeAuto = true;
   static const maxLogLines = 200;
 
-  static Future<CodeEditSettings> load() async {
-    final p = await SharedPreferences.getInstance();
+  static Future<CodeEditSettings> load({CodeEditPrefsStore? store}) async {
+    final p = await _resolve(store);
     return CodeEditSettings(
       themeIndex: p.getInt(editTheme) ?? defaultTheme,
       themeDarkIndex: p.getInt(editThemeDark) ?? defaultThemeDark,
@@ -34,44 +35,59 @@ abstract final class CodeEditPrefs {
     );
   }
 
-  static Future<void> saveTheme(int index, {required bool dark}) async {
-    final p = await SharedPreferences.getInstance();
+  static Future<void> saveTheme(
+    int index, {
+    required bool dark,
+    CodeEditPrefsStore? store,
+  }) async {
+    final p = await _resolve(store);
     await p.setInt(dark ? editThemeDark : editTheme, index);
   }
 
-  static Future<void> saveThemeAuto(bool v) async {
-    final p = await SharedPreferences.getInstance();
+  static Future<void> saveThemeAuto(bool v, {CodeEditPrefsStore? store}) async {
+    final p = await _resolve(store);
     await p.setBool(editTemeAuto, v);
   }
 
-  static Future<void> saveFontScale(int v) async {
-    final p = await SharedPreferences.getInstance();
+  static Future<void> saveFontScale(int v, {CodeEditPrefsStore? store}) async {
+    final p = await _resolve(store);
     await p.setInt(editFontScale, v);
   }
 
-  static Future<void> saveAutoWrap(bool v) async {
-    final p = await SharedPreferences.getInstance();
+  static Future<void> saveAutoWrap(bool v, {CodeEditPrefsStore? store}) async {
+    final p = await _resolve(store);
     await p.setBool(editAutoWrap, v);
   }
 
-  static Future<void> saveAutoComplete(bool v) async {
-    final p = await SharedPreferences.getInstance();
+  static Future<void> saveAutoComplete(
+    bool v, {
+    CodeEditPrefsStore? store,
+  }) async {
+    final p = await _resolve(store);
     await p.setBool(editAutoComplete, v);
   }
 
-  static Future<void> saveNonPrintable(int v) async {
-    final p = await SharedPreferences.getInstance();
+  static Future<void> saveNonPrintable(
+    int v, {
+    CodeEditPrefsStore? store,
+  }) async {
+    final p = await _resolve(store);
     await p.setInt(editNonPrintable, v);
   }
 
-  static Future<List<String>> loadLog() async {
-    final p = await SharedPreferences.getInstance();
-    return p.getStringList(editSessionLog) ?? const [];
+  static Future<List<String>> loadLog({CodeEditPrefsStore? store}) async {
+    final p = await _resolve(store);
+    return p.getStringList(editSessionLog) ?? const <String>[];
   }
 
-  static Future<void> appendLog(String line) async {
-    final p = await SharedPreferences.getInstance();
-    final list = List<String>.from(p.getStringList(editSessionLog) ?? const []);
+  static Future<void> appendLog(
+    String line, {
+    CodeEditPrefsStore? store,
+  }) async {
+    final p = await _resolve(store);
+    final list = List<String>.from(
+      p.getStringList(editSessionLog) ?? const <String>[],
+    );
     final stamp = DateTime.now().toIso8601String().substring(11, 19);
     list.add('[$stamp] $line');
     while (list.length > maxLogLines) {
@@ -80,9 +96,15 @@ abstract final class CodeEditPrefs {
     await p.setStringList(editSessionLog, list);
   }
 
-  static Future<void> clearLog() async {
-    final p = await SharedPreferences.getInstance();
+  static Future<void> clearLog({CodeEditPrefsStore? store}) async {
+    final p = await _resolve(store);
     await p.remove(editSessionLog);
+  }
+
+  static Future<CodeEditPrefsStore> _resolve(CodeEditPrefsStore? store) {
+    return store == null
+        ? SharedPreferencesCodeEditPrefsStore.load()
+        : Future<CodeEditPrefsStore>.value(store);
   }
 }
 

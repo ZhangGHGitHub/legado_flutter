@@ -216,9 +216,8 @@ mod return_semantics_tests {
 
     #[test]
     fn default_text_rule_joins_all_matching_elements() {
-        let document = Html::parse_fragment(
-            r#"<div class="item">第一项</div><div class="item">第二项</div>"#,
-        );
+        let document =
+            Html::parse_fragment(r#"<div class="item">第一项</div><div class="item">第二项</div>"#);
         let root = document.root_element();
         assert_eq!(extract_text(&root, ".item@text"), "第一项\n第二项");
     }

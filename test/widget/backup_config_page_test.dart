@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/config/backup_config_page.dart';
+import 'package:legado_flutter/domain/ports/backup_local_file_port.dart';
+import 'package:legado_flutter/domain/remote/webdav_entry.dart';
+import 'package:legado_flutter/features/settings/backup_config_page.dart';
 import 'package:legado_flutter/services/backup_service.dart';
-import 'package:legado_flutter/src/rust/api/webdav.dart' as webdav_api;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FailingBackupService extends BackupService {
@@ -11,7 +12,7 @@ class _FailingBackupService extends BackupService {
   final Object? deleteError;
   final Object? restoreError;
 
-  static const entry = webdav_api.WebDavEntry(
+  static const entry = WebDavEntry(
     name: 'backup2026-07-23.zip',
     path: '/legado/backup2026-07-23.zip',
     isDir: false,
@@ -20,7 +21,7 @@ class _FailingBackupService extends BackupService {
   );
 
   @override
-  Future<List<webdav_api.WebDavEntry>> listWebDavBackups() async => [entry];
+  Future<List<WebDavEntry>> listWebDavBackups() async => [entry];
 
   @override
   Future<void> deleteWebDavBackup(String remotePath) async {
@@ -34,6 +35,21 @@ class _FailingBackupService extends BackupService {
   }) async {
     throw restoreError!;
   }
+}
+
+class _FakeBackupLocalFilePort implements BackupLocalFilePort {
+  _FakeBackupLocalFilePort(this.entries);
+
+  final List<LocalBackupEntry> entries;
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  Future<List<LocalBackupEntry>> listBackups() async => entries;
+
+  @override
+  Future<List<int>> readBytes(LocalBackupEntry entry) async => [1, 2, 3];
 }
 
 Future<void> _pumpWebDavPage(WidgetTester tester, BackupService service) async {
@@ -63,6 +79,30 @@ void main() {
     expect(find.text('从 WebDAV 恢复'), findsOneWidget);
     expect(find.text('WebDAV 备份'), findsOneWidget);
     expect(find.byTooltip('刷新 WebDAV 备份'), findsOneWidget);
+  });
+
+  testWidgets('local backup display uses the injected file port', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final port = _FakeBackupLocalFilePort([
+      const LocalBackupEntry(
+        name: 'backup2026-07-26.zip',
+        path: r'C:\app\backups\backup2026-07-26.zip',
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BackupConfigPage(service: BackupService(), localFilePort: port),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('backup2026-07-26.zip'), findsOneWidget);
+    expect(find.text(r'C:\app\backups\backup2026-07-26.zip'), findsOneWidget);
   });
 
   testWidgets('DELETE 405 tells the user the remote backup is still safe', (

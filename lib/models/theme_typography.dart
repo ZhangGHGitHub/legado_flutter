@@ -1,4 +1,4 @@
-import '../pages/reader/reader_settings.dart';
+import '../features/reader/reader_settings.dart';
 
 /// 单主题槽排版（共用布局关闭时各槽独立；对齐 legado style configs 排版字段）
 class ThemeTypography {

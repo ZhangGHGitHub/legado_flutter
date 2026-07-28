@@ -2,8 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-import '../bridge/legado_engine_bridge.dart';
-import '../src/rust/api/network.dart' as network_api;
+import '../domain/ports/chapter_content_cache_port.dart';
+import '../domain/ports/network_engine_port.dart';
+import '../infrastructure/cache/file_chapter_content_cache.dart';
+import '../infrastructure/engine/frb_network_engine_port.dart';
 import 'app_paths.dart';
 
 /// 缓存统计与清理（Phase 4.3）
@@ -33,6 +35,14 @@ class CacheStats {
 }
 
 class CacheService {
+  const CacheService({
+    this.contentCache = const FileChapterContentCache(),
+    this.enginePort = const FrbNetworkEnginePort(),
+  });
+
+  final ChapterContentCachePort contentCache;
+  final NetworkEnginePort enginePort;
+
   Future<int> _dirSize(Directory dir) async {
     if (!await dir.exists()) return 0;
     var total = 0;
@@ -64,23 +74,12 @@ class CacheService {
   }
 
   Future<void> clearBookCache() async {
-    final dir = await AppPaths.bookCacheDir();
-    if (await dir.exists()) {
-      await for (final entity in dir.list()) {
-        if (entity is Directory) {
-          await entity.delete(recursive: true);
-        } else if (entity is File) {
-          await entity.delete();
-        }
-      }
-    }
+    await contentCache.clearAll();
     debugPrint('[Cache] 已清空书籍缓存');
   }
 
   Future<void> clearEngineCache() async {
-    if (LegadoEngineBridge.isAvailable) {
-      network_api.clearEngineCache();
-    }
+    if (enginePort.isAvailable) enginePort.clearEngineCache();
     debugPrint('[Cache] 已清空引擎 Cookie/JS 缓存');
   }
 

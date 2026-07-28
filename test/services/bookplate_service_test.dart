@@ -1,9 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/domain/book_reading_stats.dart';
+import 'package:legado_flutter/domain/ports/bookplate_port.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/services/bookplate_service.dart';
-import 'package:legado_flutter/src/rust/api.dart' as rust_api;
 
 void main() {
+  tearDown(BookplateService.resetBookplatePort);
+
   test('ratingFromProgress maps 0-1 to 0-5 stars', () {
     expect(BookplateService.ratingFromProgress(0), 0);
     expect(BookplateService.ratingFromProgress(0.5), 2.5);
@@ -11,18 +14,12 @@ void main() {
   });
 
   test('BookplateService.build assembles header/footer fields', () {
-    final book = Book(
-      id: 'b1',
-      name: '斗破苍穹',
-      author: '天蚕土豆',
-      progress: 1.0,
-    );
-    const stats = rust_api.BookReadingStats(
+    final book = Book(id: 'b1', name: '斗破苍穹', author: '天蚕土豆', progress: 1.0);
+    const stats = BookReadingStats(
       durationSeconds: 3661,
       readChars: 12000,
       startDate: '2026-07-01',
       lastDate: '2026-07-10',
-      readingDays: 5,
     );
 
     final data = BookplateService.build(
@@ -48,12 +45,11 @@ void main() {
       book: book,
       currentChapterIndex: 3,
       totalChapters: 20,
-      stats: const rust_api.BookReadingStats(
+      stats: const BookReadingStats(
         durationSeconds: 600,
         readChars: 3000,
         startDate: '2026-07-05',
         lastDate: '2026-07-08',
-        readingDays: 2,
       ),
     );
 
@@ -61,4 +57,32 @@ void main() {
     expect(data.finishDate, isNull);
     expect(data.rating, 2);
   });
+
+  test('book stats are loaded through the replaceable port', () {
+    final port = _FakeBookplatePort();
+    BookplateService.configureBookplatePort(port);
+
+    final stats = BookplateService.loadBookStats('book-1');
+
+    expect(stats?.readChars, 1234);
+    expect(port.bookId, 'book-1');
+  });
+}
+
+class _FakeBookplatePort implements BookplatePort {
+  String? bookId;
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  BookReadingStats? loadBookStats(String bookId) {
+    this.bookId = bookId;
+    return const BookReadingStats(
+      readChars: 1234,
+      durationSeconds: 90,
+      startDate: '2026-01-01',
+      lastDate: '2026-01-02',
+    );
+  }
 }

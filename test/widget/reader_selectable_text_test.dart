@@ -24,6 +24,12 @@ void main() {
     expect(captured, isEmpty);
   });
 
+  test('chapter position keeps the page slice offset', () {
+    expect(readerChapterPosition(100, 3), 103);
+    expect(readerChapterPosition(0, 5), 5);
+    expect(readerChapterPosition(-5, 2), 0);
+  });
+
   testWidgets('ReaderInlineImage keeps bounds when decoding fails', (
     tester,
   ) async {
@@ -43,10 +49,7 @@ void main() {
 
     final error = find.byKey(const ValueKey('reader-inline-image-error'));
     expect(error, findsOneWidget);
-    final bounds = find.byKey(
-      const ValueKey('reader-inline-image-bounds'),
-    );
+    final bounds = find.byKey(const ValueKey('reader-inline-image-bounds'));
     expect(tester.getSize(bounds), const Size(48, 32));
   });
-
 }

@@ -134,8 +134,14 @@ class BookHelp {
   /// 与 [_chapterFile] 相同的 id 规范化（供目录标记比对）
   static String sanitizeId(String id) => _sanitize(id);
 
-  /// 已缓存正文字数（sanitize(chapterId) → 字符数，对齐目录「2974字」）
-  static Future<Map<String, int>> mapCachedWordCounts(String bookId) async {
+  /// 已缓存正文字数（sanitize(chapterId) → 字符数，对齐目录「2974字」）。
+  ///
+  /// [chapterIds] 用于目录按可见行懒加载，避免打开大目录时读取整本书的
+  /// 所有正文文件。传入的 id 应与 [sanitizeId] 返回值一致。
+  static Future<Map<String, int>> mapCachedWordCounts(
+    String bookId, {
+    Set<String>? chapterIds,
+  }) async {
     try {
       final root = await _cacheRoot();
       final bookDir = Directory(p.join(root.path, _sanitize(bookId)));
@@ -145,10 +151,12 @@ class BookHelp {
         if (entity is! File) continue;
         final name = p.basename(entity.path);
         if (!name.endsWith('.txt')) continue;
+        final id = p.basenameWithoutExtension(name);
+        if (chapterIds != null && !chapterIds.contains(id)) continue;
         try {
           final text = await entity.readAsString();
           if (text.isEmpty) continue;
-          counts[p.basenameWithoutExtension(name)] = text.length;
+          counts[id] = text.length;
         } catch (_) {
           // 单文件失败跳过
         }

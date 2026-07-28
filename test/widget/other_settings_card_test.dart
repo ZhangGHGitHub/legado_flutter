@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/config/other_settings_card.dart';
+import 'package:legado_flutter/features/settings/other_settings_card.dart';
 import 'package:legado_flutter/services/app_paths.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -25,9 +25,13 @@ void main() {
     }
   });
 
-  testWidgets('OtherSettingsCard shows network cache and data sections', (tester) async {
+  testWidgets('OtherSettingsCard shows network cache and data sections', (
+    tester,
+  ) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: SingleChildScrollView(child: OtherSettingsCard()))),
+      const MaterialApp(
+        home: Scaffold(body: SingleChildScrollView(child: OtherSettingsCard())),
+      ),
     );
     await tester.pump();
     for (var i = 0; i < 30; i++) {

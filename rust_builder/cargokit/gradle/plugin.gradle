@@ -135,7 +135,9 @@ class CargoKitPlugin implements Plugin<Project> {
             def platforms = com.flutter.gradle.FlutterPluginUtils.getTargetPlatforms(project).collect()
 
             // Same thing addFlutterDependencies does in flutter.gradle
-            if (buildType == "debug") {
+            // An explicit Flutter target platform is authoritative. The extra
+            // debug ABIs are only needed for the default multi-ABI build.
+            if (buildType == "debug" && !project.hasProperty("target-platform")) {
                 platforms.add("android-x86")
                 platforms.add("android-x64")
             }

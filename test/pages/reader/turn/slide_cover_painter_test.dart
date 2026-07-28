@@ -2,9 +2,9 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/reader/turn/page_direction.dart';
-import 'package:legado_flutter/pages/reader/turn/painters/cover_page_painter.dart';
-import 'package:legado_flutter/pages/reader/turn/painters/slide_page_painter.dart';
+import 'package:legado_flutter/features/reader/turn/page_direction.dart';
+import 'package:legado_flutter/features/reader/turn/painters/cover_page_painter.dart';
+import 'package:legado_flutter/features/reader/turn/painters/slide_page_painter.dart';
 
 Future<ui.Image> _createTestImage(Color color) async {
   final recorder = ui.PictureRecorder();

@@ -42,10 +42,7 @@ fn is_blocked_host(host: &str) -> bool {
     if parts.len() != 4 {
         return false;
     }
-    let nums: Option<Vec<u8>> = parts
-        .iter()
-        .map(|p| p.parse::<u8>().ok())
-        .collect();
+    let nums: Option<Vec<u8>> = parts.iter().map(|p| p.parse::<u8>().ok()).collect();
     let Some(nums) = nums else {
         return false;
     };

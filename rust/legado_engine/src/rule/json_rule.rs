@@ -5,22 +5,12 @@ use super::json_util;
 use super::replace_regex;
 
 /// 解析 JSON 字段规则（支持 `$.path` + `\n<js>` 后缀、`||` 多路径）
-pub fn resolve_field(
-    data: &Value,
-    rule: &str,
-    js_lib: &str,
-    base_url: &str,
-) -> String {
+pub fn resolve_field(data: &Value, rule: &str, js_lib: &str, base_url: &str) -> String {
     resolve_field_list(data, rule, js_lib, base_url).join("\n")
 }
 
 /// Resolve a JSON rule without collapsing multiple values.
-pub fn resolve_field_list(
-    data: &Value,
-    rule: &str,
-    js_lib: &str,
-    base_url: &str,
-) -> Vec<String> {
+pub fn resolve_field_list(data: &Value, rule: &str, js_lib: &str, base_url: &str) -> Vec<String> {
     let parts: Vec<&str> = if js_engine::contains_js_block(rule) {
         vec![rule]
     } else {

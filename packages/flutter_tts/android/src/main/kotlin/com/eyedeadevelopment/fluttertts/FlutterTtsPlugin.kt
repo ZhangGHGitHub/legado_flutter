@@ -414,6 +414,7 @@ class FlutterTtsPlugin : MethodCallHandler, FlutterPlugin {
             "getVoices" -> getVoices(result)
             "getSpeechRateValidRange" -> getSpeechRateValidRange(result)
             "getEngines" -> getEngines(result)
+            "getInitializationStatus" -> result.success(ttsStatus)
             "getDefaultEngine" -> getDefaultEngine(result)
             "getDefaultVoice" -> getDefaultVoice(result)
             "setVoice" -> {

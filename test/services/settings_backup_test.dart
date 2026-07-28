@@ -1,39 +1,79 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/services/app_paths.dart';
 import 'package:legado_flutter/services/bookshelf_prefs.dart';
-import 'package:legado_flutter/services/network_prefs.dart';
 import 'package:legado_flutter/services/settings_backup.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  test('SettingsBackup collect and apply roundtrip', () async {
-    SharedPreferences.setMockInitialValues({
+  test('collect reads supported preference types through the port', () async {
+    final store = MemorySettingsStore({
       'legado_theme_mode': 'dark',
-      'legado_color_preset': 'night',
-      BookshelfPrefs.bookGroupStyleKey: 1,
-      NetworkPrefs.enabledKey: true,
-      NetworkPrefs.hostKey: '127.0.0.1',
-      NetworkPrefs.portKey: 7890,
-      AppDataPrefs.dataDirKey: 'D:/legado_data',
+      BookshelfPrefs.bookshelfLayoutKey: 2,
+      BookshelfPrefs.showUnreadKey: true,
+      'unrelated_key': 'ignored',
     });
 
-    final collected = await SettingsBackup.collect();
-    expect(collected['legado_theme_mode'], 'dark');
-    expect(collected['legado_color_preset'], 'night');
-    expect(collected[BookshelfPrefs.bookGroupStyleKey], 1);
-    expect(collected[NetworkPrefs.enabledKey], isTrue);
-    expect(collected[NetworkPrefs.hostKey], '127.0.0.1');
-    expect(collected[NetworkPrefs.portKey], 7890);
-    expect(collected[AppDataPrefs.dataDirKey], 'D:/legado_data');
+    final result = await SettingsBackup.collect(store: store);
 
-    SharedPreferences.setMockInitialValues({});
-    await SettingsBackup.apply(Map<String, dynamic>.from(collected));
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('legado_theme_mode'), 'dark');
-    expect(prefs.getInt(BookshelfPrefs.bookGroupStyleKey), 1);
-    expect(prefs.getBool(NetworkPrefs.enabledKey), isTrue);
-    expect(prefs.getString(NetworkPrefs.hostKey), '127.0.0.1');
-    expect(prefs.getInt(NetworkPrefs.portKey), 7890);
-    expect(prefs.getString(AppDataPrefs.dataDirKey), 'D:/legado_data');
+    expect(result['legado_theme_mode'], 'dark');
+    expect(result[BookshelfPrefs.bookshelfLayoutKey], 2);
+    expect(result[BookshelfPrefs.showUnreadKey], isTrue);
+    expect(result, isNot(contains('unrelated_key')));
   });
+
+  test('apply writes supported preference types through the port', () async {
+    final store = MemorySettingsStore();
+
+    await SettingsBackup.apply({
+      'legado_theme_mode': 'light',
+      BookshelfPrefs.bookshelfLayoutKey: 3,
+      BookshelfPrefs.showUnreadKey: false,
+      'unsupported_value': ['ignored'],
+    }, store: store);
+
+    expect(store.values['legado_theme_mode'], 'light');
+    expect(store.values[BookshelfPrefs.bookshelfLayoutKey], 3);
+    expect(store.values[BookshelfPrefs.showUnreadKey], isFalse);
+    expect(store.values, isNot(contains('unsupported_value')));
+  });
+}
+
+final class MemorySettingsStore implements SettingsStore {
+  MemorySettingsStore([Map<String, Object?>? initial]) : values = {...?initial};
+
+  final Map<String, Object?> values;
+
+  @override
+  bool containsKey(String key) => values.containsKey(key);
+
+  @override
+  int? getInt(String key) => values[key] as int?;
+
+  @override
+  bool? getBool(String key) => values[key] as bool?;
+
+  @override
+  String? getString(String key) => values[key] as String?;
+
+  @override
+  Future<bool> setInt(String key, int value) async {
+    values[key] = value;
+    return true;
+  }
+
+  @override
+  Future<bool> setBool(String key, bool value) async {
+    values[key] = value;
+    return true;
+  }
+
+  @override
+  Future<bool> setString(String key, String value) async {
+    values[key] = value;
+    return true;
+  }
+
+  @override
+  Future<bool> setDouble(String key, double value) async {
+    values[key] = value;
+    return true;
+  }
 }

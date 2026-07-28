@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/reader/turn/page_snapshot.dart';
+import 'package:legado_flutter/features/reader/turn/page_snapshot.dart';
 
 void main() {
   testWidgets('captureBoundary 得到非空图像', (tester) async {

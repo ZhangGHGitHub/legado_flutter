@@ -500,6 +500,11 @@ class FlutterTts {
     return engines;
   }
 
+  /// Returns the Android TextToSpeech initialization status after its
+  /// initialization callback has fired. Android SUCCESS is `1`.
+  Future<dynamic> get getInitializationStatus async =>
+      await _channel.invokeMethod('getInitializationStatus');
+
   /// [Future] which invokes the platform specific method for getDefaultEngine
   /// Returns a `String` of the default engine name
   /// ***Android supported only ***

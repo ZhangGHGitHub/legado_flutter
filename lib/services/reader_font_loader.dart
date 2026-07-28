@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import '../pages/reader/reader_settings.dart';
+import '../features/reader/reader_settings.dart';
 
 /// 自定义阅读字体加载（主题 zip / 本地字体文件 → [FontLoader]）
 ///
@@ -15,7 +15,12 @@ import '../pages/reader/reader_settings.dart';
 /// 避免 Flutter 桌面「西文+中文 fallback」混用导致有的字粗、有的字细。
 abstract final class ReaderFontLoader {
   static final Map<String, String> _pathToFamily = {};
-  static final Set<String> _loading = {};
+  static final Map<String, Future<String?>> _pendingLoads = {};
+
+  // Android Paint.FontMetrics for the reference sans-serif reader font is
+  // 18.75 logical px at 16sp. Flutter TextPainter includes extra leading and
+  // reports 24px, so use the native-compatible scale on Android.
+  static const _androidPaintLineHeightFactor = 1.171875;
 
   static final _fontExtensions = {'.ttf', '.otf', '.ttc', '.woff', '.woff2'};
 
@@ -88,7 +93,12 @@ abstract final class ReaderFontLoader {
   /// CJK 回退链：主字体缺字时仍尽量同一风格。
   static List<String> cjkFallbackFamilies() {
     if (kIsWeb) {
-      return const ['Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'];
+      return const [
+        'Noto Sans SC',
+        'PingFang SC',
+        'Microsoft YaHei',
+        'sans-serif',
+      ];
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.windows:
@@ -142,19 +152,73 @@ abstract final class ReaderFontLoader {
     required ReaderSettings settings,
     required Color color,
     String? resolvedFamily,
+    double? renderedLineHeight,
   }) {
     final family = resolvedFamily ?? resolveFamilySync(settings.fontFamily);
+    final fontSize = _positiveFinite(settings.fontSize)
+        ? settings.fontSize
+        : 1.0;
     // Jingshiro Paint.letterSpacing 为 em；Flutter 为逻辑像素。
-    final letterPx = settings.letterSpacing * settings.fontSize;
+    final letterPx = settings.letterSpacing.isFinite
+        ? settings.letterSpacing * fontSize
+        : 0.0;
+    final height =
+        renderedLineHeight != null &&
+            renderedLineHeight.isFinite &&
+            renderedLineHeight > 0
+        ? renderedLineHeight / fontSize
+        : _positiveFinite(settings.lineHeight)
+        ? settings.lineHeight
+        : 1.0;
     return TextStyle(
-      fontSize: settings.fontSize,
-      height: settings.lineHeight,
+      fontSize: fontSize,
+      height: height,
       color: color,
       fontFamily: family,
       fontFamilyFallback: cjkFallbackFamilies(),
       fontWeight: settings.fontWeight.flutterWeight,
       letterSpacing: letterPx,
     );
+  }
+
+  /// Returns the logical line step used by the original reader's
+  /// `Paint.FontMetrics` multiplied by the configured line-height ratio.
+  ///
+  /// The measurement intentionally clears [TextStyle.height], because the
+  /// setting is a multiplier rather than the font's base ascent/descent
+  /// height. The `Ag` probe is deliberate: Android's `Paint.FontMetrics` is
+  /// a property of the configured paint/typeface, not of the particular
+  /// CJK glyphs that happen to be drawn through fallback.
+  static double? renderedLineHeight({
+    required ReaderSettings settings,
+    String? resolvedFamily,
+  }) {
+    if (settings.fontSize <= 0 ||
+        !settings.lineHeight.isFinite ||
+        settings.lineHeight <= 0) {
+      return null;
+    }
+    final family = resolvedFamily ?? resolveFamilySync(settings.fontFamily);
+    final baseStyle = contentTextStyle(
+      settings: settings,
+      color: Colors.transparent,
+      resolvedFamily: family,
+    ).copyWith(height: null);
+    final painter = TextPainter(
+      text: TextSpan(text: 'Ag', style: baseStyle),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    final metrics = painter.computeLineMetrics();
+    if (metrics.isEmpty) return null;
+    final isAndroidSans =
+        defaultTargetPlatform == TargetPlatform.android &&
+        family == platformSansFamily();
+    final baseHeight = isAndroidSans
+        ? settings.fontSize * _androidPaintLineHeightFactor
+        : metrics.first.height;
+    final rendered = baseHeight * settings.lineHeight;
+    return rendered.isFinite && rendered > 0 ? rendered : null;
   }
 
   /// 将文件路径注册为 Flutter 字体族；返回可用于 [TextStyle.fontFamily] 的族名。
@@ -165,18 +229,32 @@ abstract final class ReaderFontLoader {
 
     final cached = _pathToFamily[fontPath];
     if (cached != null) return cached;
-    if (_loading.contains(fontPath)) {
-      while (_loading.contains(fontPath)) {
-        await Future<void>.delayed(const Duration(milliseconds: 16));
-      }
-      return _pathToFamily[fontPath];
-    }
+    final pending = _pendingLoads[fontPath];
+    if (pending != null) return pending;
 
-    _loading.add(fontPath);
+    final load = _loadFontFile(fontPath);
+    _pendingLoads[fontPath] = load;
     try {
-      final bytes = await file.readAsBytes();
-      final stem = p.basenameWithoutExtension(fontPath);
-      final family = 'legado_$stem';
+      return await load;
+    } finally {
+      if (identical(_pendingLoads[fontPath], load)) {
+        _pendingLoads.remove(fontPath);
+      }
+    }
+  }
+
+  static bool _positiveFinite(double value) => value.isFinite && value > 0;
+
+  static Future<String?> _loadFontFile(String fontPath) async {
+    try {
+      final bytes = await File(fontPath).readAsBytes();
+      // The path hash prevents two files with the same basename from
+      // registering the same Flutter family. The name is process-local.
+      var hash = 0x811c9dc5;
+      for (final unit in fontPath.codeUnits) {
+        hash = ((hash ^ unit) * 0x01000193) & 0x7fffffff;
+      }
+      final family = 'legado_font_$hash';
       final loader = FontLoader(family);
       loader.addFont(Future.value(ByteData.sublistView(bytes)));
       await loader.load();
@@ -184,8 +262,6 @@ abstract final class ReaderFontLoader {
       return family;
     } catch (_) {
       return null;
-    } finally {
-      _loading.remove(fontPath);
     }
   }
 
@@ -214,9 +290,7 @@ abstract final class ReaderFontLoader {
       final ext = p.extension(entity.path).toLowerCase();
       if (_fontExtensions.contains(ext)) files.add(entity);
     }
-    files.sort(
-      (a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()),
-    );
+    files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
     return files;
   }
 }

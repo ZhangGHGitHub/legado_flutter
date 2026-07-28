@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
+import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/help/book_help.dart';
 import 'package:legado_flutter/model/read_book.dart';
 import 'package:legado_flutter/models/book.dart';
@@ -127,7 +128,8 @@ void main() {
     final dao = _CacheDao(book, [chapter]);
     await BookHelp.saveContent(book.id, chapter.id, '文件正文');
     final provider = BookProvider(
-      dao: dao,
+      repository: dao,
+      contentCache: const FileChapterContentCache(),
       sourceService: _CacheSourceService([chapter]),
     );
 
@@ -147,7 +149,8 @@ void main() {
       final chapter = _chapter(isDownloaded: true, content: '旧正文');
       final dao = _CacheDao(book, [chapter]);
       final provider = BookProvider(
-        dao: dao,
+        repository: dao,
+        contentCache: const FileChapterContentCache(),
         sourceService: _CacheSourceService([chapter]),
       );
 

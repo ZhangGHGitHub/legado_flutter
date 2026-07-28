@@ -9,6 +9,7 @@ pub struct WebDavEntry {
     pub is_dir: bool,
     pub size: i32,
     pub last_modified: i64,
+    pub etag: Option<String>,
 }
 
 fn map_items(items: Vec<WebDavItem>) -> Vec<WebDavEntry> {
@@ -20,6 +21,7 @@ fn map_items(items: Vec<WebDavItem>) -> Vec<WebDavEntry> {
             is_dir: i.is_dir,
             size: i.size as i32,
             last_modified: i.last_modified,
+            etag: i.etag,
         })
         .collect()
 }
@@ -87,6 +89,23 @@ pub async fn webdav_upload(
     let client = new_webdav_client(&url, &username, &password)?;
     client
         .upload(&data, &remote_path)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 按 ETag 条件上传文件，避免覆盖其他设备的更新。
+#[flutter_rust_bridge::frb]
+pub async fn webdav_upload_if_match(
+    url: String,
+    username: String,
+    password: String,
+    remote_path: String,
+    data: Vec<u8>,
+    etag: Option<String>,
+) -> Result<(), String> {
+    let client = new_webdav_client(&url, &username, &password)?;
+    client
+        .upload_with_etag(&data, &remote_path, etag.as_deref())
         .await
         .map_err(|e| e.to_string())
 }

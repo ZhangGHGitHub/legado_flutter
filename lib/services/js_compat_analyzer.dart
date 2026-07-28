@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-/// <js> / @js: 书源规则扫描（REFACTOR_PLAN #2）
+/// JS block / @js rule scan for source compatibility (REFACTOR_PLAN #2).
 class JsCompatReport {
   final String sourceName;
   final String sourceUrl;
@@ -34,7 +34,8 @@ class JsCompatReport {
 abstract final class JsCompatAnalyzer {
   static JsCompatReport scanJson(String rawJson) {
     final text = rawJson;
-    final atJs = '@js:'.allMatches(text).length + '@Js:'.allMatches(text).length;
+    final atJs =
+        '@js:'.allMatches(text).length + '@Js:'.allMatches(text).length;
     final jsBlocks = '<js>'.allMatches(text).length;
     final hasJsLib = text.contains('"jsLib"') && !text.contains('"jsLib":""');
     final usesJsoup = text.contains('Packages.org.jsoup');

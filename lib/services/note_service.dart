@@ -1,19 +1,32 @@
 import 'dart:async';
 
-import '../bridge/legado_db_bridge.dart';
-import '../bridge/legado_engine_bridge.dart';
+import 'package:flutter/foundation.dart';
+
+import '../domain/annotation/note_snapshot.dart';
+import '../domain/ports/note_port.dart';
+import '../infrastructure/engine/frb_note_port.dart';
 import 'app_log.dart';
-import '../src/rust/api.dart' as rust_api;
 
 /// 想法笔记服务（Phase 4.5）
 class NoteService {
-  static bool get isReady =>
-      LegadoEngineBridge.isAvailable && LegadoDbBridge.isReady;
+  static NotePort _notePort = FrbNotePort();
 
-  static List<rust_api.NoteDto> list({String? bookId}) {
+  @visibleForTesting
+  static void configureNotePort(NotePort port) {
+    _notePort = port;
+  }
+
+  @visibleForTesting
+  static void resetNotePort() {
+    _notePort = FrbNotePort();
+  }
+
+  static bool get isReady => _notePort.isAvailable;
+
+  static List<NoteSnapshot> list({String? bookId}) {
     if (!isReady) return [];
     try {
-      return rust_api.listNotes(bookId: bookId ?? '');
+      return _notePort.list(bookId: bookId);
     } catch (e) {
       unawaited(AppLog.e('NoteService.list: $e'));
       return [];
@@ -31,7 +44,7 @@ class NoteService {
   }) {
     if (!isReady) return;
     try {
-      rust_api.upsertNote(
+      _notePort.save(
         id: id,
         bookId: bookId,
         chapterTitle: chapterTitle,
@@ -48,7 +61,7 @@ class NoteService {
   static void delete(String id) {
     if (!isReady) return;
     try {
-      rust_api.deleteNote(id: id);
+      _notePort.delete(id);
     } catch (e) {
       unawaited(AppLog.e('NoteService.delete: $e'));
     }
@@ -57,7 +70,7 @@ class NoteService {
   static String exportMarkdown({String? bookId}) {
     if (!isReady) return '';
     try {
-      return rust_api.exportNotesMarkdown(bookId: bookId ?? '');
+      return _notePort.exportMarkdown(bookId: bookId);
     } catch (e) {
       unawaited(AppLog.e('NoteService.exportMarkdown: $e'));
       return '';

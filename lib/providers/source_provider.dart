@@ -6,8 +6,8 @@ import 'package:file_picker/file_picker.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/source_validation_result.dart';
-import '../bridge/legado_engine_bridge.dart';
-import '../database/dao/source_dao.dart';
+import '../domain/repositories/book_source_repository.dart';
+import '../domain/ports/book_source_validation_port.dart';
 import '../services/book_source_service.dart';
 import '../services/check_source_prefs.dart';
 import '../services/source_group_catalog.dart';
@@ -18,7 +18,18 @@ import 'source_order.dart';
 
 /// 书源管理 Provider — 书源 CRUD、搜索
 class SourceProvider extends ChangeNotifier {
-  final SourceDao _dao = SourceDao();
+  SourceProvider({
+    required BookSourceRepository repository,
+    required BookSourceValidationPort validationPort,
+    Future<List<BookSource>> Function()? builtInSourcesLoader,
+  }) : _repository = repository,
+       _validationPort = validationPort,
+       _builtInSourcesLoader =
+           builtInSourcesLoader ?? BookSourceService.loadBuiltInSources;
+
+  final BookSourceRepository _repository;
+  final BookSourceValidationPort _validationPort;
+  final Future<List<BookSource>> Function() _builtInSourcesLoader;
   final BookSourceService _sourceService = BookSourceService();
 
   List<BookSource> _sources = [];
@@ -32,6 +43,7 @@ class SourceProvider extends ChangeNotifier {
   String? _loadError;
 
   List<BookSource> get sources => _sources;
+  BookSourceRepository get repository => _repository;
   Map<String, List<Book>> get searchResults => _searchResults;
   Map<String, SourceValidationResult> get validationResults =>
       Map.unmodifiable(_validationResults);
@@ -74,7 +86,7 @@ class SourceProvider extends ChangeNotifier {
     notifyListeners();
     try {
       await SourceGroupCatalog.load();
-      _sources = await _dao.getAll();
+      _sources = await _repository.getAll();
       await SourceGroupCatalog.mergeFromSources(
         _sources.map((s) => s.bookSourceGroup),
       );
@@ -91,10 +103,18 @@ class SourceProvider extends ChangeNotifier {
     }
   }
 
+  /// Ensures the first launch has the built-in sources before the UI loads them.
+  /// The repository remains the only persistence boundary for this startup step.
+  Future<void> ensureBuiltInSources() async {
+    if ((await _repository.getAll()).isNotEmpty) return;
+    final builtIns = await _builtInSourcesLoader();
+    if (builtIns.isNotEmpty) await _repository.upsertAll(builtIns);
+  }
+
   /// 添加单个书源
   Future<void> addSource(BookSource source) async {
-    await _dao.upsert(source);
-    _sources = await _dao.getAll();
+    await _repository.upsert(source);
+    _sources = await _repository.getAll();
     notifyListeners();
   }
 
@@ -104,7 +124,7 @@ class SourceProvider extends ChangeNotifier {
     await SourceGroupCatalog.rename(oldName, newName);
     for (final s in _sources) {
       if (!sourceHasGroupTag(s.bookSourceGroup, oldName)) continue;
-      await _dao.update(
+      await _repository.update(
         s.copyWith(
           bookSourceGroup: renameSourceGroupTag(
             s.bookSourceGroup,
@@ -114,7 +134,7 @@ class SourceProvider extends ChangeNotifier {
         ),
       );
     }
-    _sources = await _dao.getAll();
+    _sources = await _repository.getAll();
     notifyListeners();
   }
 
@@ -132,13 +152,13 @@ class SourceProvider extends ChangeNotifier {
     await SourceGroupCatalog.remove(groupName);
     for (final s in _sources) {
       if (!sourceHasGroupTag(s.bookSourceGroup, groupName)) continue;
-      await _dao.update(
+      await _repository.update(
         s.copyWith(
           bookSourceGroup: removeSourceGroupTag(s.bookSourceGroup, groupName),
         ),
       );
     }
-    _sources = await _dao.getAll();
+    _sources = await _repository.getAll();
     notifyListeners();
   }
 
@@ -175,8 +195,8 @@ class SourceProvider extends ChangeNotifier {
   /// 写入已解析的书源（仅 upsert 传入列表）
   Future<bool> importParsedSources(List<BookSource> sources) async {
     if (sources.isEmpty) return false;
-    await _dao.upsertAll(sources);
-    _sources = await _dao.getAll();
+    await _repository.upsertAll(sources);
+    _sources = await _repository.getAll();
     _statusMessage = '已导入 ${sources.length} 个书源';
     notifyListeners();
     return true;
@@ -310,17 +330,17 @@ class SourceProvider extends ChangeNotifier {
 
   /// 启用/禁用书源
   Future<void> toggleSource(String sourceUrl, bool enabled) async {
-    await _dao.toggle(sourceUrl, enabled);
-    _sources = await _dao.getAll();
+    await _repository.toggle(sourceUrl, enabled);
+    _sources = await _repository.getAll();
     notifyListeners();
   }
 
   /// 删除书源
   Future<void> deleteSource(String sourceUrl) async {
-    await _dao.delete(sourceUrl);
+    await _repository.delete(sourceUrl);
     _validationResults.remove(sourceUrl);
     await SourceValidationStore.remove(sourceUrl);
-    _sources = await _dao.getAll();
+    _sources = await _repository.getAll();
     notifyListeners();
   }
 
@@ -332,9 +352,9 @@ class SourceProvider extends ChangeNotifier {
     final urls = sourceUrls.toSet();
     if (urls.isEmpty) return;
     for (final url in urls) {
-      await _dao.toggle(url, enabled);
+      await _repository.toggle(url, enabled);
     }
-    _sources = await _dao.getAll();
+    _sources = await _repository.getAll();
     notifyListeners();
   }
 
@@ -343,11 +363,11 @@ class SourceProvider extends ChangeNotifier {
     final urls = sourceUrls.toSet();
     if (urls.isEmpty) return;
     for (final url in urls) {
-      await _dao.delete(url);
+      await _repository.delete(url);
       _validationResults.remove(url);
       await SourceValidationStore.remove(url);
     }
-    _sources = await _dao.getAll();
+    _sources = await _repository.getAll();
     notifyListeners();
   }
 
@@ -368,9 +388,9 @@ class SourceProvider extends ChangeNotifier {
     if (urlSet.isEmpty) return;
     for (final s in _sources) {
       if (!urlSet.contains(s.bookSourceUrl)) continue;
-      await _dao.update(s.copyWith(enabledExplore: enabled));
+      await _repository.update(s.copyWith(enabledExplore: enabled));
     }
-    _sources = await _dao.getAll();
+    _sources = await _repository.getAll();
     notifyListeners();
   }
 
@@ -424,9 +444,9 @@ class SourceProvider extends ChangeNotifier {
       if (!urlSet.contains(s.bookSourceUrl)) continue;
       final next = addSourceGroupTag(s.bookSourceGroup, tag);
       if (next == s.bookSourceGroup) continue;
-      await _dao.update(s.copyWith(bookSourceGroup: next));
+      await _repository.update(s.copyWith(bookSourceGroup: next));
     }
-    _sources = await _dao.getAll();
+    _sources = await _repository.getAll();
     await SourceGroupCatalog.mergeFromSources([tag]);
     notifyListeners();
   }
@@ -438,9 +458,9 @@ class SourceProvider extends ChangeNotifier {
     for (final s in _sources) {
       if (!urlSet.contains(s.bookSourceUrl)) continue;
       if (s.bookSourceGroup.isEmpty) continue;
-      await _dao.update(s.copyWith(bookSourceGroup: ''));
+      await _repository.update(s.copyWith(bookSourceGroup: ''));
     }
-    _sources = await _dao.getAll();
+    _sources = await _repository.getAll();
     notifyListeners();
   }
 
@@ -455,13 +475,13 @@ class SourceProvider extends ChangeNotifier {
     for (final s in _sources) {
       if (!urlSet.contains(s.bookSourceUrl)) continue;
       if (!sourceHasGroupTag(s.bookSourceGroup, trimmed)) continue;
-      await _dao.update(
+      await _repository.update(
         s.copyWith(
           bookSourceGroup: removeSourceGroupTag(s.bookSourceGroup, trimmed),
         ),
       );
     }
-    _sources = await _dao.getAll();
+    _sources = await _repository.getAll();
     notifyListeners();
   }
 
@@ -470,16 +490,16 @@ class SourceProvider extends ChangeNotifier {
     for (final s in _sources) {
       final order = orders[s.bookSourceUrl];
       if (order == null || order == s.customOrder) continue;
-      await _dao.update(s.copyWith(customOrder: order));
+      await _repository.update(s.copyWith(customOrder: order));
     }
-    _sources = await _dao.getAll();
+    _sources = await _repository.getAll();
     notifyListeners();
   }
 
   /// 更新单个书源
   Future<void> updateSource(BookSource source) async {
-    await _dao.update(source);
-    _sources = await _dao.getAll();
+    await _repository.update(source);
+    _sources = await _repository.getAll();
     notifyListeners();
   }
 
@@ -502,7 +522,7 @@ class SourceProvider extends ChangeNotifier {
     _statusMessage = '正在搜索 "$keyword"...';
     notifyListeners();
 
-    var enabledSources = await _dao.getEnabled();
+    var enabledSources = await _repository.getEnabled();
     if (restrictSourceUrls != null && restrictSourceUrls.isNotEmpty) {
       enabledSources = enabledSources
           .where((s) => restrictSourceUrls.contains(s.bookSourceUrl))
@@ -623,7 +643,7 @@ class SourceProvider extends ChangeNotifier {
     BookSource source, {
     String? keyword,
   }) async {
-    if (!LegadoEngineBridge.isAvailable) {
+    if (!_validationPort.isAvailable) {
       _statusMessage = 'Rust 引擎不可用，无法校验';
       notifyListeners();
       return null;
@@ -668,18 +688,23 @@ class SourceProvider extends ChangeNotifier {
     });
 
     try {
-      final raw =
-          await LegadoEngineBridge.validateSource(
-            source,
-            keyword: query,
-          ).timeout(
+      final raw = await _validationPort
+          .validateSource(source, keyword: query)
+          .timeout(
             Duration(seconds: timeoutSec),
             onTimeout: () {
               throw TimeoutException('校验超时 (${timeoutSec}s)');
             },
           );
       final result = _applyCheckPrefsToResult(
-        SourceValidationResult.fromRust(raw),
+        SourceValidationResult(
+          searchOk: raw.searchOk,
+          discoveryOk: raw.discoveryOk,
+          tocOk: raw.tocOk,
+          contentOk: raw.contentOk,
+          searchTimeMs: raw.searchTimeMs,
+          errors: List<String>.from(raw.errors),
+        ),
         checkSearch: checkSearch,
         checkDiscovery: checkDiscovery,
         checkToc: checkToc,
@@ -689,8 +714,10 @@ class SourceProvider extends ChangeNotifier {
       await SourceValidationStore.put(url, result);
 
       if (result.searchTimeMs > 0) {
-        await _dao.update(source.copyWith(respondTime: result.searchTimeMs));
-        _sources = await _dao.getAll();
+        await _repository.update(
+          source.copyWith(respondTime: result.searchTimeMs),
+        );
+        _sources = await _repository.getAll();
       }
 
       _setValidationProgress(url, '完成');

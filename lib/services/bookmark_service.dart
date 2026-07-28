@@ -1,23 +1,46 @@
 import 'dart:async';
 import 'dart:convert';
 
-import '../bridge/legado_db_bridge.dart';
-import '../bridge/legado_engine_bridge.dart';
+import 'package:flutter/foundation.dart';
+
+import '../domain/annotation/bookmark_snapshot.dart';
+import '../domain/ports/bookmark_port.dart';
+import '../infrastructure/engine/frb_bookmark_port.dart';
 import 'app_log.dart';
-import '../src/rust/api.dart' as rust_api;
 
 /// 独立书签服务；字段对齐 Jingshiro Bookmark。
 class BookmarkService {
-  static bool get isReady =>
-      LegadoEngineBridge.isAvailable && LegadoDbBridge.isReady;
+  static BookmarkPort _bookmarkPort = FrbBookmarkPort();
 
-  static List<rust_api.BookmarkDto> list({String? bookId}) {
+  static bool get isReady => _bookmarkPort.isAvailable;
+
+  @visibleForTesting
+  static void configureBookmarkPort(BookmarkPort port) {
+    _bookmarkPort = port;
+  }
+
+  @visibleForTesting
+  static void resetBookmarkPort() {
+    _bookmarkPort = FrbBookmarkPort();
+  }
+
+  static List<BookmarkSnapshot> list({String? bookId}) {
     if (!isReady) return [];
     try {
-      return rust_api.listBookmarks(bookId: bookId ?? '');
+      return _bookmarkPort.list(bookId: bookId);
     } catch (e) {
       unawaited(AppLog.e('BookmarkService.list: $e'));
       return [];
+    }
+  }
+
+  static List<BookmarkSnapshot> listSnapshots({String? bookId}) {
+    if (!isReady) return const [];
+    try {
+      return _bookmarkPort.list(bookId: bookId);
+    } catch (e) {
+      unawaited(AppLog.e('BookmarkService.listSnapshots: $e'));
+      return const [];
     }
   }
 
@@ -36,17 +59,20 @@ class BookmarkService {
     if (!isReady) return null;
     final bookmarkTime = time ?? DateTime.now().millisecondsSinceEpoch;
     try {
-      rust_api.upsertBookmark(
-        time: bookmarkTime,
-        bookId: bookId,
-        bookName: bookName,
-        bookAuthor: bookAuthor,
-        chapterIndex: chapterIndex,
-        chapterPos: chapterPos,
-        chapterName: chapterName,
-        bookText: bookText,
-        content: content,
+      final saved = _bookmarkPort.save(
+        BookmarkSnapshot(
+          time: bookmarkTime,
+          bookId: bookId,
+          bookName: bookName,
+          bookAuthor: bookAuthor,
+          chapterIndex: chapterIndex,
+          chapterPos: chapterPos,
+          chapterName: chapterName,
+          bookText: bookText,
+          content: content,
+        ),
       );
+      if (!saved) return null;
       return bookmarkTime;
     } catch (e) {
       unawaited(AppLog.e('BookmarkService.save: $e'));
@@ -57,7 +83,7 @@ class BookmarkService {
   static void delete(int time) {
     if (!isReady) return;
     try {
-      rust_api.deleteBookmark(time: time);
+      _bookmarkPort.delete(time);
     } catch (e) {
       unawaited(AppLog.e('BookmarkService.delete: $e'));
     }
@@ -68,11 +94,11 @@ class BookmarkService {
   }
 
   /// 合并本地与远端书签；时间主键冲突时保留远端记录。
-  static List<rust_api.BookmarkDto> mergeRemote(
-    Iterable<rust_api.BookmarkDto> local,
-    Iterable<rust_api.BookmarkDto> remote,
+  static List<BookmarkSnapshot> mergeRemote(
+    Iterable<BookmarkSnapshot> local,
+    Iterable<BookmarkSnapshot> remote,
   ) {
-    final merged = <int, rust_api.BookmarkDto>{
+    final merged = <int, BookmarkSnapshot>{
       for (final bookmark in local) bookmark.time: bookmark,
     };
     for (final bookmark in remote) {
@@ -87,7 +113,7 @@ class BookmarkService {
   }
 
   /// 编码为原版 bookmark.json 的数组格式，并保留本地 bookId 扩展。
-  static String encodeJson(Iterable<rust_api.BookmarkDto> bookmarks) {
+  static String encodeJson(Iterable<BookmarkSnapshot> bookmarks) {
     final items = bookmarks
         .map(
           (bookmark) => {
@@ -107,7 +133,7 @@ class BookmarkService {
   }
 
   /// 解码原版或本地扩展的 bookmark.json；缺失主键或非数组直接拒绝。
-  static List<rust_api.BookmarkDto> decodeJson(String raw) {
+  static List<BookmarkSnapshot> decodeJson(String raw) {
     final decoded = jsonDecode(raw);
     if (decoded is! List) {
       throw const FormatException('书签文件必须是数组');
@@ -124,7 +150,7 @@ class BookmarkService {
           String text(String key) => item[key] as String? ?? '';
           int number(String key, [int fallback = 0]) =>
               (item[key] as num?)?.toInt() ?? fallback;
-          return rust_api.BookmarkDto(
+          return BookmarkSnapshot(
             time: time,
             bookId: text('bookId'),
             bookName: text('bookName'),
@@ -143,7 +169,7 @@ class BookmarkService {
   static int importJson(String raw) {
     if (!isReady) return 0;
     final decoded = decodeJson(raw);
-    final unique = <int, rust_api.BookmarkDto>{
+    final unique = <int, BookmarkSnapshot>{
       for (final bookmark in decoded) bookmark.time: bookmark,
     };
     var imported = 0;

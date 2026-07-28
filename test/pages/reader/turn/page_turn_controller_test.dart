@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/reader/turn/page_direction.dart';
-import 'package:legado_flutter/pages/reader/turn/page_turn_controller.dart';
+import 'package:legado_flutter/features/reader/turn/page_direction.dart';
+import 'package:legado_flutter/features/reader/turn/page_turn_controller.dart';
 
 void main() {
   group('onPointerMove direction lock', () {

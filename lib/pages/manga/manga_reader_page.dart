@@ -13,8 +13,8 @@ import '../../providers/source_provider.dart';
 import '../../services/manga_prefs.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_popup_menu.dart';
-import '../book/change_source_page.dart';
-import '../book/toc_sheet.dart';
+import '../../features/book/change_source_page.dart';
+import '../../features/book/toc_sheet.dart';
 
 /// 漫画阅读器 — 1:1 对齐 Jingshiro [ReadMangaActivity] + `activity_manga.xml`
 /// + [MangaMenu]/`view_manga_menu.xml`) + [ReaderInfoBarView] + `menu/book_manga.xml`
@@ -86,7 +86,10 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       duration: const Duration(milliseconds: 240),
     );
     _tickClock();
-    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) => _tickClock());
+    _clockTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _tickClock(),
+    );
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await MangaPrefs.ensureLoaded();
@@ -123,11 +126,9 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     return widget.chapters[_chapterIndex.clamp(0, widget.chapters.length - 1)];
   }
 
-  bool get _isHorizontal =>
-      MangaPrefs.direction != MangaReadDirection.vertical;
+  bool get _isHorizontal => MangaPrefs.direction != MangaReadDirection.vertical;
 
-  bool get _isRtl =>
-      MangaPrefs.direction == MangaReadDirection.rightToLeft;
+  bool get _isRtl => MangaPrefs.direction == MangaReadDirection.rightToLeft;
 
   Future<void> _loadChapter({String? seed, bool resetPage = true}) async {
     if (widget.chapters.isEmpty) {
@@ -149,8 +150,9 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       } else {
         final chapter = widget.chapters[_chapterIndex];
         final bookProvider = context.read<BookProvider>();
-        final source =
-            context.read<SourceProvider>().findSourceForBook(widget.book);
+        final source = context.read<SourceProvider>().findSourceForBook(
+          widget.book,
+        );
         if (source == null) {
           throw StateError('未找到书源，无法加载漫画页');
         }
@@ -215,12 +217,12 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     final total = math.max(1, widget.chapters.length);
     final progress = ((_chapterIndex + 1) / total).clamp(0.0, 1.0);
     await context.read<BookProvider>().updateProgress(
-          widget.book.id,
-          progress,
-          ch.title,
-          pageIndex: _pageIndex,
-          durChapterIndex: _chapterIndex,
-        );
+      widget.book.id,
+      progress,
+      ch.title,
+      pageIndex: _pageIndex,
+      durChapterIndex: _chapterIndex,
+    );
   }
 
   void _toggleChrome() {
@@ -256,7 +258,9 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     if (_imageUrls.isEmpty) return;
     final i = index.clamp(0, _imageUrls.length - 1);
     setState(() => _pageIndex = i);
-    if (_isHorizontal && _pageController != null && _pageController!.hasClients) {
+    if (_isHorizontal &&
+        _pageController != null &&
+        _pageController!.hasClients) {
       if (MangaPrefs.disablePageAnim) {
         _pageController!.jumpToPage(i);
       } else {
@@ -268,8 +272,9 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       }
     } else if (_verticalController.hasClients) {
       final maxScroll = _verticalController.position.maxScrollExtent;
-      final target =
-          _imageUrls.length <= 1 ? 0.0 : maxScroll * (i / (_imageUrls.length - 1));
+      final target = _imageUrls.length <= 1
+          ? 0.0
+          : maxScroll * (i / (_imageUrls.length - 1));
       _verticalController.jumpTo(target.clamp(0.0, maxScroll));
     }
     _precacheNearby();
@@ -314,28 +319,76 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       final c = 1.0 + (t - 0.5) * 2.0;
       final o = 128 * (1 - c);
       return ColorFilter.matrix(<double>[
-        0.2126 * c, 0.7152 * c, 0.0722 * c, 0, o,
-        0.2126 * c, 0.7152 * c, 0.0722 * c, 0, o,
-        0.2126 * c, 0.7152 * c, 0.0722 * c, 0, o,
-        0, 0, 0, 1, 0,
+        0.2126 * c,
+        0.7152 * c,
+        0.0722 * c,
+        0,
+        o,
+        0.2126 * c,
+        0.7152 * c,
+        0.0722 * c,
+        0,
+        o,
+        0.2126 * c,
+        0.7152 * c,
+        0.0722 * c,
+        0,
+        o,
+        0,
+        0,
+        0,
+        1,
+        0,
       ]);
     }
     if (MangaPrefs.enableGray) {
       return const ColorFilter.matrix(<double>[
-        0.2126, 0.7152, 0.0722, 0, 0,
-        0.2126, 0.7152, 0.0722, 0, 0,
-        0.2126, 0.7152, 0.0722, 0, 0,
-        0, 0, 0, 1, 0,
+        0.2126,
+        0.7152,
+        0.0722,
+        0,
+        0,
+        0.2126,
+        0.7152,
+        0.0722,
+        0,
+        0,
+        0.2126,
+        0.7152,
+        0.0722,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
       ]);
     }
     final f = MangaPrefs.colorFilter;
     if (f.isIdentity) return null;
     final b = f.brightness.toDouble();
     return ColorFilter.matrix(<double>[
-      1, 0, 0, 0, b,
-      0, 1, 0, 0, b,
-      0, 0, 1, 0, b,
-      0, 0, 0, 1, 0,
+      1,
+      0,
+      0,
+      0,
+      b,
+      0,
+      1,
+      0,
+      0,
+      b,
+      0,
+      0,
+      1,
+      0,
+      b,
+      0,
+      0,
+      0,
+      1,
+      0,
     ]);
   }
 
@@ -376,7 +429,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
               strokeWidth: 3,
               value: progress.expectedTotalBytes != null
                   ? progress.cumulativeBytesLoaded /
-                      progress.expectedTotalBytes!
+                        progress.expectedTotalBytes!
                   : null,
             ),
           ),
@@ -399,11 +452,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
 
     final filtered = _wrapFilter(img);
     if (MangaPrefs.disableScale) return filtered;
-    return InteractiveViewer(
-      minScale: 1,
-      maxScale: 4,
-      child: filtered,
-    );
+    return InteractiveViewer(minScale: 1, maxScale: 4, child: filtered);
   }
 
   Widget _buildContent() {
@@ -427,9 +476,8 @@ class _MangaReaderPageState extends State<MangaReaderPage>
           _precacheNearby();
           unawaited(_persistProgress());
         },
-        itemBuilder: (_, i) => Center(
-          child: _buildImage(_imageUrls[i], fillWidth: true),
-        ),
+        itemBuilder: (_, i) =>
+            Center(child: _buildImage(_imageUrls[i], fillWidth: true)),
       );
     }
 
@@ -484,7 +532,8 @@ class _MangaReaderPageState extends State<MangaReaderPage>
         percent =
             '${((_chapterIndex + 1.0) / chapterSize * 100).toStringAsFixed(1)}%';
       } else {
-        var p = _chapterIndex * 1.0 / chapterSize +
+        var p =
+            _chapterIndex * 1.0 / chapterSize +
             1.0 / chapterSize * (_pageIndex + 1) / imageCount;
         percent = '${(p * 100).toStringAsFixed(1)}%';
         if (percent == '100.0%' &&
@@ -513,8 +562,9 @@ class _MangaReaderPageState extends State<MangaReaderPage>
               children: [
                 Expanded(
                   child: Align(
-                    alignment:
-                        alignLeft ? Alignment.centerLeft : Alignment.center,
+                    alignment: alignLeft
+                        ? Alignment.centerLeft
+                        : Alignment.center,
                     child: _OutlinedText(
                       label,
                       fill: fg,
@@ -599,7 +649,11 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
-            Widget slider(String title, int value, ValueChanged<int> onChanged) {
+            Widget slider(
+              String title,
+              int value,
+              ValueChanged<int> onChanged,
+            ) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -630,8 +684,11 @@ class _MangaReaderPageState extends State<MangaReaderPage>
                       ),
                     ),
                     const SizedBox(height: 8),
-                    slider('亮度', cfg.brightness,
-                        (v) => cfg = cfg.copyWith(brightness: v)),
+                    slider(
+                      '亮度',
+                      cfg.brightness,
+                      (v) => cfg = cfg.copyWith(brightness: v),
+                    ),
                     slider('R', cfg.r, (v) => cfg = cfg.copyWith(r: v)),
                     slider('G', cfg.g, (v) => cfg = cfg.copyWith(g: v)),
                     slider('B', cfg.b, (v) => cfg = cfg.copyWith(b: v)),
@@ -727,7 +784,11 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
-            Widget check(String label, bool value, ValueChanged<bool> onChanged) {
+            Widget check(
+              String label,
+              bool value,
+              ValueChanged<bool> onChanged,
+            ) {
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -769,8 +830,9 @@ class _MangaReaderPageState extends State<MangaReaderPage>
                         check(
                           '章节',
                           !cfg.hideChapter,
-                          (v) =>
-                              setLocal(() => cfg = cfg.copyWith(hideChapter: !v)),
+                          (v) => setLocal(
+                            () => cfg = cfg.copyWith(hideChapter: !v),
+                          ),
                         ),
                         check(
                           '章节名称',
@@ -834,24 +896,24 @@ class _MangaReaderPageState extends State<MangaReaderPage>
                           (v) =>
                               setLocal(() => cfg = cfg.copyWith(hideFooter: v)),
                         ),
-                        Radio<int>(
-                          value: 0,
+                        RadioGroup<int>(
                           groupValue: cfg.footerOrientation,
-                          onChanged: (v) => setLocal(
-                            () =>
-                                cfg = cfg.copyWith(footerOrientation: v ?? 0),
+                          onChanged: (v) {
+                            if (v != null) {
+                              setLocal(
+                                () => cfg = cfg.copyWith(footerOrientation: v),
+                              );
+                            }
+                          },
+                          child: Row(
+                            children: [
+                              const Radio<int>(value: 0),
+                              const Text('靠左'),
+                              const Radio<int>(value: 1),
+                              const Text('居中'),
+                            ],
                           ),
                         ),
-                        const Text('靠左'),
-                        Radio<int>(
-                          value: 1,
-                          groupValue: cfg.footerOrientation,
-                          onChanged: (v) => setLocal(
-                            () =>
-                                cfg = cfg.copyWith(footerOrientation: v ?? 1),
-                          ),
-                        ),
-                        const Text('居中'),
                       ],
                     ),
                   ],
@@ -905,9 +967,9 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     final provider = context.read<BookProvider>();
     final chapters = provider.currentChapters;
     if (chapters.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已换源，但目录为空，请返回详情重试')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已换源，但目录为空，请返回详情重试')));
       return;
     }
     final idx = _chapterIndex.clamp(0, chapters.length - 1);
@@ -974,7 +1036,9 @@ class _MangaReaderPageState extends State<MangaReaderPage>
           setState(() {});
         }
       case 'horizontal':
-        await MangaPrefs.setHorizontalScroll(!MangaPrefs.enableHorizontalScroll);
+        await MangaPrefs.setHorizontalScroll(
+          !MangaPrefs.enableHorizontalScroll,
+        );
         setState(() {
           _pageController?.dispose();
           _pageController = _isHorizontal
@@ -1055,7 +1119,9 @@ class _MangaReaderPageState extends State<MangaReaderPage>
 
   /// MangaMenu TitleBar — 对齐 `view_manga_menu.xml` + `menu/book_manga.xml`
   Widget _mangaMenuTop(ThemeData theme) {
-    final source = context.read<SourceProvider>().findSourceForBook(widget.book);
+    final source = context.read<SourceProvider>().findSourceForBook(
+      widget.book,
+    );
     final onSurface = theme.colorScheme.onSurface;
     final menuBg = theme.colorScheme.surfaceContainerHigh;
 
@@ -1151,14 +1217,8 @@ class _MangaReaderPageState extends State<MangaReaderPage>
                         checked: MangaPrefs.disablePageAnim,
                         child: const Text('禁用翻页动画'),
                       ),
-                      const PopupMenuItem(
-                        value: 'footer',
-                        child: Text('页脚配置'),
-                      ),
-                      const PopupMenuItem(
-                        value: 'filter',
-                        child: Text('滤镜'),
-                      ),
+                      const PopupMenuItem(value: 'footer', child: Text('页脚配置')),
+                      const PopupMenuItem(value: 'filter', child: Text('滤镜')),
                       CheckedPopupMenuItem(
                         value: 'hide_title',
                         checked: MangaPrefs.hideTitle,
@@ -1220,8 +1280,10 @@ class _MangaReaderPageState extends State<MangaReaderPage>
                   Container(
                     constraints: const BoxConstraints(maxWidth: 120),
                     margin: const EdgeInsets.all(1),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.primary,
                       borderRadius: BorderRadius.circular(2),
@@ -1251,8 +1313,10 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     final canPrev = _chapterIndex > 0;
     final canNext = _chapterIndex + 1 < widget.chapters.length;
     final maxPage = math.max(0, _imageUrls.length - 1).toDouble();
-    final value = (_seeking ? _seekValue : _pageIndex.toDouble())
-        .clamp(0.0, math.max(maxPage, 0.0));
+    final value = (_seeking ? _seekValue : _pageIndex.toDouble()).clamp(
+      0.0,
+      math.max(maxPage, 0.0),
+    );
     final menuBg = theme.colorScheme.surfaceContainerHigh;
     final onSurface = theme.colorScheme.onSurface;
 
@@ -1267,8 +1331,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: TextButton(
-                  onPressed:
-                      canPrev ? () => unawaited(_skipChapter(-1)) : null,
+                  onPressed: canPrev ? () => unawaited(_skipChapter(-1)) : null,
                   style: TextButton.styleFrom(
                     foregroundColor: onSurface,
                     padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1283,12 +1346,13 @@ class _MangaReaderPageState extends State<MangaReaderPage>
                   child: SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       trackHeight: 3,
-                      thumbShape:
-                          const RoundSliderThumbShape(enabledThumbRadius: 7),
-                      activeTrackColor:
-                          theme.colorScheme.primary.withValues(alpha: 0.55),
-                      inactiveTrackColor:
-                          onSurface.withValues(alpha: 0.24),
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 7,
+                      ),
+                      activeTrackColor: theme.colorScheme.primary.withValues(
+                        alpha: 0.55,
+                      ),
+                      inactiveTrackColor: onSurface.withValues(alpha: 0.24),
                       thumbColor: theme.colorScheme.primary,
                     ),
                     child: Slider(
@@ -1319,8 +1383,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: TextButton(
-                  onPressed:
-                      canNext ? () => unawaited(_skipChapter(1)) : null,
+                  onPressed: canNext ? () => unawaited(_skipChapter(1)) : null,
                   style: TextButton.styleFrom(
                     foregroundColor: onSurface,
                     padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1440,7 +1503,11 @@ class _OutlinedText extends StatelessWidget {
               ..strokeWidth = 2
               ..color = stroke,
             shadows: const [
-              Shadow(blurRadius: 2, offset: Offset(1, 1), color: Colors.black54),
+              Shadow(
+                blurRadius: 2,
+                offset: Offset(1, 1),
+                color: Colors.black54,
+              ),
             ],
           ),
         ),

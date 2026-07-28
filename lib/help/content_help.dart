@@ -486,7 +486,7 @@ abstract final class ContentHelp {
     if (to > 0) t = math.min(t, to);
     while (i < t) {
       final c = inOrder ? str[i] : str[str.length - i - 1];
-      if (key.indexOf(c) != -1) {
+      if (key.contains(c)) {
         if (list.isNotEmpty && i - list.last == 1) {
           list[list.length - 1] = i;
         } else {
@@ -506,7 +506,7 @@ abstract final class ContentHelp {
     if (to > 0) t = to;
     while (i > t) {
       final c = str[i];
-      if (key.indexOf(c) != -1) {
+      if (key.contains(c)) {
         return i;
       }
       i--;
@@ -528,7 +528,7 @@ abstract final class ContentHelp {
     if (to > 0) t = math.min(t, to);
     while (i < t) {
       final c = inOrder ? str[i] : str[str.length - i - 1];
-      if (key.indexOf(c) != -1) {
+      if (key.contains(c)) {
         return i;
       }
       i++;
@@ -537,7 +537,7 @@ abstract final class ContentHelp {
   }
 
   static bool _match(String rule, String chr) {
-    return rule.indexOf(chr) != -1;
+    return rule.contains(chr);
   }
 
   static String _lastChar(StringBuffer buffer) {

@@ -38,6 +38,7 @@ class ContentProcessor {
   String processForReading(
     String raw, {
     String chapterTitle = '',
+    String bookName = '',
     bool includeTitle = true,
     bool useReplace = true,
     String paragraphIndent = '',
@@ -46,11 +47,17 @@ class ContentProcessor {
   }) {
     var content = raw;
     if (raw != 'null') {
-      content = _removeDuplicateTitle(content, chapterTitle);
-      if (reSegment && chapterTitle.isNotEmpty && content.isNotEmpty) {
+      content = _removeDuplicateTitle(
+        content,
+        chapterTitle,
+        bookName: bookName,
+      );
+      if (reSegment && content.isNotEmpty) {
         content = ContentHelp.reSegment(content, chapterTitle);
       }
       if (useReplace) {
+        // Legado trims each line before applying content replacement rules.
+        content = _trimLines(content);
         content = process(content, sourceRules: sourceRules);
       }
     }
@@ -75,17 +82,45 @@ class ContentProcessor {
     return output.join('\n');
   }
 
-  static String _removeDuplicateTitle(String content, String chapterTitle) {
+  static String _removeDuplicateTitle(
+    String content,
+    String chapterTitle, {
+    String bookName = '',
+  }) {
     final title = chapterTitle.trim();
     if (title.isEmpty || content.isEmpty) return content;
-    final escaped = RegExp.escape(title).replaceAll(RegExp(r'\s+'), r'\s*');
-    final prefix = r'''^[\s.,!?;:，。！？；：、…"'“”‘’（）《》〈〉【】「」『』]*''';
-    return content.replaceFirst(RegExp('$prefix$escaped' r'\s*'), '');
+    final escaped = title
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .map(RegExp.escape)
+        .join(r'\s*');
+    // Kotlin uses (\s|\p{P}|bookName)* before the title. Spell out the
+    // punctuation ranges because Dart Unicode property support varies.
+    const punctuation =
+        r'[\s\u0000-\u002F\u003A-\u0040\u005B-\u0060\u007B-\u007E'
+        r'\u2000-\u206F\u2E00-\u2E7F\u3000-\u303F\uFE10-\uFE6F\uFF01-\uFF65]';
+    final book = bookName.trim().isEmpty ? '' : RegExp.escape(bookName.trim());
+    final prefix = book.isEmpty ? punctuation : '(?:$punctuation|$book)';
+    return content.replaceFirst(RegExp('^(?:$prefix)*$escaped\\s*'), '');
   }
 
-  static String _trimParagraph(String line) => line
-      .replaceFirst(RegExp(r'^[\s　]+'), '')
-      .replaceFirst(RegExp(r'[\s　]+$'), '');
+  static String _trimParagraph(String line) {
+    final runes = line.runes.toList();
+    var start = 0;
+    var end = runes.length;
+    while (start < end && _isOriginalTrimChar(runes[start])) {
+      start++;
+    }
+    while (end > start && _isOriginalTrimChar(runes[end - 1])) {
+      end--;
+    }
+    return String.fromCharCodes(runes.sublist(start, end));
+  }
+
+  static bool _isOriginalTrimChar(int rune) => rune <= 0x20 || rune == 0x3000;
+
+  static String _trimLines(String text) =>
+      text.split('\n').map(_trimParagraph).join('\n');
 }
 
 /// 书源级正文替换（Legado ruleContent.replaceRegex）

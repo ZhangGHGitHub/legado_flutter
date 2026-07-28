@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'dart:math' as math;
-import 'package:legado_flutter/pages/reader/turn/simulation_curl_math.dart';
+import 'package:legado_flutter/features/reader/turn/simulation_curl_math.dart';
 
 void main() {
   test('calcCornerXY 右下象限', () {

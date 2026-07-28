@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../src/rust/api.dart' as rust_api;
+import '../domain/ports/book_source_debug_port.dart';
 
 /// 书源调试结果面板（请求 / 步骤 / 结果）
 class SourceDebugPanel extends StatelessWidget {
-  final rust_api.DebugResult? result;
+  final BookSourceDebugSnapshot? result;
 
   const SourceDebugPanel({super.key, this.result});
 
@@ -81,21 +81,26 @@ class SourceDebugPanel extends StatelessWidget {
                 style: theme.textTheme.titleSmall,
               ),
               const SizedBox(height: 4),
-              ...r.results.take(5).map(
-                (item) => ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(item.name, style: const TextStyle(fontSize: 12)),
-                  subtitle: item.bookUrl.isNotEmpty
-                      ? Text(
-                          item.bookUrl,
-                          style: const TextStyle(fontSize: 10),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        )
-                      : null,
-                ),
-              ),
+              ...r.results
+                  .take(5)
+                  .map(
+                    (item) => ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        item.name,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      subtitle: item.bookUrl.isNotEmpty
+                          ? Text(
+                              item.bookUrl,
+                              style: const TextStyle(fontSize: 10),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            )
+                          : null,
+                    ),
+                  ),
             ],
           ],
         ),

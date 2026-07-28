@@ -5,17 +5,14 @@ import '../../providers/source_provider.dart';
 import '../../services/search_history.dart';
 import '../../widgets/book_list_tile.dart';
 import '../../widgets/legado_popup_menu.dart';
-import '../book/book_info_page.dart';
+import '../../features/book/book_info_page.dart';
 
 /// 搜索范围模式
 enum _ScopeMode { all, groups, sources }
 
 /// 搜索页面 — 按书源分组 + 精准搜索 + 搜索范围
 class SearchPage extends StatefulWidget {
-  const SearchPage({
-    super.key,
-    this.initialRestrictSourceUrls,
-  });
+  const SearchPage({super.key, this.initialRestrictSourceUrls});
 
   /// 非空时锁定为「按书源」并预选（书源编辑页「搜索」入口，对齐单源 scope）
   final Set<String>? initialRestrictSourceUrls;
@@ -92,11 +89,7 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
 
-  void _search(
-    String keyword, {
-    String? author,
-    bool preciseName = false,
-  }) {
+  void _search(String keyword, {String? author, bool preciseName = false}) {
     final q = keyword.trim();
     if (q.isEmpty) return;
     SearchHistory.add(q);
@@ -236,8 +229,7 @@ class _SearchPageState extends State<SearchPage> {
     final groups = <String>{
       for (final s in enabled)
         s.bookSourceGroup.isEmpty ? '未分组' : s.bookSourceGroup,
-    }.toList()
-      ..sort();
+    }.toList()..sort();
 
     var mode = _scopeMode;
     var selectedGroups = Set<String>.from(_selectedGroups);
@@ -256,26 +248,30 @@ class _SearchPageState extends State<SearchPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    RadioListTile<_ScopeMode>(
-                      dense: true,
-                      title: const Text('全部已启用书源'),
-                      value: _ScopeMode.all,
+                    RadioGroup<_ScopeMode>(
                       groupValue: mode,
-                      onChanged: (v) => setLocal(() => mode = v!),
-                    ),
-                    RadioListTile<_ScopeMode>(
-                      dense: true,
-                      title: const Text('按书源分组'),
-                      value: _ScopeMode.groups,
-                      groupValue: mode,
-                      onChanged: (v) => setLocal(() => mode = v!),
-                    ),
-                    RadioListTile<_ScopeMode>(
-                      dense: true,
-                      title: const Text('自选书源'),
-                      value: _ScopeMode.sources,
-                      groupValue: mode,
-                      onChanged: (v) => setLocal(() => mode = v!),
+                      onChanged: (v) {
+                        if (v != null) setLocal(() => mode = v);
+                      },
+                      child: Column(
+                        children: [
+                          RadioListTile<_ScopeMode>(
+                            dense: true,
+                            title: const Text('全部已启用书源'),
+                            value: _ScopeMode.all,
+                          ),
+                          RadioListTile<_ScopeMode>(
+                            dense: true,
+                            title: const Text('按书源分组'),
+                            value: _ScopeMode.groups,
+                          ),
+                          RadioListTile<_ScopeMode>(
+                            dense: true,
+                            title: const Text('自选书源'),
+                            value: _ScopeMode.sources,
+                          ),
+                        ],
+                      ),
                     ),
                     if (mode == _ScopeMode.groups) ...[
                       const Divider(),
@@ -384,9 +380,9 @@ class _SearchPageState extends State<SearchPage> {
                     _scopeSourceUrls = {};
                     _selectedGroups = {};
                   });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('已切换为全部已启用书源')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('已切换为全部已启用书源')));
                   break;
               }
             },
@@ -570,12 +566,16 @@ class _SearchPageState extends State<SearchPage> {
 
                 final groups = provider.searchResults.entries.toList()
                   ..sort(
-                    (a, b) => _sourceName(provider, a.key)
-                        .compareTo(_sourceName(provider, b.key)),
+                    (a, b) => _sourceName(
+                      provider,
+                      a.key,
+                    ).compareTo(_sourceName(provider, b.key)),
                   );
 
-                final totalCount =
-                    groups.fold<int>(0, (s, e) => s + e.value.length);
+                final totalCount = groups.fold<int>(
+                  0,
+                  (s, e) => s + e.value.length,
+                );
                 final sourceCount = groups.length;
 
                 return Column(

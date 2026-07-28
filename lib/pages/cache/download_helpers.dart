@@ -1,4 +1,3 @@
-import '../../help/book_help.dart';
 import '../../models/chapter.dart';
 import 'download_choice_dialog.dart';
 
@@ -8,9 +7,10 @@ List<Chapter> filterChaptersForDownload(
   DownloadChoiceResult choice, {
   required int startIndex,
   required Set<String> cachedIds,
+  required String Function(String chapterId) sanitizeChapterId,
 }) {
   bool isCached(Chapter c) =>
-      c.isDownloaded || cachedIds.contains(BookHelp.sanitizeId(c.id));
+      c.isDownloaded || cachedIds.contains(sanitizeChapterId(c.id));
 
   final start = startIndex.clamp(0, chapters.isEmpty ? 0 : chapters.length - 1);
   switch (choice.range) {

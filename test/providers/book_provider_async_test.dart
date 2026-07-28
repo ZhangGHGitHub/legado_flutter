@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
+import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/models/chapter.dart';
@@ -90,7 +91,8 @@ void main() {
   test('same source concurrent directory loads share one request', () async {
     final service = _DelayedTocService();
     final provider = BookProvider(
-      dao: _MemoryBookDao(),
+      repository: _MemoryBookDao(),
+      contentCache: const FileChapterContentCache(),
       sourceService: service,
     );
     final book = _book();
@@ -109,7 +111,8 @@ void main() {
   test('stale source directory result cannot replace current source', () async {
     final service = _DelayedTocService();
     final provider = BookProvider(
-      dao: _MemoryBookDao(),
+      repository: _MemoryBookDao(),
+      contentCache: const FileChapterContentCache(),
       sourceService: service,
     );
     final book = _book();

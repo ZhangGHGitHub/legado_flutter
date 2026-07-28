@@ -10,8 +10,7 @@ struct Entry {
     expiry_ms: u64,
 }
 
-static CACHE: Lazy<Mutex<HashMap<String, Entry>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static CACHE: Lazy<Mutex<HashMap<String, Entry>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 fn now_ms() -> u64 {
     SystemTime::now()

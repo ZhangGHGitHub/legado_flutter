@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "module3-real-content-media-boundary-001",
+  "raw": "第 7 章 边界\n<usehtml><p>开头<img src=\"https://img.example.com/a.png\"></p><p><audio src=\"https://audio.example.com/clip.mp3\"><span>音频备用</span></audio>结尾<img src=\"https://img.example.com/b.png\"></p></usehtml>\n[newpage]\n章节尾",
+  "expectedPlainText": "第 7 章 边界\n开头￼\n音频备用结尾￼\n[newpage]\n章节尾",
+  "expectedImageSources": [
+    "https://img.example.com/a.png",
+    "https://img.example.com/b.png"
+  ],
+  "expectedVisibleAfterHardBreak": "第 7 章 边界\n开头￼\n音频备用结尾￼\n章节尾"
+}

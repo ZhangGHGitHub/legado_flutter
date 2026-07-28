@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/pages/about/donate_page.dart';
+import 'package:legado_flutter/services/donate_clipboard_port.dart';
+
+class _FakeDonateClipboard implements DonateClipboardPort {
+  final copiedTexts = <String>[];
+
+  @override
+  Future<void> copyText(String text) async {
+    copiedTexts.add(text);
+  }
+}
 
 void main() {
   testWidgets('DonatePage shows title, sections and QR entries', (
@@ -17,5 +27,21 @@ void main() {
     expect(find.text('微信赞赏码'), findsOneWidget);
     expect(find.text('支付宝收款二维码'), findsOneWidget);
     expect(find.text('QQ 收款二维码'), findsOneWidget);
+  });
+
+  testWidgets('copies the WeChat account and keeps the original toast', (
+    WidgetTester tester,
+  ) async {
+    final clipboard = _FakeDonateClipboard();
+    await tester.pumpWidget(
+      MaterialApp(home: DonatePage(clipboard: clipboard)),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('关注公众号'));
+    await tester.pumpAndSettle();
+
+    expect(clipboard.copiedTexts, ['开源阅读']);
+    expect(find.text('已复制：开源阅读'), findsOneWidget);
   });
 }

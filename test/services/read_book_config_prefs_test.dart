@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/reader/reader_settings.dart';
+import 'package:legado_flutter/features/reader/reader_settings.dart';
 import 'package:legado_flutter/services/read_book_config_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

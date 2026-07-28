@@ -74,9 +74,7 @@ fn resolve_toc_url_field(
             } else {
                 book_url
             };
-            if let Ok(out) =
-                js_engine::run_with_result_opts(&script, html, js_lib, bu, Some(bu))
-            {
+            if let Ok(out) = js_engine::run_with_result_opts(&script, html, js_lib, bu, Some(bu)) {
                 let out = out.trim().to_string();
                 if !out.is_empty() && out != "null" && out != "undefined" {
                     return out;
@@ -109,12 +107,9 @@ mod tests {
 <meta property="og:novel:book_name" content="测试书"/>
 </head><body></body></html>"#;
         let source = BookSource::from_json(source_json).unwrap();
-        let info = parse_html_book_info_at(
-            html,
-            &source,
-            "https://www.kelexs.com/book/AIJGIFF.html",
-        )
-        .unwrap();
+        let info =
+            parse_html_book_info_at(html, &source, "https://www.kelexs.com/book/AIJGIFF.html")
+                .unwrap();
         assert_eq!(info.toc_url, "https://www.kelexs.com/chapter/AIJGIFF.html");
     }
 }

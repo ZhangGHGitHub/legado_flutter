@@ -1,7 +1,5 @@
 //! Legado `java.createSymmetricCrypto` 后端（Hutool Cipher 兼容子集）
-use aes::cipher::{
-    block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyInit, KeyIvInit,
-};
+use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyInit, KeyIvInit};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 
 type Aes128CbcEnc = cbc::Encryptor<aes::Aes128>;
@@ -74,7 +72,12 @@ fn iv_bytes(iv: &str, mode: &str) -> Result<Vec<u8>, String> {
 }
 
 /// AES 加密，返回标准 Base64（对齐 Hutool `encryptBase64`）
-pub fn encrypt_base64(transformation: &str, key: &str, iv: &str, data: &str) -> Result<String, String> {
+pub fn encrypt_base64(
+    transformation: &str,
+    key: &str,
+    iv: &str,
+    data: &str,
+) -> Result<String, String> {
     let (_, mode) = parse_transformation(transformation)?;
     let key = key_bytes(key)?;
     let iv = iv_bytes(iv, &mode)?;
@@ -149,7 +152,12 @@ pub fn encrypt_base64(transformation: &str, key: &str, iv: &str, data: &str) -> 
 }
 
 /// AES 解密 Base64 → UTF-8 字符串（对齐 Hutool `decryptStr`）
-pub fn decrypt_str(transformation: &str, key: &str, iv: &str, data_b64: &str) -> Result<String, String> {
+pub fn decrypt_str(
+    transformation: &str,
+    key: &str,
+    iv: &str,
+    data_b64: &str,
+) -> Result<String, String> {
     let (_, mode) = parse_transformation(transformation)?;
     let key = key_bytes(key)?;
     let iv = iv_bytes(iv, &mode)?;
@@ -202,13 +210,8 @@ mod tests {
         while key32.len() < 32 {
             key32.push('\0');
         }
-        let out = encrypt_base64(
-            "AES/CBC/PKCS5Padding",
-            &key32,
-            "lzxHpH8PLGXcrCIQ",
-            "重生之",
-        )
-        .unwrap();
+        let out =
+            encrypt_base64("AES/CBC/PKCS5Padding", &key32, "lzxHpH8PLGXcrCIQ", "重生之").unwrap();
         assert_eq!(out, "breUSzu0dAfgrP33wtpsvg==");
     }
 

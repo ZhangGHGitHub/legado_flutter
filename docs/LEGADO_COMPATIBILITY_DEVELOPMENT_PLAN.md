@@ -1,13 +1,16 @@
-# Legado 行为兼容性逐模块开发计划
+# Jingshiro/legado → Rust + Flutter 行为兼容性逐模块验收子计划
 
-状态：已确认，执行中<br>
-基准：`reference/Jingshiro-legado` 现有本地原版源码<br>
-实现：Rust + Flutter 重写工程<br>
+状态：已确认，作为《项目重构主计划》的行为验收子计划执行；计划修订：2026-07-27<br>
+基准：根目录只读 `legado-main/` 现有本地原版源码；`reference/Jingshiro-legado` 如存在仅为历史离线副本，不作为活跃核对基线<br>
+重构目标：将 Jingshiro/legado Android/Kotlin 实现迁移为 Rust + Flutter 工程<br>
+实现：Rust + Flutter 重构工程<br>
 约束规范：`docs/legado_rewrite_behavior_constraints.md`
 
-## 1. 目标
+> 当前暂停项（2026-07-26）：Web 平台/WASM/PWA 相关开发与验收、TTS 真实 Android 引擎验收。后续步骤不得进入上述门禁；Android/Windows 本地重构和离线测试继续推进。
 
-按固定顺序逐个对比原版功能模块与本地重写实现，修复能够由原版源码和对比测试证明的行为差异。每次只处理一个模块；当前模块全部测试通过并完成汇报后，才允许进入下一个模块。
+## 1. 定位与目标
+
+本文件不负责决定项目先做哪些重构，也不把兼容性差异拆成独立功能堆叠；它负责为 `REFACTOR_PLAN.md` 的每个重构阶段提供原版行为基线、契约测试和退出门禁。按固定顺序逐个对比原版功能模块与本地重写实现，每次只验证一个重构边界；当前边界全部测试通过并完成汇报后，才允许进入下一个边界。
 
 本计划不以“能够编译”或“页面大致可用”为完成标准。完成必须同时具备原版行为基线、重写实现结果、自动化对比测试和已知偏差说明。
 
@@ -60,7 +63,7 @@
 - [x] 1C：Default/JS/JSONPath/XPath/Regex 多值与空值转换、JS 宿主 API 差异矩阵。
 - [x] 1D：模块 1 完整离线 fixture、全量回归与偏差报告。
 
-状态：模块 1 已完成；1A、1B、1C、1D 均通过门禁。模块 2 已完成，模块 3 待用户确认后开始。
+状态：模块 1 已完成；1A、1B、1C、1D 均通过门禁。模块 2A、2B 已按 R4 计划完成顺序、`reverseToc`、章节 index、首帧和性能请求契约；模块 3 已完成最终阅读验收；模块 4 的本地开发退出门禁已完成至 4K-45。正式或主流 WebDAV 服务的发布前真实验收仍待执行，当前项目处于 R5 开发门禁已完成、发布前外部验收待执行阶段。
 
 ### 模块 2：目录分页、章节身份与去重
 
@@ -82,7 +85,91 @@
 
 验收：章节数量、顺序、标题、URL、卷节点、分页访问序列和去重结果与原版 fixture 一致；循环分页能够终止，失败后分页状态可恢复。
 
-状态：模块 2 已完成；模块 3 执行中，3A 正文处理与基础分页已通过当前子步骤门禁。
+状态：基础目录分页、章节身份和去重已通过旧门禁；2A 已重新执行并完成。当前只允许继续 2B，2B 未完成前不得修改后续模块。
+
+#### 模块 2A：目录顺序与每本书 `reverseToc` 持久化
+
+目标：恢复原 App 的两层顺序语义，保证普通书源默认显示正序；书源规则的顺序标记和每本书菜单反序互不混淆。
+
+原版对照依据：
+
+- `model/webBook/BookChapterList.kt`：书源 `chapterList` 的 `-`/`+` 前缀、分页合并、去重、书籍 `reverseToc` 应用和最终 `index` 重写。
+- `ui/book/toc/TocViewModel.kt`：菜单反序切换 `reverseToc`，反转已保存目录并按显示顺序重写章节 index。
+- `data/entities/Book.kt`、`data/dao/BookChapterDao.kt`：每本书配置持久化和章节按 `index` 正序读取。
+
+本地范围：`Book` 模型及数据库映射、目录解析/刷新、`lib/pages/book/toc_sheet.dart`、章节 DAO/Provider、阅读进度和书签定位。
+
+必须保持的行为：
+
+- 书源规则未带反序标记时，默认目录顺序与原 App 一致；以 `-` 开头的规则只表达书源层顺序语义，不能被误当成每本书的用户设置。
+- `reverseToc` 默认值为 `false`，按书籍持久化；退出目录、重启应用、重新打开同一本书后保持用户选择。
+- 菜单反序后不仅改变显示列表，还要按新显示顺序重写章节 `index`；数据库查询仍按 `index` 正序，不能依赖 UI 临时反转。
+- 目录刷新、换源和旧数据迁移必须保留当前逻辑章节及字符位置；新增字段缺失时按原有章节逻辑处理，不能把阅读进度整体翻转。
+- 章节标题、URL、卷节点、去重结果、章节正文和正文断行/分页结果不因本步改变。严格遵守《重写行为约束规范》第 3 条及第 5 节。
+
+执行顺序与测试门禁：
+
+1. 先建立同一书源的原版/重写版顺序 fixture，覆盖普通规则、`-`、`+`、分页目录、卷节点、重复 URL 和空 URL。
+2. 增加 `reverseToc=false/true`、菜单切换、应用重启、目录刷新、章节 index、阅读进度和书签定位测试。
+3. 先修模型与持久化，再修目录写入/读取，最后修 UI 菜单；每一步均运行 2A 定向测试。
+4. 2A 定向测试全部通过后，运行 Rust 全量、Flutter 全量、静态分析和 `git diff --check`；任一失败先报告原因和方案，不能修改断言绕过。
+
+当前已知状态：Rust 目录默认顺序修正、Flutter 字数按可见章节懒加载、书签 Tab 延迟加载和每本书 `reverseToc` 持久化均已完成；2A 定向、Rust 全量、Flutter 全量和静态门禁通过。2B 已补齐同一本真实线上书的原版/重写版冷热目录、请求轨迹、帧/PSS 和 Android 集成证据，当前按后续收尾记录关闭；新增目录差异仍须重新运行对应门禁。
+
+#### 模块 2B：目录完整链路性能对比与优化
+
+前置条件：2A 全部定向测试、Rust 全量测试和 Flutter 全量测试通过。
+
+目标：解释并消除当前目录“加载慢、卡顿”的结构性原因，同时保持 2A 的顺序、章节身份、index、正文、断行和分页完全不变。
+
+对比环境：
+
+- 同一台 Windows 主机、同一书源、同一本书、同一网络条件，优先使用已连接的 `emulator-5556`；`127.0.0.1:5555` 为 `offline` 时不得作为有效结果。
+- 原版和重写版分别执行冷缓存、热缓存两轮，每轮至少重复 5 次；网络路径另用固定本地 fixture 复现，避免只凭单次在线耗时下结论。
+- 记录中位数和 P95，不以一次异常网络请求决定结论；同时保存设备、DPI、视口、缓存状态、章节数量、请求次数和失败原因。
+
+必须采集的阶段：详情请求、目录分页请求序列、规则解析、章节批量落库、Provider 状态更新、目录首帧、当前章定位、可见行字数元数据和书签元数据加载；同时记录 UI 首帧前是否发生正文文件扫描、全量列表复制或重复 `getBookInfo`。
+
+首轮重点核查的本地风险：`_fetchChaptersOnce` 在已有 `tocUrl` 时重复调用 `getBookInfo`、目录分页串行等待、`_tocViewList` 全量复制、目录打开时 `_migrateReadingProgress` 的全量工作、当前章定位的线性累加、全书正文/字数缓存扫描，以及非虚拟化列表导致的首帧构建压力。
+
+真实书源基线（2026-07-26）：
+
+- 设备：雷电 `emulator-5556`，Android 9，720x1280，DPI 320；`127.0.0.1:5555` 未参与结果。
+- 书源：`assets/builtin_sources/7497.json`，`https://novel.cooks.tw`；书籍 URL 为 `https://novel.cooks.tw/api/novel/detail/524?lang=zh-CN`，书名“精灵：龙舞地龙？白菜姐都馋哭了”。
+- 原版与重写版均显示 876 章，首章均为“第 1章 赤红？希罗娜？？？”，默认均为正序；重写版目录页底部显示 `(0/876)`，顺序和章节身份与原版一致。
+- 热缓存目录打开 5 次的 ADB/UI 可观测时间（包含每轮 `uiautomator dump` 固定开销）：原版 `1930/1636/1779/1680/1840 ms`，中位数 `1779 ms`、P95 `1930 ms`；重写版 `1686/1884/1710/1799/1760 ms`，中位数 `1760 ms`、P95 `1884 ms`。两者没有观察到重写版明显慢于原版，但该数据不能替代冷缓存、请求数、Flutter 帧和内存采样。
+- 冷缓存补充采样（2026-07-26）：重写版删除本地 876 条章节后，连续 5 轮均成功完成“书架 -> 书籍详情 -> 查看目录 -> 首章”流程；稳定条件为 UI 中的 `第 1章` 和 `(1/876)`。端到端时间为 `9859/9688/10125/9761/9447 ms`，中位数 `9761 ms`、P95 `10125 ms`；各阶段分别为：书架 `4466/4516/4466/4269/4219 ms`，详情入口 `1503/1549/1560/1564/1546 ms`，目录首帧 `1998/2014/2300/2232/2143 ms`，定位计数 `1342/1155/1228/1346/1190 ms`。每轮均记录 `Rust 目录: 876 章` 1 次，详情 URL 日志计数为 0，说明本地保存的 `tocUrl` 被复用；Rust 日志未输出完整请求 URL，故 `api/novel/detail` 和 `api/chapter/list` 的文本计数为 0，不能据此声称服务端请求次数为 0/1。每轮均观察到 1 条 `novel.cooks.tw` 新连接。
+- 重写版单次内存/帧原始样本：目录首帧成功后总 PSS `477564 kB`，Native Heap 总量 `162766 kB`；短窗口 `dumpsys gfxinfo` 记录总渲染帧 10、Janky 1（10%）。该样本未按完整滚动窗口采集，只用于保留证据，不能作为最终帧性能结论。
+- 原版冷缓存复测：此前成功的一轮为“书架到 Reader `1469 ms`、菜单 `1254 ms`、目录首帧 `1665 ms`、端到端 `4779 ms`”，日志确认目录 URL、首章正文 URL，且未观察到重复详情请求。随后使用真实入口“书架 -> 阅读页 -> 点击中央显示控制栏 -> 目录”重新取得 5 个有效样本：端到端 `7153/7770/8001/7571/7602 ms`，中位数 `7602 ms`、P95 `8001 ms`；书架阶段 `1572/1845/1884/1854/1794 ms`，目录数据库恢复到 876 章阶段 `3000/3602/3888/3535/3528 ms`，控制栏阶段 `1253/1209/1202/1189/1169 ms`，目录首章阶段 `1573/1573/1508/1535/1548 ms`，底部计数阶段 `1128/1170/1191/1121/1123 ms`。5 轮均为 876 章、首章“第 1章”、`1/876`，详情请求 0、目录请求 1、首章正文请求 1。PSS 原始值为 `204791/208676/201706/201431/201765 kB`，中位数约 `201765 kB`。当前目录页窗口累计帧样本为 74 帧、Janky 27（36.49%），50/90/95/99 分位为 `15/40/57/200 ms`；该帧统计包含窗口累计历史，不等价于单次目录打开区间。
+- 采样前置失败记录：批量脚本第 1 轮在原版 Activity 启动等待阶段失去前台进程，数据库一直为 0，UI 等待超时；该轮不计入以上结果。通过 `am start -S` 并逐轮确认前台 Activity 后，其余 5 轮稳定完成。该问题属于采样器/模拟器状态，不修改测试绕过。
+- 入口行为对齐（2026-07-26）：原版书架普通单击由 `BooksFragment.open(Book)` 直接调用 `startActivityForBook` 进入阅读页，长按才进入 `BookInfoActivity`；重写版两个书架样式原先普通单击都进入 `BookInfoPage`，造成冷缓存阶段不可比。重写版新增 `BookInfoPage.openReaderImmediately`，书架普通单击在目录加载完成后直接复用既有阅读入口；目录加载失败时仍停留详情页显示错误，普通详情入口保持默认不自动阅读。模拟器验证：单击显示首章正文和 `1/11`，返回后长按显示“书籍信息”，详情页仍有“查看目录”和“阅读”。
+- 本项定向测试：目录/首帧定向 `6/6`；Rust workspace `117/117` 核心库及所有非 ignored 测试通过；Flutter 全量 `437` 通过、3 个在线 smoke 按既有条件跳过；Debug APK 构建和 `emulator-5556` 回归通过；`git diff --check` 通过。`flutter analyze` 仍为仓库既有 47 条诊断，未新增。
+- 2B 首项修改（2026-07-26）：`BookProvider.loadBooks()` 不再同步等待每本书的完整章节列表来计算未读角标；书架书籍表先完成首帧，章节元数据在后台补齐并通知 UI。目录加载、章节顺序、`index`、正文和阅读位置未改动。定向测试 `10/10`、Flutter 全量 `437`、Rust workspace `117/117`、APK 和模拟器回归均通过；Rust 首次运行的 2 个本地 fixture 因环境代理 `127.0.0.1:1080` 失败，清除代理变量后原测试全部通过，未修改测试。
+- 2B 首项复测：修改前统一入口总耗时中位数约 `10264 ms`，修改后 5 轮为 `10994/10631/10812/10820/10771 ms`，中位数约 `10812 ms`；当前采样受 Flutter 冷启动、控制栏自动隐藏和 ADB UI dump 固定开销影响，未观察到稳定下降。因此只记录该结构性修复，不宣称 2B 性能完成；下一项继续定位 Flutter 启动/阅读页进入和目录控制栏前置工作的实际耗时。
+- 2B 第二项修改（2026-07-26）：`AppBootstrap.initialize()` 已完成书架读取后，`MainShell._initProviders()` 不再重复调用 `BookProvider.loadBooks()`；书源、RSS、首页配置初始化顺序保持不变。定向测试 `9/9`、Flutter 全量 `437`、Rust workspace `117/117`、APK 构建和 `emulator-5556` 回归均通过，目录仍为 876 章、首章和 `1/876` 正确。
+- 2B 第二项复测：统一入口 5 轮为 `10900/10704/10705/9665/9569 ms`，中位数约 `10704 ms`；控制栏自动隐藏状态导致后两轮阶段边界不同，整体未证明稳定端到端收益。重复数据库读取已消除，但 2B 仍未完成，下一项需固定控制栏状态后再定位 Flutter 引擎启动与 ReaderPage 初始化成本。
+- 2B 固定边界复测（2026-07-26）：通过截图像素确认阅读控制栏状态后，重写版统一入口 5 轮为 `7774/7681/7684/7623/7811 ms`，中位数 `7684 ms`；书架 `4190 ms`、阅读 `1772 ms`、目录 `1719 ms`。原版此前同口径中位数 `7602 ms`，两者差异约 1.1%，此前 10 秒级重写版结果主要是控制栏自动隐藏后误点造成的无效阶段计时，本轮不再据此修改业务代码。
+- 2B 内存/构建模式复核：重写版 Debug 目录后 PSS 约 `534 MB`，Release 入口后约 `205 MB`、目录后约 `290 MB`；原版 Debug 书架后约 `182 MB`。Debug 高值主要来自 Dart JIT/Debug 映射；Release 目录帧样本 13 帧、Janky 0、P50/P90/P95/P99 为 `5/11/11/11 ms`。该差异记录为 Flutter 运行时基线，不归因于目录业务逻辑，也不修改正文/分页实现。
+- 2B 请求计数观测子步骤（2026-07-26）：为 Rust HTML 目录 fixture 增加线程安全的请求路径记录，并在多 `nextTocUrl` 场景断言实际请求为首屏 + 两个独立分页，共 3 次且无重复。定向测试 `1/1` 通过；该步骤只补齐观测证据，没有修改目录顺序、章节身份、分页边界或正文处理。仓库已有 Rust 格式差异使 `cargo fmt --all -- --check` 仍失败，未对无关文件做格式化。下一步单独实现并验证受控并发，必须先保持本请求计数门禁通过。
+- 2B 多分页受控并发子步骤（2026-07-26）：对照原版 `FlowExtensions.mapAsync`，Rust 目录在多个独立 GET `nextTocUrl` 时以任务上限 4 并发获取，HTTP 层继续保持每主机最多 2 个在途请求；结果按分页输入顺序解析合并，保留 URL 去重、循环终止、错误传播和最终顺序。fixture 定向测试 `6/6` 通过，实际最大同时请求数至少为 2，章节顺序和请求计数均正确。Release Rust 构建成功；Flutter 全量 `437` 通过、3 个既有在线 smoke 跳过；Debug APK 构建成功并安装到 `emulator-5556`，以 `io.legado.app.debug` 启动到主 Activity，最近 400 条 logcat 未发现崩溃。`flutter analyze` 仍为基线 47 条诊断，`git diff --check` 通过。该子步骤未修改正文原文、章节边界、中文断行、分页或阅读位置映射。
+- 2B 请求轨迹与真实冷/热入口收尾（2026-07-26）：Rust/Flutter debug-only 请求轨迹已同步到 FRB 2.11.1 绑定；`send_request` 保持精确 `POST`、其余分支为 GET 的原行为。`emulator-5556` 上对 `com.legado.legado_flutter` 同一本 876 章书执行 5 轮正文冷缓存和 5 轮热缓存：冷缓存每轮稳定 2 条 `GET /api/chapter/content/524/5649`、`GET /api/chapter/content/524/5648`，状态均 200；热缓存每轮 0 条 HTTP。冷缓存每轮均从书架进入第 1 章，真实目录入口显示首章、`1/876`，打开目录不产生 HTTP。请求轨迹不会进入 release；Debug APK 构建成功，安装启动到 `.MainActivity`，未发现 `FATAL EXCEPTION`。结合原版/重写版既有 5 轮冷/热时延、PSS 和 Release 帧采样，2B 请求数、缓存命中和结构性卡顿门禁通过；本轮不修改正文原文、章节边界、中文断行、分页或阅读位置映射。
+- 2B 暂缓结论（已关闭）：固定控制栏状态后原版与重写版端到端耗时已接近，Release 目录帧没有暴露业务层卡顿；当时因请求计数和冷缓存轮次证据未齐暂不关闭。后续已补齐同口径请求轨迹、5 轮冷/热缓存和真实目录入口证据，现按门禁关闭 2B，后续进入模块 4 收尾。任何新差异仍须先登记证据再逐项修改。
+
+优化方案按以下顺序逐项实施，每项完成后立即测试并汇报，再进入下一项：
+
+1. 先复用已保存的 `book.tocUrl` 和本地目录，消除无需发生的详情请求；失败时保留原有回退链路。
+2. 将目录首帧与字数、书签、阅读进度元数据解耦：首帧只读取可见章节，元数据在后台按可见范围懒加载，禁止打开目录扫描整本正文。
+3. 在不改变分页访问顺序和输出顺序的前提下，对独立目录页使用受控并发；任何失败、重复页和循环页仍按原版可观察结果处理。
+4. 减少目录全量复制和逐行线性工作，采用稳定章节 ID、批量数据库读写和可复用的当前章定位索引；每次优化都必须对比章节顺序和 `index`。
+
+2B 硬门禁：
+
+- 功能结果逐项等于原版/2A 基线：顺序、章节数量、标题、URL、index、当前章、书签、字数及错误恢复均一致。
+- 缓存命中时不重复请求详情；首帧不等待全量字数、书签或正文文件扫描；列表构建不因章节数量线性膨胀到阻塞首帧。
+- 冷/热缓存的阶段耗时、请求数和内存/帧抖动均有原版与重写版记录。若重写版仍明显慢于原版，2B 不得标记完成，必须在计划中登记根因、证据和下一步方案。
+- 性能优化不得修改正文原文、章节边界、字符范围、中文禁则、断行、分页或阅读位置映射；相关回归失败时先解释实现缺陷、环境限制或基线问题，不能强行修改测试。
+
+2B 完成门禁：2B 定向性能/功能测试通过后，运行 Rust 全量、Flutter 全量、静态分析和 `git diff --check`；将采样原始数据和结论写入本计划，再允许重新关闭模块 2。
 
 ### 模块 3：正文处理与中文断行、分页
 
@@ -117,7 +204,9 @@
 
 验收产物：固定字体、固定 DPR、固定视口和固定配置下，保存原版及重写版每页文本、起始字符、结束字符、总页数、章节边界和截图；所有字段逐页一致。仅总页数一致不算通过。
 
-状态：模块 3 执行中，尚未完成最终逐页快照验收；特殊标签、原版快照环境和章节边界对比仍待处理。
+状态：模块 3 已完成；3A 的固定 fixture、真实 ReaderPage Android 门禁、章节边界契约、媒体边界和固定 PNG 像素门禁均已通过，最终 Flutter 与 Android 阅读回归完成。本模块后续不得因目录性能优化改动断行或分页行为；任何跨模块影响必须重新运行第 3 模块门禁。
+
+说明：以下 3A 子步骤按实际执行顺序保留为历史记录，其中出现的“当前边界/尚未完成”只描述当时的阶段状态；模块 3 的最终状态以本行和最后的“PNG 比较器、真实正文覆盖与双章门禁”收尾记录为准。
 
 #### 模块 3A：正文处理与基础分页
 
@@ -256,6 +345,46 @@
 - APK 图形检查：`flutter build apk --debug` 在 Gradle `assembleDebug` 阶段超过 5 分钟无产出并被终止，未生成 APK，未进行应用安装截图；该失败属于 Android 构建环境阻塞，不修改业务断言或用桌面渲染替代。
 - 当前边界：仍缺少原版与重写版固定字体、DPR、内容区域、章节边界的逐页快照契约，21/21 定向测试不能替代最终逐页文本/字符范围/截图对比。
 
+#### 模块 3A 逐页快照契约子步骤
+
+- 原版对照依据：`TextPage` 的页面文本和章节位置字段，以及 `TextChapterLayout` 在页面完成时提交页面文本、章节边界和分页配置的行为。
+- 本地修改：新增 `ReaderPaginationSnapshot`、固定排版配置和页面记录的 JSON 契约；记录字体、字号、字重、DPR、逻辑/物理视口、内容区域、语义行距和实际渲染行步进、字距、段距、分页模式、章节边界、页面文本和 `[start,end)` 范围。
+- 校验语义：快照反序列化后保持全部几何配置和页面字段；页面范围必须按顺序覆盖源文本，允许跳过的字符只能是整行 `[newpage]` 布局标记；普通源文本被跳过时明确报错。
+- 定向测试：快照契约与分页器回归 `12/12` 通过；覆盖固定几何序列化、物理视口换算、硬分页间隙和非法范围拒绝。
+- 全量回归：Flutter `327/327` 通过，3 个在线 smoke 按既有配置跳过；相关 `flutter analyze` 无诊断；`git diff --check` 通过。
+- 当前边界：固定 fixture 的页面范围/文本契约和真实 ReaderPage Android 门禁已通过；更广泛书源正文、真实阅读页交互和 PNG 像素差异仍待验收，模块 3 继续执行中。
+
+#### 模块 3A 原版 Android 固定快照采集与首轮对比
+
+- 原版环境：使用 `reference/Jingshiro-legado` 的原版源码，在与 Gradle 缓存同盘的临时副本中构建 `assembleAppDebug`；原版 APK 已安装到 `emulator-5556`，通过原版 `ChapterProvider`、`TextChapterLayout` 和 `ZhLayout` 导出同一 fixture。
+- 原版基线：固定物理视口 `720x1280`、逻辑视口 `360x640`、内容区域 `328x560`、字体 `sans-serif`、字号 `16sp`、字重 `400`、字距 `0`、段距 `0`、DPR `2`；页面范围为 `[0..529]`、`[529..1079]`、`[1079..1331]`、`[1342..1359]`，共 `4` 页。
+- 重写版首轮结果：同一 Android 设备导出的页面范围为 `[0..737]`、`[737..1332]`、`[1342..1359]`，共 `3` 页；该结果未通过逐页对比。
+- 本轮修正：`ReaderPaginator` 支持原版实际行步进 `28.125` logical px，固定行容量按 `ceil(maxHeight / renderedLineHeight)` 计算；URL 布局副本对短/中等 URL 使用 word-joiner 防止 Flutter 在 `/` 处自然断行，对真正长 URL 保留自然分隔符断点，并修正中文 URL 终止符和 UTF-16 代理对映射。
+- 本轮 Android 结果：快照范围已精确对齐为 `[0..529]`、`[529..1079]`、`[1079..1331]`、`[1342..1359]`；原版页面在段落末尾允许 `displayText` 比源范围多一个合成换行，重写版快照契约已分离显示文本与源范围并通过该语义验收。
+- 产物：`test/fixtures/reader/module3/module3_original_fixed_001.{json,png}` 与 `module3_rewrite_fixed_001.{json,png}`。
+- 测试：重写版 Android 快照测试 `1/1` 通过；URL/分页/快照定向测试 `22/22` 通过；Flutter 全量测试 `336/336` 通过，另有 3 个既有在线 smoke 跳过；`git diff --check` 通过，相关静态分析无新增诊断。
+- 本次验收脚本补强：设备测试现在通过结构化快照逐页比较原版页面文本、页面序号、`[start,end)` 源范围和布局配置，并明确断言段落末尾合成换行、`[newpage]` 跳过区间不进入显示文本，以及截图物理尺寸 `720x1280`。
+- 本次 `emulator-5556` 复验状态：`flutter analyze integration_test/module3_android_snapshot_test.dart` 通过；设备快照测试未通过，实际范围为 `[0..635]`、`[635..1295]`、`[1295..1331]`，与原版四页 `[0..529]`、`[529..1079]`、`[1079..1331]`、`[1342..1359]` 不一致。失败发生在快照写出前，未生成可验收的重写产物；不得据此标记模块 3A 完成，也不得修改原版基线或测试断言来掩盖差异。
+- 本轮并行补强：`ReaderFontLoader` 新增 FontMetrics 等价行高测量，`ReaderPage` 将同一 `renderedLineHeight` 同时传给分页器和正文渲染，并在字体异步加载完成后重新分页；URL 辅助器补充中文/ASCII 终止符、IPv6、自然断点回退和 UTF-16 代理对测试。
+- 本轮验证：字体/URL/分页/快照定向测试 `30/30` 通过；Android 固定快照 `1/1` 通过；Flutter 全量 `336/336` 通过，3 个既有在线 smoke 跳过；Rust 库测试 `114+10` 通过；`git diff --check` 通过。全仓 `flutter analyze` 仍为既有 `47` 条诊断，阅读页仅保留既有 Radio API 弃用提示。
+- 当前边界：固定 fixture 与生产行高接入已完成，但 Flutter TextPainter 与 Android Paint.FontMetrics 的字体回退/混排差异仍需用更多真实书源正文验证；模块 3 尚不能标记最终完成。
+
+#### 模块 3A 真实 ReaderPage Android 门禁修正
+
+- 复现结果：真实生产页原先使用 Flutter `TextPainter` 的 `36.0` logical px 行步进，并因 Android edge-to-edge 未报告底部系统 inset 使用 `584` logical px 页高，导致页范围偏离原版。
+- 原版依据：参考设备的 Android `Paint.FontMetrics` 在 `16sp` 无衬线正文下为 `18.75` logical px 基础行高，乘 `1.5` 行高倍率得到 `28.125`；原版内容窗口为 `328x560`。
+- 本地修改：`ReaderFontLoader` 在 Android 对系统正文采用原版 Paint 度量校准，其他平台保留 TextPainter 度量；`ReaderPage` 使用稳定 `viewPadding`，并在 Android edge-to-edge 底部 inset 缺失时补齐对应系统栏空间，生产分页页高恢复为 `560`。
+- 定向测试：字体、正文、URL、快照和分页回归 `37/37` 通过；真实 `ReaderPage` Android 门禁 `1/1` 通过，日志确认 `页宽=328.0、页高=560.0、4 页`，页面范围与原版 `[0..529]、[529..1079]、[1079..1331]、[1342..1359]` 一致。
+- 失败命令说明：一次定向命令误包含不存在的 `test/pages/reader/reader_paginator_test.dart`，该命令返回失败；实际执行的 24 项测试全部通过，随后按仓库真实文件重跑为 `37/37`，未修改测试断言。
+- 当前边界：固定快照测试比较结构化页面契约和截图尺寸/文字像素存在性；PNG 逐像素门禁已在补齐标题样式与两端对齐契约后通过。SVG Android 像素门禁和双章跨章 ReaderPage 门禁已通过，更多真实书源正文与模块 3 最终回归仍待独立验收，模块 3 继续执行中。
+
+#### 模块 3A PNG 比较器、真实正文覆盖与双章门禁
+
+- 本地修改：新增 `ReaderPngDiff`，统一将 PNG 解码为 RGBA，报告尺寸、逐通道容差、差异像素比例、最大/平均通道差和差异包围盒；快照配置补齐正文两端对齐、标题字号和标题字重；新增真实正文处理流水线及媒体边界 fixture，覆盖标题、逐行 trim、替换规则、HTML 图片、音频备用文本、`[newpage]` 和中英数 URL 混排；新增双章 Android ReaderPage 门禁。
+- 生产修正：双章门禁发现 `_pendingTargetPage = -1` 未按原版语义解释，导致跨章返回打开上一章第一页；现已将 `-1` 正确映射为上一章最后一页。
+- 验证：PNG 比较器基础单测 `4/4`，固定 Reader PNG 像素门禁 `1/1`（`720x1280`，`0/921600` 差异像素）；真实正文流水线 `2/2`；媒体边界 `2/2`；双章 Android ReaderPage `1/1`；SVG Android 像素门禁 `1/1`。双章页数为第一章 `3` 页、第二章 `1` 页，跨章范围不泄漏。
+- 收尾结果：固定 PNG 样式契约差异已消除，分页范围、章节边界和断行规则保持一致；模块 3A 最终阅读相关全量回归已通过，模块 3 可进入后续模块 4 的既有未完成项处理。
+
 ### 模块 4：进度迁移、缓存与同步一致性
 
 目标：对齐目录刷新/换源后的阅读位置迁移、章节文件缓存、数据库缓存元数据、阅读记录、书签和远端进度冲突处理。
@@ -278,7 +407,9 @@
 
 验收：覆盖章节增删、改名、合卷、换源、缓存文件缺失、坏缓存、并发旧请求、同步时间冲突和重复导入；迁移后的章节及字符位置、缓存状态和阅读记录与原版一致。
 
-状态：模块 4 本地实现已完成至 4K-18；等待真实 WebDAV 服务器验证、跨设备并发冲突验证和模块 4 最终回归后再正式收尾。
+状态：模块 4 本地实现已完成至 4K-41，模块 2 已关闭后进入 R5/R6 收尾。真实 WebDAV 服务器认证/TLS/代理/权限/ETag、Flutter/Android 应用端到端、备份恢复、跨设备并发冲突和模块 4 最终全量回归仍未完成；因此模块 4 不能标记完成。
+
+说明：以下 4A-4K 子步骤是已完成的本地实现记录；本地自建 WebDAV 可以满足开发退出门禁，但发布前仍必须使用正式或主流 WebDAV 服务完成一次真实验收。
 
 #### 模块 4A：目录刷新后的章节进度迁移
 
@@ -547,6 +678,295 @@
 - 断行约束：本子步骤只处理同步互斥、错误反馈和备份恢复入口，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
 - 已知边界：该门禁只解决同一应用进程内并发，尚未实现跨设备 ETag/条件写入或服务端锁；真实服务器的 405/501、权限和 TLS 行为仍需在线验证。
 
+#### 模块 4K-19：应用启动自动下载全书阅读进度
+
+- 原版对照依据：`App.kt` 启动初始化完成后触发 `downloadAllBookProgress()`；同步失败不能阻塞应用启动。
+- 本地修改：`main.dart` 在 Rust、配置和数据库初始化后复用同一个 `BookProvider`，先加载书架，再按同步开关调用 `downloadAllBookProgress()`；WebDAV 异常只记录日志，随后继续 `runApp`。
+- 新增测试：`startup_book_progress_sync_test.dart` 覆盖加载顺序、关闭同步开关不访问 WebDAV、同步异常不阻塞启动。
+- 定向测试：启动同步 `10/10` 通过；模块 4 Flutter 定向合计 `27/27` 通过；相关 Dart 静态分析通过。
+- 断行约束：本子步骤只处理启动时的进度同步时机和失败隔离，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑。
+
+#### 模块 4K-20：原版阅读配置 ZIP 兼容
+
+- 原版对照依据：`Backup.kt` 将 `readConfig.json`（配置数组）和 `shareReadConfig.json`（共享配置）写入备份，并在恢复时分别加载。
+- 本地修改：`SettingsBackup` 将当前阅读配置映射为两份原版命名配置；本地和 WebDAV ZIP 生成时写入；legacy ZIP 恢复时保留并应用两份配置，同时保持 `legado_backup.json` wrapper 兼容。
+- 新增测试：备份服务覆盖两份文件生成、legacy 提取和字段携带。
+- 定向测试：备份 `11/11`，设置/阅读配置/样式 ZIP 回归 `8/8` 通过；相关 Dart 静态分析和格式检查通过。
+- 已知边界：字体、主题背景、视频、服务器、TTS、词典和其它原版附加文件仍未逐项映射。
+
+#### 模块 4K-21：WebDAV HTTP 状态码保真
+
+- 原版对照依据：WebDAV 操作失败时保留服务端状态语义，失败操作不应继续执行后续目录创建、上传或破坏已有数据。
+- 本地修改：`legado_webdav` 增加真实 TCP mock，验证 `PROPFIND`/`MKCOL`/`PUT` 链路对 `401`、`405`、`501` 的操作名和状态码保真，并确认 Basic Auth 与失败后的请求停止行为。
+- 定向测试：WebDAV crate `11/11` 通过；WebDAV/备份/配置页面 Flutter 定向 `17/17` 通过；crate `rustfmt --check` 通过。
+- 已知边界：真实服务器认证、TLS、代理转发和服务器能力差异仍需在线验证；跨设备 ETag/`If-Match` 条件写入仍未实现。
+
+#### 模块 4K-22：ETag 条件同步与跨设备冲突重试
+
+- 原版对照依据：远端文件修改时间只能作为同步提示；跨设备写入不能无条件覆盖其他设备的新版本。本地冲突策略区分同版本、远端领先、本地领先和并发冲突。
+- 本地修改：WebDAV `PROPFIND` 解析 `getetag`；Rust/FRB 增加可选 ETag 和 `If-Match` 条件上传；书签与阅读进度同步在默认路径读取远端 ETag，收到 `412 Precondition Failed` 后重新读取、合并并最多重试一次。
+- 数据安全：远端文件存在但没有 ETag 时停止覆盖上传；仅新文件不存在时允许普通创建；同步时间只在最终上传成功后更新，重试失败不改变本地同步状态。
+- 新增测试：WebDAV TCP 条件 PUT/412 测试、`SyncConflictPolicy` 四类决策测试、书签 ETag 重读合并测试、进度 ETag 重试测试。
+- 验收结果：`legado_webdav` `12/12`；Rust engine 核心库 `114/114` 及非 ignored 集成/文档测试通过；Flutter K-22 定向测试 `28/28`，FRB 绑定和 release DLL 已同步重建；相关 `flutter analyze` 无诊断。
+- 断行约束：本子步骤只处理同步元数据、条件写入和冲突重试，不修改正文原文、净化顺序、中文禁则、断行或分页逻辑，严格保持《重写行为约束规范》第 3 条。
+- 已知边界：真实 WebDAV 服务的认证、TLS、代理、权限、服务器 ETag 行为和跨设备并发仍需在线验证；模块 4 最终全量回归尚未完成。
+
+#### 模块 4K-23：WebDAV 删除状态码与原版保真
+
+- 原版对照依据：`WebDav.delete()` 统一调用 `checkResult`；所有非 2xx 响应（包括 404）都作为删除失败返回，并保留服务端状态码。
+- 本地修改：`legado-webdav::WebDavClient.delete()` 删除原有的 404 特殊成功分支，统一返回 `删除 失败: HTTP <status>`；其他上传、下载、目录初始化和 ETag 条件写入行为不变。
+- 新增测试：TCP fixture 对 DELETE 404 断言请求方法、Basic Auth、错误操作名和 HTTP 状态码，纳入 WebDAV crate `12/12` 定向门禁。
+- 断行约束：本子步骤只修正远端删除错误传播，不修改正文原文、净化顺序、中文禁则、断行、分页或阅读位置映射，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：WebDAV crate `12/12`；相关 Flutter 进度/书签/备份定向 `32/32`；Rust workspace `117/117`；`cargo fmt`（`legado_webdav`）和 `git diff --check` 通过。
+- 已知边界：真实 WebDAV 服务的认证、TLS、代理、权限、服务器 ETag 行为、跨设备并发和最终模块 4 全量回归仍未完成；本子步骤不关闭模块 4。
+
+#### 模块 4K-24：想法保存的章内位置保真
+
+- 原版对照依据：`legado-main/app/src/main/java/io/legado/app/ui/book/read/TextActionMenu.kt` 的选中文本动作，以及 `legado-main/app/src/main/java/io/legado/app/ui/book/toc/BookmarkThoughtFragment.kt` 的 `chapterPos` 跳转语义；原版想法保存后必须携带章节索引和章内字符位置，列表点击才能回到对应位置。
+- 差异确认：重写版此前只从 `ReaderSelectableText` 传递选中文本，`NoteEditorSheet` 保存时使用默认 `chapterPos=-1`；因此想法列表只能按章节回退，不能稳定定位到选区起点。
+- 本地修改：增加带章内偏移的选区回调；分页正文使用页面切片起点加选区起点计算 `chapterPos`，滚动正文以章节正文起点计算；阅读器和想法编辑器贯通该字段，编辑既有想法时保留原位置。保留原文本回调以兼容不需要定位的调用方。
+- 新增回归：`test/widget/reader_selectable_text_test.dart` 增加页面切片偏移、零点和负起点边界测试；正文内容、净化、中文断行和分页输入未修改。
+- 定向验收：ReaderSelectableText `3/3`，BookmarkPage `1/1`，均通过。
+- 全量验收：Flutter `438` 通过，3 个既有在线 smoke 按配置跳过；Rust workspace `117` 通过；`git diff --check` 通过。首次 Rust 全量运行因会话代理 `127.0.0.1:1080` 拒绝连接导致 116/117，清除该命令级代理环境后原测试 `117/117` 通过，未修改测试断言。
+- 静态检查：`flutter analyze` 仍为仓库既有 `47` 条诊断，未新增；Dart 格式化通过。
+- 断行约束：本子步骤只补充选区到 `chapterPos` 的位置元数据，不修改正文原文、章节边界、中文断行、分页或阅读位置映射，严格保持《重写行为约束规范》第 3 条。
+- 当前边界：原版选中文本菜单的“替换、书签、朗读、词典、正文搜索、浏览器、分享”等动作仍需逐项对照实现；真实 WebDAV 服务器认证、TLS、代理、权限、服务器 ETag、跨设备并发和模块 4 最终全量回归仍未完成。
+
+#### 模块 4K-25：选中文本添加书签
+
+- 原版对照依据：`legado-main/app/src/main/res/menu/content_select_action.xml` 的 `menu_bookmark`，以及 `legado-main/app/src/main/java/io/legado/app/ui/book/read/ReadBookActivity.kt` / `ContentTextView.kt`；选区书签保存选中文本、章节索引、章内位置和章节名。
+- 差异确认：重写版原先只有阅读器工具栏的当前页书签，选中文本上下文菜单没有 `menu_bookmark` 动作。
+- 本地修改：`ReaderSelectableText` 增加“书签”菜单项和带 `chapterPos` 的回调；三个阅读模式统一接入 `ReaderPage._addSelectedBookmark`，通过 `BookmarkService` 保存书籍、章节、选中文本和位置；空选区、引擎未就绪和持久化失败分别提示，不改变现有当前页书签入口。
+- 定向验收：ReaderSelectableText、BookmarkPort、BookmarkService 集成测试 `7/7` 通过；其中书签集成断言 `chapterIndex/chapterPos/chapterName/bookText/content` 持久化字段。
+- 全量验收：Flutter `438` 通过，3 个既有在线 smoke 按配置跳过；Rust workspace `117/117` 通过；`git diff --check` 通过。并行运行曾因共享代理状态出现 2 个本地 HTTP fixture 连接失败，改为清除代理后串行复测全部通过，未修改测试断言。
+- 静态检查：Dart 格式化通过；`flutter analyze` 仍为仓库既有 `47` 条诊断，未新增。
+- 断行约束：本子步骤只增加选区书签元数据写入，不修改正文原文、章节边界、中文断行、分页或阅读位置映射，严格保持《重写行为约束规范》第 3 条。
+- 当前边界：原版新建书签后还会打开 `BookmarkDialog` 编辑书签文本和备注；该编辑行为、朗读、词典、正文搜索、替换、浏览器和分享仍未完成。真实 WebDAV 服务器认证、TLS、代理、权限、服务器 ETag、跨设备并发和模块 4 最终全量回归仍未完成。
+
+#### 模块 4K-26：书签编辑对话框与确认落库
+
+- 原版对照依据：`legado-main/app/src/main/java/io/legado/app/ui/book/bookmark/BookmarkDialog.kt` 和 `dialog_bookmark.xml`；新建书签先显示章节、正文片段和备注编辑界面，点击确认后才插入；已有书签编辑时保留 `time`、章节索引和章内位置，只更新正文片段与备注，取消不产生写入。
+- 差异确认：重写版此前书签入口直接调用 `BookmarkService.save`，没有取消/确认边界；书签列表只有删除，缺少原版编辑入口。
+- 本地修改：新增 `BookmarkEditorSheet`；阅读器当前页书签与选区书签均改为先打开编辑器，确认后保存；书签列表新增编辑入口，已有书签使用原时间主键和全部章节定位字段更新，失败时保留编辑器并提示。
+- 新增测试：`test/widget/bookmark_editor_sheet_test.dart` `2/2`，覆盖取消不落库、已有书签身份与位置保留；既有书签页/服务/选区定向回归继续通过。
+- 定向验收：书签相关集合 `9/9` 通过。
+- 全量验收：Flutter `440` 通过，3 个既有在线 smoke 按配置跳过；Rust workspace 串行门禁 `117/117` 通过；`git diff --check` 通过。Rust 并行运行曾出现共享 HTTP fixture/代理时序失败，单测隔离和 `--test-threads=1` 全量复测通过，未修改测试断言。
+- 静态检查：Dart 格式化通过；`flutter analyze` 仍为仓库既有 `47` 条诊断，未新增。
+- 断行约束：本子步骤只改变书签编辑 UI 和确认落库时机，不修改正文原文、章节边界、中文断行、分页或阅读位置映射，严格保持《重写行为约束规范》第 3 条。
+- 当前边界：原版书签编辑器的全屏 Material Dialog 外观尚未做 PNG 级对照；朗读、词典、正文搜索、替换、浏览器、分享等选中文本菜单动作，以及真实 WebDAV 服务器和模块 4 最终全量回归仍未完成。
+
+#### 模块 4K-27：选中文本菜单朗读
+
+- 原版对照依据：`legado-main/app/src/main/res/menu/content_select_action.xml` 的 `menu_speak`，以及 `legado-main/app/src/main/java/io/legado/app/ui/book/read/ContentTextView.kt`、`ReadBookActivity.kt` 的选区朗读入口；默认 `contentSelectSpeakMod=0` 时只朗读当前选中文本，选区首尾空白不应进入 TTS 句子队列。
+- 差异确认：重写版选中文本上下文菜单此前缺少“朗读”，TTS 服务虽已支持正文句子播放，但没有选区文本入口和阅读器三种正文模式的统一接入。
+- 本地修改：`TtsService.speakSelection` 按原版默认模式 trim 选区后复用现有句子切分和播放链路；`ReaderSelectableText` 增加“朗读”菜单项；阅读器分页、滚动和普通正文三种模式统一接入选区朗读，未改变选区书签/想法动作。
+- 新增回归：TTS 测试覆盖选区首尾空白清理及句子绑定；ReaderSelectableText 测试覆盖“朗读”菜单回调。
+- 定向验收：TTS + ReaderSelectableText `7/7` 通过。
+- 全量验收：Flutter `441` 通过，3 个既有在线 smoke 按配置跳过；Rust workspace 串行门禁 `117/117` 通过；`git diff --check` 通过。Rust 使用默认并行时仍可能受既有共享 HTTP fixture/代理时序影响，未修改测试断言，清除代理并使用 `--test-threads=1` 后稳定通过。
+- 静态检查：Dart 格式化通过；`flutter analyze` 仍为仓库既有 `47` 条诊断，未新增。
+- 断行约束：本子步骤只增加选区到 TTS 的调用，不修改正文原文、章节边界、中文断行、分页或阅读位置映射，严格保持《重写行为约束规范》第 3 条。
+- 当前边界：本步只实现原版默认的“朗读选中文本”；原版长按“朗读”切换到“从选择位置开始一直朗读”的跨页/跨章节队列、词典、正文搜索、替换、浏览器和分享仍待后续独立子步骤。真实 WebDAV 服务器认证、TLS、代理、权限、服务器 ETag、跨设备并发和模块 4 最终全量回归仍未完成。
+
+#### 模块 4K-28：选区位置连续朗读与章节队列
+
+- 原版对照依据：`legado-main/app/src/main/java/io/legado/app/ui/book/read/TextActionMenu.kt` 的朗读菜单长按模式切换；`legado-main/app/src/main/java/io/legado/app/ui/book/read/ReadBookActivity.kt` 的 `contentSelectSpeakMod=1` 分支；`legado-main/app/src/main/java/io/legado/app/ui/book/read/page/ReadView.kt` 的 `aloudStartSelect()`；`legado-main/app/src/main/java/io/legado/app/service/BaseReadAloudService.kt` / `TTSReadAloudService.kt` 的章内起点、段落完成、下一页和下一章推进。
+- 差异确认：4K-27 只能朗读选中文本，未保留选区在章节正文中的起点，也没有在当前正文完成后加载下一章；原版通过长按“朗读”将模式切换为从选区位置开始，并持续到全书可读末尾。
+- 本地修改：新增 `TtsSelectionSpeakMode` 并以 `contentSelectSpeakMod` 持久化；上下文菜单保留系统按钮样式，朗读按钮支持点击执行、长按切换模式；`ReaderSelectableText` 将 `markupStart + selectionStart` 传给阅读器；`TtsService` 新增从章内偏移绑定剩余正文、当前句偏移和完成监听；HTTP 模式不触发无关的系统 TTS 初始化；`HttpTtsClient` 按原版拒绝 JSON/文本错误响应并校验 `contentType` 响应正则；`ReaderPage` 以代数令牌防止旧朗读任务串入新章节，章节完成后等待正文加载再继续，并按句子偏移推进分页页索引或滚动位置。现有 `AudioPlayPage` 的旧完成回调未被覆盖。
+- 新增回归：TTS 测试覆盖从正文偏移绑定剩余句子、句内偏移和两种选区朗读模式切换；HTTP TTS 测试覆盖请求头/响应类型语义、JSON 错误响应和响应类型正则；Android HTTP 集成测试使用本地有效 WAV 验证播放器完成事件及连续句子推进；纯 Dart 环境没有 Flutter `ServicesBinding` 时，偏好写入异常被捕获为内存模式，不产生未处理 Future。
+- 定向验收：TTS + ReaderSelectableText `8/8`、HTTP TTS `4/4`、HTTP Android 集成 `1/1` 通过。
+- 全量验收：Flutter `455` 通过，3 个既有在线 smoke 按配置跳过；Rust workspace 串行门禁 `117/117` 通过；Android HTTP 集成构建成功；`git diff --check` 通过。Rust 使用绝对 Cargo 路径并清除命令级代理后稳定通过。真实 Android TTS 集成门禁因设备初始化状态 `-1` 未通过，不能以全量离线测试替代。
+- 静态检查：Dart 格式化通过；针对本步文件无新增诊断；全仓 `flutter analyze` 仍为仓库既有 `47` 条诊断。
+- 平台保护修正：vendored `flutter_tts` Android 插件新增初始化状态查询；`TtsService` 仅在 Android `TextToSpeech.SUCCESS(1)` 且初始化超时门禁通过后标记平台可用。无 TTS 引擎时不再让 `speak` 永久排队，阅读页可回到不可用提示。
+- 设备验收尝试：`emulator-5556` 上的 `module4k28_android_tts_bridge_test.dart` 已从原先整体挂起收敛为 `Android TTS initialization failed: -1` 的明确失败；该设备没有可用系统 TTS 引擎，故真实 `onStart/onDone` 音频事件门禁仍未通过，不修改测试断言。
+- 断行约束：本子步骤只使用既有展示正文的字符偏移和既有 TTS 句子队列推进阅读位置，不修改正文原文、净化顺序、中文断行、分页输入或章节位置映射，严格保持《重写行为约束规范》第 3 条。
+- 当前边界：连续模式已支持当前章剩余正文、句子推进、分页/滚动位置同步和下一章队列；平台初始化失败现在会在 3 秒内降级。HTTP TTS 已通过 Android 集成测试：本地 HTTP 端点返回有效 WAV，播放器完成事件驱动两句连续推进并回到 `idle`；系统 TTS 仍未完成真实引擎验收。本次 `emulator-5556` 复核得到 `tts_default_synth=null`、无可解析的 Android TTS 服务；使用临时外部静音引擎仍返回初始化状态 `-1`，不把它当作真实语音通过。恢复方案：在同一模拟器安装并启用可用 Android TTS 引擎及语音数据后，重新构建/安装 APK，运行 `flutter test integration_test/module4k28_android_tts_bridge_test.dart -d emulator-5556`，验证 `flutter_tts` 的 `onStart`、`onCompletion`、暂停/停止和连续下一章事件；HTTP TTS 的真实外部书源音频格式、鉴权和错误重试仍需使用实际端点复验。异常 TTS 重试、后台服务通知、跨进程音频焦点仍沿用现有边界。词典、正文搜索、替换、浏览器、分享等选中文本动作，以及真实 WebDAV 服务器认证、TLS、代理、权限、服务器 ETag、跨设备并发和模块 4 最终全量回归仍未完成。
+
+#### 模块 4K-29：选中文本词典
+
+- 原版对照依据：`legado-main/app/src/main/res/menu/content_select_action.xml` 的 `menu_dict`、`ReadBookActivity.kt` 的 `DictDialog(selectedText)` 入口，以及 `ui/dict/DictDialog.kt` / `DictViewModel.kt`；空文本提示并关闭，只加载启用规则，按排序创建 Tab，首次查询第一条规则，切换 Tab 查询当前规则，失败显示错误文本。
+- 差异确认：重写版选区菜单此前只有书签、想法和朗读，已有字典规则管理与轻量 HTTP 测试能力但没有阅读器词典入口、启用规则 Tab 查询和查询状态隔离。
+- 本地修改：新增 `DictLookupSheet`，复用 `DictRulePrefs.load` 和 `DictRuleTester.test`；过滤并排序启用规则，显示加载中、无规则、结果和错误状态；使用查询代数令牌避免旧 Tab 请求覆盖当前结果；新增 `DictResultContent`，按原版结果前缀渲染轻量 Markdown/HTML、图片、链接和按钮回调；`ReaderSelectableText` 增加固定顺序的“词典”菜单项，分页、滑动和滚动三种正文模式统一接入；空选区只提示，不打开面板。
+- 新增回归：`test/widget/dict_lookup_sheet_test.dart` 覆盖启用规则排序与首 Tab、Tab 切换旧结果隔离、查询失败、空文本入口，以及 HTML/Markdown 结果、图片和按钮回调；既有 `ReaderSelectableText`、书签、想法和朗读测试继续保留。
+- 断行约束：本子步骤只新增选区词典动作和独立结果面板，不修改正文原文、净化顺序、中文断行、分页输入、章节位置映射或 TTS 队列，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：词典基础定向测试 `11/11` 加结果渲染定向测试 `6/6` 通过；Flutter 全量 `457` 通过，3 个既有在线 smoke 按配置跳过；Rust workspace 串行门禁 `117/117` 通过；Android `flutter build apk --debug` 成功；`git diff --check` 通过；`flutter analyze` 保持仓库既有 `47` 条诊断。本步未修改测试断言来绕过失败，首次渲染测试失败原因是 `RichText/WidgetSpan` finder 结构，已改为检查对应 widget 语义。
+- 当前边界：结果层已支持常见 HTML/Markdown、图片、链接和按钮回调，但不宣称完整 Markwon/Glide 行为；`DictRuleTester` 对 `@js:` 和复杂 `showRule` 仍按既有轻量测试能力展示说明/原文，不宣称完整 Rhino/AnalyzeUrl 兼容；真实 Android TTS、WebDAV 和其他选中文本动作仍未完成。
+
+#### 模块 4K-30：选中文本正文搜索
+
+- 原版对照依据：`legado-main/app/src/main/res/menu/content_select_action.xml` 的 `menu_search_content`、`ReadBookActivity.kt` 的 `searchContentQuery = selectedText` 与 `openSearchActivity(selectedText)`，以及 `ui/book/searchContent/SearchContentActivity.kt` 的初始 `searchWord` 行为；选区文本作为查询词打开正文搜索页，搜索页继续负责当前章/缓存章/联网范围、正则和净化选项。
+- 差异确认：重写版已有完整 `SearchContentPage` 和阅读器内搜索结果定位，但选区上下文菜单此前没有“正文搜索”，也没有把选中文字传入搜索页作为初始查询。
+- 本地修改：`ReaderSelectableText` 在“词典”后增加“正文搜索”；`ReaderPage` 将选中文字 trim 后传给现有 `SearchContentPage.open(initialQuery: ...)`，三种正文模式统一接入；`SearchContentPage` 增加搜索代数令牌、停止搜索按钮和初始偏好加载门禁，旧搜索的迟到缓存/联网结果不再覆盖新查询；原有搜索结果回传和阅读器章节/位置定位路径不变。
+- 新增回归：搜索页缓存章节查询、选区组件和搜索偏好定向回归 `7/7` 通过；新增停止搜索丢弃迟到结果回归 `1/1` 通过；不修改正文原文或搜索匹配算法。
+- 断行约束：本子步骤只增加选区到正文搜索页的入口和初始查询参数，不修改正文清洗、中文断行、分页输入、章节位置映射或搜索结果定位语义，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：正文搜索定向测试 `7/7`、停止搜索并发回归 `1/1` 通过；Flutter 全量 `458` 通过，3 个既有在线 smoke 按配置跳过；Rust workspace 串行门禁 `117/117` 通过；Android `flutter build apk --debug` 成功；`git diff --check` 通过；`flutter analyze` 保持仓库既有 `47` 条诊断，未新增本步诊断。
+- 当前边界：本步只处理选区正文搜索入口；搜索页的真实全书联网范围仍受缓存、书源可用性和网络状态影响，替换、浏览器、分享等后续选区动作以及真实 WebDAV 验收仍未完成。
+
+#### 模块 4K-31：选中文本浏览器
+
+- 原版对照依据：`legado-main/app/src/main/res/menu/content_select_action.xml` 的 `menu_browser`，以及 `legado-main/app/src/main/java/io/legado/app/ui/book/read/TextActionMenu.kt`；绝对 `http/https` 文本执行 `Intent.ACTION_VIEW`，普通文本执行 `Intent.ACTION_WEB_SEARCH`。
+- 差异确认：重写版选区菜单此前没有“浏览器”；正文 HTML 链接已有独立打开逻辑，但不能覆盖选中文字作为网页地址或搜索词的两种原版行为。
+- 本地修改：`ReaderSelectableText` 在“正文搜索”后增加“浏览器”；新增 `reader_selection_browser.dart`，按原版 `String.isAbsUrl` 的大小写不敏感 `http://`/`https://` 前缀分类；Android 通过 `MethodChannel('legado_flutter/system')` 调用 `ACTION_WEB_SEARCH`，其他平台或通道不可用时回退到 Google Web Search URL；绝对网页地址统一使用 `url_launcher` 外部浏览器。阅读器三种正文模式统一接入。
+- 新增回归：绝对 HTTP(S) URL、普通文本、空文本、非 HTTP URI 和原版前缀分类共 `5/5`；与选区、正文搜索和缓存搜索相关定向回归合计 `12/12`；Android `flutter build apk --debug` 成功。
+- 断行约束：本子步骤只增加选区浏览器动作和 Android 系统 Intent 适配，不修改正文清洗、中文断行、分页输入、章节位置映射或搜索算法，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：浏览器分支定向测试 `5/5` 通过；选区、正文搜索和缓存搜索相关定向回归 `13/13` 通过；Flutter 全量 `459` 通过，3 个既有在线 smoke 按配置跳过；Rust workspace 串行门禁 `117/117` 通过；Android `flutter build apk --debug` 成功；`git diff --check` 通过；`flutter analyze` 保持仓库既有 `47` 条诊断，未新增本步诊断。
+- 当前边界：非 Android 平台没有统一的系统 Web Search Intent，使用 Google Web Search URL 回退；替换、分享等后续选区动作以及真实 WebDAV 验收仍未完成。
+
+#### 模块 4K-32：选中文本分享
+
+- 原版对照依据：`legado-main/app/src/main/res/menu/content_select_action.xml` 的 `menu_share_str` 与 `TextActionMenu.kt`；分享动作直接调用 `context.share(callBack.selectedText)`，位于浏览器菜单之后，不对选中文字做 trim 或净化。
+- 差异确认：重写版选区菜单此前已支持书签、想法、朗读、词典、正文搜索和浏览器，但缺少系统分享入口。
+- 本地修改：`ReaderSelectableText` 在“浏览器”后增加“分享”；`ReaderPage` 使用 `share_plus` 将选中文字原样交给系统分享面板，异常时提示；分页、滑动和滚动三种正文模式统一接入。
+- 新增回归：`reader_selection_share_test.dart` 覆盖原版分享主题、原样保留空白和空选区保护，共 `3/3`；与浏览器、正文搜索、缓存搜索及选区组件定向回归继续保持通过。
+- 断行约束：本子步骤只增加选区系统分享动作，不修改正文原文、净化顺序、中文断行、分页输入、章节位置映射或其他菜单动作，严格保持《重写行为约束规范》第 3 条。
+- 验收结果：分享定向测试 `3/3` 通过；Flutter 全量 `460` 通过，3 个既有在线 smoke 按配置跳过；Rust workspace 串行门禁 `117/117` 通过；Android `flutter build apk --debug` 成功；`git diff --check` 通过。`flutter analyze` 仍报告仓库基线的 `47` 条 lint/info（含 `flutter_tts` 子包缺少 `lints` 配置），4K-32 新增的分享代码未产生诊断；不在本步修改无关基线问题。若后续测试失败，先报告失败原因和方案，不修改测试断言。
+- 当前边界：分享行为依赖目标平台可用的系统分享服务；真实 Android 分享面板交互仍需模拟器人工验收，WebDAV 与模块 4 最终回归仍未完成。
+
+#### 模块 4K-33：应用启动 WebDAV 目录初始化
+
+- 原版对照依据：`legado-main/app/src/main/java/io/legado/app/help/AppWebDav.kt` 的 `init`/`upConfig`；启动时在凭证有效后依次检查根目录并创建 `bookProgress`、`books`、`background`，初始化失败不应阻止应用进入主界面。
+- 差异确认：重写版配置页保存时已有目录初始化，但应用启动路径没有调用 `WebDavSetupService`；已保存配置的首次同步/备份可能在远端目录尚未创建时直接失败。
+- 本地修改：`AppBootstrap` 在 Rust、数据库和网络配置初始化完成后读取 WebDAV 配置；完整凭证存在时调用统一 `WebDavSetupService.initialize`，按原版顺序执行；远端不可用时记录诊断并继续加载书架和首屏，配置页即时初始化行为保持不变。
+- 新增回归：`startup_webdav_setup_test.dart` 覆盖不完整配置跳过、就绪配置只调用一次和网络失败不阻塞启动，共 `3/3`。
+- 断行约束：本子步骤只改变应用启动时的 WebDAV 目录准备时机，不修改正文原文、净化顺序、中文断行、分页输入、章节位置映射或 TTS 队列，严格保持《重写行为约束规范》第 3 条。
+- 当前边界：启动初始化仍需真实 WebDAV 服务验证凭证、TLS、权限和服务器目录响应；本地 TCP mock 仅作为协议契约，不替代真实服务门禁。
+
+#### 模块 4K-34：远程书籍目录初始化与默认排序
+
+- 原版对照依据：`legado-main/app/src/main/java/io/legado/app/model/remote/RemoteBookWebDav.kt` 的初始化 `makeAsDir()` 与 `RemoteBookViewModel.kt` 的 `RemoteBookSort.Default`；远程书籍页首次加载前确保 `books/` 存在，默认按 `lastModify` 降序且目录排在文件之前。
+- 差异确认：重写版远程书籍页仍保留“Rust 暂无 mkdir”的旧 TODO，首次只列目录；同时虽然 `WebDavEntry` 已带 `lastModified`，时间排序仍错误地复用了文件名比较。
+- 本地修改：远程书籍页首次加载/切换配置时调用 `webdavEnsureDir`，成功后复用状态避免每次刷新重复创建；默认排序改用服务端 `lastModified`，保留目录优先和名称模式；目录创建失败提示改为权限/访问检查，不再指导用户手动创建已由客户端负责的目录。
+- 新增回归：`remote_book_sort_test.dart` `2/2`，覆盖目录优先的时间降序和名称升降序。
+- 断行约束：本子步骤只修改 WebDAV 远程书籍目录准备和条目排序，不修改正文原文、净化顺序、中文断行、分页输入、章节位置映射或 TTS 队列，严格保持《重写行为约束规范》第 3 条。
+- 当前边界：远程书籍压缩包及 UMD/PDF/MOBI 等格式导入仍未移植；真实 WebDAV 服务的目录创建、时间字段和权限行为仍需在线验证。
+
+#### 模块 4K-35：远程 ZIP 书籍导入
+
+- 原版对照依据：`legado-main/app/src/main/java/io/legado/app/model/remote/RemoteBookWebDav.kt` 与 `model/localBook/LocalBook.kt`；远程列表包含 `zip/rar/7z`，选择压缩包后按书籍扩展名筛选解压并逐本导入。
+- 差异确认：重写版远程页此前只下载并导入单个 TXT/EPUB，ZIP 被列出但始终显示“不支持导入”，RAR/7z 也没有可靠解析库。
+- 本地修改：新增 `RemoteArchiveImportService`，对远程 ZIP 做大小上限、路径穿越和总解压大小门禁，只提取 TXT/EPUB 到隔离目录，再逐本复用 `BookProvider.importLocalBookFromPath`；远程页将 ZIP 标为可导入，RAR/7z/UMD/PDF/MOBI 仍保留不支持提示。
+- 新增回归：`remote_archive_import_service_test.dart` 覆盖 TXT/EPUB 提取、无关文件过滤和路径穿越门禁；若 ZIP 没有可导入文件或解压总量超限则返回明确错误。
+- 断行约束：本子步骤只处理远程文件解包和本地导入入口，不修改正文原文、净化顺序、中文断行、分页输入、章节位置映射或 TTS 队列，严格保持《重写行为约束规范》第 3 条。
+- 当前边界：RAR/7z 及原版其它本地格式仍未移植；真实 WebDAV 下载、压缩包编码/损坏包和多本导入失败部分成功策略仍需在线与设备回归。
+
+#### 模块 4K-36：远程书籍 WebDAV 端口迁移
+
+- 重构对照依据：`docs/REFACTOR_PLAN.md` R5 与 `docs/REFACTOR_ARCHITECTURE_BASELINE.md` 的依赖方向；页面不得直接依赖 `lib/src/rust` 生成绑定，基础设施适配器负责 FRB DTO 映射。
+- 差异确认：远程书籍页和排序服务此前直接导入生成的 `WebDavEntry` 与 WebDAV 函数，替换 FRB 或为页面注入测试实现都需要触碰页面代码。
+- 本地修改：新增纯 Dart `WebDavEntry` 领域 DTO、`WebDavRepository` 端口和 `FrbWebDavRepository` 适配器；远程书籍页改为通过端口执行目录列出、目录初始化和下载，保留默认排序、ZIP 导入和错误语义；生成绑定仅留在 infrastructure 适配器。
+- 新增回归：`webdav_repository_contract_test.dart` `1/1`，验证端口可替换且不暴露 FRB 类型；远程排序和 ZIP 导入回归继续通过。
+- 断行约束：本子步骤只反转远程 WebDAV 调用依赖和 DTO 映射，不修改正文原文、净化顺序、中文断行、分页输入、章节位置映射或 TTS 队列，严格保持《重写行为约束规范》第 3 条。
+- 当前边界：备份页、阅读进度同步、书签同步的 WebDAV 协议调用已迁移到 `WebDavRepository`；真实 WebDAV 服务验证仍未完成。
+
+#### 模块 4K-37：备份 WebDAV 端口迁移
+
+- 重构对照依据：`docs/REFACTOR_PLAN.md` R5 的同步/备份基础设施边界；`BackupService` 负责备份格式和错误语义，FRB WebDAV 调用应集中在 infrastructure 适配器。
+- 差异确认：备份服务和配置页此前直接导入生成 `WebDavEntry` 并调用 `webdavList/Upload/Download/Delete/Move`，导致备份业务和 FRB 绑定耦合。
+- 本地修改：扩展 `WebDavRepository` 覆盖备份所需的列表、上传、下载、删除和 MOVE；`FrbWebDavRepository` 集中完成生成 DTO 映射；`BackupService` 和 `BackupConfigPage` 改用领域 DTO/端口，保留原备份文件名、ZIP、权限提示、失败不覆盖和重命名语义。
+- 新增回归：备份服务、备份配置页和 `webdav_repository_contract_test.dart` 定向 `13/13` 通过。
+- 断行约束：本子步骤只反转备份 WebDAV 调用依赖和 DTO 映射，不修改正文原文、净化顺序、中文断行、分页输入、章节位置映射或 TTS 队列，严格保持《重写行为约束规范》第 3 条。
+- 当前边界：阅读进度同步、书签同步已使用 `WebDavRepository`；真实 WebDAV 服务认证、TLS、权限、ZIP 往返和 MOVE 行为仍需在线验证。
+
+#### 模块 4K-38：阅读进度同步 WebDAV 端口迁移
+
+- 重构对照依据：`docs/REFACTOR_PLAN.md` R5 的同步基础设施边界；阅读进度同步的书籍合并和时间戳策略应保留在服务层，WebDAV 协议调用由 Repository 适配器承接。
+- 差异确认：阅读进度服务已具备 ETag 条件上传和 412 重试，但批量下载的目录条目类型仍残留 FRB 生成类型，服务层与生成绑定存在迁移遗漏。
+- 本地修改：批量下载改用领域 `WebDavEntry`；默认列表、下载和条件上传继续通过 `WebDavRepository`，保留旧的测试注入器和阅读进度同步时间语义。
+- 新增/更新回归：阅读进度同步与 ETag 定向测试及 WebDAV Repository 契约测试共 `12/12` 通过；迁移遗漏先以编译/定向测试暴露，再修复生产代码和测试夹具，未修改断言掩盖问题。
+- 断行约束：本子步骤只反转阅读进度 WebDAV 调用的 DTO/端口依赖，不修改正文原文、净化顺序、中文断行、分页输入、章节位置映射或 TTS 队列，严格保持《重写行为约束规范》第 3 条。
+- 当前边界：书签同步的协议调用已通过 `WebDavRepository`，书签合并仍由服务层负责；真实 WebDAV 条件 PUT、ETag 变化和多客户端竞争仍需在线验证。
+
+#### 模块 4K-39：书签同步 WebDAV 端口迁移
+
+- 重构对照依据：`docs/REFACTOR_PLAN.md` R5 的同步基础设施边界；书签合并、冲突重试和进程内串行策略保留在服务层，协议调用由 WebDAV Repository 适配器承接。
+- 差异确认：书签同步服务的列表、下载、普通上传和条件上传默认实现仍直接引用 FRB 生成 API，测试夹具也暴露生成的 `WebDavEntry` 类型。
+- 本地修改：书签同步服务改用领域 `WebDavEntry`、`WebDavRepository` 和 `FrbWebDavRepository` 默认实现；保留可替换的下载、列表、上传和条件上传注入器，以及原有 404、ETag 缺失保护、412 重试和同步锁行为。
+- 新增/更新回归：书签同步服务和 ETag 定向测试、WebDAV Repository 契约测试共 `12/12` 通过；测试夹具迁移为领域 DTO，未削弱原有断言。
+- 断行约束：本子步骤只反转书签同步 WebDAV 调用的 DTO/端口依赖，不修改正文原文、净化顺序、中文断行、分页输入、章节位置映射或 TTS 队列，严格保持《重写行为约束规范》第 3 条。
+- 当前边界：WebDAV 启动初始化已通过 `WebDavRepository`；真实 WebDAV 认证、TLS、权限和多客户端竞争仍需在线验证。
+
+#### 模块 4K-40：WebDAV 启动初始化端口迁移
+
+- 重构对照依据：`docs/REFACTOR_PLAN.md` R5 的基础设施边界；启动初始化必须保持原版“检查根目录、确保根目录、依次确保 `bookProgress`/`books`/`background`”顺序，同时业务服务不直接依赖 FRB 绑定。
+- 差异确认：启动 WebDAV 初始化服务仍直接导入生成的 `webdavCheck` 和 `webdavEnsureDir`，与远程书籍、备份、同步服务使用的 Repository 边界不一致。
+- 本地修改：`WebDavRepository` 增加 `check` 端口，FRB 适配器负责映射 `webdavCheck`；`WebDavSetupService` 默认实现改走 Repository，保留检查和目录创建的可注入测试入口及原版顺序。
+- 新增/更新回归：启动初始化、WebDAV Repository 契约、书签同步和 ETag 定向测试共 `16/16` 通过；Rust workspace `117/117`，Flutter 全量 `469` 通过且 3 个既有在线 smoke 跳过，Android debug APK 构建成功，`git diff --check` 通过。
+- 断行约束：本子步骤只迁移 WebDAV 启动初始化的协议端口，不修改正文原文、净化顺序、中文断行、分页输入、章节位置映射或 TTS 队列，严格保持《重写行为约束规范》第 3 条。
+- 当前边界：真实 WebDAV 服务认证、TLS、权限和启动网络不可用时的设备行为仍需模拟器/在线服务验证；TTS 真实 Android 引擎门禁按用户要求暂缓。
+
+#### 模块 4K-41：WebDAV 设备启动验收记录
+
+- 设备环境：雷电 `emulator-5556`，APK debug 构建产物 `build/app/outputs/flutter-apk/app-debug.apk`。
+- 验收结果：ADB 安装成功；`com.legado.legado_flutter/.MainActivity` 启动成功；进程保持运行并位于前台，未发现 FATAL 崩溃。
+- 已知限制：当前工作区没有可用 WebDAV 服务地址、账号或密码，无法执行真实远端目录/文件读写门禁；AndroidX sidecar 的类探测告警未阻止启动，记录为模拟器平台告警，不修改代码掩盖。
+- 断行约束：本记录只涉及 APK 安装和应用启动，不修改正文原文、净化顺序、中文断行、分页输入、章节位置映射或 TTS 队列，严格保持《重写行为约束规范》第 3 条。
+- 后续边界：真实 WebDAV 认证、TLS、权限、远端目录初始化和跨设备同步仍需在有服务凭证的设备环境运行；代码层继续进入 R6 页面端口收敛。
+
+#### 模块 4K-42：R5-A Android 应用 WebDAV smoke
+
+- 本地修改：新增 `integration_test/r5_android_webdav_application_smoke_test.dart`，通过 `R5_WEBDAV_URL` 注入设备可达地址；不修改生产 WebDAV、备份、进度、书签或阅读正文逻辑。
+- 设备环境：雷电 `emulator-5556`；标准 `10.0.2.2` 在该网络栈不可达，实际使用宿主机 `http://192.168.100.52:19080/`。
+- 验收范围：真实 FRB WebDAV 目录初始化、书签上传/合并下载、阅读进度上传/读取、`BackupConfigPage` 上传按钮触发和远端 ZIP 列表。
+- 定向验收：Android 集成 `1/1`；R5 相关 Flutter 定向回归 `52/52`；Rust workspace `117/117`；JS 兼容 Rust `18/18`、Flutter `4/4`；新增测试定向 `flutter analyze` 无诊断；`git diff --check` 通过。
+- 全量门禁：并发 `flutter test` 曾因 7565 在线源时序出现 7 个失败，未修改测试；单独串行 7565 回归通过后，`flutter test --concurrency=1` 为 `509` 通过、`3` 个既有在线 smoke 跳过。
+- 断行约束：本子步骤只验证 WebDAV 应用入口和同步/备份元数据，不修改正文原文、净化顺序、中文断行、分页输入、章节位置映射或 TTS 队列。
+- 当前边界：R5-A 已完成；R5-B 双客户端 ETag/`412` 冲突已完成；真实外部 WebDAV 服务和 R5 最终退出仍待完成，模块 4/R5 不关闭。
+
+#### 模块 4K-43：R5-B 双客户端 ETag/412 冲突 smoke
+
+- 本地修改：新增 `integration_test/r5_android_webdav_cross_client_conflict_test.dart`，使用隔离远端根目录模拟两个客户端，不修改生产同步服务或冲突断言。
+- 验收范围：书签并集写回、阅读进度并发冲突分类、旧 ETag 条件写入收到 `412`、重读远端和新 ETag 条件写回。
+- 设备环境：雷电 `emulator-5556`，WebDAV 地址 `http://192.168.100.52:19080/`。
+- 定向验收：Android 集成 `1/1`；新增测试 `flutter analyze` 无诊断。
+- 全量验收：Rust workspace `117/117`；串行 Flutter `509` 通过、3 个既有在线 smoke 跳过；JS 兼容 Rust `18/18`、Flutter `4/4`；`git diff --check` 通过。
+- 断行约束：本子步骤只处理同步元数据、ETag 条件写入和冲突决策，不修改正文原文、净化顺序、中文断行、分页输入、章节位置映射或 TTS 队列。
+- 当前边界：R5-B 已完成；真实外部 WebDAV 服务和真实物理第二设备仍待验证，下一步为 R5-C 外部服务验收，不得提前关闭 R5。
+
+#### 模块 4K-44：R5-C 外部 WebDAV 验收夹具
+
+- 本地修改：新增 `integration_test/r5_external_webdav_smoke_test.dart`，通过
+  `R5_EXTERNAL_WEBDAV_*` 参数注入服务地址、账号、密码、可选错误密码和代理；未提供
+  地址时明确跳过，不伪造外部通过结果。
+- 验收范围：真实服务认证目录访问、可选权限失败、服务器 ETag、旧 ETag 条件写入
+  `412`、MOVE，以及 ZIP 备份字节上传/下载和恢复解析。
+- 本地夹具验证：雷电 `emulator-5556` 连接本地 Node WebDAV，完整测试 `1/1` 通过；
+  该结果只证明验收夹具和 FRB 链路可运行，不计入真实外部 WebDAV 证据。
+- 无外部凭证时的定向行为：同一测试 `1` 项跳过；静态分析无诊断；Rust WebDAV
+  crate `12/12` 通过，1 个既有真实服务测试继续按设计 ignored。
+- 断行约束：本子步骤只验证 WebDAV 传输、备份字节和错误状态，不修改正文原文、
+  净化顺序、中文断行、分页输入、章节位置映射或 TTS 队列。
+- 当前边界：本地 R5 开发退出门禁已完成；正式或主流 WebDAV 服务的 TLS/服务权限/服务器实现差异仍待发布前提供外部依赖并执行，不影响继续进入后续重构阶段，但不得标记发布验收完成。
+
+#### 模块 4K-45：R5 备份恢复与失败策略 Android smoke
+
+- 本地修改：新增 `integration_test/r5_android_webdav_backup_restore_failure_test.dart`
+  和 `test/services/backup_failure_policy_test.dart`；不修改 ZIP 格式、同步冲突策略或
+  正文阅读链路。
+- 验收范围：真实 FRB 数据库中的书籍/书源 ZIP 上传、清空后远端恢复；损坏 ZIP、缺少
+  `database` 字段、远端 404 恢复失败时本地已恢复数据保持不变；401/403/405/501 的
+  UI 错误策略保持原备份或当前数据不变。
+- 定向验收：`flutter analyze integration_test/r5_android_webdav_backup_restore_failure_test.dart
+  test/services/backup_failure_policy_test.dart` 无诊断；`flutter test
+  test/services/backup_service_test.dart test/services/backup_failure_policy_test.dart
+  test/widget/backup_config_page_test.dart` 为 `17/17` 通过。
+- Android 本地验收：雷电 `emulator-5556` 使用本地 Node WebDAV，`flutter test
+  integration_test/r5_android_webdav_backup_restore_failure_test.dart -d emulator-5556
+  --dart-define=R5_WEBDAV_URL=http://192.168.100.52:19080/` 为 `1/1` 通过。
+- R5 本地合并门禁：R5-A、R5-B 和本测试分别为 `1/1` 通过；串行 Flutter 全量为
+  `512` 通过、`3` 个既有在线 smoke 跳过；Rust workspace 返回 `0`；JS 兼容返回 `0`；
+  `git diff --check` 通过。
+- 当前状态：本地开发退出门禁已完成；正式或主流 WebDAV 发布前验收仍待执行。
+
+#### 模块 4K-46：R6 UI 数据库/桥接状态直连清理
+
+- 本地修改：`MainShell` 不再创建 `DatabaseHelper()`；内置书源空库初始化收敛到
+  `SourceProvider` Repository。新增 `DatabaseStatusPort`、FRB 适配器和
+  `DatabaseStatusService`，备份页和我的页不再直接读取数据库/引擎 Bridge 状态。
+- 定向测试：SourceProvider/MainShell `6/6`；数据库/引擎状态、备份页、我的页 `9/9`。
+- 定向 analyze：新增端口和 Provider/MainShell 无诊断；`MyPage` 保留原有 2 条
+  `RadioGroup` 弃用提示，归入 R6 analyze 批次，不由本步修改掩盖。
+- 断行约束：本子步骤只调整 UI 状态依赖方向，不修改正文原文、中文断行、分页输入、
+  章节位置映射或 TTS 队列。
+
 ## 4. 每个模块的固定工作流
 
 1. 运行上一步全量测试，记录基线。
@@ -557,6 +977,8 @@
 6. 运行格式化、静态分析、模块测试、Rust 全量测试和 Flutter 全量测试。
 7. 更新本文档中的模块状态与测试记录。
 8. 汇报修改、原版对照依据、测试结果、已知偏差；停止并等待下一步确认。
+
+当前执行门禁：项目先执行 `REFACTOR_PLAN.md` 的 R0 架构盘点；R0 退出条件满足后进入 R1、R2。目录 2A/2B 只有在 R4 开始时执行，且每个实现小步都必须定向测试通过，2A 收尾后再运行全量门禁进入 2B。任何重构阶段都不得以模块 3 已完成为理由放宽第 3 条断行/分页约束。
 
 ## 5. 测试门禁
 
@@ -665,3 +1087,12 @@ $env:RUN_ONLINE_SMOKE='1'; flutter test test/integration/src_7497_smoke_test.dar
 - Flutter 全量测试：254/254 通过；外部 smoke 中失效站点的 HTTP 400/401/403 仍按既有降级策略通过。
 - 静态检查：`git diff --check` 通过；`flutter analyze` 仍为仓库基线 47 条诊断，未新增；相关 Dart 文件已格式化。
 - 已知边界：本模块未修改正文清洗、中文断行或分页排版；行为约束规范第 3 条及 `§5.1`–`§5.3` 留待模块 3 按固定字体、DPR、视口和配置建立逐页对比基线。
+
+### 模块 2 重新开启：2A/2B 计划记录（2026-07-25 起持续）
+
+- 触发原因：用户在同一书源对比原版 Jingshiro-legado 后确认，重写版目录默认顺序疑似反向，且目录打开和加载明显卡顿；旧模块 2 门禁只覆盖分页、章节身份和去重，未覆盖书籍级 `reverseToc` 与目录首帧性能。
+- 已确认的参考行为：原版 DAO 按章节 `index` 正序读取；书源 `chapterList` 顺序标记和书籍持久化 `reverseToc` 分层处理；菜单反序会重写章节 `index`；目录列表使用虚拟化显示，字数和书签等非首帧元数据不应阻塞目录显示。
+- 当前代码基线：`Book` 已独立保存 `sourceUrl` 与 `tocUrl`，Rust schema 17 支持旧库迁移；目录请求优先复用 `book.tocUrl`，缺失时才回退详情请求。定向测试、Rust workspace 和 Flutter 全量均通过。
+- 2B 合成基线：`emulator-5556`，Android 9，720x1280，DPI 320，DPR 2，2000 章，顺序和连续 index 通过。冷构建首帧 P50/P95 为 59.555/457.953 ms，滚动帧 P50/P95 为 6.126/11.852 ms；热构建首帧 P50/P95 为 17.209/45.923 ms，滚动帧 P50/P95 为 5.742/11.536 ms。该数据含 Flutter/引擎首次采样抖动，不能替代原版同书源对照。
+- 历史状态（截至本节早期记录）：2A 已完成；2B 尚未完成。当时原版 `io.legado.app.debug` 书架为空，尚未取得同一本真实书的原版冷/热目录数据。
+- 后续结果：该历史记录之后已补齐同一真实书源的原版/重写版冷热请求轨迹、5 轮采样、Release 帧和 PSS 证据，2B 已按本文件第 2B 节收尾记录关闭；后续新增差异仍须重新运行对应门禁。

@@ -2,6 +2,8 @@
 ///
 /// Splits on `,` and `，`, trims, drops empty segments, dedupes in order.
 
+library;
+
 final _groupDelimiter = RegExp(r'[,，]');
 
 List<String> splitSourceGroups(String raw) {
@@ -39,9 +41,7 @@ String addSourceGroupTag(String raw, String tag) {
 String removeSourceGroupTag(String raw, String tag) {
   final trimmed = tag.trim();
   if (trimmed.isEmpty) return joinSourceGroups(splitSourceGroups(raw));
-  return joinSourceGroups(
-    splitSourceGroups(raw).where((t) => t != trimmed),
-  );
+  return joinSourceGroups(splitSourceGroups(raw).where((t) => t != trimmed));
 }
 
 String renameSourceGroupTag(String raw, String from, String to) {

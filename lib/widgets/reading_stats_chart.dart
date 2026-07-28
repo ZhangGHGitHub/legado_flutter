@@ -1,35 +1,25 @@
 import 'package:flutter/material.dart';
 
-import '../src/rust/api.dart' as rust_api;
+import '../domain/reading_stats.dart';
 
 /// 近 N 日阅读字数柱状图
 class ReadingBarChart extends StatelessWidget {
-  final List<rust_api.DailyReadingStat> daily;
+  final List<DailyReadingStat> daily;
   final int maxBars;
 
-  const ReadingBarChart({
-    super.key,
-    required this.daily,
-    this.maxBars = 14,
-  });
+  const ReadingBarChart({super.key, required this.daily, this.maxBars = 14});
 
   @override
   Widget build(BuildContext context) {
     if (daily.isEmpty) {
-      return const SizedBox(
-        height: 120,
-        child: Center(child: Text('暂无阅读数据')),
-      );
+      return const SizedBox(height: 120, child: Center(child: Text('暂无阅读数据')));
     }
 
     final theme = Theme.of(context);
     final bars = daily.length > maxBars
         ? daily.sublist(daily.length - maxBars)
         : daily;
-    final maxChars = bars.fold<int>(
-      1,
-      (m, d) => d.chars > m ? d.chars : m,
-    );
+    final maxChars = bars.fold<int>(1, (m, d) => d.chars > m ? d.chars : m);
 
     return SizedBox(
       height: 140,
@@ -90,7 +80,7 @@ class ReadingBarChart extends StatelessWidget {
 
 /// 日历热力图（近 35 天，7 列）
 class ReadingHeatmap extends StatelessWidget {
-  final List<rust_api.DailyReadingStat> daily;
+  final List<DailyReadingStat> daily;
 
   const ReadingHeatmap({super.key, required this.daily});
 

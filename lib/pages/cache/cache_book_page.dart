@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../help/book_help.dart';
+import '../../domain/ports/chapter_content_cache_port.dart';
+import '../../infrastructure/cache/file_chapter_content_cache.dart';
 import '../../models/book.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
@@ -16,7 +17,12 @@ import 'download_helpers.dart';
 
 /// 离线缓存管理 — 对齐 Jingshiro `CacheActivity` + `item_download`
 class CacheBookPage extends StatefulWidget {
-  const CacheBookPage({super.key});
+  const CacheBookPage({
+    super.key,
+    this.contentCache = const FileChapterContentCache(),
+  });
+
+  final ChapterContentCachePort contentCache;
 
   @override
   State<CacheBookPage> createState() => _CacheBookPageState();
@@ -47,7 +53,6 @@ class _CacheBookRow {
 }
 
 class _CacheBookPageState extends State<CacheBookPage> {
-  static const _exportService = BookCacheExportService();
   final Map<String, _CacheBookRow> _rows = {};
   final Set<String> _selected = {};
   bool _loading = true;
@@ -66,7 +71,7 @@ class _CacheBookPageState extends State<CacheBookPage> {
     setState(() => _loading = true);
     final map = <String, _CacheBookRow>{};
     for (final book in books) {
-      final stats = await BookHelp.bookCacheStats(book.id);
+      final stats = await widget.contentCache.stats(book.id);
       final dbChapters = await provider.getChapterCount(book.id);
       map[book.id] = _CacheBookRow(
         book: book,
@@ -125,12 +130,13 @@ class _CacheBookPageState extends State<CacheBookPage> {
       return;
     }
 
-    final cachedIds = await BookHelp.listCachedChapterIds(book.id);
+    final cachedIds = await widget.contentCache.listChapterIds(book.id);
     if (!mounted) return;
     final cachedCount = chapters
         .where(
           (c) =>
-              c.isDownloaded || cachedIds.contains(BookHelp.sanitizeId(c.id)),
+              c.isDownloaded ||
+              cachedIds.contains(widget.contentCache.sanitizeChapterId(c.id)),
         )
         .length;
 
@@ -155,6 +161,7 @@ class _CacheBookPageState extends State<CacheBookPage> {
                 .clamp(0, chapters.length - 1)
           : 0,
       cachedIds: cachedIds,
+      sanitizeChapterId: widget.contentCache.sanitizeChapterId,
     );
     if (toDownload.isEmpty) {
       ScaffoldMessenger.of(
@@ -193,7 +200,7 @@ class _CacheBookPageState extends State<CacheBookPage> {
     );
     if (ok != true) return;
     for (final id in _selected) {
-      await BookHelp.clearBookCache(id);
+      await widget.contentCache.clearBook(id);
     }
     if (!mounted) return;
     setState(() {
@@ -222,16 +229,17 @@ class _CacheBookPageState extends State<CacheBookPage> {
       ),
     );
     if (ok != true) return;
-    await BookHelp.clearAllCache();
+    await widget.contentCache.clearAll();
     if (mounted) await _reload();
   }
 
   Future<void> _exportBooks(List<Book> books) async {
     if (books.isEmpty) return;
-    final text = await _exportService.buildBooksText(
-      books: books,
-      loadChapters: context.read<BookProvider>().getLocalChapters,
-    );
+    final text = await BookCacheExportService(contentCache: widget.contentCache)
+        .buildBooksText(
+          books: books,
+          loadChapters: context.read<BookProvider>().getLocalChapters,
+        );
     if (text.isEmpty || !mounted) {
       if (mounted) {
         ScaffoldMessenger.of(

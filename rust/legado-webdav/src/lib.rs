@@ -1,7 +1,7 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use quick_xml::events::Event;
 use quick_xml::Reader;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, IF_MATCH};
 use reqwest::{Client, Proxy};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -31,6 +31,7 @@ pub struct WebDavItem {
     pub is_dir: bool,
     pub size: i64,
     pub last_modified: i64,
+    pub etag: Option<String>,
 }
 
 /// Proxy settings shared with the engine's NetworkConfig.
@@ -89,6 +90,7 @@ impl WebDavClient {
     <d:displayname/>
     <d:getcontentlength/>
     <d:getlastmodified/>
+    <d:getetag/>
     <d:resourcetype/>
   </d:prop>
 </d:propfind>"#;
@@ -158,14 +160,25 @@ impl WebDavClient {
     }
 
     pub async fn upload(&self, local: &[u8], remote: &str) -> Result<()> {
+        self.upload_with_etag(local, remote, None).await
+    }
+
+    pub async fn upload_with_etag(
+        &self,
+        local: &[u8],
+        remote: &str,
+        etag: Option<&str>,
+    ) -> Result<()> {
         let target = self.join_path(remote)?;
-        let resp = self
+        let mut request = self
             .client
             .put(target)
             .headers(self.auth_headers()?)
-            .body(local.to_vec())
-            .send()
-            .await?;
+            .body(local.to_vec());
+        if let Some(etag) = etag {
+            request = request.header(IF_MATCH, etag);
+        }
+        let resp = request.send().await?;
         if !resp.status().is_success() {
             return Err(http_status_error("上传", resp.status()));
         }
@@ -194,7 +207,7 @@ impl WebDavClient {
             .headers(self.auth_headers()?)
             .send()
             .await?;
-        if !resp.status().is_success() && resp.status().as_u16() != 404 {
+        if !resp.status().is_success() {
             return Err(http_status_error("删除", resp.status()));
         }
         Ok(())
@@ -258,6 +271,7 @@ const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
     <d:displayname/>
     <d:getcontentlength/>
     <d:getlastmodified/>
+    <d:getetag/>
     <d:resourcetype/>
   </d:prop>
 </d:propfind>"#;
@@ -342,6 +356,7 @@ struct ResponseBuilder {
     display_name: String,
     size: i64,
     last_modified: i64,
+    etag: Option<String>,
     is_dir: bool,
 }
 
@@ -351,6 +366,7 @@ enum ResponseField {
     DisplayName,
     ContentLength,
     LastModified,
+    Etag,
 }
 
 impl ResponseField {
@@ -360,6 +376,7 @@ impl ResponseField {
             b"displayname" => Some(Self::DisplayName),
             b"getcontentlength" => Some(Self::ContentLength),
             b"getlastmodified" => Some(Self::LastModified),
+            b"getetag" => Some(Self::Etag),
             _ => None,
         }
     }
@@ -371,6 +388,7 @@ impl ResponseField {
                 | (Self::DisplayName, b"displayname")
                 | (Self::ContentLength, b"getcontentlength")
                 | (Self::LastModified, b"getlastmodified")
+                | (Self::Etag, b"getetag")
         )
     }
 }
@@ -384,6 +402,7 @@ impl ResponseBuilder {
             ResponseField::LastModified => {
                 self.last_modified = parse_http_date_millis(value).unwrap_or(0)
             }
+            ResponseField::Etag => self.etag = (!value.is_empty()).then(|| value.to_string()),
         }
     }
 
@@ -394,6 +413,7 @@ impl ResponseBuilder {
             self.is_dir,
             self.size,
             self.last_modified,
+            self.etag,
             (!self.display_name.trim().is_empty()).then_some(self.display_name),
         )
     }
@@ -405,6 +425,7 @@ fn item_from_href(
     is_dir: bool,
     size: i64,
     last_modified: i64,
+    etag: Option<String>,
     display_name: Option<String>,
 ) -> Option<WebDavItem> {
     let href = href.trim();
@@ -438,6 +459,7 @@ fn item_from_href(
         is_dir,
         size,
         last_modified,
+        etag,
     })
 }
 
@@ -560,6 +582,7 @@ mod tests {
     <d:propstat><d:prop>
       <d:getcontentlength>1024</d:getcontentlength>
       <d:getlastmodified>Wed, 21 Oct 2015 07:28:00 GMT</d:getlastmodified>
+      <d:getetag>&quot;backup-v1&quot;</d:getetag>
     </d:prop></d:propstat>
   </d:response>
 </d:multistatus>"#;
@@ -571,6 +594,7 @@ mod tests {
             .unwrap();
         assert_eq!(item.size, 1024);
         assert_eq!(item.last_modified, 1_445_412_480_000);
+        assert_eq!(item.etag.as_deref(), Some("\"backup-v1\""));
     }
 
     #[test]
@@ -814,5 +838,182 @@ mod tests {
         assert!(requests[2].contains("/remote/legado/legado_backup_latest.json"));
         assert!(move_request.contains("overwrite: f"));
         assert!(requests[3].starts_with("GET /remote/legado/legado_backup_latest.json "));
+    }
+
+    #[tokio::test]
+    async fn conditional_upload_sends_if_match_and_preserves_412_status() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for status in ["201 Created", "412 Precondition Failed"] {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buffer = vec![0_u8; 8192];
+                let size = socket.read(&mut buffer).await.unwrap();
+                requests.push(String::from_utf8_lossy(&buffer[..size]).to_string());
+                let response =
+                    format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                socket.write_all(response.as_bytes()).await.unwrap();
+            }
+            requests
+        });
+
+        let client = WebDavClient::new(&format!("http://{address}/remote"), "", "").unwrap();
+        client
+            .upload_with_etag(b"first", "/legado/backup.json", None)
+            .await
+            .unwrap();
+        let error = client
+            .upload_with_etag(b"second", "/legado/backup.json", Some("\"backup-v1\""))
+            .await
+            .unwrap_err();
+
+        match error {
+            WebDavError::HttpStatus { operation, status } => {
+                assert_eq!(operation, "上传");
+                assert_eq!(status, 412);
+            }
+            other => panic!("expected structured HTTP status, got {other:?}"),
+        }
+
+        let requests = server.await.unwrap();
+        assert!(!requests[0].to_ascii_lowercase().contains("if-match:"));
+        assert!(requests[1]
+            .to_ascii_lowercase()
+            .contains("if-match: \"backup-v1\""));
+    }
+
+    async fn assert_http_status_from_mock<F, Fut>(
+        status: &'static str,
+        expected_method: &'static str,
+        expected_error: &'static str,
+        operation: F,
+    ) where
+        F: FnOnce(WebDavClient) -> Fut,
+        Fut: std::future::Future<Output = Result<()>>,
+    {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = vec![0_u8; 8192];
+            let size = socket.read(&mut buffer).await.unwrap();
+            let request = String::from_utf8_lossy(&buffer[..size]).to_string();
+            let response =
+                format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            socket.write_all(response.as_bytes()).await.unwrap();
+            request
+        });
+
+        let client =
+            WebDavClient::new(&format!("http://{address}/remote"), "account", "password").unwrap();
+        let error = operation(client).await.unwrap_err();
+        assert_eq!(error.to_string(), expected_error);
+
+        let request = server.await.unwrap();
+        assert!(request.starts_with(expected_method));
+        assert!(request
+            .to_ascii_lowercase()
+            .contains("authorization: basic ywnjb3vuddpwyxnzd29yza=="));
+    }
+
+    #[tokio::test]
+    async fn operation_failures_preserve_http_status_and_stop_follow_up_requests() {
+        assert_http_status_from_mock(
+            "401 Unauthorized",
+            "PROPFIND /remote/legado ",
+            "PROPFIND 失败: HTTP 401",
+            |client| async move { client.check("/legado").await },
+        )
+        .await;
+
+        assert_http_status_from_mock(
+            "405 Method Not Allowed",
+            "PROPFIND /remote/legado/bookProgress ",
+            "PROPFIND 失败: HTTP 405",
+            |client| async move { client.ensure_dir("/legado/bookProgress").await },
+        )
+        .await;
+
+        assert_http_status_from_mock(
+            "501 Not Implemented",
+            "PUT /remote/legado/backup.zip ",
+            "上传 失败: HTTP 501",
+            |client| async move { client.upload(b"payload", "/legado/backup.zip").await },
+        )
+        .await;
+
+        assert_http_status_from_mock(
+            "404 Not Found",
+            "DELETE /remote/legado/backup.zip ",
+            "删除 失败: HTTP 404",
+            |client| async move { client.delete("/legado/backup.zip").await },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires scripts/start_local_webdav.ps1 or another real WebDAV endpoint"]
+    async fn local_webdav_smoke_roundtrip() -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let url = std::env::var("LOCAL_WEBDAV_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:19080/".to_string());
+        let username = std::env::var("LOCAL_WEBDAV_USER").unwrap_or_else(|_| "legado".to_string());
+        let password =
+            std::env::var("LOCAL_WEBDAV_PASSWORD").unwrap_or_else(|_| "legado-test".to_string());
+        let client = WebDavClient::new(&url, &username, &password)?;
+
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_millis();
+        let root = format!("/codex-rust-smoke-{stamp}");
+        let progress_dir = format!("{root}/bookProgress");
+        let sample = format!("{progress_dir}/sample.json");
+        let renamed = format!("{progress_dir}/sample-renamed.json");
+        let etag_file = format!("{progress_dir}/etag.json");
+
+        client.check(&root).await?;
+        client.ensure_dir(&root).await?;
+        client.ensure_dir(&progress_dir).await?;
+        client.upload(br#"{"ok":true}"#, &sample).await?;
+
+        let entries = client.list(&progress_dir).await?;
+        assert!(entries
+            .iter()
+            .any(|entry| entry.name == "sample.json" && !entry.is_dir && entry.size > 0));
+
+        assert_eq!(client.download(&sample).await?, br#"{"ok":true}"#);
+        client.move_to(&sample, &renamed).await?;
+        assert_eq!(client.download(&renamed).await?, br#"{"ok":true}"#);
+
+        client.upload(b"v1", &etag_file).await?;
+        let etag = client
+            .list(&progress_dir)
+            .await?
+            .into_iter()
+            .find(|entry| entry.name == "etag.json")
+            .and_then(|entry| entry.etag)
+            .expect("etag.json should include an ETag");
+        client.upload_with_etag(b"v2", &etag_file, Some(&etag)).await?;
+
+        let stale = client
+            .upload_with_etag(b"v3", &etag_file, Some(&etag))
+            .await
+            .unwrap_err();
+        match stale {
+            WebDavError::HttpStatus { operation, status } => {
+                assert_eq!(operation, "上传");
+                assert_eq!(status, 412);
+            }
+            other => panic!("expected stale ETag to return HTTP 412, got {other:?}"),
+        }
+
+        client.delete(&root).await?;
+        Ok(())
     }
 }

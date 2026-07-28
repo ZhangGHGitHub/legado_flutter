@@ -62,11 +62,7 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (
-            self.status,
-            Json(json!({ "error": self.message })),
-        )
-            .into_response()
+        (self.status, Json(json!({ "error": self.message }))).into_response()
     }
 }
 
@@ -104,7 +100,10 @@ fn build_router(state: AppState) -> Router {
         .route("/books/:id/chapters", get(list_chapters))
         .route("/sources", get(list_sources))
         .route("/records", get(list_records))
-        .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ));
 
     Router::new()
         .route("/api/health", get(health))

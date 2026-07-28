@@ -1,8 +1,13 @@
 import 'package:flutter/foundation.dart';
 
+import '../database/dao/book_dao.dart';
 import '../database/database_helper.dart';
-import '../help/book_help.dart';
+import '../domain/repositories/book_repository.dart';
+import '../domain/ports/chapter_content_cache_port.dart';
+import '../domain/ports/content_processing_port.dart';
 import '../help/content_processor.dart';
+import '../infrastructure/cache/file_chapter_content_cache.dart';
+import '../infrastructure/content/content_processor_adapter.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/chapter.dart';
@@ -17,8 +22,9 @@ class ReadBook extends ChangeNotifier {
   static final ReadBook instance = ReadBook._();
 
   BookSourceService? _sourceService;
-  DatabaseHelper? _db;
-  ContentProcessor? _processor;
+  BookRepository? _repository;
+  ContentProcessingPort? _processor;
+  ChapterContentCachePort? _contentCache;
 
   Book? book;
   BookSource? bookSource;
@@ -52,12 +58,17 @@ class ReadBook extends ChangeNotifier {
 
   void configure({
     required BookSourceService sourceService,
+    BookRepository? repository,
     DatabaseHelper? db,
     ContentProcessor? processor,
+    ContentProcessingPort? contentProcessor,
+    ChapterContentCachePort? contentCache,
   }) {
     _sourceService = sourceService;
-    _db = db ?? DatabaseHelper();
-    _processor = processor ?? ContentProcessor.instance;
+    _repository = repository ?? (db == null ? null : BookDao(db));
+    _processor =
+        contentProcessor ?? ContentProcessorAdapter(processor: processor);
+    _contentCache = contentCache ?? FileChapterContentCache();
   }
 
   /// 打开阅读会话
@@ -128,7 +139,8 @@ class ReadBook extends ChangeNotifier {
   }) async {
     final svc = _sourceService;
     final proc = _processor;
-    if (svc == null || proc == null) {
+    final contentCache = _contentCache;
+    if (svc == null || proc == null || contentCache == null) {
       return '（阅读引擎未初始化）';
     }
 
@@ -151,11 +163,11 @@ class ReadBook extends ChangeNotifier {
 
     try {
       // 1. 文件缓存（跳过空章/失败占位，并清掉坏文件）
-      final fileCached = await BookHelp.getCachedContent(bid, chapter.id);
+      final fileCached = await contentCache.get(bid, chapter.id);
       if (fileCached != null && fileCached.isNotEmpty) {
         if (shouldSkipCache(fileCached)) {
           if (generation == _sessionGeneration) {
-            await BookHelp.deleteChapterContent(bid, chapter.id);
+            await contentCache.delete(bid, chapter.id);
           }
         } else {
           final processed = _processContent(
@@ -169,7 +181,7 @@ class ReadBook extends ChangeNotifier {
             return processed;
           }
           if (generation == _sessionGeneration) {
-            await BookHelp.deleteChapterContent(bid, chapter.id);
+            await contentCache.delete(bid, chapter.id);
           }
         }
       }
@@ -177,7 +189,7 @@ class ReadBook extends ChangeNotifier {
       // 2. DB 正文列（目录查询已不再带 content；正文以文件缓存为主）
       // 文件丢失时回落到 DB；数据库未就绪或读取失败则继续走网络。
       try {
-        final dbCached = await _db?.getChapterContent(chapter.id);
+        final dbCached = await _repository?.getChapterContent(chapter.id);
         if (dbCached != null && dbCached.isNotEmpty) {
           final processed = _processContent(
             dbCached,
@@ -187,7 +199,7 @@ class ReadBook extends ChangeNotifier {
             if (generation == _sessionGeneration) {
               _memoryCache[memKey] = processed;
               if (saveCache) {
-                await BookHelp.saveContent(bid, chapter.id, dbCached);
+                await contentCache.save(bid, chapter.id, dbCached);
               }
             }
             return processed;
@@ -214,12 +226,12 @@ class ReadBook extends ChangeNotifier {
 
         if (saveCache) {
           // 对齐 BookHelp：缓存原文，净化/重分段在读取时应用
-          await BookHelp.saveContent(bid, chapter.id, raw);
-          if (_db != null) {
+          await contentCache.save(bid, chapter.id, raw);
+          if (_repository != null) {
             // upsert：UPDATE 在章节行尚未落库时为 0 行，需 insert 才能打上 isDownloaded
             // 搜索预览书未进 books 表时外键会失败——文件缓存仍可用，DB 标记可跳过
             try {
-              await _db!.insertChapters([
+              await _repository!.insertChapters([
                 Chapter(
                   id: chapter.id,
                   bookId: bid,
@@ -230,7 +242,7 @@ class ReadBook extends ChangeNotifier {
                   content: raw,
                 ),
               ]);
-              await _db!.saveChapterContent(chapter.id, raw);
+              await _repository!.saveChapterContent(chapter.id, raw);
             } catch (e) {
               debugPrint('正文 DB 落库跳过（常见于未加入书架）: $e');
             }
@@ -300,8 +312,44 @@ class ReadBook extends ChangeNotifier {
     final bid = bookId ?? book?.id;
     if (bid != null && bid.isNotEmpty) {
       _memoryCache.remove(contentCacheKey(bookId: bid, chapterId: chapterId));
-      await BookHelp.deleteChapterContent(bid, chapterId);
+      await _contentCache?.delete(bid, chapterId);
     }
+  }
+
+  /// 读取章节原文缓存，不经过正文净化、重新分段或分页。
+  ///
+  /// 编辑器需要看到与文件缓存一致的原文，因此这里直接暴露缓存端口的
+  /// 最小读操作，不把缓存实现泄漏到页面层。
+  Future<String?> readRawChapterCache(
+    String chapterId, {
+    String? bookId,
+  }) async {
+    final bid = bookId ?? book?.id;
+    if (bid == null || bid.isEmpty) return null;
+    return _contentCache?.get(bid, chapterId);
+  }
+
+  /// 写入章节原文缓存，不经过正文净化、重新分段或分页。
+  Future<void> writeRawChapterCache(
+    String chapterId,
+    String content, {
+    String? bookId,
+  }) async {
+    final bid = bookId ?? book?.id;
+    final contentCache = _contentCache;
+    if (bid == null || bid.isEmpty || contentCache == null) return;
+    await contentCache.save(bid, chapterId, content);
+    invalidateMemoryCache(chapterId, bookId: bid);
+  }
+
+  /// 获取某本书已缓存的章节标识，供目录/阅读器展示缓存状态。
+  Future<Set<String>> listCachedChapterIds(String bookId) async {
+    return await _contentCache?.listChapterIds(bookId) ?? <String>{};
+  }
+
+  /// 将章节标识转换为文件缓存使用的稳定名称。
+  String sanitizeCachedChapterId(String chapterId) {
+    return _contentCache?.sanitizeChapterId(chapterId) ?? chapterId;
   }
 
   /// 仅清内存缓存（文件原文保留，供替换/重分段开关切换后重算）
@@ -325,10 +373,12 @@ class ReadBook extends ChangeNotifier {
   }) async {
     final bid = bookId ?? book?.id;
     if (bid == null || bid.isEmpty) return false;
-    final raw = await BookHelp.getCachedContent(bid, chapter.id);
+    final contentCache = _contentCache;
+    if (contentCache == null) return false;
+    final raw = await contentCache.get(bid, chapter.id);
     if (raw == null || raw.isEmpty || shouldSkipCache(raw)) return false;
     final reversed = String.fromCharCodes(raw.runes.toList().reversed);
-    await BookHelp.saveContent(bid, chapter.id, reversed);
+    await contentCache.save(bid, chapter.id, reversed);
     invalidateMemoryCache(chapter.id, bookId: bid);
     return true;
   }
@@ -341,7 +391,9 @@ class ReadBook extends ChangeNotifier {
   }) async {
     final bid = bookId ?? book?.id;
     if (bid == null || bid.isEmpty) return;
-    await BookHelp.saveContent(bid, chapter.id, content);
+    final contentCache = _contentCache;
+    if (contentCache == null) return;
+    await contentCache.save(bid, chapter.id, content);
     invalidateMemoryCache(chapter.id, bookId: bid);
   }
 

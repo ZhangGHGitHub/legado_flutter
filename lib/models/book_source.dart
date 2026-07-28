@@ -101,8 +101,9 @@ class BookSource {
       bool hasJsonRule(String key) {
         final val = obj[key];
         if (val is String) return val.startsWith(r'$');
-        if (val is Map)
+        if (val is Map) {
           return val.values.any((v) => v is String && v.startsWith(r'$'));
+        }
         return false;
       }
 

@@ -1,6 +1,9 @@
-import '../bridge/legado_engine_bridge.dart';
+import 'package:flutter/foundation.dart';
+
+import '../domain/book_reading_stats.dart';
+import '../domain/ports/bookplate_port.dart';
+import '../infrastructure/engine/frb_bookplate_port.dart';
 import '../models/book.dart';
-import '../src/rust/api.dart' as rust_api;
 import 'reading_record_service.dart';
 
 /// 阅读小票展示数据（Phase 4.4）
@@ -32,20 +35,27 @@ class BookplateData {
 
 /// 阅读小票数据组装
 abstract final class BookplateService {
-  static rust_api.BookReadingStats? loadBookStats(String bookId) {
-    if (!LegadoEngineBridge.isAvailable) return null;
-    try {
-      return rust_api.getBookReadingStats(bookId: bookId);
-    } catch (_) {
-      return null;
-    }
+  static BookplatePort _bookplatePort = FrbBookplatePort();
+
+  @visibleForTesting
+  static void configureBookplatePort(BookplatePort port) {
+    _bookplatePort = port;
+  }
+
+  @visibleForTesting
+  static void resetBookplatePort() {
+    _bookplatePort = FrbBookplatePort();
+  }
+
+  static BookReadingStats? loadBookStats(String bookId) {
+    return _bookplatePort.loadBookStats(bookId);
   }
 
   static BookplateData build({
     required Book book,
     required int currentChapterIndex,
     required int totalChapters,
-    rust_api.BookReadingStats? stats,
+    BookReadingStats? stats,
   }) {
     final safeTotal = totalChapters <= 0 ? 1 : totalChapters;
     final chaptersRead = (currentChapterIndex + 1).clamp(1, safeTotal);

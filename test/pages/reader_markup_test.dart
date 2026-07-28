@@ -1,7 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/reader/reader_markup.dart';
+import 'package:legado_flutter/features/reader/reader_markup.dart';
 import 'package:legado_flutter/widgets/reader_inline_image.dart';
 
 void main() {

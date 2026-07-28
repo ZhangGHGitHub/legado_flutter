@@ -33,8 +33,13 @@ fn builtin_source(name: &str) -> BookSource {
 fn js_7497_jslib_clean_strips_html() {
     let source = builtin_source("7497.json");
     let raw = r#"{"data":{"content":"<p>段落一</p><br/><p>段落二</p>"}}"#;
-    let out = js_engine::run_with_result("Clean(result)", raw, &source.js_lib, &source.book_source_url)
-        .expect("Clean");
+    let out = js_engine::run_with_result(
+        "Clean(result)",
+        raw,
+        &source.js_lib,
+        &source.book_source_url,
+    )
+    .expect("Clean");
     assert!(out.contains("段落一"));
     assert!(!out.contains("<p>"));
 }
@@ -42,8 +47,13 @@ fn js_7497_jslib_clean_strips_html() {
 #[test]
 fn js_7497_jslib_cover_builds_url() {
     let source = builtin_source("7497.json");
-    let out = js_engine::run_with_result("Cover('12345')", "", &source.js_lib, &source.book_source_url)
-        .expect("Cover");
+    let out = js_engine::run_with_result(
+        "Cover('12345')",
+        "",
+        &source.js_lib,
+        &source.book_source_url,
+    )
+    .expect("Cover");
     assert_eq!(out, "https://pic.cooks.tw/12/12345/12345s.jpg");
 }
 

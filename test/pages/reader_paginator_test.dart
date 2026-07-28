@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/reader/reader_paginator.dart';
+import 'package:legado_flutter/features/reader/reader_paginator.dart';
 
 void main() {
   test('image styles preserve original width semantics', () {

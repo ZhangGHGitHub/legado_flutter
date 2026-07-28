@@ -17,9 +17,7 @@ fn first_source_json(name: &str) -> String {
     let trimmed = raw.trim_start_matches('\u{feff}');
     if trimmed.starts_with('[') {
         let arr: Vec<serde_json::Value> = serde_json::from_str(trimmed).expect("书源数组");
-        arr.first()
-            .expect("书源非空")
-            .to_string()
+        arr.first().expect("书源非空").to_string()
     } else {
         trimmed.to_string()
     }
@@ -48,9 +46,7 @@ async fn pipeline_bishu() {
     } else {
         info.toc_url
     };
-    let chapters = get_toc(source.clone(), toc_url)
-        .await
-        .expect("笔书网目录");
+    let chapters = get_toc(source.clone(), toc_url).await.expect("笔书网目录");
     assert!(!chapters.is_empty(), "笔书网目录为空");
     println!("  笔书网目录: {} 章", chapters.len());
     if let (Some(first), Some(last)) = (chapters.first(), chapters.last()) {

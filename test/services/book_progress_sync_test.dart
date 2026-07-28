@@ -3,13 +3,14 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/config/app_config.dart';
+import 'package:legado_flutter/domain/ports/book_progress_sync_store.dart';
+import 'package:legado_flutter/domain/remote/webdav_entry.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:legado_flutter/models/book_progress.dart';
 import 'package:legado_flutter/services/book_progress_sync.dart';
 import 'package:legado_flutter/services/webdav_prefs.dart';
-import 'package:legado_flutter/src/rust/api/webdav.dart' as webdav_api;
 
 void main() {
   setUp(() {
@@ -33,6 +34,26 @@ void main() {
 
     expect(await BookProgressSync.loadSyncTime('测试书', '作者'), 1234);
     expect(await BookProgressSync.loadSyncTime('另一本书', '作者'), 0);
+  });
+
+  test('sync time uses the injected persistence boundary', () async {
+    final store = _MemorySyncStore();
+
+    await BookProgressSync.saveSyncTime(
+      '注入书',
+      '作者',
+      syncTime: 1234,
+      store: store,
+    );
+
+    expect(
+      await BookProgressSync.loadSyncTime('注入书', '作者', store: store),
+      1234,
+    );
+    expect(
+      store.values,
+      containsPair('webdav_book_progress_sync_注入书_作者.json', 1234),
+    );
   });
 
   test('progress sync requires complete WebDAV credentials', () async {
@@ -133,7 +154,7 @@ void main() {
             }) async {
               expect(path, '/legado/bookProgress/');
               return [
-                webdav_api.WebDavEntry(
+                WebDavEntry(
                   name: fileName,
                   path: '/legado/bookProgress/$fileName',
                   isDir: false,
@@ -234,4 +255,16 @@ void main() {
     expect(called, isFalse);
     expect(await BookProgressSync.loadSyncTime('测试书', '作者'), 0);
   });
+}
+
+final class _MemorySyncStore implements BookProgressSyncStore {
+  final values = <String, int>{};
+
+  @override
+  Future<int?> read(String key) async => values[key];
+
+  @override
+  Future<void> write(String key, int value) async {
+    values[key] = value;
+  }
 }

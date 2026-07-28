@@ -1,11 +1,24 @@
-import '../bridge/legado_db_bridge.dart';
-import '../bridge/legado_engine_bridge.dart';
-import '../src/rust/api.dart' as rust_api;
+import 'package:flutter/foundation.dart';
+
+import '../domain/ports/reading_record_port.dart';
+import '../domain/reading_stats.dart';
+import '../infrastructure/engine/frb_reading_record_port.dart';
 
 /// 阅读记录服务（Rust DB）
 class ReadingRecordService {
-  static bool get isReady =>
-      LegadoEngineBridge.isAvailable && LegadoDbBridge.isReady;
+  static ReadingRecordPort _recordPort = FrbReadingRecordPort();
+
+  static bool get isReady => _recordPort.isAvailable;
+
+  @visibleForTesting
+  static void configureRecordPort(ReadingRecordPort port) {
+    _recordPort = port;
+  }
+
+  @visibleForTesting
+  static void resetRecordPort() {
+    _recordPort = FrbReadingRecordPort();
+  }
 
   static bool recordReading({
     required String bookId,
@@ -14,23 +27,18 @@ class ReadingRecordService {
     required int durationSeconds,
   }) {
     if (!isReady || chars < 0 || durationSeconds <= 0) return false;
-    try {
-      rust_api.recordReading(
-        bookId: bookId,
-        bookName: bookName,
-        chars: chars,
-        durationSeconds: durationSeconds.clamp(0, 86400),
-      );
-      return true;
-    } catch (_) {
-      return false;
-    }
+    return _recordPort.recordReading(
+      bookId: bookId,
+      bookName: bookName,
+      chars: chars,
+      durationSeconds: durationSeconds.clamp(0, 86400),
+    );
   }
 
-  static rust_api.ReadingStats? getStats(String range) {
+  static ReadingStats? getStats(String range) {
     if (!isReady) return null;
     try {
-      return rust_api.getReadingStats(range: range);
+      return _recordPort.getStats(range);
     } catch (_) {
       return null;
     }
@@ -39,7 +47,7 @@ class ReadingRecordService {
   static String? exportRecords(String format) {
     if (!isReady) return null;
     try {
-      return rust_api.exportReadingRecords(format: format);
+      return _recordPort.exportRecords(format);
     } catch (_) {
       return null;
     }
@@ -56,23 +64,18 @@ class ReadingRecordService {
         endTime.difference(startTime).inMilliseconds <= 120000) {
       return false;
     }
-    try {
-      rust_api.recordDetailedReadSession(
-        bookName: bookName.trim(),
-        startTime: startTime.millisecondsSinceEpoch,
-        endTime: endTime.millisecondsSinceEpoch,
-        readIteration: readIteration,
-      );
-      return true;
-    } catch (_) {
-      return false;
-    }
+    return _recordPort.recordDetailedReadSession(
+      bookName: bookName.trim(),
+      startTime: startTime,
+      endTime: endTime,
+      readIteration: readIteration,
+    );
   }
 
   static String? exportDetailedReadRecords() {
     if (!isReady) return null;
     try {
-      return rust_api.exportDetailedReadRecords();
+      return _recordPort.exportDetailedReadRecords();
     } catch (_) {
       return null;
     }

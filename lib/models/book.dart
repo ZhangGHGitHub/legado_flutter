@@ -1,3 +1,42 @@
+/// Per-book reader settings persisted inside the Book `readConfig` record.
+class BookReadConfig {
+  final bool reverseToc;
+  final Map<String, dynamic> _extra;
+
+  const BookReadConfig({
+    this.reverseToc = false,
+    Map<String, dynamic> extra = const {},
+  }) : _extra = extra;
+
+  factory BookReadConfig.fromJson(
+    dynamic value, {
+    bool? legacyTopLevelReverseToc,
+  }) {
+    final map = value is Map
+        ? Map<String, dynamic>.from(value)
+        : <String, dynamic>{};
+    final rawReverse = map.remove('reverseToc');
+    final reverse = rawReverse is bool
+        ? rawReverse
+        : legacyTopLevelReverseToc ?? false;
+    return BookReadConfig(
+      reverseToc: reverse,
+      extra: Map<String, dynamic>.unmodifiable(map),
+    );
+  }
+
+  BookReadConfig copyWith({bool? reverseToc}) {
+    return BookReadConfig(
+      reverseToc: reverseToc ?? this.reverseToc,
+      extra: _extra,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {..._extra, 'reverseToc': reverseToc};
+  }
+}
+
 /// 书籍模型 - 对应 legado 的一本书
 class Book {
   final String id;
@@ -10,25 +49,36 @@ class Book {
   final String? lastChapter; // 最新章节名（从书源获取的最新更新）
   /// 目录总章数（对齐 legado `totalChapterNum`）
   final int totalChapterNum;
+
   /// 当前阅读章 0-based 索引（对齐 legado `durChapterIndex`）
   final int durChapterIndex;
   final int currentPageIndex; // 当前章节内阅读到的页面索引
+  /// Per-book reader settings. `reverseToc` lives inside this record in the
+  /// original app rather than as a top-level Book field.
+  final BookReadConfig readConfig;
   final bool isFavorite;
   final String sourceUrl; // 书籍来源链接（如章节列表 URL）
+  /// 目录链接（对齐 legado `tocUrl`）
+  final String tocUrl;
   final String description; // 书籍简介
   final String bookSourceUrl; // 搜索到此书的书源 URL（用于匹配书源规则）
   final String group; // 书架分组
   /// 阅读轮次（对齐 Jingshiro `readIteration`）：
   /// 0=未读完，1=读完，2=二刷，3=二刷完，依此类推。
   final int readIteration;
+
   /// 模拟追读：开关
   final bool simReadEnabled;
+
   /// 模拟追读：开始日期（YYYY-MM-DD）；空表示未写入 DB
   final String simReadStartDate;
+
   /// 模拟追读：0-based 起始章节
   final int simReadStartChapter;
+
   /// 模拟追读：每日解锁章数
   final int simReadDailyChapters;
+
   /// SQLite `updatedAt`（阅读/更新时间排序用）
   final String? updatedAt;
 
@@ -44,8 +94,10 @@ class Book {
     this.totalChapterNum = 0,
     this.durChapterIndex = 0,
     this.currentPageIndex = 0,
+    this.readConfig = const BookReadConfig(),
     this.isFavorite = false,
     this.sourceUrl = '',
+    this.tocUrl = '',
     this.description = '',
     this.bookSourceUrl = '',
     this.group = '',
@@ -83,8 +135,10 @@ class Book {
     int? totalChapterNum,
     int? durChapterIndex,
     int? currentPageIndex,
+    BookReadConfig? readConfig,
     bool? isFavorite,
     String? sourceUrl,
+    String? tocUrl,
     String? description,
     String? bookSourceUrl,
     String? group,
@@ -107,8 +161,10 @@ class Book {
       totalChapterNum: totalChapterNum ?? this.totalChapterNum,
       durChapterIndex: durChapterIndex ?? this.durChapterIndex,
       currentPageIndex: currentPageIndex ?? this.currentPageIndex,
+      readConfig: readConfig ?? this.readConfig,
       isFavorite: isFavorite ?? this.isFavorite,
       sourceUrl: sourceUrl ?? this.sourceUrl,
+      tocUrl: tocUrl ?? this.tocUrl,
       description: description ?? this.description,
       bookSourceUrl: bookSourceUrl ?? this.bookSourceUrl,
       group: group ?? this.group,
@@ -135,8 +191,15 @@ class Book {
       totalChapterNum: (json['totalChapterNum'] as num?)?.toInt() ?? 0,
       durChapterIndex: (json['durChapterIndex'] as num?)?.toInt() ?? 0,
       currentPageIndex: (json['currentPageIndex'] as num?)?.toInt() ?? 0,
+      readConfig: BookReadConfig.fromJson(
+        json['readConfig'],
+        // Compatibility with an intermediate Flutter build that briefly
+        // emitted a top-level field; new records are always nested.
+        legacyTopLevelReverseToc: json['reverseToc'] as bool?,
+      ),
       isFavorite: json['isFavorite'] as bool? ?? false,
       sourceUrl: json['sourceUrl'] as String? ?? '',
+      tocUrl: json['tocUrl'] as String? ?? '',
       description: json['description'] as String? ?? '',
       bookSourceUrl: json['bookSourceUrl'] as String? ?? '',
       group: json['group'] as String? ?? '',
@@ -164,8 +227,10 @@ class Book {
       'totalChapterNum': totalChapterNum,
       'durChapterIndex': durChapterIndex,
       'currentPageIndex': currentPageIndex,
+      'readConfig': readConfig.toJson(),
       'isFavorite': isFavorite,
       'sourceUrl': sourceUrl,
+      'tocUrl': tocUrl,
       'description': description,
       'bookSourceUrl': bookSourceUrl,
       'group': group,

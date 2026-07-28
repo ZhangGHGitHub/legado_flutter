@@ -3,8 +3,17 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-import '../bridge/legado_engine_bridge.dart';
 import '../data/builtin_book_sources.dart';
+import '../domain/ports/book_source_book_info_port.dart';
+import '../domain/ports/book_source_content_port.dart';
+import '../domain/ports/book_source_explore_port.dart';
+import '../domain/ports/book_source_search_port.dart';
+import '../domain/ports/book_source_toc_port.dart';
+import '../infrastructure/engine/frb_book_source_book_info_port.dart';
+import '../infrastructure/engine/frb_book_source_content_port.dart';
+import '../infrastructure/engine/frb_book_source_explore_port.dart';
+import '../infrastructure/engine/frb_book_source_search_port.dart';
+import '../infrastructure/engine/frb_book_source_toc_port.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/chapter.dart';
@@ -13,22 +22,30 @@ import '../utils/ssrf_guard.dart';
 
 /// 书源服务门面 — 全部书源操作走 Rust 引擎（Phase E-B：无 Dart 回退）
 class BookSourceService {
-  BookSourceService();
+  BookSourceService({
+    BookSourceSearchPort? searchPort,
+    BookSourceBookInfoPort? bookInfoPort,
+    BookSourceContentPort? contentPort,
+    BookSourceExplorePort? explorePort,
+    BookSourceTocPort? tocPort,
+  }) : _searchPort = searchPort ?? FrbBookSourceSearchPort(),
+       _bookInfoPort = bookInfoPort ?? FrbBookSourceBookInfoPort(),
+       _contentPort = contentPort ?? FrbBookSourceContentPort(),
+       _explorePort = explorePort ?? FrbBookSourceExplorePort(),
+       _tocPort = tocPort ?? FrbBookSourceTocPort();
 
-  /// 全部书源操作走 Rust 引擎（Phase 3：无 Dart 回退）
-  void _requireRust() {
-    if (!LegadoEngineBridge.isAvailable) {
-      throw StateError('Rust 引擎未加载，请编译 legado_engine 后重试');
-    }
-  }
+  final BookSourceSearchPort _searchPort;
+  final BookSourceBookInfoPort _bookInfoPort;
+  final BookSourceContentPort _contentPort;
+  final BookSourceExplorePort _explorePort;
+  final BookSourceTocPort _tocPort;
 
   /// 搜索书籍
   Future<List<Map<String, String>>> search(
     BookSource source,
     String keyword,
   ) async {
-    _requireRust();
-    final results = await LegadoEngineBridge.search(source, keyword);
+    final results = await _searchPort.search(source, keyword);
     debugPrint('  ✓ Rust 搜索: ${results.length} 条');
     return results;
   }
@@ -38,7 +55,6 @@ class BookSourceService {
     Book book, {
     required BookSource source,
   }) async {
-    _requireRust();
     final key =
         '${source.bookSourceUrl}\u0000${book.sourceUrl}\u0000${book.id}';
     return SiteBusyGuard.dedupeByKey(key, () {
@@ -46,17 +62,17 @@ class BookSourceService {
     });
   }
 
-  Future<List<Chapter>> _fetchChaptersOnce(
-    Book book,
-    BookSource source,
-  ) async {
-    // 先拉详情：ruleBookInfo.init 等 JS 会写入 cache（如番茄 articleid）
-    final info = await getBookInfo(source, book.sourceUrl);
-    final tocUrl = info['tocUrl'] ?? '';
+  Future<List<Chapter>> _fetchChaptersOnce(Book book, BookSource source) async {
+    var tocUrl = book.tocUrl.trim();
+    if (tocUrl.isEmpty) {
+      // 仅在书籍未保存目录地址时拉详情，保留源站详情初始化副作用。
+      final info = await getBookInfo(source, book.sourceUrl);
+      tocUrl = info['tocUrl']?.trim() ?? '';
+    }
     final tocBook = (tocUrl.isNotEmpty && tocUrl != book.sourceUrl)
         ? book.copyWith(sourceUrl: tocUrl)
         : book;
-    final chapters = await LegadoEngineBridge.getToc(source, tocBook);
+    final chapters = await _tocPort.getToc(source, tocBook);
     debugPrint('  ✓ Rust 目录: ${chapters.length} 章');
     return chapters;
   }
@@ -66,9 +82,8 @@ class BookSourceService {
     String url, {
     required BookSource source,
   }) async {
-    _requireRust();
     try {
-      final content = await LegadoEngineBridge.getContent(source, url);
+      final content = await _contentPort.getContent(source, url);
       debugPrint('  ✓ Rust 正文: ${content.length} 字符');
       return content;
     } catch (e) {
@@ -83,8 +98,7 @@ class BookSourceService {
     String exploreUrl, {
     int page = 1,
   }) async {
-    _requireRust();
-    return LegadoEngineBridge.explore(source, exploreUrl, page: page);
+    return _explorePort.explore(source, exploreUrl, page: page);
   }
 
   /// 书籍详情
@@ -92,8 +106,7 @@ class BookSourceService {
     BookSource source,
     String bookUrl,
   ) async {
-    _requireRust();
-    return LegadoEngineBridge.getBookInfo(source, bookUrl);
+    return _bookInfoPort.getBookInfo(source, bookUrl);
   }
 
   /// 搜索结果转 Book 对象
@@ -171,15 +184,18 @@ class BookSourceService {
               cookieJar.entries.map((e) => '${e.key}=${e.value}').join('; '),
             );
           }
-          final response =
-              await req.close().timeout(const Duration(seconds: 30));
-          for (final raw in response.headers[HttpHeaders.setCookieHeader] ??
-              const <String>[]) {
+          final response = await req.close().timeout(
+            const Duration(seconds: 30),
+          );
+          for (final raw
+              in response.headers[HttpHeaders.setCookieHeader] ??
+                  const <String>[]) {
             final part = raw.split(';').first;
             final eq = part.indexOf('=');
             if (eq > 0) {
-              cookieJar[part.substring(0, eq).trim()] =
-                  part.substring(eq + 1).trim();
+              cookieJar[part.substring(0, eq).trim()] = part
+                  .substring(eq + 1)
+                  .trim();
             }
           }
           final code = response.statusCode;

@@ -9,6 +9,7 @@ import '../models/book_source.dart';
 import '../models/chapter.dart';
 import '../services/source_login_prefs.dart';
 import '../src/rust/api.dart' as rust_api;
+import '../src/rust/api/network.dart' as network_api;
 import '../src/rust/frb_generated.dart';
 
 /// Rust 书源引擎桥接层
@@ -32,6 +33,7 @@ class LegadoEngineBridge {
       }
       rust_api.initEngine();
       _available = true;
+      _startHttpRequestTrace();
       debugPrint('[Engine] Rust 书源引擎 v${engineVersion()} 已加载');
     } catch (e) {
       _available = false;
@@ -77,29 +79,55 @@ class LegadoEngineBridge {
     }
   }
 
+  /// 仅 debug 采样 Rust 实际 HTTP 请求；release 不启用轨迹，避免积累 URL 元数据。
+  static void _startHttpRequestTrace() {
+    if (!kDebugMode || !_available) return;
+    try {
+      network_api.startHttpRequestTrace();
+    } catch (e) {
+      debugPrint('[Engine] start HTTP trace failed: $e');
+    }
+  }
+
+  static void _drainHttpRequestTrace(String operation) {
+    if (!kDebugMode || !_available) return;
+    try {
+      final raw = network_api.drainHttpRequestTrace();
+      if (raw.isNotEmpty && raw != '[]') {
+        debugPrint('[Engine][HTTP][$operation] $raw');
+      }
+      _startHttpRequestTrace();
+    } catch (e) {
+      debugPrint('[Engine] drain HTTP trace failed: $e');
+    }
+  }
+
   static Future<List<Map<String, String>>> search(
     BookSource source,
     String keyword,
   ) async {
     if (!_available) throw StateError('Rust engine not available');
-
-    final items = await rust_api.search(
-      sourceJson: await _sourceJson(source),
-      keyword: keyword,
-    );
-    await _syncLoginHeaders();
-    return items
-        .map(
-          (item) => {
-            'name': item.name,
-            'author': item.author,
-            'url': item.bookUrl,
-            'coverUrl': item.coverUrl,
-            'kind': item.kind,
-            'note': item.note,
-          },
-        )
-        .toList();
+    try {
+      final items = await rust_api.search(
+        sourceJson: await _sourceJson(source),
+        keyword: keyword,
+      );
+      await _syncLoginHeaders();
+      return items
+          .map(
+            (item) => {
+              'name': item.name,
+              'author': item.author,
+              'url': item.bookUrl,
+              'coverUrl': item.coverUrl,
+              'kind': item.kind,
+              'note': item.note,
+            },
+          )
+          .toList();
+    } finally {
+      _drainHttpRequestTrace('search');
+    }
   }
 
   static Future<List<Map<String, String>>> explore(
@@ -108,25 +136,28 @@ class LegadoEngineBridge {
     int page = 1,
   }) async {
     if (!_available) throw StateError('Rust engine not available');
-
-    final items = await rust_api.explore(
-      sourceJson: await _sourceJson(source),
-      exploreUrl: exploreUrl,
-      page: page,
-    );
-    await _syncLoginHeaders();
-    return items
-        .map(
-          (item) => {
-            'name': item.name,
-            'author': item.author,
-            'url': item.bookUrl,
-            'coverUrl': item.coverUrl,
-            'kind': item.kind,
-            'note': item.note,
-          },
-        )
-        .toList();
+    try {
+      final items = await rust_api.explore(
+        sourceJson: await _sourceJson(source),
+        exploreUrl: exploreUrl,
+        page: page,
+      );
+      await _syncLoginHeaders();
+      return items
+          .map(
+            (item) => {
+              'name': item.name,
+              'author': item.author,
+              'url': item.bookUrl,
+              'coverUrl': item.coverUrl,
+              'kind': item.kind,
+              'note': item.note,
+            },
+          )
+          .toList();
+    } finally {
+      _drainHttpRequestTrace('explore');
+    }
   }
 
   static Future<Map<String, String>> getBookInfo(
@@ -134,61 +165,67 @@ class LegadoEngineBridge {
     String bookUrl,
   ) async {
     if (!_available) throw StateError('Rust engine not available');
-
-    final info = await rust_api.getBookInfo(
-      sourceJson: await _sourceJson(source),
-      bookUrl: bookUrl,
-    );
-    await _syncLoginHeaders();
-    return {
-      'name': info.name,
-      'author': info.author,
-      'coverUrl': info.coverUrl,
-      'intro': info.intro,
-      'kind': info.kind,
-      'lastChapter': info.lastChapter,
-      'tocUrl': info.tocUrl,
-    };
+    try {
+      final info = await rust_api.getBookInfo(
+        sourceJson: await _sourceJson(source),
+        bookUrl: bookUrl,
+      );
+      await _syncLoginHeaders();
+      return {
+        'name': info.name,
+        'author': info.author,
+        'coverUrl': info.coverUrl,
+        'intro': info.intro,
+        'kind': info.kind,
+        'lastChapter': info.lastChapter,
+        'tocUrl': info.tocUrl,
+      };
+    } finally {
+      _drainHttpRequestTrace('bookInfo');
+    }
   }
 
   static Future<List<Chapter>> getToc(BookSource source, Book book) async {
     if (!_available) throw StateError('Rust engine not available');
-
-    final items = await rust_api.getToc(
-      sourceJson: await _sourceJson(source),
-      bookUrl: book.sourceUrl,
-    );
-    await _syncLoginHeaders();
-    return items.asMap().entries.map((entry) {
-      final i = entry.key;
-      final item = entry.value;
-      return Chapter(
-        id: Chapter.idFor(bookId: book.id, url: item.url, index: i),
-        bookId: book.id,
-        title: item.title,
-        index: i,
-        url: item.url,
-        isVolume: item.isVolume,
-        isVip: item.isVip,
-        isPay: item.isPay,
-        tag: item.tag,
-        baseUrl: item.baseUrl,
+    try {
+      final items = await rust_api.getToc(
+        sourceJson: await _sourceJson(source),
+        bookUrl: book.sourceUrl,
       );
-    }).toList();
+      await _syncLoginHeaders();
+      return items.asMap().entries.map((entry) {
+        final i = entry.key;
+        final item = entry.value;
+        return Chapter(
+          id: Chapter.idFor(bookId: book.id, url: item.url, index: i),
+          bookId: book.id,
+          title: item.title,
+          index: i,
+          url: item.url,
+          isVolume: item.isVolume,
+          isVip: item.isVip,
+          isPay: item.isPay,
+          tag: item.tag,
+          baseUrl: item.baseUrl,
+        );
+      }).toList();
+    } finally {
+      _drainHttpRequestTrace('toc');
+    }
   }
 
-  static Future<String> getContent(
-    BookSource source,
-    String chapterUrl,
-  ) async {
+  static Future<String> getContent(BookSource source, String chapterUrl) async {
     if (!_available) throw StateError('Rust engine not available');
-
-    final body = await rust_api.getContent(
-      sourceJson: await _sourceJson(source),
-      chapterUrl: chapterUrl,
-    );
-    await _syncLoginHeaders();
-    return body;
+    try {
+      final body = await rust_api.getContent(
+        sourceJson: await _sourceJson(source),
+        chapterUrl: chapterUrl,
+      );
+      await _syncLoginHeaders();
+      return body;
+    } finally {
+      _drainHttpRequestTrace('content');
+    }
   }
 
   static Future<rust_api.SourceValidation> validateSource(
@@ -213,8 +250,12 @@ class LegadoEngineBridge {
         .toList();
   }
 
-  static ({String title, String author, List<({String title, String content})> chapters})
-      parseEpub(List<int> data) {
+  static ({
+    String title,
+    String author,
+    List<({String title, String content})> chapters,
+  })
+  parseEpub(List<int> data) {
     if (!_available) throw StateError('Rust engine not available');
     final info = rust_api.parseEpub(data: data);
     return (
@@ -331,8 +372,8 @@ class LegadoEngineBridge {
     final name = Platform.isWindows
         ? 'legado_engine.dll'
         : Platform.isMacOS
-            ? 'liblegado_engine.dylib'
-            : 'liblegado_engine.so';
+        ? 'liblegado_engine.dylib'
+        : 'liblegado_engine.so';
 
     final exeDir = File(Platform.resolvedExecutable).parent.path;
     final candidates = <String>[

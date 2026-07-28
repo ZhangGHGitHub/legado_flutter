@@ -73,9 +73,7 @@ pub fn resolve_template(template: &str, item: &Value) -> String {
         let replacement = if key.starts_with('$') {
             resolve_string(item, key)
         } else if let Some(obj) = item.as_object() {
-            obj.get(key)
-                .map(value_to_string)
-                .unwrap_or_default()
+            obj.get(key).map(value_to_string).unwrap_or_default()
         } else {
             String::new()
         };

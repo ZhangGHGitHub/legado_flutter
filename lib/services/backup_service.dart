@@ -6,17 +6,23 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
-import '../bridge/legado_db_bridge.dart';
-import '../bridge/legado_engine_bridge.dart';
+import '../domain/ports/backup_port.dart';
+import '../domain/ports/webdav_repository.dart';
+import '../domain/remote/webdav_entry.dart';
+import '../infrastructure/database/frb_backup_port.dart';
+import '../infrastructure/webdav/frb_webdav_repository.dart';
 import '../services/app_paths.dart';
-import '../src/rust/api/backup.dart' as backup_api;
-import '../src/rust/api/webdav.dart' as webdav_api;
 import 'settings_backup.dart';
 import 'webdav_prefs.dart';
 
 /// 备份与恢复服务（DB + 设置打包，支持本地/WebDAV）
 class BackupService {
-  BackupService();
+  BackupService({WebDavRepository? webdav, BackupPort? backup})
+    : _webdav = webdav ?? const FrbWebDavRepository(),
+      _backup = backup ?? FrbBackupPort();
+
+  final WebDavRepository _webdav;
+  final BackupPort _backup;
 
   static const _archivePayloadName = 'legado_backup.json';
 
@@ -30,7 +36,7 @@ class BackupService {
   static const _legacyDetailedRecordName = 'readRecord_detail.json';
 
   void _requireReady() {
-    if (!LegadoEngineBridge.isAvailable || !LegadoDbBridge.isReady) {
+    if (!_backup.isAvailable) {
       throw StateError('Rust 引擎或数据库未就绪');
     }
   }
@@ -47,7 +53,17 @@ class BackupService {
         : 'backup$dateText-$normalizedDevice.zip';
   }
 
-  static Uint8List archiveJson(String json) {
+  static Uint8List archiveJson(
+    String json, {
+    Map<String, String> additionalFiles = const {},
+  }) {
+    return _archiveJson(json, additionalFiles: additionalFiles);
+  }
+
+  static Uint8List _archiveJson(
+    String json, {
+    Map<String, String> additionalFiles = const {},
+  }) {
     final archive = Archive()
       ..add(ArchiveFile.string(_archivePayloadName, json));
     final root = _decodeMap(json);
@@ -73,7 +89,17 @@ class BackupService {
         database['detailedReadRecords'],
       );
     }
+    for (final entry in additionalFiles.entries) {
+      archive.add(ArchiveFile.string(entry.key, entry.value));
+    }
     return ZipEncoder().encodeBytes(archive);
+  }
+
+  static Future<Uint8List> archiveFullJson(String json) async {
+    return _archiveJson(
+      json,
+      additionalFiles: await SettingsBackup.collectLegacyReadConfigFiles(),
+    );
   }
 
   static String extractJson(List<int> bytes) {
@@ -300,13 +326,26 @@ class BackupService {
         _legacyDetailedRecordName,
       );
     }
+    final readConfig = _archiveEntryText(
+      archive,
+      SettingsBackup.readConfigFileName,
+    );
+    final shareReadConfig = _archiveEntryText(
+      archive,
+      SettingsBackup.shareReadConfigFileName,
+    );
+    final settings = <String, dynamic>{};
+    if (readConfig != null) {
+      found = true;
+      settings[SettingsBackup.legacyReadConfigKey] = readConfig;
+    }
+    if (shareReadConfig != null) {
+      found = true;
+      settings[SettingsBackup.legacyShareReadConfigKey] = shareReadConfig;
+    }
     if (!found) return null;
 
-    return {
-      'version': 1,
-      'database': database,
-      'settings': <String, dynamic>{},
-    };
+    return {'version': 1, 'database': database, 'settings': settings};
   }
 
   static Map<String, dynamic> _fromOriginalBook(Object value) {
@@ -361,13 +400,12 @@ class BackupService {
 
   Future<String> createFullBackupJson() async {
     _requireReady();
-    final database =
-        jsonDecode(backup_api.exportBackup()) as Map<String, dynamic>;
+    final database = jsonDecode(_backup.exportBackup()) as Map<String, dynamic>;
     final settings = await SettingsBackup.collect();
     return const JsonEncoder.withIndent('  ').convert({
       'version': 1,
       'exportedAt': DateTime.now().toIso8601String(),
-      'engineVersion': LegadoEngineBridge.engineVersion(),
+      'engineVersion': _backup.engineVersion,
       'database': database,
       'settings': settings,
     });
@@ -377,7 +415,7 @@ class BackupService {
     final json = await createFullBackupJson();
     final backupsDir = await AppPaths.backupsDir();
     final file = File(p.join(backupsDir.path, backupFileName()));
-    await file.writeAsBytes(archiveJson(json));
+    await file.writeAsBytes(await archiveFullJson(json));
     debugPrint('[Backup] 本地备份: ${file.path}');
     return file;
   }
@@ -389,7 +427,7 @@ class BackupService {
     if (database is! Map) {
       throw const FormatException('备份缺少 database 字段');
     }
-    backup_api.restoreBackup(json: jsonEncode(database), replace: replace);
+    _backup.restoreBackup(json: jsonEncode(database), replace: replace);
     final settings = root['settings'];
     if (settings is Map<String, dynamic>) {
       await SettingsBackup.apply(settings);
@@ -442,22 +480,22 @@ class BackupService {
       config,
       backupFileName(device: config.device),
     );
-    await webdav_api.webdavUpload(
+    await _webdav.upload(
       url: config.url,
       username: config.account,
       password: config.password,
       remotePath: remote,
-      data: archiveJson(json),
+      data: await archiveFullJson(json),
     );
     debugPrint('[Backup] WebDAV 上传: $remote');
   }
 
-  Future<List<webdav_api.WebDavEntry>> listWebDavBackups() async {
+  Future<List<WebDavEntry>> listWebDavBackups() async {
     final config = await WebDavPrefs.load();
     if (!config.isReady) {
       throw StateError('请先配置 WebDAV');
     }
-    final items = await webdav_api.webdavList(
+    final items = await _webdav.list(
       url: config.url,
       username: config.account,
       password: config.password,
@@ -484,7 +522,7 @@ class BackupService {
     if (!config.isReady) {
       throw StateError('请先配置 WebDAV');
     }
-    final bytes = await webdav_api.webdavDownload(
+    final bytes = await _webdav.download(
       url: config.url,
       username: config.account,
       password: config.password,
@@ -498,7 +536,7 @@ class BackupService {
     if (!config.isReady) {
       throw StateError('请先配置 WebDAV');
     }
-    await webdav_api.webdavDelete(
+    await _webdav.delete(
       url: config.url,
       username: config.account,
       password: config.password,
@@ -517,7 +555,7 @@ class BackupService {
     }
     final directory = remotePath.substring(0, remotePath.lastIndexOf('/') + 1);
     final destination = '$directory$name';
-    await webdav_api.webdavMove(
+    await _webdav.move(
       url: config.url,
       username: config.account,
       password: config.password,

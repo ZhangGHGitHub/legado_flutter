@@ -17,6 +17,9 @@ migrate_working_dir/
 .env.*
 !.env.example
 
+# Local WebDAV smoke-test storage
+/.local-webdav/
+
 # IntelliJ related
 *.iml
 *.ipr
@@ -64,6 +67,16 @@ read_lines*.py
 tools_*_tmp.xml
 test.txt
 .dart_files.txt
+# Local-only Android TTS probe build output
+/tools/android_debug_tts_engine/
 
 # Local reference clone of Jingshiro/legado (for UI layout lookup)
 /reference/
+
+# Read-only original baselines and local R0 evidence probes. These files are
+# never build inputs and must not enter a refactor commit.
+/legado-main/
+/original_legado.db*
+/tools/*.db
+/tools/*.png
+/tools/*.txt

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "module3-real-content-pipeline-001",
+  "chapterTitle": "第 42 章 Mixed Signals 2",
+  "bookName": "混排书",
+  "paragraphIndent": "  ",
+  "includeTitle": true,
+  "useReplace": true,
+  "reSegment": false,
+  "raw": "\r\n【混排书】。。。第 42 章   Mixed Signals 2\r\n  广告词  \r\n  PLACEHOLDER  \r\n中文与English混排，数字123和URL https://example.com/read?id=42&lang=zh 追踪参数=42  \r\n<usehtml><p><strong>图文段</strong><br><span style='color:#ff0000'>中文 English 123</span><img src='https://img.example.com/cover.png, {\"style\":\"FULL\",\"width\":\"50%\",\"click\":\"https://example.com/open?id=42\"}'></p><p>HTML段落</p></usehtml>\r\n[newpage]\r\n  末段中文 English 456 https://example.com/end  ",
+  "replaceRules": [
+    {
+      "id": "trimmed-ad-line",
+      "name": "trimmed-ad-line",
+      "pattern": "^广告词$",
+      "replacement": "净化后",
+      "isRegex": true
+    },
+    {
+      "id": "literal-placeholder",
+      "name": "literal-placeholder",
+      "pattern": "PLACEHOLDER",
+      "replacement": "已替换",
+      "isRegex": false
+    }
+  ],
+  "sourceRules": {
+    "contentReplace": "追踪参数=\\d+",
+    "contentReplaceTo": "追踪参数=N"
+  },
+  "expectedProcessed": "第 42 章 Mixed Signals 2\n  净化后\n  已替换\n  中文与English混排，数字123和URL https://example.com/read?id=42&lang=zh 追踪参数=N\n  <usehtml><p><strong>图文段</strong><br><span style='color:#ff0000'>中文 English 123</span><img src='https://img.example.com/cover.png, {\"style\":\"FULL\",\"width\":\"50%\",\"click\":\"https://example.com/open?id=42\"}'></p><p>HTML段落</p></usehtml>\n  [newpage]\n  末段中文 English 456 https://example.com/end",
+  "expectedPlainText": "第 42 章 Mixed Signals 2\n  净化后\n  已替换\n  中文与English混排，数字123和URL https://example.com/read?id=42&lang=zh 追踪参数=N\n  图文段\n中文 English 123￼\nHTML段落\n  [newpage]\n  末段中文 English 456 https://example.com/end",
+  "expectedPlainTextWithoutNewPage": "第 42 章 Mixed Signals 2\n  净化后\n  已替换\n  中文与English混排，数字123和URL https://example.com/read?id=42&lang=zh 追踪参数=N\n  图文段\n中文 English 123￼\nHTML段落\n  末段中文 English 456 https://example.com/end"
+}

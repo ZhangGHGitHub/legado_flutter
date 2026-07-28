@@ -1,0 +1,7 @@
+{
+  "chapterTitle": "第十二章 山雨",
+  "paragraphIndent": "  ",
+  "raw": "\r\n。。。第十二章   山雨\r\n<usehtml><p>“山雨落在檐上。”</p><p>第二段<img src='cover.jpg, {\"style\":\"FULL\"}'></p></usehtml>\r\n[newpage]\r\n  第三段  ",
+  "expectedProcessed": "第十二章 山雨\n  <usehtml><p>“山雨落在檐上。”</p><p>第二段<img src='cover.jpg, {\"style\":\"FULL\"}'></p></usehtml>\n  [newpage]\n  第三段",
+  "expectedPlainText": "第十二章 山雨\n  “山雨落在檐上。”\n第二段￼\n  [newpage]\n  第三段"
+}

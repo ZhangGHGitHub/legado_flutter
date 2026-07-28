@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../pages/reader/reader_settings.dart';
+import '../features/reader/reader_settings.dart';
 
 /// 全局阅读配置持久化 — 对齐 Jingshiro [ReadBookConfig]
 ///（`filesDir/readConfig.json` + `shareReadConfig.json`，面板关闭时 `save()`）。

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/help/book_help.dart';
 import 'package:legado_flutter/help/content_processor.dart';
+import 'package:legado_flutter/domain/ports/network_engine_port.dart';
 import 'package:legado_flutter/models/replace_rule.dart';
 import 'package:legado_flutter/services/app_paths.dart';
 import 'package:legado_flutter/services/cache_service.dart';
@@ -69,6 +70,18 @@ void main() {
   });
 
   test(
+    'CacheService clearEngineCache delegates through the engine port',
+    () async {
+      final port = _FakeNetworkEnginePort();
+      final service = CacheService(enginePort: port);
+
+      await service.clearEngineCache();
+
+      expect(port.clearCount, 1);
+    },
+  );
+
+  test(
     'BookHelp isolates chapter files by book and deletes one chapter only',
     () async {
       await BookHelp.saveContent('book-a', 'chapter/1', 'A 内容');
@@ -99,4 +112,25 @@ void main() {
     processor.loadRules(const []);
     expect(processor.getContent('正文[广告]内容'), '正文[广告]内容');
   });
+}
+
+class _FakeNetworkEnginePort implements NetworkEnginePort {
+  int clearCount = 0;
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  void clearEngineCache() => clearCount++;
+
+  @override
+  void setNetworkConfig({
+    required bool proxyEnabled,
+    required String proxyType,
+    required String proxyHost,
+    required int proxyPort,
+    required String proxyUsername,
+    required String proxyPassword,
+    required String dnsServers,
+  }) {}
 }

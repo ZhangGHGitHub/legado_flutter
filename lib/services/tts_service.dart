@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'http_tts_service.dart';
 
@@ -14,6 +15,9 @@ import 'http_tts_service.dart';
 enum TtsPlaybackState { idle, playing, paused }
 
 enum TtsCapability { stub, platform, http }
+
+/// 原版 `contentSelectSpeakMod`：0 朗读选区，1 从选区位置开始连续朗读。
+enum TtsSelectionSpeakMode { selection, continuous }
 
 /// 对齐 Jingshiro [AudioPlay.PlayMode]
 enum TtsPlayMode {
@@ -40,6 +44,10 @@ class TtsEngineOption {
 class TtsService extends ChangeNotifier {
   TtsService._() : _flutterTts = _createEngine();
   static final TtsService instance = TtsService._();
+
+  static const _platformInitTimeout = Duration(seconds: 3);
+
+  static const _selectionSpeakModeKey = 'contentSelectSpeakMod';
 
   static const List<TtsEngineOption> engines = [
     TtsEngineOption('system', '系统 TTS'),
@@ -70,11 +78,15 @@ class TtsService extends ChangeNotifier {
   Timer? _stopTimer;
   Timer? _timerTick;
   TtsPlayMode _playMode = TtsPlayMode.listEndStop;
+  TtsSelectionSpeakMode _selectionSpeakMode = TtsSelectionSpeakMode.selection;
+  bool _selectionSpeakModeLoaded = false;
 
   /// 当当前绑定文本全部朗读完成时触发（含 stub）。
   VoidCallback? onPlaybackCompleted;
+  final Set<VoidCallback> _playbackCompletionListeners = <VoidCallback>{};
 
   List<String> _sentences = const [];
+  List<int> _sentenceOffsets = const [];
   int _sentenceIndex = 0;
 
   TtsPlaybackState get state => _state;
@@ -84,6 +96,9 @@ class TtsService extends ChangeNotifier {
   bool get backgroundPlay => _backgroundPlay;
   int? get timerMinutes => _timerMinutes;
   TtsPlayMode get playMode => _playMode;
+  TtsSelectionSpeakMode get selectionSpeakMode => _selectionSpeakMode;
+  bool get readsFromSelection =>
+      _selectionSpeakMode == TtsSelectionSpeakMode.continuous;
 
   /// 定时关闭剩余分钟（向上取整）；未设置返回 null。
   int? get timerRemainingMinutes {
@@ -104,6 +119,11 @@ class TtsService extends ChangeNotifier {
       _state == TtsPlaybackState.playing || _state == TtsPlaybackState.paused;
   int get sentenceIndex => _sentenceIndex;
   int get sentenceCount => _sentences.length;
+
+  /// 当前句在传入 [bindText] 文本中的起始字符偏移。
+  int get currentTextOffset => _sentences.isEmpty
+      ? 0
+      : _sentenceOffsets[_sentenceIndex.clamp(0, _sentenceOffsets.length - 1)];
   String get currentSentence => _sentences.isEmpty
       ? ''
       : _sentences[_sentenceIndex.clamp(0, _sentences.length - 1)];
@@ -121,6 +141,59 @@ class TtsService extends ChangeNotifier {
   void configureHttpTts(HttpTtsConfig? config) {
     _httpConfig = config;
     notifyListeners();
+  }
+
+  /// 加载原版 `contentSelectSpeakMod`。缺失时保持默认的选区朗读模式。
+  Future<void> loadSelectionSpeakMode() async {
+    if (_selectionSpeakModeLoaded) return;
+    _selectionSpeakModeLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final value = prefs.getInt(_selectionSpeakModeKey) ?? 0;
+      _selectionSpeakMode = value == 1
+          ? TtsSelectionSpeakMode.continuous
+          : TtsSelectionSpeakMode.selection;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('TTS selection mode load failed: $e');
+    }
+  }
+
+  void setSelectionSpeakMode(TtsSelectionSpeakMode mode) {
+    if (_selectionSpeakMode == mode) return;
+    _selectionSpeakMode = mode;
+    notifyListeners();
+    unawaited(_persistSelectionSpeakMode(mode));
+  }
+
+  Future<void> _persistSelectionSpeakMode(TtsSelectionSpeakMode mode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(
+        _selectionSpeakModeKey,
+        mode == TtsSelectionSpeakMode.continuous ? 1 : 0,
+      );
+    } catch (e) {
+      // Pure Dart tests and early process startup may not have ServicesBinding.
+      debugPrint('TTS selection mode save skipped: $e');
+    }
+  }
+
+  void toggleSelectionSpeakMode() {
+    setSelectionSpeakMode(
+      _selectionSpeakMode == TtsSelectionSpeakMode.selection
+          ? TtsSelectionSpeakMode.continuous
+          : TtsSelectionSpeakMode.selection,
+    );
+  }
+
+  /// 页面型调用方可订阅“当前绑定文本完成”的事件，而不覆盖旧式单回调。
+  void addPlaybackCompletedListener(VoidCallback listener) {
+    _playbackCompletionListeners.add(listener);
+  }
+
+  void removePlaybackCompletedListener(VoidCallback listener) {
+    _playbackCompletionListeners.remove(listener);
   }
 
   Future<void> ensureInitialized() async {
@@ -160,7 +233,17 @@ class TtsService extends ChangeNotifier {
         _state = TtsPlaybackState.idle;
         notifyListeners();
       });
-      await _applyVoiceParams();
+      if (Platform.isAndroid) {
+        final status = await tts.getInitializationStatus.timeout(
+          _platformInitTimeout,
+        );
+        if (status != 1) {
+          throw StateError('Android TTS initialization failed: $status');
+        }
+      }
+      // Some Android images expose no TTS engine and leave plugin method
+      // calls pending forever. Keep startup and the reader action responsive.
+      await _applyVoiceParams().timeout(_platformInitTimeout);
       _platformAvailable = true;
     } catch (e) {
       debugPrint('TTS init failed: $e');
@@ -194,6 +277,10 @@ class TtsService extends ChangeNotifier {
     if (_engineId == id) return;
     if (isActive) unawaited(stop());
     _engineId = id;
+    // HTTP TTS has its own audio pipeline and must not inherit a failed
+    // platform-engine initialization from the previous system mode.
+    _engineReady = false;
+    _platformAvailable = false;
     notifyListeners();
   }
 
@@ -249,16 +336,41 @@ class TtsService extends ChangeNotifier {
   }
 
   void bindText(String text) {
+    final trimmed = text.trim();
     _sentences = splitSentences(text);
+    final baseOffset = trimmed.isEmpty ? 0 : text.indexOf(trimmed);
+    final offsets = <int>[];
+    var searchFrom = 0;
+    for (final sentence in _sentences) {
+      final found = trimmed.indexOf(sentence, searchFrom);
+      final offset = found < 0 ? searchFrom : found;
+      offsets.add((baseOffset < 0 ? 0 : baseOffset) + offset);
+      searchFrom = offset + sentence.length;
+    }
+    _sentenceOffsets = offsets;
     _sentenceIndex = 0;
     notifyListeners();
   }
 
   Future<bool> speak(String text) async {
-    await ensureInitialized();
+    if (_engineId == 'system') {
+      await ensureInitialized();
+    }
     bindText(text);
     if (_sentences.isEmpty) return false;
     return _speakFromCurrent();
+  }
+
+  /// 选中文本菜单的默认朗读语义（原版 contentSelectSpeakMod=0）。
+  Future<bool> speakSelection(String text) => speak(text.trim());
+
+  /// 从正文的章内字符位置开始朗读（原版 contentSelectSpeakMod=1）。
+  ///
+  /// 位置只用于截取起点，不改变正文内容、净化顺序或分页输入。
+  Future<bool> speakFromOffset(String text, int startOffset) {
+    if (text.isEmpty) return Future.value(false);
+    final offset = startOffset.clamp(0, text.length);
+    return speak(text.substring(offset));
   }
 
   Future<bool> _speakFromCurrent() async {
@@ -320,6 +432,11 @@ class TtsService extends ChangeNotifier {
     _state = TtsPlaybackState.idle;
     notifyListeners();
     onPlaybackCompleted?.call();
+    for (final listener in List<VoidCallback>.of(
+      _playbackCompletionListeners,
+    )) {
+      listener();
+    }
   }
 
   /// 跳转到指定句并可选继续播放（快进/后退）。

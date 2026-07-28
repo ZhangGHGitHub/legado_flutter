@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../services/donate_clipboard_port.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_card.dart';
 
@@ -9,7 +9,9 @@ import '../../widgets/legado_card.dart';
 ///
 /// 现仓布局仅为 TitleBar + Fragment 容器；具体渠道项来自历史上移除前的 Preference 列表。
 class DonatePage extends StatelessWidget {
-  const DonatePage({super.key});
+  const DonatePage({super.key, this.clipboard});
+
+  final DonateClipboardPort? clipboard;
 
   /// 原作者公开收款码图片（gedoor.github.io）
   static const wxAppreciationQrUrl =
@@ -108,32 +110,28 @@ class DonatePage extends StatelessWidget {
     final uri = Uri.parse(url);
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('无法打开链接：$url')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('无法打开链接：$url')));
     }
   }
 
-  static Future<void> _copy(
-    BuildContext context,
-    String text,
-    String toast,
-  ) async {
-    await Clipboard.setData(ClipboardData(text: text));
+  Future<void> _copy(BuildContext context, String text, String toast) async {
+    await (clipboard ?? const PlatformDonateClipboard()).copyText(text);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(toast)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(toast)));
     }
   }
 
-  static Future<void> _copyAlipayCode(BuildContext context) async {
-    await Clipboard.setData(const ClipboardData(text: alipayRedEnvelopeCode));
+  Future<void> _copyAlipayCode(BuildContext context) async {
+    await (clipboard ?? const PlatformDonateClipboard()).copyText(
+      alipayRedEnvelopeCode,
+    );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          '高级功能已解锁\n请等待邮箱确认\n支付宝首页搜索「537954522」领取红包',
-        ),
-      ),
+      const SnackBar(content: Text('高级功能已解锁\n请等待邮箱确认\n支付宝首页搜索「537954522」领取红包')),
     );
     final alipay = Uri.parse('alipays://platformapi/startapp');
     try {

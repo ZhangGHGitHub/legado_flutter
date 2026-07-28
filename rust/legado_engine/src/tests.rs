@@ -131,11 +131,7 @@ mod engine_tests {
 
     #[test]
     fn parse_url_config_replaces_page_placeholder() {
-        let cfg = crate::http::client::parse_url_config_with_page(
-            "/sort/1_{{page}}/",
-            "",
-            3,
-        );
+        let cfg = crate::http::client::parse_url_config_with_page("/sort/1_{{page}}/", "", 3);
         assert_eq!(cfg.url, "/sort/1_3/");
     }
 
@@ -177,8 +173,7 @@ mod engine_tests {
         let data: serde_json::Value = serde_json::json!({
             "data": { "content": "<p>第一段</p><br><p>第二段</p>" }
         });
-        let content =
-            crate::rule::json_content::parse_json_content(&data, &source).unwrap();
+        let content = crate::rule::json_content::parse_json_content(&data, &source).unwrap();
         assert!(content.contains("第一段"));
         assert!(content.contains("第二段"));
         assert!(!content.contains("<p>"));
@@ -206,8 +201,8 @@ mod engine_tests {
             }
         });
         let book_url = "https://novel.cooks.tw/api/novel/detail/12345?lang=zh-CN";
-        let info = crate::rule::json_book_info::parse_json_book_info(&data, &source, book_url)
-            .unwrap();
+        let info =
+            crate::rule::json_book_info::parse_json_book_info(&data, &source, book_url).unwrap();
         assert_eq!(info.name, "测试书");
         assert!(info.toc_url.contains("/api/chapter/list/12345"));
     }
@@ -228,8 +223,7 @@ mod engine_tests {
             "data": [{ "chapterid": "100", "chaptername": "第一章" }]
         });
         let list_url = "https://novel.cooks.tw/api/chapter/list/3814?lang=zh-CN";
-        let chapters =
-            crate::rule::json_toc::parse_json_toc(&data, &source, list_url).unwrap();
+        let chapters = crate::rule::json_toc::parse_json_toc(&data, &source, list_url).unwrap();
         assert_eq!(chapters.len(), 1);
         assert!(
             chapters[0].url.contains("/api/chapter/content/3814/100"),

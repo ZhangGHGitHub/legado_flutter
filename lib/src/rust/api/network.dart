@@ -31,6 +31,14 @@ void setNetworkConfig({
 void clearEngineCache() =>
     LegadoEngine.instance.api.crateApiNetworkClearEngineCache();
 
+/// 开启一次 debug HTTP 请求轨迹采集。
+void startHttpRequestTrace() =>
+    LegadoEngine.instance.api.crateApiNetworkStartHttpRequestTrace();
+
+/// 停止并取出 debug HTTP 请求轨迹 JSON。
+String drainHttpRequestTrace() =>
+    LegadoEngine.instance.api.crateApiNetworkDrainHttpRequestTrace();
+
 /// 当前网络配置
 NetworkConfigDto getNetworkConfig() =>
     LegadoEngine.instance.api.crateApiNetworkGetNetworkConfig();

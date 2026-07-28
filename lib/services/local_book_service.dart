@@ -4,10 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:charset_converter/charset_converter.dart';
-import '../bridge/legado_engine_bridge.dart';
+import '../domain/repositories/book_repository.dart';
+import '../domain/ports/local_book_parser_port.dart';
+import '../infrastructure/engine/frb_local_book_parser_port.dart';
 import '../models/book.dart';
 import '../models/chapter.dart';
-import '../database/database_helper.dart';
 import 'txt_toc_rule_prefs.dart';
 
 /// 本地导入超过大小上限时抛出（消息为可直接展示的中文说明）
@@ -20,9 +21,14 @@ class LocalBookImportException implements Exception {
 
 /// 本地书籍导入服务 - 支持 TXT/EPUB（Rust 分章/解析）
 class LocalBookService {
-  LocalBookService({DatabaseHelper? db}) : _db = db ?? DatabaseHelper();
+  LocalBookService({
+    required BookRepository repository,
+    LocalBookParserPort? parser,
+  }) : _repository = repository,
+       _parser = parser ?? const FrbLocalBookParserPort();
 
-  final DatabaseHelper _db;
+  final BookRepository _repository;
+  final LocalBookParserPort _parser;
 
   /// 本地导入体积上限（约 50MB），防止超大文件导致 OOM
   static const int maxImportBytes = 50 * 1024 * 1024;
@@ -108,8 +114,13 @@ class LocalBookService {
       sourceUrl: filePath,
     );
 
-    await _db.insertBook(book);
-    await _saveChapters(bookId, parsed, fallbackTitle: bookName, fallbackContent: text);
+    await _repository.insert(book);
+    await _saveChapters(
+      bookId,
+      parsed,
+      fallbackTitle: bookName,
+      fallbackContent: text,
+    );
 
     return book;
   }
@@ -118,17 +129,19 @@ class LocalBookService {
     final bytes = await File(filePath).readAsBytes();
     final bookId = 'local_${DateTime.now().millisecondsSinceEpoch}';
 
-    if (LegadoEngineBridge.isAvailable) {
+    if (_parser.isAvailable) {
       try {
-        final info = LegadoEngineBridge.parseEpub(bytes);
+        final info = _parser.parseEpub(bytes);
         final book = Book(
           id: bookId,
-          name: info.title.isNotEmpty ? info.title : p.withoutExtension(fileName),
+          name: info.title.isNotEmpty
+              ? info.title
+              : p.withoutExtension(fileName),
           author: info.author,
           type: 'local',
           sourceUrl: filePath,
         );
-        await _db.insertBook(book);
+        await _repository.insert(book);
         final chapters = info.chapters
             .asMap()
             .entries
@@ -145,7 +158,7 @@ class LocalBookService {
             )
             .toList();
         if (chapters.isNotEmpty) {
-          await _db.insertChapters(chapters);
+          await _repository.insertChapters(chapters);
         }
         return book;
       } catch (e) {
@@ -161,16 +174,19 @@ class LocalBookService {
       type: 'local',
       sourceUrl: filePath,
     );
-    await _db.insertBook(book);
+    await _repository.insert(book);
     return book;
   }
 
   Future<List<({String title, String content})>> _parseTxtChapters(
     String text,
   ) async {
-    if (LegadoEngineBridge.isAvailable) {
+    if (_parser.isAvailable) {
       try {
-        return LegadoEngineBridge.parseTxtChapters(text);
+        return _parser
+            .parseTxtChapters(text)
+            .map((chapter) => (title: chapter.title, content: chapter.content))
+            .toList(growable: false);
       } catch (e) {
         debugPrint('TXT Rust 分章失败，回退 Dart: $e');
       }
@@ -201,11 +217,11 @@ class LocalBookService {
             ),
           )
           .toList();
-      await _db.insertChapters(chapters);
+      await _repository.insertChapters(chapters);
       return;
     }
 
-    await _db.insertChapters([
+    await _repository.insertChapters([
       Chapter(
         id: '${bookId}_ch_0',
         bookId: bookId,
@@ -265,8 +281,9 @@ class LocalBookService {
     for (var i = 0; i < bestMatches.length; i++) {
       final title = bestMatches[i].group(0)!.trim();
       final start = bestMatches[i].end;
-      final end =
-          i + 1 < bestMatches.length ? bestMatches[i + 1].start : text.length;
+      final end = i + 1 < bestMatches.length
+          ? bestMatches[i + 1].start
+          : text.length;
       final content = text.substring(start, end).trim();
       if (content.isEmpty) continue;
       out.add((title: title, content: content));

@@ -1,21 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/config/theme_config_page.dart';
+import 'package:legado_flutter/features/settings/theme_config_page.dart';
+import 'package:legado_flutter/services/clipboard_port.dart';
 import 'package:legado_flutter/theme/app_theme.dart';
 import 'package:legado_flutter/theme/color_presets.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+class _FakeClipboard implements ClipboardPort {
+  String? pastedText;
+  final copiedTexts = <String>[];
+
+  @override
+  Future<void> copyText(String text) async {
+    copiedTexts.add(text);
+  }
+
+  @override
+  Future<String?> pasteText() async => pastedText;
+}
+
 void main() {
   SharedPreferences.setMockInitialValues({});
 
-  Future<void> pumpPage(WidgetTester tester, ThemeModeController ctrl) async {
+  Future<void> pumpPage(
+    WidgetTester tester,
+    ThemeModeController ctrl, {
+    ClipboardPort? clipboard,
+  }) async {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: ctrl,
         child: MaterialApp(
           theme: AppTheme.light(preset: ctrl.preset),
-          home: const Scaffold(body: ThemeConfigPage()),
+          home: Scaffold(body: ThemeConfigPage(clipboard: clipboard)),
         ),
       ),
     );
@@ -71,6 +89,37 @@ void main() {
     await tester.tap(find.text('导出'));
     await tester.pump();
     expect(find.text('主题配置已复制到剪贴板'), findsOneWidget);
+  });
+
+  testWidgets('export uses the shared clipboard port', (tester) async {
+    final ctrl = ThemeModeController();
+    await ctrl.load();
+    final clipboard = _FakeClipboard();
+    await pumpPage(tester, ctrl, clipboard: clipboard);
+
+    await scrollTo(tester, find.text('导出'));
+    await tester.tap(find.text('导出'));
+    await tester.pump();
+
+    expect(clipboard.copiedTexts, hasLength(1));
+    expect(clipboard.copiedTexts.single, contains('"version": "1"'));
+  });
+
+  testWidgets('import paste uses the shared clipboard port', (tester) async {
+    final ctrl = ThemeModeController();
+    await ctrl.load();
+    final clipboard = _FakeClipboard()
+      ..pastedText = '{"version":"1","mode":"dark","preset":"night"}';
+    await pumpPage(tester, ctrl, clipboard: clipboard);
+
+    await scrollTo(tester, find.text('导入'));
+    await tester.tap(find.text('导入'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('从剪贴板粘贴'));
+    await tester.pump();
+
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text(clipboard.pastedText!), findsOneWidget);
   });
 
   testWidgets('shows color editor and import buttons', (tester) async {

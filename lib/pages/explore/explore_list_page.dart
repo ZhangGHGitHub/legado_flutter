@@ -7,7 +7,7 @@ import '../../providers/book_provider.dart';
 import '../../services/book_source_service.dart';
 import '../../widgets/book_list_tile.dart';
 import '../../widgets/empty_state.dart';
-import '../book/book_info_page.dart';
+import '../../features/book/book_info_page.dart';
 
 /// 发现分类书籍列表 — 对齐 book/explore
 ///

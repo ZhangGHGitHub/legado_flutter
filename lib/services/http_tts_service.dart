@@ -52,14 +52,14 @@ class HttpTtsConfig {
           .replaceAll('{{speakSpeed}}', speed.toString())
           .replaceAll('{{speed}}', speed.toString());
     }
-    if (contentType != null && contentType!.trim().isNotEmpty) {
-      resolvedHeaders.putIfAbsent('Content-Type', () => contentType!.trim());
-    }
+    // Legado's HttpTTS.contentType describes the response audio type.
+    // Request headers are supplied independently through [headers].
     return HttpTtsRequest(
       url: raw,
       method: method,
       body: body,
       headers: resolvedHeaders,
+      responseContentTypePattern: contentType?.trim(),
     );
   }
 
@@ -97,12 +97,14 @@ class HttpTtsRequest {
   final String method;
   final String? body;
   final Map<String, String> headers;
+  final String? responseContentTypePattern;
 
   const HttpTtsRequest({
     required this.url,
     required this.method,
     this.body,
     this.headers = const {},
+    this.responseContentTypePattern,
   });
 }
 
@@ -132,6 +134,25 @@ class HttpTtsClient {
     }
     if (data.length > maxAudioBytes) {
       throw StateError('HTTP TTS 音频过大');
+    }
+    final responseContentType = response.headers.value('content-type');
+    if (responseContentType != null) {
+      final mediaType = responseContentType.split(';').first.trim();
+      if (mediaType == 'application/json' ||
+          mediaType.toLowerCase().startsWith('text/')) {
+        final message = utf8.decode(data, allowMalformed: true).trim();
+        throw StateError(message.isEmpty ? 'HTTP TTS 返回文本错误' : message);
+      }
+      final pattern = request.responseContentTypePattern;
+      if (pattern != null && pattern.isNotEmpty) {
+        final matches = RegExp(
+          pattern,
+          caseSensitive: false,
+        ).hasMatch(mediaType);
+        if (!matches) {
+          throw StateError('HTTP TTS 返回错误：$mediaType');
+        }
+      }
     }
     return Uint8List.fromList(data);
   }

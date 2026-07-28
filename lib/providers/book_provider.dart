@@ -2,12 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import '../domain/repositories/book_repository.dart';
+import '../domain/ports/chapter_content_cache_port.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/chapter.dart';
-import '../database/dao/book_dao.dart';
-import '../database/database_helper.dart';
-import '../help/book_help.dart';
 import '../help/content_processor.dart';
 import '../help/shelf_unread.dart';
 import '../model/read_book.dart';
@@ -20,23 +19,26 @@ import '../utils/site_busy_guard.dart';
 /// 书籍管理 Provider — 书架、阅读、章节、下载缓存
 class BookProvider extends ChangeNotifier {
   BookProvider({
-    BookDao? dao,
+    required BookRepository repository,
     BookSourceService? sourceService,
     LocalBookService? localService,
-  }) : _dao = dao ?? BookDao(),
+    required ChapterContentCachePort contentCache,
+  }) : _repository = repository,
        _sourceService = sourceService ?? BookSourceService(),
-       _localService = localService ?? LocalBookService() {
-    // ReadBook 仍直接依赖 DatabaseHelper（会话层缓存），与 BookDao 同为单例库
+       _contentCache = contentCache {
+    _localService = localService ?? LocalBookService(repository: _repository);
     ReadBook.instance.configure(
       sourceService: _sourceService,
-      db: DatabaseHelper(),
+      repository: _repository,
       processor: ContentProcessor.instance,
+      contentCache: _contentCache,
     );
   }
 
-  final BookDao _dao;
+  final BookRepository _repository;
   final BookSourceService _sourceService;
-  final LocalBookService _localService;
+  final ChapterContentCachePort _contentCache;
+  late final LocalBookService _localService;
 
   List<Book> _books = [];
   List<Chapter> _currentChapters = [];
@@ -77,6 +79,8 @@ class BookProvider extends ChangeNotifier {
 
   List<Book> get books => _books;
   List<Chapter> get currentChapters => _currentChapters;
+  BookRepository get repository => _repository;
+  ChapterContentCachePort get contentCache => _contentCache;
   bool get isLoading => _isLoading;
   String? get loadError => _loadError;
   bool get isDownloading => _isDownloading;
@@ -94,7 +98,7 @@ class BookProvider extends ChangeNotifier {
 
   /// 本地库中该书的章节数（缓存页展示用）
   Future<int> getChapterCount(String bookId) async {
-    final list = await _dao.getChapters(bookId);
+    final list = await _repository.getChapters(bookId);
     return list.length;
   }
 
@@ -129,7 +133,7 @@ class BookProvider extends ChangeNotifier {
             shelfBook.durChapterIndex != next.durChapterIndex ||
             shelfBook.currentPageIndex != next.currentPageIndex ||
             shelfBook.currentChapter != next.currentChapter)) {
-      await _dao.insert(next);
+      await _repository.insert(next);
       final shelfIndex = _books.indexWhere((item) => item.id == book.id);
       if (shelfIndex >= 0) _books[shelfIndex] = next;
     }
@@ -174,12 +178,12 @@ class BookProvider extends ChangeNotifier {
         content: c.content,
       );
     }).toList();
-    await _dao.insertChapters(list);
+    await _repository.insertChapters(list);
     _currentChapters = list;
     final onShelf = findBookById(book.id);
     if (onShelf != null && onShelf.totalChapterNum != list.length) {
       final next = onShelf.copyWith(totalChapterNum: list.length);
-      await _dao.insert(next);
+      await _repository.insert(next);
       final i = _books.indexWhere((b) => b.id == book.id);
       if (i >= 0) _books[i] = next;
     }
@@ -193,12 +197,13 @@ class BookProvider extends ChangeNotifier {
     _loadError = null;
     notifyListeners();
     try {
-      _books = await _dao.getAll();
+      _books = await _repository.getAll();
       // 缓存清理是启动维护任务，不应阻塞书架首屏初始化。
       unawaited(
-        BookHelp.clearInvalidCache(_books.map((book) => book.id).toSet()),
+        _contentCache.clearInvalid(_books.map((book) => book.id).toSet()),
       );
-      await _refreshShelfChapterMeta();
+      // 章节元数据只影响未读角标，不能阻塞书架首帧。
+      unawaited(_refreshShelfChapterMetaInBackground());
       _loadError = null;
     } catch (e) {
       _loadError = '加载书架失败: $e';
@@ -216,7 +221,7 @@ class BookProvider extends ChangeNotifier {
     try {
       final book = await _localService.importFromFile();
       if (book != null) {
-        _books = await _dao.getAll();
+        _books = await _repository.getAll();
         await _refreshShelfChapterMetaFor(book.id);
         notifyListeners();
       }
@@ -239,7 +244,7 @@ class BookProvider extends ChangeNotifier {
         path,
         displayName: displayName,
       );
-      _books = await _dao.getAll();
+      _books = await _repository.getAll();
       await _refreshShelfChapterMetaFor(book.id);
       notifyListeners();
       return book;
@@ -289,7 +294,7 @@ class BookProvider extends ChangeNotifier {
               : e.intro.trim(),
           isFavorite: true,
         );
-        await _dao.insert(book);
+        await _repository.insert(book);
         added++;
       } catch (err) {
         debugPrint('导入书单失败 $name/$author: $err');
@@ -297,7 +302,7 @@ class BookProvider extends ChangeNotifier {
       }
     }
     if (added > 0) {
-      _books = await _dao.getAll();
+      _books = await _repository.getAll();
       await _refreshShelfChapterMeta();
       notifyListeners();
     }
@@ -321,11 +326,11 @@ class BookProvider extends ChangeNotifier {
               id: '${raw.bookSourceUrl}_${raw.sourceUrl.hashCode}_${DateTime.now().microsecondsSinceEpoch}',
             )
           : raw;
-      await _dao.insert(book);
+      await _repository.insert(book);
       added++;
     }
     if (added > 0) {
-      _books = await _dao.getAll();
+      _books = await _repository.getAll();
       await _refreshShelfChapterMeta();
       notifyListeners();
     }
@@ -369,7 +374,7 @@ class BookProvider extends ChangeNotifier {
       }
     }
     if (success > 0) {
-      _books = await _dao.getAll();
+      _books = await _repository.getAll();
       await _refreshShelfChapterMeta();
       notifyListeners();
     }
@@ -406,6 +411,7 @@ class BookProvider extends ChangeNotifier {
       // 同名同作者：迁移书源信息（对齐 upToc / migrate）
       final migrated = same.copyWith(
         sourceUrl: book.sourceUrl.isNotEmpty ? book.sourceUrl : same.sourceUrl,
+        tocUrl: book.tocUrl.isNotEmpty ? book.tocUrl : same.tocUrl,
         bookSourceUrl: book.bookSourceUrl.isNotEmpty
             ? book.bookSourceUrl
             : same.bookSourceUrl,
@@ -416,11 +422,11 @@ class BookProvider extends ChangeNotifier {
         lastChapter: book.lastChapter ?? same.lastChapter,
         type: 'online',
       );
-      await _dao.insert(migrated);
+      await _repository.insert(migrated);
       return true;
     }
 
-    await _dao.insert(book.copyWith(isFavorite: true));
+    await _repository.insert(book.copyWith(isFavorite: true));
     return true;
   }
 
@@ -477,7 +483,6 @@ class BookProvider extends ChangeNotifier {
         final intro = (info['intro'] ?? info['description'] ?? '').trim();
         final last = (info['lastChapter'] ?? '').trim();
         final tocUrl = (info['tocUrl'] ?? '').trim();
-        final sourceUrl = tocUrl.isNotEmpty ? tocUrl : pureUrl;
         return Book(
           id: '${source.bookSourceUrl}_${pureUrl.hashCode}',
           name: name,
@@ -486,7 +491,8 @@ class BookProvider extends ChangeNotifier {
               : info['author']!.trim(),
           coverUrl: cover,
           type: 'online',
-          sourceUrl: sourceUrl,
+          sourceUrl: pureUrl,
+          tocUrl: tocUrl,
           description: intro,
           lastChapter: last.isEmpty ? null : last,
           bookSourceUrl: source.bookSourceUrl,
@@ -655,7 +661,7 @@ class BookProvider extends ChangeNotifier {
         notifyListeners();
         try {
           await _refreshBookTocOnShelf(book, source);
-          _books = await _dao.getAll();
+          _books = await _repository.getAll();
         } catch (e, st) {
           debugPrint('书架目录更新失败 ${book.name}: $e\n$st');
         } finally {
@@ -672,7 +678,7 @@ class BookProvider extends ChangeNotifier {
     );
     await Future.wait(workers);
     _shelfUpdateQueued = 0;
-    _books = await _dao.getAll();
+    _books = await _repository.getAll();
     await _refreshShelfChapterMeta();
     notifyListeners();
   }
@@ -681,6 +687,16 @@ class BookProvider extends ChangeNotifier {
     _shelfChapterMeta.clear();
     for (final book in _books) {
       await _refreshShelfChapterMetaFor(book.id);
+    }
+  }
+
+  Future<void> _refreshShelfChapterMetaInBackground() async {
+    try {
+      await _refreshShelfChapterMeta();
+    } catch (error, stackTrace) {
+      debugPrint('书架章节元数据后台加载失败: $error\n$stackTrace');
+    } finally {
+      notifyListeners();
     }
   }
 
@@ -696,7 +712,7 @@ class BookProvider extends ChangeNotifier {
       _shelfChapterMeta.remove(bookId);
       return;
     }
-    final chapters = await _dao.getChapters(bookId);
+    final chapters = await _repository.getChapters(bookId);
     if (chapters.isEmpty) {
       _shelfChapterMeta.remove(bookId);
       return;
@@ -723,7 +739,7 @@ class BookProvider extends ChangeNotifier {
       dirty = true;
     }
     if (dirty) {
-      await _dao.insert(next);
+      await _repository.insert(next);
       final i = _books.indexWhere((b) => b.id == bookId);
       if (i >= 0) _books[i] = next;
     }
@@ -740,9 +756,13 @@ class BookProvider extends ChangeNotifier {
 
   Future<void> _refreshBookTocOnShelf(Book book, BookSource source) async {
     final remote = await _sourceService.getChapters(book, source: source);
-    final local = await _dao.getChapters(book.id);
-    final merged = _mergeTocWithLocal(remote, local);
-    await _dao.insertChapters(
+    final local = await _repository.getChapters(book.id);
+    final merged = _mergeTocWithLocal(
+      remote,
+      local,
+      reverseToc: book.readConfig.reverseToc,
+    );
+    await _repository.insertChapters(
       merged
           .map(
             (c) => Chapter(
@@ -788,7 +808,7 @@ class BookProvider extends ChangeNotifier {
         );
       }
     }
-    await _dao.insert(updated);
+    await _repository.insert(updated);
   }
 
   /// 仅接受可网络加载的封面，避免相对/空 URL 被 resolve 成站点根路径后覆盖好封面。
@@ -854,8 +874,8 @@ class BookProvider extends ChangeNotifier {
     }
 
     if (shelf != null) {
-      await _dao.insert(updated);
-      _books = await _dao.getAll();
+      await _repository.insert(updated);
+      _books = await _repository.getAll();
     }
     if (_currentChapters.isNotEmpty &&
         _currentChapters.first.bookId == updated.id) {
@@ -951,7 +971,7 @@ class BookProvider extends ChangeNotifier {
     );
     if (_books.any((book) => book.id == updated.id)) {
       try {
-        await _dao.insertChapters(_currentChapters);
+        await _repository.insertChapters(_currentChapters);
       } catch (e) {
         debugPrint('自动换源目录落库失败（内存目录仍可用）: $e');
       }
@@ -1000,38 +1020,38 @@ class BookProvider extends ChangeNotifier {
 
   /// 添加书籍到书架
   Future<void> addBook(Book book) async {
-    await _dao.insert(book);
-    _books = await _dao.getAll();
+    await _repository.insert(book);
+    _books = await _repository.getAll();
     await _refreshShelfChapterMetaFor(book.id);
     notifyListeners();
   }
 
   /// 从书架移除
   Future<void> removeBook(String bookId) async {
-    await _dao.delete(bookId);
-    await BookHelp.clearBookCache(bookId);
+    await _repository.delete(bookId);
+    await _contentCache.clearBook(bookId);
     _shelfChapterMeta.remove(bookId);
-    _books = await _dao.getAll();
+    _books = await _repository.getAll();
     notifyListeners();
   }
 
   /// 批量从书架移除
   Future<void> removeBooks(Iterable<String> bookIds) async {
     for (final id in bookIds) {
-      await _dao.delete(id);
-      await BookHelp.clearBookCache(id);
+      await _repository.delete(id);
+      await _contentCache.clearBook(id);
       _shelfChapterMeta.remove(id);
     }
-    _books = await _dao.getAll();
+    _books = await _repository.getAll();
     notifyListeners();
   }
 
   /// 批量更新分组
   Future<void> updateBooksGroup(Iterable<String> bookIds, String group) async {
     for (final id in bookIds) {
-      await _dao.updateGroup(id, group);
+      await _repository.updateGroup(id, group);
     }
-    _books = await _dao.getAll();
+    _books = await _repository.getAll();
     notifyListeners();
   }
 
@@ -1047,7 +1067,7 @@ class BookProvider extends ChangeNotifier {
     if (durChapterIndex != null) {
       final existing = findBookById(bookId);
       if (existing != null) {
-        await _dao.insert(
+        await _repository.insert(
           existing.copyWith(
             progress: progress,
             currentChapter: chapter,
@@ -1055,14 +1075,19 @@ class BookProvider extends ChangeNotifier {
             durChapterIndex: durChapterIndex,
           ),
         );
-        _books = await _dao.getAll();
+        _books = await _repository.getAll();
         await _refreshShelfChapterMetaFor(bookId);
         notifyListeners();
         return;
       }
     }
-    await _dao.updateProgress(bookId, progress, chapter, pageIndex: pageIndex);
-    _books = await _dao.getAll();
+    await _repository.updateProgress(
+      bookId,
+      progress,
+      chapter,
+      pageIndex: pageIndex,
+    );
+    _books = await _repository.getAll();
     await _refreshShelfChapterMetaFor(bookId);
     notifyListeners();
   }
@@ -1090,16 +1115,16 @@ class BookProvider extends ChangeNotifier {
 
   /// 更新书籍分组
   Future<void> updateBookGroup(String bookId, String group) async {
-    await _dao.updateGroup(bookId, group);
-    _books = await _dao.getAll();
+    await _repository.updateGroup(bookId, group);
+    _books = await _repository.getAll();
     notifyListeners();
   }
 
   /// 更新读完/N刷轮次（upsert 整书字段）
   Future<void> updateReadIteration(Book book, int readIteration) async {
     final next = book.copyWith(readIteration: readIteration);
-    await _dao.insert(next);
-    _books = await _dao.getAll();
+    await _repository.insert(next);
+    _books = await _repository.getAll();
     notifyListeners();
   }
 
@@ -1126,8 +1151,8 @@ class BookProvider extends ChangeNotifier {
       simReadStartChapter: startChapter < 0 ? 0 : startChapter,
       simReadDailyChapters: dailyChapters < 1 ? 3 : dailyChapters.clamp(1, 999),
     );
-    await _dao.insert(next);
-    _books = await _dao.getAll();
+    await _repository.insert(next);
+    _books = await _repository.getAll();
     notifyListeners();
     return findBookById(book.id) ?? next;
   }
@@ -1146,7 +1171,7 @@ class BookProvider extends ChangeNotifier {
       bookId: bookId,
       saveCache: true,
     );
-    await _dao.saveChapterContent(chapter.id, content);
+    await _repository.saveChapterContent(chapter.id, content);
     return content;
   }
 
@@ -1163,7 +1188,7 @@ class BookProvider extends ChangeNotifier {
     _cancelRequested = false;
     notifyListeners();
 
-    await _dao.insertChapters(chapters);
+    await _repository.insertChapters(chapters);
 
     final workers = concurrency.clamp(1, 8);
     var next = 0;
@@ -1187,7 +1212,7 @@ class BookProvider extends ChangeNotifier {
     _isDownloading = false;
     _downloadBookId = '';
     if (_currentChapters.isNotEmpty) {
-      final localChapters = await _dao.getChapters(bookId);
+      final localChapters = await _repository.getChapters(bookId);
       final downloadedIds = localChapters
           .where((c) => c.isDownloaded)
           .map((c) => c.id)
@@ -1298,7 +1323,7 @@ class BookProvider extends ChangeNotifier {
     bool backgroundRefresh = false,
   }) async {
     final gen = ++_tocLoadGen;
-    final localChapters = await _dao.getChapters(book.id);
+    final localChapters = await _repository.getChapters(book.id);
     final hasLocal = localChapters.isNotEmpty;
 
     if (hasLocal && !forceRefresh) {
@@ -1350,8 +1375,12 @@ class BookProvider extends ChangeNotifier {
       final remote = await _sourceService.getChapters(book, source: source);
       if (gen != _tocLoadGen) return;
 
-      final local = await _dao.getChapters(book.id);
-      final merged = _mergeTocWithLocal(remote, local);
+      final local = await _repository.getChapters(book.id);
+      final merged = _mergeTocWithLocal(
+        remote,
+        local,
+        reverseToc: book.readConfig.reverseToc,
+      );
 
       // 先写入内存，避免「已拉到目录但落库失败」时界面仍空白
       if (gen != _tocLoadGen) return;
@@ -1392,16 +1421,16 @@ class BookProvider extends ChangeNotifier {
             )
             .toList();
         try {
-          await _dao.insertChapters(meta);
+          await _repository.insertChapters(meta);
           if (gen != _tocLoadGen) return;
           final shelfBook = findBookById(book.id);
           if (shelfBook != null && shelfBook.totalChapterNum != merged.length) {
             final next = shelfBook.copyWith(totalChapterNum: merged.length);
-            await _dao.insert(next);
+            await _repository.insert(next);
             final i = _books.indexWhere((b) => b.id == book.id);
             if (i >= 0) _books[i] = next;
           }
-          final saved = await _dao.getChapters(book.id);
+          final saved = await _repository.getChapters(book.id);
           if (saved.isNotEmpty) {
             _currentChapters = _tocViewList(saved);
             ReadBook.instance.open(
@@ -1436,40 +1465,63 @@ class BookProvider extends ChangeNotifier {
   }
 
   /// 用章节 URL 合并本地下载状态，避免刷新目录清掉已缓存正文标记
-  List<Chapter> _mergeTocWithLocal(List<Chapter> remote, List<Chapter> local) {
-    return Chapter.mergeWithLocal(remote, local);
+  List<Chapter> _mergeTocWithLocal(
+    List<Chapter> remote,
+    List<Chapter> local, {
+    bool reverseToc = false,
+  }) {
+    final merged = Chapter.mergeWithLocal(remote, local);
+    final ordered = reverseToc ? merged.reversed.toList() : merged;
+    return ordered.asMap().entries.map((entry) {
+      final chapter = entry.value;
+      return Chapter(
+        id: chapter.id,
+        bookId: chapter.bookId,
+        title: chapter.title,
+        index: entry.key,
+        url: chapter.url,
+        isVolume: chapter.isVolume,
+        isVip: chapter.isVip,
+        isPay: chapter.isPay,
+        tag: chapter.tag,
+        baseUrl: chapter.baseUrl,
+        isDownloaded: chapter.isDownloaded,
+        content: chapter.content,
+      );
+    }).toList();
   }
 
   /// 目录列表元数据（不含正文）
   List<Chapter> _tocViewList(List<Chapter> chapters) {
-    return chapters
-        .map(
-          (c) => Chapter(
-            id: c.id,
-            bookId: c.bookId,
-            title: c.title,
-            index: c.index,
-            url: c.url,
-            isVolume: c.isVolume,
-            isVip: c.isVip,
-            isPay: c.isPay,
-            tag: c.tag,
-            baseUrl: c.baseUrl,
-            isDownloaded: c.isDownloaded,
-            content: c.content,
-          ),
-        )
-        .toList();
+    return chapters.asMap().entries.map((entry) {
+      final c = entry.value;
+      return Chapter(
+        id: c.id,
+        bookId: c.bookId,
+        title: c.title,
+        index: entry.key,
+        url: c.url,
+        isVolume: c.isVolume,
+        isVip: c.isVip,
+        isPay: c.isPay,
+        tag: c.tag,
+        baseUrl: c.baseUrl,
+        isDownloaded: c.isDownloaded,
+        content: c.content,
+      );
+    }).toList();
   }
 
   /// 异步用文件缓存补全勾选，不阻塞目录首屏
   Future<void> _enrichDownloadedFromFiles(String bookId, int gen) async {
-    final fileCached = await BookHelp.listCachedChapterIds(bookId);
+    final fileCached = await _contentCache.listChapterIds(bookId);
     if (gen != _tocLoadGen) return;
     var changed = false;
     final cleared = <Chapter>[];
     final next = _currentChapters.map((c) {
-      final hasFile = fileCached.contains(BookHelp.sanitizeId(c.id));
+      final hasFile = fileCached.contains(
+        _contentCache.sanitizeChapterId(c.id),
+      );
       if (c.isDownloaded == hasFile) return c;
       changed = true;
       if (!hasFile) cleared.add(c);
@@ -1492,9 +1544,9 @@ class BookProvider extends ChangeNotifier {
     _currentChapters = next;
     if (_books.any((book) => book.id == bookId)) {
       try {
-        await _dao.insertChapters(next);
+        await _repository.insertChapters(next);
         for (final chapter in cleared) {
-          await _dao.clearChapterContent(chapter);
+          await _repository.clearChapterContent(chapter);
         }
       } catch (e) {
         debugPrint('章节文件缓存元数据回写失败: $e');
@@ -1557,6 +1609,6 @@ class BookProvider extends ChangeNotifier {
   }
 
   Future<List<Chapter>> getLocalChapters(String bookId) async {
-    return await _dao.getChapters(bookId);
+    return await _repository.getChapters(bookId);
   }
 }

@@ -2,13 +2,18 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/database/dao/book_dao.dart';
+import 'package:legado_flutter/database/dao/replace_rule_dao.dart';
+import 'package:legado_flutter/database/dao/source_dao.dart';
+import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
+import 'package:legado_flutter/infrastructure/engine/frb_book_source_validation_port.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:legado_flutter/bridge/legado_db_bridge.dart';
 import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
 import 'package:legado_flutter/config/app_config.dart';
-import 'package:legado_flutter/pages/main/main_shell.dart';
+import 'package:legado_flutter/features/main/main_shell.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/replace_provider.dart';
 import 'package:legado_flutter/providers/rss_provider.dart';
@@ -56,10 +61,22 @@ void main() {
         providers: [
           ChangeNotifierProvider.value(value: themeController),
           ChangeNotifierProvider.value(value: AppConfig.instance),
-          ChangeNotifierProvider(create: (_) => BookProvider()),
-          ChangeNotifierProvider(create: (_) => SourceProvider()),
+          ChangeNotifierProvider(
+            create: (_) => BookProvider(
+              repository: BookDao(),
+              contentCache: const FileChapterContentCache(),
+            ),
+          ),
+          ChangeNotifierProvider(
+            create: (_) => SourceProvider(
+              repository: SourceDao(),
+              validationPort: FrbBookSourceValidationPort(),
+            ),
+          ),
           ChangeNotifierProvider(create: (_) => RssProvider()),
-          ChangeNotifierProvider(create: (_) => ReplaceProvider()),
+          ChangeNotifierProvider(
+            create: (_) => ReplaceProvider(repository: ReplaceRuleDao()),
+          ),
         ],
         child: const MaterialApp(home: MainShell()),
       ),
@@ -78,7 +95,9 @@ void main() {
     }
   });
 
-  testWidgets('MainShell hides explore/RSS when disabled', (WidgetTester tester) async {
+  testWidgets('MainShell hides explore/RSS when disabled', (
+    WidgetTester tester,
+  ) async {
     if (!rustReady) return;
 
     final themeController = ThemeModeController();
@@ -91,10 +110,22 @@ void main() {
         providers: [
           ChangeNotifierProvider.value(value: themeController),
           ChangeNotifierProvider.value(value: AppConfig.instance),
-          ChangeNotifierProvider(create: (_) => BookProvider()),
-          ChangeNotifierProvider(create: (_) => SourceProvider()),
+          ChangeNotifierProvider(
+            create: (_) => BookProvider(
+              repository: BookDao(),
+              contentCache: const FileChapterContentCache(),
+            ),
+          ),
+          ChangeNotifierProvider(
+            create: (_) => SourceProvider(
+              repository: SourceDao(),
+              validationPort: FrbBookSourceValidationPort(),
+            ),
+          ),
           ChangeNotifierProvider(create: (_) => RssProvider()),
-          ChangeNotifierProvider(create: (_) => ReplaceProvider()),
+          ChangeNotifierProvider(
+            create: (_) => ReplaceProvider(repository: ReplaceRuleDao()),
+          ),
         ],
         child: const MaterialApp(home: MainShell()),
       ),

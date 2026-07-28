@@ -7,7 +7,7 @@ alwaysApply: true
 
 ## 产品定义 (What)
 
-Legado Flutter 是开源阅读器「阅读」（Legado）的跨平台复刻版，使用 Flutter 构建 UI 层，核心解析引擎由 Rust 实现，目标覆盖 iOS/Android/Desktop 三端。产品致力于提供与原版 Android 应用一致的核心体验，无商业化目标，保持开源免费。
+Legado Flutter 的总体目标是将 [Jingshiro/legado](https://github.com/Jingshiro/legado) 的 Android/Kotlin 实现重构为 Rust + Flutter 跨平台版本，使用 Flutter 构建 UI 层、Rust 承担核心引擎，目标覆盖 iOS/Android/Desktop/Web。Jingshiro/legado 是行为、数据格式和 UI 兼容性的基线；UI 复刻是重构验收的一部分。项目无商业化目标，保持开源免费。
 
 ## 用户与场景 (Who & When)
 
@@ -41,9 +41,9 @@ Legado Flutter 是开源阅读器「阅读」（Legado）的跨平台复刻版�
 
 ## 路线图 (Roadmap)
 
-- **Phase 1（性能基础）**：Rust 替换 Dart 解析引擎，确保目录和正文解析稳定高效。
-- **Phase 2（体验复刻）**：UI 1:1 复刻原版「阅读」，保证老用户零学习成本迁移。
-- **Phase 3（发布稳定）**：多平台（iOS/Android/Desktop）打包与稳定性测试，正式发布。
+- **R0-R3（核心迁移）**：将规则解析、网络、数据库、阅读会话和缓存从 Android/Kotlin 边界迁移到 Rust + Flutter 分层架构。
+- **R4-R5（行为与数据兼容）**：对齐目录、正文、进度、备份、书签和 WebDAV 数据链路，保留 Jingshiro/legado 的可观察行为。
+- **R6（平台与 UI 收敛）**：按功能域整理 Flutter UI，完成多平台适配和与 Jingshiro/legado 的 UI/交互验收。
 
 ## 法律与合规 (Legal)
 

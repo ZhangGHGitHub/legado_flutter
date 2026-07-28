@@ -5,12 +5,81 @@ use crate::model::book_source::custom_headers;
 use once_cell::sync::Lazy;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, ACCEPT_LANGUAGE, USER_AGENT};
 use reqwest::{Client, Proxy};
+use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-static CLIENT: Lazy<Mutex<Client>> = Lazy::new(|| Mutex::new(build_http_client(&NetworkConfig::default())));
+static CLIENT: Lazy<Mutex<Client>> =
+    Lazy::new(|| Mutex::new(build_http_client(&NetworkConfig::default())));
 
 static COOKIE_JAR: Lazy<Mutex<CookieJar>> = Lazy::new(|| Mutex::new(CookieJar::new()));
+
+static REQUEST_TRACE_ENABLED: AtomicBool = AtomicBool::new(false);
+static REQUEST_TRACE: Lazy<Mutex<Vec<RequestTraceEvent>>> = Lazy::new(|| Mutex::new(Vec::new()));
+
+#[derive(Debug, Clone, Serialize)]
+struct RequestTraceEvent {
+    method: String,
+    url: String,
+    status_code: u16,
+    duration_ms: u64,
+}
+
+/// 开启一次诊断请求轨迹；默认关闭，避免正常运行时积累网络元数据。
+pub fn start_request_trace() -> Result<(), String> {
+    REQUEST_TRACE
+        .lock()
+        .map_err(|_| "请求轨迹锁失败".to_string())?
+        .clear();
+    REQUEST_TRACE_ENABLED.store(true, Ordering::Release);
+    Ok(())
+}
+
+/// 停止并取出当前诊断请求轨迹，返回 JSON 供 Flutter debug 日志采样。
+pub fn drain_request_trace() -> String {
+    REQUEST_TRACE_ENABLED.store(false, Ordering::Release);
+    let events = REQUEST_TRACE
+        .lock()
+        .map(|mut trace| std::mem::take(&mut *trace))
+        .unwrap_or_default();
+    serde_json::to_string(&events).unwrap_or_else(|_| "[]".to_string())
+}
+
+fn record_request_trace(url: &str, method: &str, status_code: u16, started: Instant) {
+    if !REQUEST_TRACE_ENABLED.load(Ordering::Acquire) {
+        return;
+    }
+    let event = RequestTraceEvent {
+        method: method.to_ascii_uppercase(),
+        url: trace_url(url),
+        status_code,
+        duration_ms: started.elapsed().as_millis() as u64,
+    };
+    if let Ok(mut trace) = REQUEST_TRACE.lock() {
+        if trace.len() >= 512 {
+            trace.remove(0);
+        }
+        trace.push(event);
+    }
+}
+
+fn trace_url(raw: &str) -> String {
+    let Ok(parsed) = url::Url::parse(raw) else {
+        return raw.to_string();
+    };
+    let mut out = format!(
+        "{}://{}{}",
+        parsed.scheme(),
+        parsed.host_str().unwrap_or_default(),
+        parsed.path()
+    );
+    if let Some(query) = parsed.query() {
+        out.push('?');
+        out.push_str(query);
+    }
+    out
+}
 
 /// 单次书源响应上限，避免异常站点或错误 URL 无限占用内存。
 pub(crate) const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
@@ -40,17 +109,13 @@ fn build_http_client(cfg: &NetworkConfig) -> Client {
 pub fn rebuild_http_client() -> Result<(), String> {
     let cfg = network_config::get_network_config();
     let client = build_http_client(&cfg);
-    *CLIENT
-        .lock()
-        .map_err(|_| "HTTP 客户端锁失败".to_string())? = client;
+    *CLIENT.lock().map_err(|_| "HTTP 客户端锁失败".to_string())? = client;
     Ok(())
 }
 
 /// 清空 Cookie 缓存
 pub fn clear_http_cookies() -> Result<(), String> {
-    *COOKIE_JAR
-        .lock()
-        .map_err(|_| "Cookie 锁失败".to_string())? = CookieJar::new();
+    *COOKIE_JAR.lock().map_err(|_| "Cookie 锁失败".to_string())? = CookieJar::new();
     Ok(())
 }
 
@@ -490,8 +555,7 @@ pub fn fetch_blocking_with_header_map(
                     headers.insert("Cookie", v);
                 }
             }
-            let response =
-                send_request(&url, &method, body.as_deref(), &charset, headers).await?;
+            let response = send_request(&url, &method, body.as_deref(), &charset, headers).await?;
             let status = response.status().as_u16();
             save_cookies(&url, &response);
             let bytes = read_response_bytes(response).await?;
@@ -532,9 +596,11 @@ pub async fn fetch_with_source(
     charset: &str,
     source_json: &str,
 ) -> Result<String, String> {
-    Ok(fetch_with_source_meta(url, method, body, charset, source_json)
-        .await?
-        .body)
+    Ok(
+        fetch_with_source_meta(url, method, body, charset, source_json)
+            .await?
+            .body,
+    )
 }
 
 /// 带书源自定义头发送请求（含状态码）
@@ -606,9 +672,7 @@ async fn fetch_with_source_meta_inner(
     pass_ge_ua_challenge(url, &resp.body).await?;
     let retry = fetch_with_source_meta_once(url, method, body, charset, source_json).await?;
     if super::ge_ua::is_challenge(&retry.body) {
-        return Err(
-            "命中 WAF 验证页（人人书云MAX GE-UA），自动验证后仍被拦截".to_string(),
-        );
+        return Err("命中 WAF 验证页（人人书云MAX GE-UA），自动验证后仍被拦截".to_string());
     }
     Ok(retry)
 }
@@ -665,9 +729,7 @@ async fn maybe_pass_ge_ua_and_retry(
         charset::decode_bytes(&bytes, charset)?
     };
     if super::ge_ua::is_challenge(&retry) {
-        return Err(
-            "命中 WAF 验证页（人人书云MAX GE-UA），自动验证后仍被拦截".to_string(),
-        );
+        return Err("命中 WAF 验证页（人人书云MAX GE-UA），自动验证后仍被拦截".to_string());
     }
     Ok(retry)
 }
@@ -679,12 +741,9 @@ async fn pass_ge_ua_challenge(url: &str, challenge_html: &str) -> Result<(), Str
 
     let (cookie_str, sum) = {
         let jar = COOKIE_JAR.lock().map_err(|_| "Cookie 锁失败".to_string())?;
-        let cookie_val = jar.get_cookie_value(url, &params.cpk).ok_or_else(|| {
-            format!(
-                "命中 WAF 验证页，缺少 Cookie {}，无法自动验证",
-                params.cpk
-            )
-        })?;
+        let cookie_val = jar
+            .get_cookie_value(url, &params.cpk)
+            .ok_or_else(|| format!("命中 WAF 验证页，缺少 Cookie {}，无法自动验证", params.cpk))?;
         let sum = super::ge_ua::compute_sum(&cookie_val, params.nonce);
         let mut parts = vec![format!("{}={cookie_val}", params.cpk)];
         // 其余 Cookie（如 PHPSESSID）一并带上，贴近浏览器
@@ -725,9 +784,8 @@ async fn pass_ge_ua_challenge(url: &str, challenge_html: &str) -> Result<(), Str
     save_cookies(url, &response);
     let bytes = read_response_bytes(response).await?;
     let text = String::from_utf8_lossy(&bytes).to_string();
-    let ok = text.contains("\"ok\":true")
-        || text.contains("\"ok\": true")
-        || text.contains("'ok':true");
+    let ok =
+        text.contains("\"ok\":true") || text.contains("\"ok\": true") || text.contains("'ok':true");
     if !ok {
         return Err(format!(
             "命中 WAF 验证页，自动验证未通过: {}",
@@ -759,7 +817,9 @@ async fn send_request(
 ) -> Result<reqwest::Response, String> {
     super::ssrf::assert_public_http_url(url)?;
     let _permit = super::rate_limit::acquire_host_permit(url).await?;
-    let response = if method == "POST" {
+    let started = Instant::now();
+    let request_method = if method == "POST" { "POST" } else { "GET" };
+    let response = if request_method == "POST" {
         let post_body = body.unwrap_or("");
         let encoded = charset::encode_form_body(post_body, charset);
         headers.insert(
@@ -772,17 +832,20 @@ async fn send_request(
             .body(encoded)
             .send()
             .await
-            .map_err(|e| format!("POST 请求失败: {e:?}"))?
     } else {
-        http_client()?
-            .get(url)
-            .headers(headers)
-            .send()
-            .await
-            .map_err(|e| format!("GET 请求失败: {e:?}"))?
+        http_client()?.get(url).headers(headers).send().await
     };
-    if !response.status().is_success() {
-        return Err(format!("HTTP 请求失败: {}", response.status()));
+    let response = match response {
+        Ok(response) => response,
+        Err(error) => {
+            record_request_trace(url, request_method, 0, started);
+            return Err(format!("{} 请求失败: {error:?}", request_method));
+        }
+    };
+    let status = response.status();
+    record_request_trace(url, request_method, status.as_u16(), started);
+    if !status.is_success() {
+        return Err(format!("HTTP 请求失败: {status}"));
     }
     Ok(response)
 }

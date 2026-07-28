@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../domain/book_reading_stats.dart';
 import '../models/book.dart';
 import '../services/bookplate_service.dart';
-import '../src/rust/api.dart' as rust_api;
 
 /// 阅读书票 — 章首/章尾卡片（Phase 4.4）
 class BookplateOverlay extends StatefulWidget {
@@ -60,7 +60,7 @@ class _BookplateOverlayState extends State<BookplateOverlay> {
     }
 
     setState(() => _loading = true);
-    rust_api.BookReadingStats? stats;
+    BookReadingStats? stats;
     try {
       stats = BookplateService.loadBookStats(widget.book.id);
     } catch (_) {}
@@ -111,10 +111,7 @@ class _BookplateOverlayState extends State<BookplateOverlay> {
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            data.author,
-            style: TextStyle(fontSize: 10, color: muted),
-          ),
+          Text(data.author, style: TextStyle(fontSize: 10, color: muted)),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -219,7 +216,9 @@ class _StarRating extends StatelessWidget {
         return Icon(
           icon,
           size: 13,
-          color: color.withValues(alpha: i < full || (i == full && half) ? 0.75 : 0.3),
+          color: color.withValues(
+            alpha: i < full || (i == full && half) ? 0.75 : 0.3,
+          ),
         );
       }),
     );

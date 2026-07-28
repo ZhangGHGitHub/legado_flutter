@@ -66,11 +66,7 @@ pub fn extract_next_content_url(
     engine::resolve_url(&url, base_url)
 }
 
-fn extract_content_by_rule(
-    document: &Html,
-    body: &scraper::ElementRef<'_>,
-    rule: &str,
-) -> String {
+fn extract_content_by_rule(document: &Html, body: &scraper::ElementRef<'_>, rule: &str) -> String {
     if rule.contains("||") {
         for part in rule.split("||") {
             let result = extract_content_by_rule(document, body, part.trim());
@@ -98,7 +94,12 @@ fn extract_content_by_rule(
 }
 
 fn smart_extract_content(document: &Html) -> String {
-    for sel in ["#content", ".chapter-content", "#chaptercontent", "article#nr"] {
+    for sel in [
+        "#content",
+        ".chapter-content",
+        "#chaptercontent",
+        "article#nr",
+    ] {
         if let Ok(selector) = Selector::parse(sel) {
             if let Some(el) = document.select(&selector).next() {
                 let text = el.text().collect::<String>().trim().to_string();

@@ -2,7 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/reader/turn/page_snapshot_cache.dart';
+import 'package:legado_flutter/features/reader/turn/page_snapshot_cache.dart';
 
 Future<ui.Image> _solidImage(ui.Color color) async {
   final recorder = ui.PictureRecorder();

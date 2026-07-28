@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import '../bridge/legado_engine_bridge.dart';
+import '../domain/ports/js_eval_port.dart';
+import '../infrastructure/engine/frb_js_eval_port.dart';
 import '../models/book_source.dart';
 import '../models/rss_source.dart';
-import '../src/rust/api.dart' as rust_api;
 
 /// JS 侧 `java.*` 命令 — 对齐 Jingshiro [SourceLoginJsExtensions]
 class LoginJsCommand {
@@ -39,6 +39,18 @@ class LoginJsResult {
 
 /// 书源登录 JS 辅助 — 对齐 Jingshiro SourceLoginDialog / SourceLoginJsExtensions。
 abstract final class SourceLoginService {
+  static JsEvalPort _jsPort = const FrbJsEvalPort();
+
+  @visibleForTesting
+  static void configureJsPort(JsEvalPort port) {
+    _jsPort = port;
+  }
+
+  @visibleForTesting
+  static void resetJsPort() {
+    _jsPort = const FrbJsEvalPort();
+  }
+
   static String extractScript(String raw) {
     final t = raw.trim();
     if (t.startsWith('@js:')) return t.substring(4).trim();
@@ -56,9 +68,7 @@ abstract final class SourceLoginService {
 
   static bool isJsUrl(String url) {
     final t = url.trim();
-    return t.startsWith('@js:') ||
-        t.startsWith('<js>') ||
-        t.startsWith('<JS>');
+    return t.startsWith('@js:') || t.startsWith('<js>') || t.startsWith('<JS>');
   }
 
   /// RSS 登录用临时 BookSource 视图
@@ -73,15 +83,8 @@ abstract final class SourceLoginService {
     });
   }
 
-  static String eval(
-    String script, {
-    String jsLib = '',
-    String baseUrl = '',
-  }) {
-    if (!LegadoEngineBridge.isAvailable) {
-      throw StateError('Rust 引擎不可用，无法执行登录 JS');
-    }
-    return rust_api.evalJs(script: script, jsLib: jsLib, baseUrl: baseUrl);
+  static String eval(String script, {String jsLib = '', String baseUrl = ''}) {
+    return _jsPort.eval(script: script, jsLib: jsLib, baseUrl: baseUrl);
   }
 
   static String _prelude(
@@ -144,7 +147,8 @@ var source = {
   }) {
     final script = extractScript(source.loginUi);
     if (script.isEmpty) return [];
-    final wrapped = '''
+    final wrapped =
+        '''
 ${_prelude(source, loginInfo, loginHeader: loginHeader)}
 $script
 ''';
@@ -163,7 +167,8 @@ $script
     String loginHeader = '',
   }) {
     final script = extractScript(source.loginUrl);
-    final wrapped = '''
+    final wrapped =
+        '''
 ${_prelude(source, loginInfo, loginHeader: loginHeader)}
 $script
 var __legado_out = '';
@@ -186,10 +191,12 @@ JSON.stringify({ result: __legado_out, cmds: __legado_cmds, login: result });
     String actionScript, {
     String loginHeader = '',
   }) {
-    final loginJs =
-        isJsUrl(source.loginUrl) ? extractScript(source.loginUrl) : '';
+    final loginJs = isJsUrl(source.loginUrl)
+        ? extractScript(source.loginUrl)
+        : '';
     final action = extractScript(actionScript);
-    final wrapped = '''
+    final wrapped =
+        '''
 ${_prelude(source, loginInfo, loginHeader: loginHeader)}
 $loginJs
 $action

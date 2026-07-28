@@ -1,26 +1,27 @@
 import '../models/book.dart';
-import '../src/rust/api.dart' as rust_api;
+import '../domain/annotation/bookmark_snapshot.dart';
+import '../domain/annotation/note_snapshot.dart';
 import 'bookmark_service.dart';
 
 /// 将旧 notes 表中以「书签」前缀标记的记录转换为独立 Bookmark。
 abstract final class BookmarkMigrationService {
-  static List<rust_api.BookmarkDto> convertLegacyNotes({
-    required Iterable<rust_api.NoteDto> notes,
+  static List<BookmarkSnapshot> convertLegacyNoteSnapshots({
+    required Iterable<NoteSnapshot> notes,
     required Map<String, Book> books,
     Set<int> reservedTimes = const <int>{},
   }) {
     final used = {...reservedTimes};
-    final converted = <rust_api.BookmarkDto>[];
+    final converted = <BookmarkSnapshot>[];
     for (final note in notes) {
       if (!note.noteContent.startsWith('书签')) continue;
-      var time = _timeFor(note);
+      var time = _timeForSnapshot(note);
       while (used.contains(time)) {
         time++;
       }
       used.add(time);
       final book = books[note.bookId];
       converted.add(
-        rust_api.BookmarkDto(
+        BookmarkSnapshot(
           time: time,
           bookId: note.bookId,
           bookName: book?.name ?? note.bookId,
@@ -36,13 +37,12 @@ abstract final class BookmarkMigrationService {
     return converted;
   }
 
-  /// 迁移不删除旧 notes；重复执行会复用稳定主键并覆盖同一 Bookmark。
-  static int migrateLegacyNotes({
-    required Iterable<rust_api.NoteDto> notes,
+  static int migrateLegacyNoteSnapshots({
+    required Iterable<NoteSnapshot> notes,
     required Iterable<Book> books,
   }) {
     if (!BookmarkService.isReady) return 0;
-    final existingBookmarks = BookmarkService.list();
+    final existingBookmarks = BookmarkService.listSnapshots();
     final existing = existingBookmarks.map((bookmark) => bookmark.time).toSet();
     final existingBySignature = <String, int>{
       for (final bookmark in existingBookmarks)
@@ -54,9 +54,10 @@ abstract final class BookmarkMigrationService {
           bookText: bookmark.bookText,
         ): bookmark.time,
     };
-    final converted = convertLegacyNotes(
+    final converted = convertLegacyNoteSnapshots(
       notes: notes,
       books: {for (final book in books) book.id: book},
+      reservedTimes: existing,
     );
     var migrated = 0;
     for (final bookmark in converted) {
@@ -67,13 +68,7 @@ abstract final class BookmarkMigrationService {
         chapterName: bookmark.chapterName,
         bookText: bookmark.bookText,
       );
-      var time = existingBySignature[signature] ?? bookmark.time;
-      if (!existingBySignature.containsKey(signature)) {
-        while (existing.contains(time)) {
-          time++;
-        }
-        existing.add(time);
-      }
+      final time = existingBySignature[signature] ?? bookmark.time;
       if (BookmarkService.save(
             time: time,
             bookId: bookmark.bookId,
@@ -92,7 +87,23 @@ abstract final class BookmarkMigrationService {
     return migrated;
   }
 
-  static int _timeFor(rust_api.NoteDto note) {
+  static List<BookmarkSnapshot> convertLegacyNotes({
+    required Iterable<NoteSnapshot> notes,
+    required Map<String, Book> books,
+    Set<int> reservedTimes = const <int>{},
+  }) => convertLegacyNoteSnapshots(
+    notes: notes,
+    books: books,
+    reservedTimes: reservedTimes,
+  );
+
+  /// 迁移不删除旧 notes；重复执行会复用稳定主键并覆盖同一 Bookmark。
+  static int migrateLegacyNotes({
+    required Iterable<NoteSnapshot> notes,
+    required Iterable<Book> books,
+  }) => migrateLegacyNoteSnapshots(notes: notes, books: books);
+
+  static int _timeForSnapshot(NoteSnapshot note) {
     final parsed = DateTime.tryParse(note.createdAt)?.millisecondsSinceEpoch;
     if (parsed != null && parsed > 0) return parsed;
     return 1000000000000 + _stableHash(note.id);

@@ -161,7 +161,8 @@ mod tests {
             &["ge_ua_p=%2Babc%2Fxyz; Path=/; Max-Age=3600".to_string()],
         );
         assert_eq!(
-            jar.get_cookie_value("https://www.rrssk.com/", "ge_ua_p").as_deref(),
+            jar.get_cookie_value("https://www.rrssk.com/", "ge_ua_p")
+                .as_deref(),
             Some("%2Babc%2Fxyz")
         );
         jar.save_from_headers(

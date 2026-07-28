@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/book/bookmark_page.dart';
+import 'package:legado_flutter/features/book/bookmark_page.dart';
 
 void main() {
   testWidgets('BookmarkPage shows title and empty hint', (tester) async {

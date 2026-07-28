@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
+import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/models/chapter.dart';
@@ -99,7 +100,8 @@ void main() {
       );
       final source = _source('source-new');
       final provider = BookProvider(
-        dao: _EmptyDao(),
+        repository: _EmptyDao(),
+        contentCache: const FileChapterContentCache(),
         sourceService: _AutoSourceService({source.bookSourceUrl}),
       );
 

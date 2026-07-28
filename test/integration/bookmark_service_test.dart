@@ -73,14 +73,14 @@ void main() {
       );
       final legacy = NoteService.list(bookId: 'b1');
       expect(
-        BookmarkMigrationService.migrateLegacyNotes(
+        BookmarkMigrationService.migrateLegacyNoteSnapshots(
           notes: legacy,
           books: [book],
         ),
         1,
       );
       expect(
-        BookmarkMigrationService.migrateLegacyNotes(
+        BookmarkMigrationService.migrateLegacyNoteSnapshots(
           notes: legacy,
           books: [book],
         ),

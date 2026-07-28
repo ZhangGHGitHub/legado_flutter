@@ -1,12 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/domain/annotation/note_snapshot.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/services/bookmark_migration_service.dart';
 import 'package:legado_flutter/services/bookmark_service.dart';
-import 'package:legado_flutter/src/rust/api.dart' as rust_api;
 
 void main() {
   test('legacy bookmark conversion maps book metadata and stable fields', () {
-    const note = rust_api.NoteDto(
+    const note = NoteSnapshot(
       id: 'legacy-1',
       bookId: 'b1',
       chapterTitle: '第一章',

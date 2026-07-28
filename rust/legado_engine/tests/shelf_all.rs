@@ -1,5 +1,6 @@
-﻿use legado_engine::{get_book_info, get_content, get_toc};
-use std::fs; use std::path::PathBuf;
+use legado_engine::{get_book_info, get_content, get_toc};
+use std::fs;
+use std::path::PathBuf;
 
 fn tomato() -> String {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -26,7 +27,12 @@ async fn check_shelf_books() {
     let u = "https://novel.cooks.tw/api/novel/detail/5946?lang=zh-CN".to_string();
     let info = get_book_info(s.clone(), u.clone()).await.unwrap();
     let ch = get_toc(s.clone(), info.toc_url.clone()).await.unwrap();
-    println!("tomato 5946: name={} n={} url0={}", info.name, ch.len(), ch[0].url);
+    println!(
+        "tomato 5946: name={} n={} url0={}",
+        info.name,
+        ch.len(),
+        ch[0].url
+    );
     let c = get_content(s.clone(), ch[0].url.clone()).await.unwrap();
     println!("  content {} chars", c.len());
 
@@ -38,12 +44,26 @@ async fn check_shelf_books() {
     ] {
         let s = bishu();
         let info = get_book_info(s.clone(), url.to_string()).await.unwrap();
-        let toc = if info.toc_url.is_empty() { url.to_string() } else { info.toc_url.clone() };
+        let toc = if info.toc_url.is_empty() {
+            url.to_string()
+        } else {
+            info.toc_url.clone()
+        };
         let ch = get_toc(s.clone(), toc).await.unwrap();
-        println!("bishu {}: name={} n={} url0={}", url, info.name, ch.len(), ch.first().map(|c| c.url.as_str()).unwrap_or(""));
+        println!(
+            "bishu {}: name={} n={} url0={}",
+            url,
+            info.name,
+            ch.len(),
+            ch.first().map(|c| c.url.as_str()).unwrap_or("")
+        );
         if let Some(first) = ch.first() {
             let c = get_content(s.clone(), first.url.clone()).await.unwrap();
-            println!("  content {} chars preview={:?}", c.len(), &c[..c.len().min(40)]);
+            println!(
+                "  content {} chars preview={:?}",
+                c.len(),
+                &c[..c.len().min(40)]
+            );
         }
     }
 }

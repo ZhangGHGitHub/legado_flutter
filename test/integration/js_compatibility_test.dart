@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/services/js_compat_analyzer.dart';
 
-/// 内置书源 <js> 规则扫描 + 可选在线探测（REFACTOR_PLAN #2）
+/// 内置书源 JS 规则扫描和可选在线探测（REFACTOR_PLAN #2）。
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -28,7 +28,9 @@ void main() {
     });
 
     test('7565 search endpoint reachable (optional online)', () async {
-      final raw = await rootBundle.loadString('assets/builtin_sources/7565.json');
+      final raw = await rootBundle.loadString(
+        'assets/builtin_sources/7565.json',
+      );
       final report = JsCompatAnalyzer.scanJson(raw);
       expect(report.usesJsoup, isTrue);
 
@@ -47,7 +49,9 @@ void main() {
         }
         await resp.drain<void>();
         // ignore: avoid_print
-        print('online 7565 search reachable (full pipeline in Rust e2e_builtin)');
+        print(
+          'online 7565 search reachable (full pipeline in Rust e2e_builtin)',
+        );
       } catch (e) {
         // ignore: avoid_print
         print('skip online 7565: $e');

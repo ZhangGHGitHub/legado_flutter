@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/services/http_tts_service.dart';
 
@@ -20,7 +23,8 @@ void main() {
     const config = HttpTtsConfig(
       url:
           'https://tts.example/audio,{"method":"POST","body":"text={{speakText}}","headers":{"X-Test":"ok"}}',
-      contentType: 'application/x-www-form-urlencoded',
+      contentType: r'audio/(mpeg|wav)',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
     );
 
     final request = config.resolve('测试', 1.0);
@@ -30,6 +34,49 @@ void main() {
     expect(
       request.headers['Content-Type'],
       'application/x-www-form-urlencoded',
+    );
+    expect(request.responseContentTypePattern, r'audio/(mpeg|wav)');
+  });
+
+  test(
+    'rejects a JSON error response instead of passing it to the player',
+    () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) {
+        request.response.headers.contentType = ContentType.json;
+        request.response.write('{"error":"quota"}');
+        request.response.close();
+      });
+      addTearDown(() => server.close(force: true));
+
+      final request = HttpTtsRequest(
+        url: 'http://127.0.0.1:${server.port}/tts',
+        method: 'GET',
+      );
+      expect(
+        () => HttpTtsClient(dio: Dio()).fetchAudio(request),
+        throwsA(isA<StateError>()),
+      );
+    },
+  );
+
+  test('enforces the original response content type pattern', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((request) {
+      request.response.headers.contentType = ContentType('audio', 'wav');
+      request.response.add([0, 1, 2]);
+      request.response.close();
+    });
+    addTearDown(() => server.close(force: true));
+
+    final request = HttpTtsRequest(
+      url: 'http://127.0.0.1:${server.port}/tts',
+      method: 'GET',
+      responseContentTypePattern: r'audio/mpeg',
+    );
+    expect(
+      () => HttpTtsClient(dio: Dio()).fetchAudio(request),
+      throwsA(isA<StateError>()),
     );
   });
 }

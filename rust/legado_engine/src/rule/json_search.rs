@@ -13,7 +13,10 @@ pub struct JsonSearchResult {
     pub note: String,
 }
 
-pub fn parse_json_search(data: &Value, source: &BookSource) -> Result<Vec<JsonSearchResult>, String> {
+pub fn parse_json_search(
+    data: &Value,
+    source: &BookSource,
+) -> Result<Vec<JsonSearchResult>, String> {
     let rule_search = source
         .rule_search_obj
         .as_ref()
@@ -35,7 +38,10 @@ pub fn parse_json_search(data: &Value, source: &BookSource) -> Result<Vec<JsonSe
     for item in items {
         let name = json_rule::resolve_field(
             &item,
-            rule_search.get("name").and_then(|v| v.as_str()).unwrap_or(""),
+            rule_search
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(""),
             js_lib,
             base,
         );

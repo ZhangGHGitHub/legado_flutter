@@ -102,11 +102,13 @@ class _ObsidianExportDialogState extends State<ObsidianExportDialog> {
     try {
       final url = _apiUrl.text.trim();
       if (url.isEmpty) throw Exception('请填写 API URL');
-      final dio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 15),
-        validateStatus: (_) => true,
-      ));
+      final dio = Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 15),
+          validateStatus: (_) => true,
+        ),
+      );
       final res = await dio.get<dynamic>(
         url,
         options: Options(
@@ -119,9 +121,7 @@ class _ObsidianExportDialogState extends State<ObsidianExportDialog> {
       final code = res.statusCode ?? 0;
       if (!mounted) return;
       setState(() {
-        _message = code > 0
-            ? '连接返回 HTTP $code'
-            : '无响应状态码';
+        _message = code > 0 ? '连接返回 HTTP $code' : '无响应状态码';
       });
     } catch (e) {
       if (mounted) setState(() => _message = '测试失败: $e');
@@ -145,12 +145,16 @@ class _ObsidianExportDialogState extends State<ObsidianExportDialog> {
         final out = await _exportLocal();
         if (!mounted) return;
         setState(() => _message = out);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(out)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(out)));
       } else {
         final out = await _exportRestApi();
         if (!mounted) return;
         setState(() => _message = out);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(out)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(out)));
       }
     } catch (e) {
       if (mounted) setState(() => _message = '导出失败: $e');
@@ -180,8 +184,9 @@ class _ObsidianExportDialogState extends State<ObsidianExportDialog> {
       await dir.create(recursive: true);
     }
     final stamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-    final suffix =
-        (widget.bookId == null || widget.bookId!.isEmpty) ? 'all' : widget.bookId!;
+    final suffix = (widget.bookId == null || widget.bookId!.isEmpty)
+        ? 'all'
+        : widget.bookId!;
     final file = File(p.join(dir.path, 'legado_notes_${suffix}_$stamp.md'));
     await file.writeAsString(markdown);
     return '已导出到 ${file.path}';
@@ -198,11 +203,13 @@ class _ObsidianExportDialogState extends State<ObsidianExportDialog> {
         ? 'legado_notes.md'
         : '${vault.replaceAll(RegExp(r'^/+|/+$'), '')}/legado_notes.md';
 
-    final dio = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 30),
-      validateStatus: (_) => true,
-    ));
+    final dio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+        validateStatus: (_) => true,
+      ),
+    );
 
     // Obsidian Local REST API 常见：PUT /vault/{path}
     final target = url.contains('{path}')
@@ -265,23 +272,27 @@ class _ObsidianExportDialogState extends State<ObsidianExportDialog> {
                               '导出方式',
                               style: Theme.of(context).textTheme.titleSmall,
                             ),
-                            RadioListTile<ObsidianExportMethod>(
-                              value: ObsidianExportMethod.restApi,
+                            RadioGroup<ObsidianExportMethod>(
                               groupValue: _method,
-                              title: const Text('Obsidian REST API'),
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              onChanged: (v) =>
-                                  setState(() => _method = v!),
-                            ),
-                            RadioListTile<ObsidianExportMethod>(
-                              value: ObsidianExportMethod.localFile,
-                              groupValue: _method,
-                              title: const Text('本地文件'),
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              onChanged: (v) =>
-                                  setState(() => _method = v!),
+                              onChanged: (v) {
+                                if (v != null) setState(() => _method = v);
+                              },
+                              child: Column(
+                                children: [
+                                  RadioListTile<ObsidianExportMethod>(
+                                    value: ObsidianExportMethod.restApi,
+                                    title: const Text('Obsidian REST API'),
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  RadioListTile<ObsidianExportMethod>(
+                                    value: ObsidianExportMethod.localFile,
+                                    title: const Text('本地文件'),
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                ],
+                              ),
                             ),
                             const SizedBox(height: 8),
                             if (_method == ObsidianExportMethod.restApi) ...[
@@ -330,7 +341,8 @@ class _ObsidianExportDialogState extends State<ObsidianExportDialog> {
                             TextField(
                               controller: _vaultPath,
                               decoration: InputDecoration(
-                                labelText: _method == ObsidianExportMethod.restApi
+                                labelText:
+                                    _method == ObsidianExportMethod.restApi
                                     ? 'Vault 内路径（可选）'
                                     : '相对子目录（可选）',
                                 hintText: 'Notes/Legado',

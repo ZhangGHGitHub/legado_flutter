@@ -1,0 +1,25 @@
+services:
+  webdav:
+    image: rclone/rclone:latest
+    container_name: legado-local-webdav
+    command:
+      - serve
+      - webdav
+      - /data
+      - --addr
+      - :8080
+      - --user
+      - ${LOCAL_WEBDAV_USER:-legado}
+      - --pass
+      - ${LOCAL_WEBDAV_PASSWORD:-legado-test}
+      - --baseurl
+      - /
+      - --dir-cache-time
+      - 0s
+      - --vfs-cache-mode
+      - off
+    ports:
+      - "${LOCAL_WEBDAV_PORT:-19080}:8080"
+    volumes:
+      - ../../.local-webdav/data:/data
+    restart: unless-stopped

@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import '../pages/reader/reader_markup.dart';
+import '../features/reader/reader_markup.dart';
 import '../services/reader_image_cache.dart';
+
+int readerChapterPosition(int markupStart, int selectionStart) =>
+    (markupStart + selectionStart).clamp(0, 0x7fffffff);
 
 /// 阅读器正文：对齐 Jingshiro —— 平时不可选中，仅长按进入选区。
 ///
@@ -23,6 +26,21 @@ class ReaderSelectableText extends StatefulWidget {
   final TextAlign textAlign;
   final void Function(String selectedText) onWriteNote;
 
+  /// Receives the selected text and its offset in the chapter body.
+  ///
+  /// The legacy callback is kept for callers that only need the text.
+  final void Function(String selectedText, int chapterPos)? onWriteNoteAt;
+  final void Function(String selectedText, int chapterPos)? onAddBookmarkAt;
+  final Future<void> Function(String selectedText)? onReadAloud;
+  final Future<void> Function(String selectedText, int chapterPos)?
+  onReadAloudAt;
+  final Future<void> Function(String selectedText)? onDictionaryLookup;
+  final Future<void> Function(String selectedText)? onContentSearch;
+  final Future<void> Function(String selectedText)? onOpenBrowser;
+  final Future<void> Function(String selectedText)? onShareText;
+  final bool readAloudFromSelection;
+  final ValueChanged<bool>? onReadAloudModeChanged;
+
   const ReaderSelectableText({
     super.key,
     required this.text,
@@ -37,6 +55,16 @@ class ReaderSelectableText extends StatefulWidget {
     this.imageHeaders = const {},
     this.textAlign = TextAlign.start,
     required this.onWriteNote,
+    this.onWriteNoteAt,
+    this.onAddBookmarkAt,
+    this.onReadAloud,
+    this.onReadAloudAt,
+    this.onDictionaryLookup,
+    this.onContentSearch,
+    this.onOpenBrowser,
+    this.onShareText,
+    this.readAloudFromSelection = false,
+    this.onReadAloudModeChanged,
   });
 
   @override
@@ -254,18 +282,132 @@ class _ReaderSelectableTextState extends State<ReaderSelectableText> {
         final items = <ContextMenuButtonItem>[
           ...editableTextState.contextMenuButtonItems,
           ContextMenuButtonItem(
+            label: '书签',
+            onPressed: selected.isEmpty || widget.onAddBookmarkAt == null
+                ? () {}
+                : () {
+                    ContextMenuController.removeAny();
+                    final start = _controller.selection.start.clamp(
+                      0,
+                      _controller.text.length,
+                    );
+                    widget.onAddBookmarkAt!(
+                      selected,
+                      readerChapterPosition(widget.markupStart, start),
+                    );
+                  },
+          ),
+          ContextMenuButtonItem(
             label: '写想法',
             onPressed: selected.isEmpty
                 ? () {}
                 : () {
                     ContextMenuController.removeAny();
-                    widget.onWriteNote(selected);
+                    final start = _controller.selection.start.clamp(
+                      0,
+                      _controller.text.length,
+                    );
+                    final chapterPos = readerChapterPosition(
+                      widget.markupStart,
+                      start,
+                    );
+                    widget.onWriteNoteAt?.call(selected, chapterPos);
+                    if (widget.onWriteNoteAt == null) {
+                      widget.onWriteNote(selected);
+                    }
+                  },
+          ),
+          ContextMenuButtonItem(
+            label: '朗读',
+            onPressed:
+                selected.isEmpty ||
+                    (widget.onReadAloud == null && widget.onReadAloudAt == null)
+                ? () {}
+                : () {
+                    ContextMenuController.removeAny();
+                    final start = _controller.selection.start.clamp(
+                      0,
+                      _controller.text.length,
+                    );
+                    if (widget.readAloudFromSelection &&
+                        widget.onReadAloudAt != null) {
+                      unawaited(
+                        widget.onReadAloudAt!(
+                          selected,
+                          readerChapterPosition(widget.markupStart, start),
+                        ),
+                      );
+                    } else {
+                      unawaited(widget.onReadAloud!(selected));
+                    }
+                  },
+          ),
+          ContextMenuButtonItem(
+            label: '词典',
+            onPressed: selected.isEmpty || widget.onDictionaryLookup == null
+                ? () {}
+                : () {
+                    ContextMenuController.removeAny();
+                    unawaited(widget.onDictionaryLookup!(selected));
+                  },
+          ),
+          ContextMenuButtonItem(
+            label: '正文搜索',
+            onPressed: selected.isEmpty || widget.onContentSearch == null
+                ? () {}
+                : () {
+                    ContextMenuController.removeAny();
+                    unawaited(widget.onContentSearch!(selected));
+                  },
+          ),
+          ContextMenuButtonItem(
+            label: '浏览器',
+            onPressed: selected.isEmpty || widget.onOpenBrowser == null
+                ? () {}
+                : () {
+                    ContextMenuController.removeAny();
+                    unawaited(widget.onOpenBrowser!(selected));
+                  },
+          ),
+          ContextMenuButtonItem(
+            label: '分享',
+            onPressed: selected.isEmpty || widget.onShareText == null
+                ? () {}
+                : () {
+                    ContextMenuController.removeAny();
+                    unawaited(widget.onShareText!(selected));
                   },
           ),
         ];
-        return AdaptiveTextSelectionToolbar.buttonItems(
+        if (widget.onReadAloudModeChanged == null) {
+          return AdaptiveTextSelectionToolbar.buttonItems(
+            anchors: editableTextState.contextMenuAnchors,
+            buttonItems: items,
+          );
+        }
+
+        // ContextMenuButtonItem 没有长按回调；包装默认平台按钮以保留原版
+        // “长按朗读切换模式、点击朗读执行动作”的双重语义和系统样式。
+        final readIndex = items.lastIndexWhere((item) => item.label == '朗读');
+        final buttons = AdaptiveTextSelectionToolbar.getAdaptiveButtons(
+          ctx,
+          items,
+        ).toList();
+        if (readIndex >= 0 && readIndex < buttons.length) {
+          buttons[readIndex] = GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onLongPress: () {
+              ContextMenuController.removeAny();
+              widget.onReadAloudModeChanged!.call(
+                !widget.readAloudFromSelection,
+              );
+            },
+            child: buttons[readIndex],
+          );
+        }
+        return AdaptiveTextSelectionToolbar(
           anchors: editableTextState.contextMenuAnchors,
-          buttonItems: items,
+          children: buttons,
         );
       },
     );

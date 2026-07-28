@@ -1,5 +1,3 @@
-import 'package:path/path.dart' as p;
-
 import '../bridge/legado_engine_bridge.dart';
 import '../services/app_paths.dart';
 import '../src/rust/api/db.dart' as rust_db;

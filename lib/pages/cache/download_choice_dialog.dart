@@ -135,64 +135,75 @@ class _DownloadChoiceDialogState extends State<DownloadChoiceDialog> {
                     style: theme.textTheme.bodySmall,
                   ),
                   const SizedBox(height: 8),
-                  RadioListTile<DownloadRangeKind>(
-                    value: DownloadRangeKind.notCached,
+                  RadioGroup<DownloadRangeKind>(
                     groupValue: _range,
-                    onChanged: (v) => setState(() => _range = v!),
-                    title: const Text('下载未缓存章节', style: TextStyle(fontSize: 14)),
-                    subtitle: Text(
-                      '约 $uncached 章',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  RadioListTile<DownloadRangeKind>(
-                    value: DownloadRangeKind.all,
-                    groupValue: _range,
-                    onChanged: (v) => setState(() => _range = v!),
-                    title: const Text('下载全部章节', style: TextStyle(fontSize: 14)),
-                    subtitle: Text(
-                      '共 ${widget.totalChapters} 章',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  RadioListTile<DownloadRangeKind>(
-                    value: DownloadRangeKind.fromCurrent,
-                    groupValue: _range,
-                    onChanged: (v) => setState(() => _range = v!),
-                    title: const Text(
-                      '从当前章节下载到结尾',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                    subtitle: Text(
-                      '第 ${widget.currentChapterIndex + 1} 章起',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  RadioListTile<DownloadRangeKind>(
-                    value: DownloadRangeKind.nextN,
-                    groupValue: _range,
-                    onChanged: (v) => setState(() => _range = v!),
-                    title: const Text('从当前章节下载', style: TextStyle(fontSize: 14)),
-                    secondary: SizedBox(
-                      width: 80,
-                      child: TextField(
-                        controller: _nextNCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          isDense: true,
-                          suffixText: '章',
-                          border: OutlineInputBorder(),
+                    onChanged: (v) {
+                      if (v != null) setState(() => _range = v);
+                    },
+                    child: Column(
+                      children: [
+                        RadioListTile<DownloadRangeKind>(
+                          value: DownloadRangeKind.notCached,
+                          title: const Text(
+                            '下载未缓存章节',
+                            style: TextStyle(fontSize: 14),
+                          ),
+                          subtitle: Text(
+                            '约 $uncached 章',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
                         ),
-                      ),
+                        RadioListTile<DownloadRangeKind>(
+                          value: DownloadRangeKind.all,
+                          title: const Text(
+                            '下载全部章节',
+                            style: TextStyle(fontSize: 14),
+                          ),
+                          subtitle: Text(
+                            '共 ${widget.totalChapters} 章',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        RadioListTile<DownloadRangeKind>(
+                          value: DownloadRangeKind.fromCurrent,
+                          title: const Text(
+                            '从当前章节下载到结尾',
+                            style: TextStyle(fontSize: 14),
+                          ),
+                          subtitle: Text(
+                            '第 ${widget.currentChapterIndex + 1} 章起',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        RadioListTile<DownloadRangeKind>(
+                          value: DownloadRangeKind.nextN,
+                          title: const Text(
+                            '从当前章节下载',
+                            style: TextStyle(fontSize: 14),
+                          ),
+                          secondary: SizedBox(
+                            width: 80,
+                            child: TextField(
+                              controller: _nextNCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                suffixText: '章',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ],
                     ),
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
                   ),
                   const Divider(height: 24),
                   Text('并发数', style: theme.textTheme.titleSmall),
@@ -211,10 +222,7 @@ class _DownloadChoiceDialogState extends State<DownloadChoiceDialog> {
                       ),
                       SizedBox(
                         width: 28,
-                        child: Text(
-                          '$_concurrency',
-                          textAlign: TextAlign.end,
-                        ),
+                        child: Text('$_concurrency', textAlign: TextAlign.end),
                       ),
                     ],
                   ),
