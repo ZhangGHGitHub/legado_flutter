@@ -6,7 +6,7 @@ import '../../models/login_row_ui.dart';
 import '../../services/source_login_prefs.dart';
 import '../../services/source_login_service.dart';
 import '../../widgets/legado_popup_menu.dart';
-import '../../pages/common/app_webview_page.dart';
+import '../common/app_webview_page.dart';
 
 /// 书源登录 — 对齐 Jingshiro `SourceLoginDialog` + `dialog_login.xml`
 ///

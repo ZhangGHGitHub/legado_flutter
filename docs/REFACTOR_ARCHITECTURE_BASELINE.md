@@ -2002,3 +2002,19 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - 旧 `pages/obsidian` 路径引用扫描：无残留。
 
 边界结论：Obsidian 导出对话框已进入 `features/obsidian` 功能域；外部 Obsidian/WebDAV 服务继续按既有范围处理，R6 仍需处理通用 WebView 并完成 UI/发布验收。
+
+## 96. 2026-07-29：R6 通用 WebView 功能域收敛
+
+迁移范围：
+
+- 将 `lib/pages/common/app_webview_page.dart` 迁移至 `lib/features/common/app_webview_page.dart`，更新 RSS 阅读和书源登录入口。
+- 保持内嵌 WebView、HTML 加载、外链回退、平台支持判断和登录/RSS 页面返回行为不变；未改变网络请求、Cookie 或书源登录语义。
+- 涉及 Flutter app，无 Rust crate；未修改原版基线。
+
+测试结果：
+
+- RSS 阅读、书源登录和共享页面 `flutter analyze --no-pub`：无诊断。
+- RSS 编辑/管理、书源登录端口和 RSS Tab 定向测试：`6/6` 通过。
+- 旧 `pages/common` 路径引用扫描：无残留。
+
+边界结论：通用 WebView 页面已进入 `features/common` 功能域；R6 过渡页面目录收敛完成，仍需执行本批最终门禁并完成 UI/发布验收。

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/rss_article.dart';
 import '../../models/rss_source.dart';
 import '../../services/rss_service.dart';
-import '../../pages/common/app_webview_page.dart';
+import '../common/app_webview_page.dart';
 
 /// RSS 阅读 — 对齐 Jingshiro 文章阅读：优先 ruleContent，否则 WebView 打开 link。
 class RssReadPage extends StatefulWidget {
