@@ -1890,3 +1890,19 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - 旧 `pages/txt_toc` 路径引用扫描：无残留。
 
 边界结论：TXT 目录规则页面已进入 `features/my` 功能域；R6 仍需继续收敛替换和漫画等过渡页面，并完成 UI/发布验收。
+
+## 89. 2026-07-29：R6 替换净化功能域收敛
+
+迁移范围：
+
+- 将 `lib/pages/replace/replace_page.dart` 迁移至 `lib/features/my/replace_page.dart`，更新“我的”页入口。
+- 保持替换规则的列表、编辑、导入预设、启用/删除、恢复默认和实时预览行为不变；未修改替换规则 Repository、正文处理或阅读分页行为。
+- 涉及 Flutter app，无 Rust crate；未修改原版基线。
+
+测试结果：
+
+- 相关入口 `flutter analyze --no-pub`：无诊断。
+- 替换 Provider、服务和预览面板定向测试：`9/9` 通过。
+- 旧 `pages/replace` 路径引用扫描：无残留。
+
+边界结论：Replace 页面已进入 `features/my` 功能域；R6 仍需处理漫画阅读页并完成 UI/发布验收。

@@ -18,7 +18,7 @@ import '../cache/cache_book_page.dart';
 import '../../features/settings/config_page.dart';
 import '../../pages/obsidian/obsidian_export_dialog.dart';
 import '../../features/reader/ai_chat_page.dart';
-import '../../pages/replace/replace_page.dart';
+import 'replace_page.dart';
 import '../../features/sources/sources_page.dart';
 import '../../pages/about/donate_page.dart';
 import 'dict_rule_page.dart';
