@@ -153,7 +153,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 退出条件：核心用户流程在目标平台构建并通过，UI 与原版对照测试通过，平台差异有明确适配记录。
 
-当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings` 和 `my`；`book` 定向 analyze 无诊断、直接回归 `8/8` 通过，`sources` 规则补全回归 `4/4` 通过，`rss` 定向回归 `3/3` 通过，`settings` 相关回归 `17/17` 通过，`my` 关联回归 `2/2` 通过。代码编辑、二维码、发现、搜索、漫画等仍保留在过渡目录，已通过导入适配调用新功能域；同步能力无独立 UI 页面，继续由现有 application/domain/service 边界承载；既有弃用和异步生命周期诊断转入统一 analyze 批次。
+当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；其中 Dict/TXT 目录规则、替换净化、捐赠页归入 `my`，二维码归入 `sources`，漫画阅读归入 `reader`，启动页归入 `main`。相关定向回归、Flutter 全量 `540` 项（3 个既有条件测试跳过）、全仓 analyze 和架构边界检查均通过；Rust workspace 核心 `127` 项通过。旧 `lib/pages` 下仅保留 `home/home_page.dart` 这一兼容导出入口，主实现已在 `features/bookshelf`；同步能力无独立 UI 页面，继续由现有 application/domain/service 边界承载。R6 剩余工作是 UI 与原版对照、目标平台构建及发布前正式/主流 WebDAV 验收；真实 Android TTS、后台音频服务、Web/WASM/PWA 和外部 AI 服务继续按暂停/范围外条件处理。
 
 ### 0.4 重构工作规则
 
