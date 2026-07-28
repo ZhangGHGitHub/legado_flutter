@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/about/donate_page.dart';
+import 'package:legado_flutter/features/my/donate_page.dart';
 import 'package:legado_flutter/services/donate_clipboard_port.dart';
 
 class _FakeDonateClipboard implements DonateClipboardPort {

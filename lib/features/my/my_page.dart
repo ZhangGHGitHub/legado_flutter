@@ -20,7 +20,7 @@ import '../../pages/obsidian/obsidian_export_dialog.dart';
 import '../../features/reader/ai_chat_page.dart';
 import 'replace_page.dart';
 import '../../features/sources/sources_page.dart';
-import '../../pages/about/donate_page.dart';
+import 'donate_page.dart';
 import 'dict_rule_page.dart';
 import 'txt_toc_rule_page.dart';
 import 'file_manage_page.dart';

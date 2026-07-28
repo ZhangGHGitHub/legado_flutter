@@ -1922,3 +1922,19 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - 旧 `pages/manga` 路径引用扫描：无残留。
 
 边界结论：漫画阅读页面已进入 `features/reader` 功能域；R6 过渡页面目录已完成本轮收敛，仍需执行全量门禁并完成 UI/发布验收。
+
+## 91. 2026-07-29：R6 Donate 功能域收敛
+
+迁移范围：
+
+- 将 `lib/pages/about/donate_page.dart` 迁移至 `lib/features/my/donate_page.dart`，更新“我的”页入口和 Donate Widget 测试导入。
+- 保持捐赠渠道展示、二维码 URL、剪贴板复制和提示语行为不变；未修改外部服务、网络请求或阅读行为。
+- 涉及 Flutter app，无 Rust crate；未修改原版基线。
+
+测试结果：
+
+- 相关 `flutter analyze --no-pub`：无诊断。
+- Donate 页面 Widget 测试：`2/2` 通过。
+- 旧 `pages/about` 路径引用扫描：无残留。
+
+边界结论：Donate 页面已进入 `features/my` 功能域；R6 仍需处理启动页及跨功能共享页面，并完成 UI/发布验收。
