@@ -1842,3 +1842,19 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - Flutter 全量：`540` 通过，3 个既有条件测试跳过。
 
 边界结论：HTTP TTS 文件缓存现在有设置页清理入口；真实 Android TTS/后台音频服务仍按暂停项处理。
+
+## 86. 2026-07-29：R6 Search 功能域收敛
+
+迁移范围：
+
+- 将 `lib/pages/search/search_page.dart` 迁移至 `lib/features/search/search_page.dart`，并更新应用、书架、发现、书源编辑和书源管理入口。
+- 保持搜索范围、精准搜索、搜索历史、结果分组和跳转书籍详情行为不变；未修改搜索端口、书源请求、结果顺序或正文/目录契约。
+- 涉及 Flutter app，无 Rust crate；未修改原版基线。
+
+测试结果：
+
+- 相关入口 `flutter analyze --no-pub`：无诊断。
+- 搜索端口与搜索偏好定向测试：`3/3` 通过。
+- 旧 `pages/search` 路径引用扫描：无残留。
+
+边界结论：Search 页面已进入 `features/search` 功能域；R6 仍需继续收敛字典、替换、TXT 目录和漫画等过渡页面，并完成 UI/发布验收。

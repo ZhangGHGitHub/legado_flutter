@@ -18,7 +18,7 @@ import '../code_edit/code_edit_page.dart';
 import '../../services/code_edit_prefs.dart';
 import '../code_edit/keyboard_tool_bar.dart';
 import '../../pages/qrcode/qrcode_capture_page.dart';
-import '../../pages/search/search_page.dart';
+import '../search/search_page.dart';
 import 'rule_complete.dart';
 import 'source_debug_page.dart';
 import 'source_login_page.dart';

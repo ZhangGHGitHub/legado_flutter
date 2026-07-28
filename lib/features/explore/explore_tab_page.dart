@@ -6,7 +6,7 @@ import '../../providers/source_provider.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/source_chip.dart';
-import '../../pages/search/search_page.dart';
+import '../search/search_page.dart';
 import 'explore_list_page.dart';
 import 'explore_utils.dart';
 

@@ -18,7 +18,7 @@ import '../../widgets/legado_refresh_indicator.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../../features/book/book_info_page.dart';
 import '../cache/cache_book_page.dart';
-import '../../pages/search/search_page.dart';
+import '../search/search_page.dart';
 import 'bookshelf_arrange_page.dart';
 import 'bookshelf_books_view.dart';
 import 'bookshelf_config_dialog.dart';

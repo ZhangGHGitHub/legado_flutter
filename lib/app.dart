@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'features/main/main_shell.dart';
 import 'features/my/my_page.dart';
-import 'pages/search/search_page.dart';
+import 'features/search/search_page.dart';
 import 'features/sources/sources_page.dart';
 import 'pages/welcome/welcome_page.dart';
 import 'theme/app_theme.dart';
