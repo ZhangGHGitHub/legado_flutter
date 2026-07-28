@@ -1,7 +1,7 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/ai_config_prefs.dart';
+import '../../services/ai_config_http_service.dart';
 
 /// AI 配置 — 对齐 Jingshiro `dialog_ai_config.xml` / `AiConfigDialog`
 class AiConfigDialog extends StatefulWidget {
@@ -21,6 +21,7 @@ class AiConfigDialog extends StatefulWidget {
 }
 
 class _AiConfigDialogState extends State<AiConfigDialog> {
+  final _httpService = AiConfigHttpService();
   late final TextEditingController _apiUrl;
   late final TextEditingController _apiKey;
   late final TextEditingController _model;
@@ -88,9 +89,9 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
         _prefs = prefs;
         _message = '配置已保存';
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('AI 配置已保存')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('AI 配置已保存')));
     }
   }
 
@@ -101,29 +102,10 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
     });
     try {
       final base = _apiUrl.text.trim();
-      final uri = _modelsEndpoint(base);
-      final dio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 20),
-        receiveTimeout: const Duration(seconds: 20),
-      ));
-      final res = await dio.get<dynamic>(
-        uri,
-        options: Options(
-          headers: {
-            if (_apiKey.text.trim().isNotEmpty)
-              'Authorization': 'Bearer ${_apiKey.text.trim()}',
-          },
-        ),
+      final ids = await _httpService.fetchModels(
+        apiUrl: base,
+        apiKey: _apiKey.text,
       );
-      final data = res.data;
-      final ids = <String>[];
-      if (data is Map && data['data'] is List) {
-        for (final item in data['data'] as List) {
-          if (item is Map && item['id'] != null) {
-            ids.add(item['id'].toString());
-          }
-        }
-      }
       if (!mounted) return;
       if (ids.isEmpty) {
         setState(() => _message = '未解析到模型列表');
@@ -164,30 +146,12 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
       _message = null;
     });
     try {
-      final dio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
-      ));
-      final res = await dio.post<dynamic>(
-        _apiUrl.text.trim(),
-        data: {
-          'model': _model.text.trim(),
-          'messages': [
-            {'role': 'user', 'content': 'ping'},
-          ],
-          'max_tokens': 8,
-        },
-        options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-            if (_apiKey.text.trim().isNotEmpty)
-              'Authorization': 'Bearer ${_apiKey.text.trim()}',
-          },
-          validateStatus: (_) => true,
-        ),
+      final code = await _httpService.testModel(
+        apiUrl: _apiUrl.text,
+        model: _model.text,
+        apiKey: _apiKey.text,
       );
       if (!mounted) return;
-      final code = res.statusCode ?? 0;
       if (code >= 200 && code < 300) {
         setState(() => _message = '模型可用（HTTP $code）');
       } else {
@@ -198,16 +162,6 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  String _modelsEndpoint(String chatCompletionsUrl) {
-    // .../v1/chat/completions → .../v1/models
-    final u = chatCompletionsUrl.trim();
-    if (u.contains('/chat/completions')) {
-      return u.replaceFirst('/chat/completions', '/models');
-    }
-    if (u.endsWith('/')) return '${u}models';
-    return '$u/models';
   }
 
   Future<void> _openMemory() async {
@@ -283,7 +237,8 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
                               controller: _apiUrl,
                               decoration: const InputDecoration(
                                 labelText: 'API URL',
-                                hintText: 'https://api.openai.com/v1/chat/completions',
+                                hintText:
+                                    'https://api.openai.com/v1/chat/completions',
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.url,
@@ -300,7 +255,8 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
                             const SizedBox(height: 4),
                             Text(
                               'API Key 仅保存在本机，请勿泄露',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
                                     color: Theme.of(context).colorScheme.error,
                                   ),
                             ),
@@ -367,7 +323,9 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
                             ListTile(
                               contentPadding: EdgeInsets.zero,
                               title: const Text('记忆条数'),
-                              trailing: Text('${_prefs?.memoryList.length ?? 0}'),
+                              trailing: Text(
+                                '${_prefs?.memoryList.length ?? 0}',
+                              ),
                             ),
                             Row(
                               children: [
@@ -384,9 +342,9 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
                                     child: Text(
                                       '清除记忆',
                                       style: TextStyle(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .error,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
                                       ),
                                     ),
                                   ),
@@ -455,9 +413,9 @@ class _AiMemoryDialogState extends State<AiMemoryDialog> {
     await prefs.clearMemory();
     if (mounted) {
       setState(() => _items = []);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('记忆已清除')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('记忆已清除')));
     }
   }
 
@@ -488,22 +446,23 @@ class _AiMemoryDialogState extends State<AiMemoryDialog> {
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())
                     : _items.isEmpty
-                        ? const Center(child: Text('暂无记忆'))
-                        : ListView.separated(
-                            controller: scrollCtrl,
-                            itemCount: _items.length,
-                            separatorBuilder: (_, _) =>
-                                const Divider(height: 1),
-                            itemBuilder: (_, i) {
-                              final m = _items[i];
-                              return ListTile(
-                                title: Text(m.chapterRange.isEmpty
-                                    ? '会话 ${m.id}'
-                                    : m.chapterRange),
-                                subtitle: Text(m.preview),
-                              );
-                            },
-                          ),
+                    ? const Center(child: Text('暂无记忆'))
+                    : ListView.separated(
+                        controller: scrollCtrl,
+                        itemCount: _items.length,
+                        separatorBuilder: (_, _) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final m = _items[i];
+                          return ListTile(
+                            title: Text(
+                              m.chapterRange.isEmpty
+                                  ? '会话 ${m.id}'
+                                  : m.chapterRange,
+                            ),
+                            subtitle: Text(m.preview),
+                          );
+                        },
+                      ),
               ),
               SafeArea(
                 child: TextButton(

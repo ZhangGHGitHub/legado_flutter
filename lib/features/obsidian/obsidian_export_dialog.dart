@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -8,6 +7,7 @@ import 'package:path/path.dart' as p;
 import '../../services/note_export_service.dart';
 import '../../services/note_service.dart';
 import '../../services/obsidian_export_prefs.dart';
+import '../../services/obsidian_api_service.dart';
 
 /// 导出到 Obsidian — 对齐 `dialog_obsidian_export.xml`
 class ObsidianExportDialog extends StatefulWidget {
@@ -30,6 +30,7 @@ class ObsidianExportDialog extends StatefulWidget {
 }
 
 class _ObsidianExportDialogState extends State<ObsidianExportDialog> {
+  final _apiService = ObsidianApiService();
   ObsidianExportMethod _method = ObsidianExportMethod.localFile;
   late final TextEditingController _apiUrl;
   late final TextEditingController _apiKey;
@@ -102,23 +103,10 @@ class _ObsidianExportDialogState extends State<ObsidianExportDialog> {
     try {
       final url = _apiUrl.text.trim();
       if (url.isEmpty) throw Exception('请填写 API URL');
-      final dio = Dio(
-        BaseOptions(
-          connectTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 15),
-          validateStatus: (_) => true,
-        ),
+      final code = await _apiService.testConnection(
+        url: url,
+        apiKey: _apiKey.text,
       );
-      final res = await dio.get<dynamic>(
-        url,
-        options: Options(
-          headers: {
-            if (_apiKey.text.trim().isNotEmpty)
-              'Authorization': 'Bearer ${_apiKey.text.trim()}',
-          },
-        ),
-      );
-      final code = res.statusCode ?? 0;
       if (!mounted) return;
       setState(() {
         _message = code > 0 ? '连接返回 HTTP $code' : '无响应状态码';
@@ -203,35 +191,12 @@ class _ObsidianExportDialogState extends State<ObsidianExportDialog> {
         ? 'legado_notes.md'
         : '${vault.replaceAll(RegExp(r'^/+|/+$'), '')}/legado_notes.md';
 
-    final dio = Dio(
-      BaseOptions(
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
-        validateStatus: (_) => true,
-      ),
+    return _apiService.exportMarkdown(
+      url: url,
+      markdown: markdown,
+      fileName: fileName,
+      apiKey: _apiKey.text,
     );
-
-    // Obsidian Local REST API 常见：PUT /vault/{path}
-    final target = url.contains('{path}')
-        ? url.replaceAll('{path}', Uri.encodeComponent(fileName))
-        : (url.endsWith('/') ? '$url$fileName' : '$url/$fileName');
-
-    final res = await dio.put<dynamic>(
-      target,
-      data: markdown,
-      options: Options(
-        headers: {
-          'Content-Type': 'text/markdown',
-          if (_apiKey.text.trim().isNotEmpty)
-            'Authorization': 'Bearer ${_apiKey.text.trim()}',
-        },
-      ),
-    );
-    final code = res.statusCode ?? 0;
-    if (code >= 200 && code < 300) {
-      return '已通过 REST API 导出（HTTP $code）';
-    }
-    throw Exception('HTTP $code: ${res.data}');
   }
 
   @override

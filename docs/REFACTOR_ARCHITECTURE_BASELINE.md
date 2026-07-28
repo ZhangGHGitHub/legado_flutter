@@ -2018,3 +2018,19 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - 旧 `pages/common` 路径引用扫描：无残留。
 
 边界结论：通用 WebView 页面已进入 `features/common` 功能域；R6 过渡页面目录收敛完成，仍需执行本批最终门禁并完成 UI/发布验收。
+
+## 97. 2026-07-29：R6 AI/Obsidian 网络边界修复
+
+修复范围：
+
+- 将 AI 配置的模型列表/测试请求移至 `AiConfigHttpService`，将 Obsidian 连通性/REST 导出移至 `ObsidianApiService`；`features` 页面不再直接导入 Dio 或创建业务 HTTP 客户端。
+- 保持原有 URL 拼接、请求头、HTTP 方法、超时、状态码提示和错误文本行为；未扩大真实 AI、Obsidian 或 WebDAV 服务范围。
+- 新增服务层适配器，未修改 Rust crate、原版基线、正文、目录、分页或章节身份。
+
+测试结果：
+
+- 相关服务、AI/Obsidian 页面和调用方 `flutter analyze --no-pub`：无诊断。
+- 架构边界检查：`Architecture boundary check passed`，AI/Obsidian 原有 `10` 条违规已清零。
+- 相关集成回归：`5/5` 通过；Flutter 全量：`540` 通过，3 个既有条件测试跳过。
+
+边界结论：AI、Obsidian 和通用 WebView 页面均已满足当前静态功能域边界；真实外部服务仍按暂停/范围外条件处理。
