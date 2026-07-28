@@ -13,8 +13,8 @@ import '../../providers/source_provider.dart';
 import '../../services/manga_prefs.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_popup_menu.dart';
-import '../../features/book/change_source_page.dart';
-import '../../features/book/toc_sheet.dart';
+import '../book/change_source_page.dart';
+import '../book/toc_sheet.dart';
 
 /// 漫画阅读器 — 1:1 对齐 Jingshiro [ReadMangaActivity] + `activity_manga.xml`
 /// + [MangaMenu]/`view_manga_menu.xml`) + [ReaderInfoBarView] + `menu/book_manga.xml`

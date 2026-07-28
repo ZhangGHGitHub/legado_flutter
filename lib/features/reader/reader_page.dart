@@ -56,7 +56,7 @@ import 'tts_panel.dart';
 import 'turn/page_direction.dart';
 import 'turn/reader_turn_view.dart';
 import 'audio_play_page.dart';
-import '../../pages/manga/manga_reader_page.dart';
+import 'manga_reader_page.dart';
 import '../../widgets/bookplate_overlay.dart';
 import '../../widgets/bookmark_editor_sheet.dart';
 import '../../widgets/dict_lookup_sheet.dart';

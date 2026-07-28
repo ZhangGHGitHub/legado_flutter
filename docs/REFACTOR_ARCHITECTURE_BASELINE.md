@@ -1906,3 +1906,19 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - 旧 `pages/replace` 路径引用扫描：无残留。
 
 边界结论：Replace 页面已进入 `features/my` 功能域；R6 仍需处理漫画阅读页并完成 UI/发布验收。
+
+## 90. 2026-07-29：R6 漫画阅读功能域收敛
+
+迁移范围：
+
+- 将 `lib/pages/manga/manga_reader_page.dart` 迁移至 `lib/features/reader/manga_reader_page.dart`，更新书籍详情页和 Reader 入口。
+- 保持漫画图片提取、相对 URL 解析、章节切换、页码、方向、自动翻页和阅读位置行为不变；未修改正文内容、目录顺序、章节身份或分页契约。
+- 涉及 Flutter app，无 Rust crate；未修改原版基线。
+
+测试结果：
+
+- Reader、书籍详情和漫画相关 `flutter analyze --no-pub`：无诊断。
+- 漫画图像提取、阅读位置、滚动位置、缓存端口和标记处理定向测试：`24/24` 通过。
+- 旧 `pages/manga` 路径引用扫描：无残留。
+
+边界结论：漫画阅读页面已进入 `features/reader` 功能域；R6 过渡页面目录已完成本轮收敛，仍需执行全量门禁并完成 UI/发布验收。

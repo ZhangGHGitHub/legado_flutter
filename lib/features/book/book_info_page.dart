@@ -15,7 +15,7 @@ import '../../theme/legado_tokens.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../../features/reader/reader_page.dart';
-import '../../pages/manga/manga_reader_page.dart';
+import '../reader/manga_reader_page.dart';
 import 'change_cover_page.dart';
 import 'change_source_page.dart';
 import 'toc_sheet.dart';
