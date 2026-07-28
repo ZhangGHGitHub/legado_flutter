@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/ai_config_prefs.dart';
 import '../../widgets/empty_state.dart';
-import '../../pages/ai/ai_config_dialog.dart';
+import '../ai/ai_config_dialog.dart';
 
 /// AI 助手占位 — 对齐 AiChatActivity（配置已落地，对话待接）
 class AiChatPage extends StatefulWidget {

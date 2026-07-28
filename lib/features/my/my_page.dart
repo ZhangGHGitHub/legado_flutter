@@ -11,7 +11,7 @@ import '../../services/web_api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/legado_list_tile.dart';
 import '../../widgets/quick_action_button.dart';
-import '../../pages/ai/ai_config_dialog.dart';
+import '../ai/ai_config_dialog.dart';
 import '../../features/book/bookmark_page.dart';
 import '../../providers/book_provider.dart';
 import '../cache/cache_book_page.dart';

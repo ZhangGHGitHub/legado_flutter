@@ -1970,3 +1970,19 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - 旧 `pages/qrcode` 路径引用扫描：无残留。
 
 边界结论：二维码页面已进入 `features/sources` 功能域；R6 仍需处理通用 WebView、AI、Obsidian 等共享页面，并完成 UI/发布验收。
+
+## 94. 2026-07-29：R6 AI 配置功能域收敛
+
+迁移范围：
+
+- 将 `lib/pages/ai/ai_config_dialog.dart` 迁移至 `lib/features/ai/ai_config_dialog.dart`，更新“我的”页和 Reader AI 聊天入口。
+- 保持 AI 配置加载、保存、模型获取、工具开关和头像/人设字段行为不变；未调用真实外部 AI 服务，也未改变 Reader 正文或章节行为。
+- 涉及 Flutter app，无 Rust crate；未修改原版基线。
+
+测试结果：
+
+- AI 配置、我的页和 Reader AI 聊天 `flutter analyze --no-pub`：无诊断。
+- MainShell 集成回归：`2/2` 通过。
+- 旧 `pages/ai` 路径引用扫描：无残留。
+
+边界结论：AI 配置页面已进入 `features/ai` 功能域；真实 AI 外部服务继续按范围外处理，R6 仍需处理通用 WebView、Obsidian 等共享页面，并完成 UI/发布验收。
