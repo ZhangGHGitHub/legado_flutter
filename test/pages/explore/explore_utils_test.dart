@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/models/book_source.dart';
-import 'package:legado_flutter/pages/explore/explore_utils.dart';
+import 'package:legado_flutter/features/explore/explore_utils.dart';
 
 void main() {
   BookSource src({

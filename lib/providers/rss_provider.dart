@@ -1,18 +1,20 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/ports/rss_source_import_port.dart';
 import '../models/rss_source.dart';
-import '../utils/ssrf_guard.dart';
 
 const _rssSourcesKey = 'legado_rss_sources';
-const _rssImportTimeout = Duration(seconds: 30);
-const _rssImportMaxBytes = 10 * 1024 * 1024;
 
 /// RSS 订阅源管理 — 本地持久化（UI 层；规则引擎后续接入）
 class RssProvider extends ChangeNotifier {
+  RssProvider({RssSourceImportPort? sourceImportPort})
+    : _sourceImportPort =
+          sourceImportPort ?? const _UnavailableRssSourceImportPort();
+
+  final RssSourceImportPort _sourceImportPort;
   List<RssSource> _sources = [];
 
   List<RssSource> get sources => List.unmodifiable(_sources);
@@ -98,10 +100,7 @@ class RssProvider extends ChangeNotifier {
   }
 
   /// 管理页列表过滤：搜索 + 分组/启用态
-  List<RssSource> managedSources({
-    String? searchKey,
-    String filter = 'all',
-  }) {
+  List<RssSource> managedSources({String? searchKey, String filter = 'all'}) {
     var list = List<RssSource>.from(_sources)
       ..sort((a, b) {
         final order = b.customOrder.compareTo(a.customOrder);
@@ -182,48 +181,8 @@ class RssProvider extends ChangeNotifier {
 
   Future<bool> importSourcesFromUrl(String url) async {
     try {
-      var currentUrl = url.trim();
-      SsrfGuard.assertPublicHttpUrl(currentUrl);
-      final client = HttpClient();
-      client.connectionTimeout = _rssImportTimeout;
-      try {
-        for (var hop = 0; hop <= SsrfGuard.maxRedirects; hop++) {
-          SsrfGuard.assertPublicHttpUrl(currentUrl);
-          final uri = Uri.parse(currentUrl);
-          final req = await client.getUrl(uri);
-          req.followRedirects = false;
-          req.maxRedirects = 0;
-          final res = await req.close().timeout(_rssImportTimeout);
-
-          if (res.statusCode >= 300 && res.statusCode < 400) {
-            final location = res.headers.value(HttpHeaders.locationHeader);
-            await res.drain<void>();
-            if (location == null || location.isEmpty ||
-                hop == SsrfGuard.maxRedirects) {
-              return false;
-            }
-            SsrfGuard.assertRedirectTarget(currentUrl, location);
-            currentUrl = uri.resolve(location).toString();
-            continue;
-          }
-
-          if (res.statusCode < 200 || res.statusCode >= 300) {
-            await res.drain<void>();
-            return false;
-          }
-          if (res.contentLength > _rssImportMaxBytes) return false;
-
-          final bytes = <int>[];
-          await for (final chunk in res.timeout(_rssImportTimeout)) {
-            if (bytes.length + chunk.length > _rssImportMaxBytes) return false;
-            bytes.addAll(chunk);
-          }
-          return importSources(utf8.decode(bytes));
-        }
-        return false;
-      } finally {
-        client.close(force: true);
-      }
+      final content = await _sourceImportPort.fetch(url);
+      return content != null && await importSources(content);
     } catch (e) {
       debugPrint('RSS import URL failed: $e');
       return false;
@@ -250,8 +209,8 @@ class RssProvider extends ChangeNotifier {
       final list = decoded is List
           ? decoded
           : decoded is Map && decoded['sources'] is List
-              ? decoded['sources'] as List
-              : <dynamic>[];
+          ? decoded['sources'] as List
+          : <dynamic>[];
       if (list.isEmpty) return false;
       final imported = <RssSource>[];
       for (final item in list) {
@@ -288,4 +247,11 @@ class RssProvider extends ChangeNotifier {
     _sources.removeWhere((s) => s.sourceUrl == source.sourceUrl);
     await _persist();
   }
+}
+
+class _UnavailableRssSourceImportPort implements RssSourceImportPort {
+  const _UnavailableRssSourceImportPort();
+
+  @override
+  Future<String?> fetch(String url) async => null;
 }

@@ -24,7 +24,7 @@ import '../../widgets/source_group_manage_dialog.dart';
 import '../../widgets/source_manage_help_dialog.dart';
 import '../../widgets/source_status_dot.dart';
 import '../../widgets/source_validation_sheet.dart';
-import '../../pages/explore/explore_utils.dart';
+import '../explore/explore_utils.dart';
 import '../../pages/qrcode/qrcode_capture_page.dart';
 import '../../pages/search/search_page.dart';
 import 'source_debug_page.dart';

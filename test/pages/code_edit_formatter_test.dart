@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/code_edit/code_edit_formatter.dart';
-import 'package:legado_flutter/pages/code_edit/code_edit_highlighter.dart';
-import 'package:legado_flutter/pages/code_edit/code_edit_theme.dart';
+import 'package:legado_flutter/features/code_edit/code_edit_formatter.dart';
+import 'package:legado_flutter/features/code_edit/code_edit_highlighter.dart';
+import 'package:legado_flutter/features/code_edit/code_edit_theme.dart';
 import 'package:flutter/material.dart';
 
 void main() {

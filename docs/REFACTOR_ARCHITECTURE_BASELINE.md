@@ -1676,3 +1676,169 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 边界结论：R0 已建立当前残留业务和静态越界的可重复证据，基线退出就绪，等待确认进入 R1。历史
 资料中含既有未提交内容的部分仅登记为原位归档候选；现有工作树的可追溯提交拆分与 `21` 项违规的
 逐项迁移属于后续 R1-R6 最小迁移单元，不阻塞 R0 基线退出。
+
+## 76. 2026-07-29：R6 RemoteBookPage WebDAV 端口边界
+
+迁移范围：
+
+- `RemoteBookPage` 移除 `FrbWebDavRepository` 的直接导入和默认构造，改为读取根组合层提供的
+  `WebDavRepository`；测试仍可通过 widget 注入 fake。
+- `main.dart` 负责创建 `FrbWebDavRepository`，页面继续保留 WebDAV 配置、目录浏览、下载和本地导入行为。
+- 未修改远程路径、排序、书籍导入、正文、断行、分页、章节位置或 TTS 行为。
+
+测试结果：
+
+- `flutter analyze lib/features/bookshelf/remote_book_page.dart lib/main.dart test/features/bookshelf/remote_book_page_test.dart`：`No issues found`。
+- `flutter test --no-pub test/features/bookshelf/remote_book_page_test.dart`：`1/1` 通过，覆盖注入端口的初始目录加载。
+- `scripts/check_architecture_boundaries.ps1`：剩余 `4` 项违规；本步移除 `RemoteBookPage` 的 WebDAV adapter 违规。
+
+边界结论：书架远程书籍页面已收敛到领域端口；下一步处理 Reader 搜索页的章节缓存 adapter 直接依赖。
+
+## 77. 2026-07-29：R6 SearchContentPage 章节缓存端口边界
+
+迁移范围：
+
+- `SearchContentPage` 移除 `FileChapterContentCache` 的直接导入和默认构造，构造函数及 `open` 入口改为要求
+  `ChapterContentCachePort`。
+- `ReaderPage` 从已有 `BookProvider.contentCache` 显式传入缓存端口；现有全文搜索 fake 测试同步补齐依赖。
+- 未修改当前章/缓存章/联网搜索范围、替换规则、结果顺序、正文内容、断行、分页或章节位置行为。
+
+测试结果：
+
+- `flutter analyze lib/features/reader/search_content_page.dart lib/features/reader/reader_page.dart test/pages/cache_port_pages_test.dart`：`No issues found`。
+- `flutter test --no-pub test/pages/cache_port_pages_test.dart`：`3/3` 通过。
+- `scripts/check_architecture_boundaries.ps1`：剩余 `3` 项违规；本步移除 `SearchContentPage` 的章节缓存 adapter 违规。
+
+边界结论：Reader 全文搜索已收敛到章节缓存端口；下一步处理 `BackupConfigPage` 的 Room 导入服务和本地文件 adapter 直接依赖。
+
+## 78. 2026-07-29：R6 BackupConfigPage 依赖组装边界
+
+迁移范围：
+
+- `BackupConfigPage` 移除 application service 和本地文件 adapter 的直接导入；`BackupService`、`BackupLocalFilePort`
+  与 `LegacyRoomImportUseCase` 均从根组合层读取，测试继续支持显式 fake 注入。
+- 新增 domain 层 `LegacyRoomImportUseCase` 与 `LegacyRoomImportReport`，application 的具体
+  `LegacyRoomImportService` 实现该用例；Room JSON 报告解析仍集中在 application/domain 契约，不进入页面。
+- 未修改本地备份列表、文件恢复、WebDAV 备份、Room 导入确认/备份/回滚提示或其他阅读行为。
+
+测试结果：
+
+- `flutter analyze lib/features/settings/backup_config_page.dart lib/main.dart lib/application/database/legacy_room_import_service.dart lib/domain/ports/legacy_room_import_use_case.dart lib/domain/remote/legacy_room_import_report.dart test/widget/backup_config_page_test.dart`：`No issues found`。
+- `flutter test --no-pub test/application/database/legacy_room_import_service_test.dart test/widget/backup_config_page_test.dart`：`7/7` 通过。
+- `scripts/check_architecture_boundaries.ps1`：剩余 `1` 项违规；本步移除备份页的两项直接依赖。
+
+边界结论：备份设置页已收敛到 application/domain 端口；剩余静态边界问题为 `RssProvider` 的业务 HTTP client，下一步处理其网络端口化。
+
+## 79. 2026-07-29：R6 RssProvider 网络端口边界
+
+迁移范围：
+
+- 新增 `RssSourceImportPort` 与 `IoRssSourceImportPort`，将 RSS URL 抓取、手动重定向、每跳 SSRF 校验、30 秒超时和 10 MiB 上限移出 `RssProvider`。
+- `main.dart` 根组合层注入 IO adapter；`RssProvider` 只保留 JSON 解析、持久化和导入状态，并支持 fake/不可用端口测试。
+- 未修改 RSS JSON 字段映射、去重/覆盖、SharedPreferences 键名或文章正文、断行、分页和 TTS 行为。
+
+测试结果：
+
+- `flutter analyze lib/providers/rss_provider.dart lib/domain/ports/rss_source_import_port.dart lib/infrastructure/network/io_rss_source_import_port.dart lib/main.dart test/providers/rss_source_import_port_test.dart`：`No issues found`。
+- `flutter test --no-pub test/providers/rss_source_import_port_test.dart test/widget/rss_tab_test.dart test/pages/rss_source_manage_page_test.dart`：`4/4` 通过。
+- `scripts/check_architecture_boundaries.ps1`：`Architecture boundary check passed`，静态违规由 `1` 条降为 `0` 条。
+
+边界结论：当前 `lib/features`、`lib/widgets` 和 `lib/providers` 静态边界检查已通过；R6 剩余工作转为同状态 UI 对照、过渡目录收敛和发布前外部 WebDAV 验收。
+
+## 80. 2026-07-29：R6 RuleSub 管理页功能域收敛
+
+迁移范围：
+
+- 将 `lib/pages/rule_sub/rule_sub_page.dart` 迁移至 `lib/features/sources/rule_sub_page.dart`，并更新 `MainShell` 与 RSS 页面入口。
+- 保持 RuleSub 导入、自动更新、静默更新、本地分组和确认缓存行为；未修改 RuleSub 服务、订阅 JSON 或原版基线。
+- 本步未新增测试文件，复用既有规则订阅定向回归。
+
+测试结果：
+
+- 代理定向 `flutter analyze --no-pub`：无诊断。
+- 规则订阅定向回归：`11/11` 通过。
+- 旧 `pages/rule_sub` 路径引用扫描：无残留。
+
+边界结论：RuleSub 管理页已进入 `features/sources` 功能域；R6 仍需继续收敛其他过渡页面和完成 UI/发布验收。
+
+## 81. 2026-07-29：R6 AudioPlayPage 功能域收敛
+
+迁移范围：
+
+- 将 `lib/pages/audio/audio_play_page.dart` 迁移至 `lib/features/reader/audio_play_page.dart`，并更新 `ReaderPage` 入口。
+- 迁移前后页面内容保持一致，保留 TTS 播放、章节切换、播放模式和 UI 语义；未实现原版 Android 后台 `AudioPlayService`。
+- 本步未新增测试文件，复用既有 TTS 播放模式回归。
+
+测试结果：
+
+- 代理定向 `flutter analyze --no-pub`：无诊断。
+- TTS 播放模式定向回归：`5/5` 通过。
+- 旧 `pages/audio` 路径引用扫描：无残留。
+
+边界结论：音频播放 UI 已进入 `features/reader` 功能域；真实 Android TTS、后台音频服务和媒体会话仍按暂停项处理。
+
+## 82. 2026-07-29：R6 Explore 功能域收敛
+
+迁移范围：
+
+- 将 `lib/pages/explore/` 的 `ExploreListPage`、`ExploreTabPage` 和 `explore_utils.dart` 迁移至 `lib/features/explore/`。
+- 更新 MainShell、SourcesPage 和 Explore 测试导入；保持发现分类、书源校验、搜索列表和启用状态行为不变。
+- 涉及 Flutter app，无 Rust crate；未修改原版基线或正文/目录/分页契约。
+
+测试结果：
+
+- 定向 `flutter analyze --no-pub`：无诊断。
+- Explore 定向测试：`2/2` 通过。
+- 旧 `pages/explore` 路径引用扫描：无残留。
+
+边界结论：Explore 页面已进入 `features/explore` 功能域；R6 仍需继续收敛剩余过渡页面和完成 UI/发布验收。
+
+## 83. 2026-07-29：R6 CodeEdit 功能域与偏好服务边界
+
+迁移范围：
+
+- 将 `lib/pages/code_edit/` 六个文件迁移至 `lib/features/code_edit/`，更新书源编辑器和规则完整页面入口。
+- 将 `CodeEditPrefs` 移至 `lib/services/code_edit_prefs.dart`，由服务层持有 SharedPreferences adapter；功能域只依赖服务和领域端口。
+- 保持格式化、高亮、主题、键盘工具栏、偏好键、会话日志和保存结果语义不变；涉及 Flutter app，无 Rust crate。
+
+测试结果：
+
+- 定向 `flutter analyze --no-pub`：无诊断。
+- CodeEdit/SourceEditor 定向测试：`17/17` 通过（CodeEdit 13、规则完整 4）；与 Explore 合计本批 `19/19`。
+- 架构边界检查：`Architecture boundary check passed`。
+- 旧 `pages/code_edit` 路径引用扫描：无残留。
+
+边界结论：CodeEdit UI 已进入 `features/code_edit`，偏好持久化归入服务边界；R6 仍需继续收敛剩余过渡页面和完成 UI/发布验收。
+
+## 84. 2026-07-29：R6 Cache 功能域与缓存端口边界
+
+迁移范围：
+
+- 将 `lib/pages/cache/` 的缓存管理、下载选择和下载辅助迁移至 `lib/features/cache/`，更新书架、我的页面和 Reader 入口。
+- `CacheBookPage` 改为由生产调用方显式传入 `BookProvider.contentCache`，功能域不再直接导入 `FileChapterContentCache`；缓存统计、清理、导出和下载行为保持不变。
+- 涉及 Flutter app，无 Rust crate；未修改正文、目录、分页或章节身份。
+
+测试结果：
+
+- 定向 `flutter analyze --no-pub`：无诊断。
+- Cache/设置相关定向复核：`19/19` 通过。
+- 架构边界检查：`Architecture boundary check passed`。
+- 旧 `pages/cache` 路径引用扫描：无残留。
+
+边界结论：Cache 页面已进入 `features/cache`，文件缓存实现保留在 infrastructure；R6 仍需继续收敛剩余过渡页面和完成 UI/发布验收。
+
+## 85. 2026-07-29：HTTP TTS 缓存清理入口
+
+实现范围：
+
+- 在 `OtherSettingsCard` 的缓存管理区域增加“清理 HTTP TTS 缓存”操作，调用已有 `TtsService.clearHttpTtsCache()`。
+- 清理成功或失败均显示明确提示；不改变 HTTP TTS 请求、缓存键、播放链路或真实 Android TTS 行为。
+- 新增 1 个设置 Widget 测试用例，涉及 Flutter app，无 Rust crate。
+
+测试结果：
+
+- 定向 `flutter analyze --no-pub`：无诊断。
+- 设置页定向测试：`2/2` 通过。
+- Flutter 全量：`540` 通过，3 个既有条件测试跳过。
+
+边界结论：HTTP TTS 文件缓存现在有设置页清理入口；真实 Android TTS/后台音频服务仍按暂停项处理。

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/book.dart';
+import '../../models/book_source.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/book_group_store.dart';
@@ -15,7 +16,7 @@ import '../../widgets/error_view.dart';
 import '../../widgets/legado_refresh_indicator.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../../features/book/book_info_page.dart';
-import '../../pages/cache/cache_book_page.dart';
+import '../cache/cache_book_page.dart';
 import '../../pages/search/search_page.dart';
 import 'bookshelf_arrange_page.dart';
 import 'bookshelf_books_view.dart';
@@ -122,16 +123,32 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
       ).showSnackBar(const SnackBar(content: Text('没有可更新的书籍')));
       return;
     }
-    unawaited(
-      provider.refreshShelfToc(
-        books,
-        resolveSource: sources.findSourceForBook,
-        onlyUpdateRead: widget.config.onlyUpdateRead,
-      ),
-    );
+    unawaited(_runTocUpdate(provider, books, sources.findSourceForBook));
+  }
+
+  Future<void> _runTocUpdate(
+    BookProvider provider,
+    List<Book> books,
+    BookSource? Function(Book book) resolveSource,
+  ) async {
+    if (provider.isShelfUpdateRunning) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('正在更新目录…')));
+    final result = await provider.refreshShelfToc(
+      books,
+      resolveSource: resolveSource,
+      onlyUpdateRead: widget.config.onlyUpdateRead,
+    );
+    if (!mounted) return;
+    final message =
+        '目录更新完成：成功 ${result.updated}，失败 ${result.failed}，跳过 ${result.skipped}';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: result.failed > 0 ? Colors.red : null,
+      ),
+    );
   }
 
   void _showStub(String action) {
@@ -154,7 +171,11 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
       case BookshelfOverflowMenu.cacheExport:
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const CacheBookPage()),
+          MaterialPageRoute(
+            builder: (_) => CacheBookPage(
+              contentCache: context.read<BookProvider>().contentCache,
+            ),
+          ),
         );
       case BookshelfOverflowMenu.groupMgmt:
         _showGroupManagement();
@@ -326,11 +347,7 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
             onRefreshTriggered: () {
               final sources = context.read<SourceProvider>();
               unawaited(
-                provider.refreshShelfToc(
-                  books,
-                  resolveSource: sources.findSourceForBook,
-                  onlyUpdateRead: widget.config.onlyUpdateRead,
-                ),
+                _runTocUpdate(provider, books, sources.findSourceForBook),
               );
             },
             child: ScrollConfiguration(

@@ -20,6 +20,20 @@ class HttpTtsConfig {
 
   bool get isConfigured => url.trim().isNotEmpty;
 
+  /// 稳定描述当前 HTTP TTS 配置的身份，供音频缓存区分配置使用。
+  String get cacheIdentity {
+    final sortedHeaders = headers.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return jsonEncode(<String, Object?>{
+      'name': name,
+      'url': url,
+      'contentType': contentType,
+      'headers': <String, String>{
+        for (final entry in sortedHeaders) entry.key: entry.value,
+      },
+    });
+  }
+
   HttpTtsRequest resolve(String text, double speed) {
     var raw = url.trim();
     var method = 'GET';

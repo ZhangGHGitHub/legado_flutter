@@ -120,6 +120,7 @@ void main() {
             currentChapterContent: '当前正文没有命中',
             initialQuery: '迟到词',
             onlineContentLoader: (_) => lateContent.future,
+            contentCache: _FakeChapterContentCache(),
           ),
         ),
       ),

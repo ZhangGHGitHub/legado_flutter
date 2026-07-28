@@ -33,6 +33,10 @@ All notable changes to this project are recorded in this file.
 - R6：新增 Android 原版/重构版 UI 对照记录；已采集书架首屏证据，但因数据、主题和首次启动状态不一致，暂不宣称最终像素验收通过。
 - R6：扩展 Android UI 对照记录至“我的”页面；结构基本一致，但图标、主题、文本和设置项差异已登记，尚未通过 1:1 UI 验收。
 - R6：扩展 Android UI 对照记录至书源管理页面；已分别记录首次帮助弹窗和关闭后的列表状态，当前仍存在数据、主题和控件细节差异。
+- R6：将 `RemoteBookPage` 的 WebDAV FRB adapter 组装移至 `main.dart` 根组合层，页面仅依赖 `WebDavRepository`；注入 fake 页面测试通过，静态架构违规由 `6` 条降至 `4` 条。
+- R6：将 `SearchContentPage` 的章节缓存改为必填 `ChapterContentCachePort`，由 `ReaderPage` 显式传入已有缓存端口；缓存页面回归 `3/3` 通过，静态架构违规由 `4` 条降至 `3` 条。
+- R6：将 `BackupConfigPage` 的 `BackupLocalFilePort`、`BackupService` 和 Room 导入用例改为根组合层注入；Room 报告/用例契约下沉至 domain，备份页与 application service 联合回归 `7/7` 通过，静态架构违规由 `3` 条降至 `1` 条。
+- R6：将 `RssProvider` 的 RSS URL 抓取、重定向 SSRF 校验、超时和大小限制移至 `IoRssSourceImportPort`；Provider 仅依赖 domain port，RSS 端口/管理页回归 `4/4` 通过，静态架构边界检查已通过（`0` 条违规）。
 
 ### Added
 

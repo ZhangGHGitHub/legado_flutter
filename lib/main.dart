@@ -5,13 +5,21 @@ import 'application/app_bootstrap.dart';
 import 'config/app_config.dart';
 import 'database/dao/replace_rule_dao.dart';
 import 'database/dao/source_dao.dart';
+import 'domain/ports/backup_local_file_port.dart';
 import 'domain/ports/book_source_debug_port.dart';
 import 'domain/ports/book_source_validation_port.dart';
+import 'domain/ports/legacy_room_import_use_case.dart';
+import 'domain/ports/rss_source_import_port.dart';
+import 'domain/ports/webdav_repository.dart';
+import 'infrastructure/file_system/backup_local_file_adapter.dart';
 import 'infrastructure/engine/frb_book_source_debug_port.dart';
 import 'infrastructure/engine/frb_book_source_validation_port.dart';
+import 'infrastructure/webdav/frb_webdav_repository.dart';
+import 'infrastructure/network/io_rss_source_import_port.dart';
 import 'providers/source_provider.dart';
 import 'providers/replace_provider.dart';
 import 'providers/rss_provider.dart';
+import 'services/backup_service.dart';
 
 export 'application/app_bootstrap.dart' show loadStartupBookProgress;
 
@@ -36,6 +44,18 @@ void main() async {
         Provider<BookSourceValidationPort>(
           create: (_) => FrbBookSourceValidationPort(),
         ),
+        Provider<WebDavRepository>(create: (_) => const FrbWebDavRepository()),
+        Provider<BackupService>(create: (_) => BackupService()),
+        Provider<BackupLocalFilePort>(
+          create: (context) =>
+              FileSystemBackupLocalFileAdapter(context.read<BackupService>()),
+        ),
+        Provider<LegacyRoomImportUseCase>.value(
+          value: bootstrap.legacyRoomImportService,
+        ),
+        Provider<RssSourceImportPort>(
+          create: (_) => const IoRssSourceImportPort(),
+        ),
         ChangeNotifierProvider(
           create: (context) => SourceProvider(
             repository: SourceDao(),
@@ -46,7 +66,11 @@ void main() async {
           create: (_) =>
               ReplaceProvider(repository: ReplaceRuleDao())..loadRules(),
         ),
-        ChangeNotifierProvider(create: (_) => RssProvider()..loadSources()),
+        ChangeNotifierProvider(
+          create: (context) =>
+              RssProvider(sourceImportPort: context.read<RssSourceImportPort>())
+                ..loadSources(),
+        ),
       ],
       child: const LegadoApp(),
     ),

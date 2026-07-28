@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-import '../../pages/code_edit/keyboard_tool_bar.dart';
+import '../code_edit/keyboard_tool_bar.dart';
 
 /// 规则自动补全 — 对齐 Jingshiro [RuleComplete] 常用片段提示。
 abstract final class RuleComplete {

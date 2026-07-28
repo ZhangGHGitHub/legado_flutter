@@ -27,9 +27,9 @@ class RuleSubPage extends StatefulWidget {
       if (!context.mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
       if (fetched.count == 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('未获取到可导入规则')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('未获取到可导入规则')));
         return;
       }
       await showDialog<void>(
@@ -105,18 +105,18 @@ class _RuleSubPageState extends State<RuleSubPage> {
 
     if (saved.url.trim().isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('URL 为空')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('URL 为空')));
       return;
     }
 
     final existing = await RuleSubPrefs.findByUrl(saved.url.trim());
     if (existing != null && existing.id != saved.id) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('此 URL 已订阅(${existing.name})')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('此 URL 已订阅(${existing.name})')));
       return;
     }
 
@@ -141,9 +141,7 @@ class _RuleSubPageState extends State<RuleSubPage> {
         anchor.dx,
         anchor.dy,
       ),
-      items: const [
-        PopupMenuItem(value: 'del', child: Text('删除')),
-      ],
+      items: const [PopupMenuItem(value: 'del', child: Text('删除'))],
     ).then((v) {
       if (v == 'del') _delete(sub);
     });
@@ -282,10 +280,7 @@ class _RuleSubTile extends StatelessWidget {
                             padding: const EdgeInsets.all(3),
                             child: Text(
                               sub.url,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: secondary,
-                              ),
+                              style: TextStyle(fontSize: 12, color: secondary),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -358,9 +353,7 @@ class _RuleSubEditDialogState extends State<_RuleSubEditDialog> {
     _urlCtrl = TextEditingController(text: r.url);
     _autoUpdate = r.autoUpdate;
     _silentUpdate = r.silentUpdate;
-    _intervalCtrl = TextEditingController(
-      text: r.updateInterval.toString(),
-    );
+    _intervalCtrl = TextEditingController(text: r.updateInterval.toString());
   }
 
   @override
@@ -399,8 +392,8 @@ class _RuleSubEditDialogState extends State<_RuleSubEditDialog> {
   @override
   Widget build(BuildContext context) {
     final intervalEnabled = _autoUpdate;
-    final silentEnabled = _autoUpdate &&
-        (int.tryParse(_intervalCtrl.text) ?? 0) != 0;
+    final silentEnabled =
+        _autoUpdate && (int.tryParse(_intervalCtrl.text) ?? 0) != 0;
 
     return AlertDialog(
       title: const Text('规则订阅'),
@@ -458,10 +451,7 @@ class _RuleSubEditDialogState extends State<_RuleSubEditDialog> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Checkbox(
-                      value: _autoUpdate,
-                      onChanged: _onAutoChanged,
-                    ),
+                    Checkbox(value: _autoUpdate, onChanged: _onAutoChanged),
                     const Text('自动更新'),
                   ],
                 ),
@@ -531,10 +521,7 @@ class _RuleSubEditDialogState extends State<_RuleSubEditDialog> {
 
 /// 对齐 ImportBookSource / ImportRssSource / ImportReplaceRule 选择导入
 class _RuleSubImportDialog extends StatefulWidget {
-  const _RuleSubImportDialog({
-    required this.sub,
-    required this.fetched,
-  });
+  const _RuleSubImportDialog({required this.sub, required this.fetched});
 
   final RuleSub sub;
   final RuleSubFetched fetched;
@@ -600,9 +587,7 @@ class _RuleSubImportDialogState extends State<_RuleSubImportDialog> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          imported > 0
-              ? '已导入 $imported 条${widget.sub.typeLabel}'
-              : '导入失败',
+          imported > 0 ? '已导入 $imported 条${widget.sub.typeLabel}' : '导入失败',
         ),
       ),
     );
@@ -627,7 +612,11 @@ class _RuleSubImportDialogState extends State<_RuleSubImportDialog> {
           itemBuilder: (_, i) => CheckboxListTile(
             dense: true,
             value: _selected[i],
-            title: Text(labels[i], maxLines: 2, overflow: TextOverflow.ellipsis),
+            title: Text(
+              labels[i],
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
             onChanged: (v) => setState(() => _selected[i] = v ?? false),
           ),
         ),
@@ -646,10 +635,7 @@ class _RuleSubImportDialogState extends State<_RuleSubImportDialog> {
           },
           child: const Text('全选'),
         ),
-        FilledButton(
-          onPressed: _import,
-          child: const Text('导入'),
-        ),
+        FilledButton(onPressed: _import, child: const Text('导入')),
       ],
     );
   }

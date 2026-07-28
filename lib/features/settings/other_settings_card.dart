@@ -5,6 +5,7 @@ import '../../services/app_paths.dart';
 import '../../services/cache_service.dart';
 import '../../services/engine_status_service.dart';
 import '../../services/network_prefs.dart';
+import '../../services/tts_service.dart';
 import '../../theme/legado_tokens.dart';
 
 /// 其它设置 — 代理 / DNS / 缓存 / 数据目录（Phase 4.3）
@@ -120,6 +121,23 @@ class _OtherSettingsCardState extends State<OtherSettingsCard> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('缓存已清理')));
+    }
+  }
+
+  Future<void> _clearHttpTtsCache() async {
+    try {
+      await TtsService.instance.clearHttpTtsCache();
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('HTTP TTS 缓存已清理')));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('HTTP TTS 缓存清理失败')));
+      }
     }
   }
 
@@ -297,6 +315,10 @@ class _OtherSettingsCardState extends State<OtherSettingsCard> {
                     OutlinedButton(
                       onPressed: () => _clearCache('backup'),
                       child: const Text('清本地备份'),
+                    ),
+                    OutlinedButton(
+                      onPressed: _clearHttpTtsCache,
+                      child: const Text('清理 HTTP TTS 缓存'),
                     ),
                     FilledButton.tonal(
                       onPressed: engineReady ? () => _clearCache('all') : null,

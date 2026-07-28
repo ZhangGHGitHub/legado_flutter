@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 
 import '../../domain/ports/webdav_repository.dart';
 import '../../domain/remote/webdav_entry.dart';
-import '../../infrastructure/webdav/frb_webdav_repository.dart';
 import '../../models/book.dart';
 import '../../providers/book_provider.dart';
 import '../../services/app_log.dart';
@@ -37,8 +36,7 @@ class RemoteBookPage extends StatefulWidget {
 }
 
 class _RemoteBookPageState extends State<RemoteBookPage> {
-  late final WebDavRepository _webdav =
-      widget.webdavRepository ?? const FrbWebDavRepository();
+  late final WebDavRepository _webdav;
   WebDavConfig? _config;
   late String _booksRoot;
   String _path = '';
@@ -73,6 +71,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
   @override
   void initState() {
     super.initState();
+    _webdav = widget.webdavRepository ?? context.read<WebDavRepository>();
     _bootstrap();
   }
 

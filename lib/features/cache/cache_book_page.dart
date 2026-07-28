@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../domain/ports/chapter_content_cache_port.dart';
-import '../../infrastructure/cache/file_chapter_content_cache.dart';
 import '../../models/book.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
@@ -17,10 +16,7 @@ import 'download_helpers.dart';
 
 /// 离线缓存管理 — 对齐 Jingshiro `CacheActivity` + `item_download`
 class CacheBookPage extends StatefulWidget {
-  const CacheBookPage({
-    super.key,
-    this.contentCache = const FileChapterContentCache(),
-  });
+  const CacheBookPage({super.key, required this.contentCache});
 
   final ChapterContentCachePort contentCache;
 

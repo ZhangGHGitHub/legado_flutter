@@ -16,6 +16,25 @@ import '../services/chapter_progress_migrator.dart';
 import '../services/local_book_service.dart';
 import '../utils/site_busy_guard.dart';
 
+/// 书架批量更新目录的结果，供 UI 展示完整的成功/失败/跳过统计。
+class ShelfTocUpdateResult {
+  const ShelfTocUpdateResult({
+    required this.requested,
+    required this.eligible,
+    required this.updated,
+    required this.failed,
+    required this.skipped,
+    this.failures = const <String, String>{},
+  });
+
+  final int requested;
+  final int eligible;
+  final int updated;
+  final int failed;
+  final int skipped;
+  final Map<String, String> failures;
+}
+
 /// 书籍管理 Provider — 书架、阅读、章节、下载缓存
 class BookProvider extends ChangeNotifier {
   BookProvider({
@@ -63,12 +82,16 @@ class BookProvider extends ChangeNotifier {
   /// 书架下拉刷新：正在联网更新目录的书 ID（对齐 legado `onUpTocBooks`）
   final Set<String> _shelfUpdatingBookIds = {};
   int _shelfUpdateQueued = 0;
+  bool _isShelfUpdateRunning = false;
+  Future<ShelfTocUpdateResult>? _shelfUpdateFuture;
 
   /// 本地目录章数 + 当前读到章索引（0-based），供未读角标精确计算
   final Map<String, ({int count, int? durIndex})> _shelfChapterMeta = {};
 
   bool isBookShelfUpdating(String bookId) =>
       _shelfUpdatingBookIds.contains(bookId);
+
+  bool get isShelfUpdateRunning => _isShelfUpdateRunning;
 
   /// 待更新 + 更新中数量（对齐 `postUpBooksLiveData` / 主框架角标，后续可接）
   int get shelfUpdateActiveCount =>
@@ -625,26 +648,73 @@ class BookProvider extends ChangeNotifier {
 
   /// 书架下拉刷新 — 对齐 legado `MainViewModel.upToc` + `BooksFragment` listener：
   /// 非本地书后台并行拉目录，不阻塞下拉指示器；单书更新时列表项显示 `RotateLoading`。
-  Future<void> refreshShelfToc(
+  Future<ShelfTocUpdateResult> refreshShelfToc(
     Iterable<Book> books, {
     required BookSource? Function(Book book) resolveSource,
     bool onlyUpdateRead = false,
     int concurrency = 3,
   }) async {
-    final targets = <Book>[];
+    final existing = _shelfUpdateFuture;
+    if (existing != null) return existing;
+
+    _isShelfUpdateRunning = true;
+    notifyListeners();
+    late final Future<ShelfTocUpdateResult> current;
+    current = _refreshShelfTocBatch(
+      books,
+      resolveSource: resolveSource,
+      onlyUpdateRead: onlyUpdateRead,
+      concurrency: concurrency,
+    );
+    _shelfUpdateFuture = current;
+    try {
+      return await current;
+    } finally {
+      if (identical(_shelfUpdateFuture, current)) {
+        _shelfUpdateFuture = null;
+        _isShelfUpdateRunning = false;
+        _shelfUpdateQueued = 0;
+        _shelfUpdatingBookIds.clear();
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<ShelfTocUpdateResult> _refreshShelfTocBatch(
+    Iterable<Book> books, {
+    required BookSource? Function(Book book) resolveSource,
+    required bool onlyUpdateRead,
+    required int concurrency,
+  }) async {
+    final requestedBooks = <String, Book>{};
     for (final book in books) {
+      requestedBooks.putIfAbsent(book.id, () => book);
+    }
+    final targets = <Book>[];
+    for (final book in requestedBooks.values) {
       if (book.type == 'local' || book.bookSourceUrl.isEmpty) continue;
       if (resolveSource(book) == null) continue;
       if (onlyUpdateRead && _hasUnreadChapters(book)) continue;
       if (_shelfUpdatingBookIds.contains(book.id)) continue;
       targets.add(book);
     }
-    if (targets.isEmpty) return;
+    if (targets.isEmpty) {
+      return ShelfTocUpdateResult(
+        requested: requestedBooks.length,
+        eligible: 0,
+        updated: 0,
+        failed: 0,
+        skipped: requestedBooks.length,
+      );
+    }
 
     _shelfUpdateQueued = targets.length;
     notifyListeners();
 
     var index = 0;
+    var updated = 0;
+    var failed = 0;
+    final failures = <String, String>{};
     Future<void> worker() async {
       while (true) {
         if (index >= targets.length) return;
@@ -662,11 +732,18 @@ class BookProvider extends ChangeNotifier {
         try {
           await _refreshBookTocOnShelf(book, source);
           _books = await _repository.getAll();
+          updated++;
         } catch (e, st) {
+          failed++;
+          failures[book.id] = e.toString();
           debugPrint('书架目录更新失败 ${book.name}: $e\n$st');
         } finally {
           _shelfUpdatingBookIds.remove(book.id);
-          await _refreshShelfChapterMetaFor(book.id);
+          try {
+            await _refreshShelfChapterMetaFor(book.id);
+          } catch (e, st) {
+            debugPrint('书架目录元数据刷新失败 ${book.name}: $e\n$st');
+          }
           notifyListeners();
         }
       }
@@ -681,6 +758,14 @@ class BookProvider extends ChangeNotifier {
     _books = await _repository.getAll();
     await _refreshShelfChapterMeta();
     notifyListeners();
+    return ShelfTocUpdateResult(
+      requested: requestedBooks.length,
+      eligible: targets.length,
+      updated: updated,
+      failed: failed,
+      skipped: requestedBooks.length - targets.length,
+      failures: Map.unmodifiable(failures),
+    );
   }
 
   Future<void> _refreshShelfChapterMeta() async {

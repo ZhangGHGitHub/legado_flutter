@@ -73,18 +73,11 @@ class KeyboardToolBar extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
           children: [
-            _Chip(
-              label: '❓',
-              onTap: onHelp,
-              emphasized: true,
-            ),
+            _Chip(label: '❓', onTap: onHelp, emphasized: true),
             _Chip(label: '↩️', onTap: onUndo),
             _Chip(label: '↪️', onTap: onRedo),
             for (final item in items)
-              _Chip(
-                label: item.key,
-                onTap: () => onSendText(item.value),
-              ),
+              _Chip(label: item.key, onTap: () => onSendText(item.value)),
           ],
         ),
       ),

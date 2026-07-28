@@ -8,7 +8,7 @@ import '../../services/source_login_service.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_refresh_indicator.dart';
 import '../../features/my/read_record_page.dart';
-import '../../pages/rule_sub/rule_sub_page.dart';
+import '../sources/rule_sub_page.dart';
 import '../../features/sources/source_login_page.dart';
 import 'rss_articles_page.dart';
 import 'rss_favorites_page.dart';

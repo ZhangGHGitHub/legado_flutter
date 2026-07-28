@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/pages/code_edit/code_edit_page.dart';
+import 'package:legado_flutter/features/code_edit/code_edit_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -14,9 +14,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: CodeEditPage(initialText: '{"a":1}'),
-      ),
+      const MaterialApp(home: CodeEditPage(initialText: '{"a":1}')),
     );
     await tester.pumpAndSettle();
 
@@ -33,9 +31,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: CodeEditPage(initialText: 'hello world hello'),
-      ),
+      const MaterialApp(home: CodeEditPage(initialText: 'hello world hello')),
     );
     await tester.pumpAndSettle();
 

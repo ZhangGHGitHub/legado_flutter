@@ -5,7 +5,7 @@ import 'code_edit_theme.dart';
 /// 轻量 JSON/JS 词法着色 — 颜色对齐 Jingshiro Monokai TextMate token。
 class HighlightEditingController extends TextEditingController {
   HighlightEditingController({super.text, required CodeEditPalette palette})
-      : _palette = palette;
+    : _palette = palette;
 
   CodeEditPalette _palette;
 
@@ -46,9 +46,9 @@ List<InlineSpan> highlightJsJson(
   var i = 0;
 
   TextStyle sty(Color c, {bool italic = false}) => base.copyWith(
-        color: c,
-        fontStyle: italic ? FontStyle.italic : FontStyle.normal,
-      );
+    color: c,
+    fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+  );
 
   void emit(String s, TextStyle style) {
     if (s.isEmpty) return;

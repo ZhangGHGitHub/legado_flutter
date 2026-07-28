@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../widgets/legado_popup_menu.dart';
 import 'code_edit_formatter.dart';
 import 'code_edit_highlighter.dart';
-import 'code_edit_prefs.dart';
+import '../../services/code_edit_prefs.dart';
 import 'code_edit_theme.dart';
 import 'keyboard_tool_bar.dart';
 
@@ -161,9 +161,9 @@ class _CodeEditPageState extends State<CodeEditPage> {
 
     if (text == _initialText) {
       if (cursor > 0) {
-        Navigator.of(context).pop(
-          CodeEditResult(text: text, cursorPosition: cursor),
-        );
+        Navigator.of(
+          context,
+        ).pop(CodeEditResult(text: text, cursorPosition: cursor));
       } else {
         Navigator.of(context).pop();
       }
@@ -195,9 +195,9 @@ class _CodeEditPageState extends State<CodeEditPage> {
 
     await _log('保存 ${text.length} 字符');
     if (!mounted) return;
-    Navigator.of(context).pop(
-      CodeEditResult(text: text, cursorPosition: cursor),
-    );
+    Navigator.of(
+      context,
+    ).pop(CodeEditResult(text: text, cursorPosition: cursor));
   }
 
   void _openSearch() {
@@ -311,7 +311,10 @@ class _CodeEditPageState extends State<CodeEditPage> {
     String next;
     try {
       if (_isRegex) {
-        next = _controller.text.replaceAll(RegExp(_findCtrl.text), _replaceCtrl.text);
+        next = _controller.text.replaceAll(
+          RegExp(_findCtrl.text),
+          _replaceCtrl.text,
+        );
       } else {
         next = _controller.text.replaceAll(_findCtrl.text, _replaceCtrl.text);
       }
@@ -332,23 +335,23 @@ class _CodeEditPageState extends State<CodeEditPage> {
       _controller.text = pretty;
       await _log('格式化成功');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已格式化')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已格式化')));
       }
     } on FormatSkipException catch (e) {
       await _log(e.message);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } catch (e) {
       await _log('格式化失败: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('格式化失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('格式化失败: $e')));
       }
     }
   }
@@ -525,7 +528,10 @@ class _CodeEditPageState extends State<CodeEditPage> {
                   itemCount: logs.length,
                   itemBuilder: (_, i) => Text(
                     logs[logs.length - 1 - i],
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                    ),
                   ),
                 ),
         ),
@@ -595,8 +601,9 @@ class _CodeEditPageState extends State<CodeEditPage> {
     final start = value.selection.start < 0
         ? value.text.length
         : value.selection.start;
-    final end =
-        value.selection.end < 0 ? value.text.length : value.selection.end;
+    final end = value.selection.end < 0
+        ? value.text.length
+        : value.selection.end;
     final s = start <= end ? start : end;
     final e = start <= end ? end : start;
     final next = value.text.replaceRange(s, e, text);
@@ -724,10 +731,7 @@ class _CodeEditPageState extends State<CodeEditPage> {
                   checked: _autoWrap,
                   child: const Text('自动换行'),
                 ),
-                const PopupMenuItem(
-                  value: _CodeMenu.log,
-                  child: Text('日志'),
-                ),
+                const PopupMenuItem(value: _CodeMenu.log, child: Text('日志')),
               ],
             ),
           ],
@@ -815,7 +819,10 @@ class _CodeEditPageState extends State<CodeEditPage> {
           children: [
             Row(
               children: [
-                Text('搜索结果:', style: TextStyle(fontSize: 14, color: primaryText)),
+                Text(
+                  '搜索结果:',
+                  style: TextStyle(fontSize: 14, color: primaryText),
+                ),
                 const SizedBox(width: 8),
                 Text(
                   _searchResultLabel,
@@ -825,7 +832,10 @@ class _CodeEditPageState extends State<CodeEditPage> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('正则', style: TextStyle(fontSize: 14, color: primaryText)),
+                    Text(
+                      '正则',
+                      style: TextStyle(fontSize: 14, color: primaryText),
+                    ),
                     Switch(
                       value: _isRegex,
                       onChanged: (v) {
@@ -863,7 +873,10 @@ class _CodeEditPageState extends State<CodeEditPage> {
             if (_replaceVisible)
               Row(
                 children: [
-                  Text('替换', style: TextStyle(fontSize: 14, color: primaryText)),
+                  Text(
+                    '替换',
+                    style: TextStyle(fontSize: 14, color: primaryText),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(

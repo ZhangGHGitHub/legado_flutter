@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/ports/http_tts_cache_port.dart';
+import 'http_tts_cache_service.dart';
 import 'http_tts_service.dart';
 
 /// TTS 朗读服务（UI-2 / UI-22）。
@@ -18,6 +20,8 @@ enum TtsCapability { stub, platform, http }
 
 /// 原版 `contentSelectSpeakMod`：0 朗读选区，1 从选区位置开始连续朗读。
 enum TtsSelectionSpeakMode { selection, continuous }
+
+typedef HttpTtsAudioSink = Future<void> Function(Uint8List audio);
 
 /// 对齐 Jingshiro [AudioPlay.PlayMode]
 enum TtsPlayMode {
@@ -42,8 +46,20 @@ class TtsEngineOption {
 }
 
 class TtsService extends ChangeNotifier {
-  TtsService._() : _flutterTts = _createEngine();
+  TtsService._() : this();
   static final TtsService instance = TtsService._();
+
+  /// 依赖可注入，便于验证 HTTP TTS 的请求和缓存语义；默认构造仍使用
+  /// 应用实际的 HTTP 客户端和临时目录缓存。
+  TtsService({
+    FlutterTts? flutterTts,
+    HttpTtsClient? httpClient,
+    HttpTtsCachePort? httpCache,
+    HttpTtsAudioSink? httpAudioSink,
+  }) : _flutterTts = flutterTts ?? _createEngine(),
+       _httpClient = httpClient ?? HttpTtsClient(),
+       _httpCache = httpCache ?? HttpTtsCacheService(),
+       _httpAudioSink = httpAudioSink;
 
   static const _platformInitTimeout = Duration(seconds: 3);
 
@@ -62,7 +78,9 @@ class TtsService extends ChangeNotifier {
   }
 
   final FlutterTts? _flutterTts;
-  final HttpTtsClient _httpClient = HttpTtsClient();
+  final HttpTtsClient _httpClient;
+  final HttpTtsCachePort _httpCache;
+  final HttpTtsAudioSink? _httpAudioSink;
   AudioPlayer? _httpPlayer;
   HttpTtsConfig? _httpConfig;
   bool _engineReady = false;
@@ -142,6 +160,8 @@ class TtsService extends ChangeNotifier {
     _httpConfig = config;
     notifyListeners();
   }
+
+  Future<void> clearHttpTtsCache() => _httpCache.clear();
 
   /// 加载原版 `contentSelectSpeakMod`。缺失时保持默认的选区朗读模式。
   Future<void> loadSelectionSpeakMode() async {
@@ -383,13 +403,23 @@ class TtsService extends ChangeNotifier {
       }
       try {
         final request = config.resolve(currentSentence, _speechRate);
-        final audio = await _httpClient.fetchAudio(request);
-        final player = _ensureHttpPlayer();
-        await player.stop();
-        await player.setSourceBytes(audio);
+        final audio = await _httpCache.getOrFetch(
+          configurationKey: config.cacheIdentity,
+          text: currentSentence,
+          speed: _speechRate,
+          fetch: () => _httpClient.fetchAudio(request),
+        );
+        final audioSink = _httpAudioSink;
+        if (audioSink != null) {
+          await audioSink(audio);
+        } else {
+          final player = _ensureHttpPlayer();
+          await player.stop();
+          await player.setSourceBytes(audio);
+          await player.resume();
+        }
         _state = TtsPlaybackState.playing;
         notifyListeners();
-        await player.resume();
         return true;
       } catch (e) {
         debugPrint('HTTP TTS 播放失败: $e');

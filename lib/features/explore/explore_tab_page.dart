@@ -6,7 +6,7 @@ import '../../providers/source_provider.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/source_chip.dart';
-import '../search/search_page.dart';
+import '../../pages/search/search_page.dart';
 import 'explore_list_page.dart';
 import 'explore_utils.dart';
 
@@ -71,7 +71,10 @@ class ExploreTabPageState extends State<ExploreTabPage> {
                 height: 48,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   itemCount: sources.length,
                   itemBuilder: (_, i) => SourceChip(
                     label: sources[i].bookSourceName,
@@ -122,18 +125,18 @@ class ExploreTabPageState extends State<ExploreTabPage> {
                             physics: const NeverScrollableScrollPhysics(),
                             gridDelegate:
                                 const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              mainAxisSpacing: 8,
-                              crossAxisSpacing: 8,
-                              childAspectRatio: 2.4,
-                            ),
+                                  crossAxisCount: 3,
+                                  mainAxisSpacing: 8,
+                                  crossAxisSpacing: 8,
+                                  childAspectRatio: 2.4,
+                                ),
                             itemCount: section.categories.length,
                             itemBuilder: (_, ci) {
                               final cat = section.categories[ci];
                               return Material(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(8),
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(8),

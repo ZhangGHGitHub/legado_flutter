@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/code_edit_prefs_store.dart';
 import 'package:legado_flutter/infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
-import 'package:legado_flutter/pages/code_edit/code_edit_prefs.dart';
+import 'package:legado_flutter/services/code_edit_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

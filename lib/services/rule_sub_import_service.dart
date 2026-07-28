@@ -184,6 +184,7 @@ class RuleSubImportService {
     required SourceProvider sourceProvider,
     required RssProvider rssProvider,
     required ReplaceProvider replaceProvider,
+    @visibleForTesting Future<String> Function(String url)? fetchTextOverride,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final intervalMs = ruleSub.updateInterval * 3600 * 1000;
@@ -197,6 +198,7 @@ class RuleSubImportService {
     final url = stamped.url;
     final silent = stamped.silentUpdate;
     var needUi = false;
+    final fetch = fetchTextOverride ?? fetchText;
 
     try {
       switch (stamped.type) {
@@ -218,13 +220,16 @@ class RuleSubImportService {
             }
           }
         case 1:
-          final lists = parseRssSources(await fetchText(url));
+          final lists = parseRssSources(await fetch(url));
           if (lists.isEmpty) return false;
           for (final remote in lists) {
             final local = _findRss(rssProvider, remote.sourceUrl);
-            if (local == null) {
+            if (local == null || _rssNeedsUpdate(local, remote)) {
               if (silent) {
-                await rssProvider.upsertSource(remote);
+                final source = local == null
+                    ? remote
+                    : remote.copyWith(sourceGroup: local.sourceGroup);
+                await rssProvider.upsertSource(source);
               } else {
                 cacheRssSources[url] = lists;
                 needUi = true;
@@ -233,7 +238,7 @@ class RuleSubImportService {
             }
           }
         case 2:
-          final lists = parseReplaceRules(await fetchText(url));
+          final lists = parseReplaceRules(await fetch(url));
           if (lists.isEmpty) return false;
           for (final remote in lists) {
             final old = _findReplace(replaceProvider, remote.id);
@@ -299,6 +304,9 @@ class RuleSubImportService {
     return false;
   }
 
+  static bool _rssNeedsUpdate(RssSource local, RssSource remote) =>
+      local.lastUpdateTime < remote.lastUpdateTime;
+
   static RssSource? _findRss(RssProvider p, String url) {
     for (final s in p.sources) {
       if (s.sourceUrl == url) return s;
@@ -339,17 +347,16 @@ class RuleSubFetched {
       RuleSubFetched._(kind: RuleSubFetchKind.replaceRule, replaceRules: list);
 
   int get count => switch (kind) {
-        RuleSubFetchKind.bookSource => bookSources.length,
-        RuleSubFetchKind.rssSource => rssSources.length,
-        RuleSubFetchKind.replaceRule => replaceRules.length,
-      };
+    RuleSubFetchKind.bookSource => bookSources.length,
+    RuleSubFetchKind.rssSource => rssSources.length,
+    RuleSubFetchKind.replaceRule => replaceRules.length,
+  };
 
   List<String> get labels => switch (kind) {
-        RuleSubFetchKind.bookSource =>
-          bookSources.map((e) => e.bookSourceName).toList(),
-        RuleSubFetchKind.rssSource =>
-          rssSources.map((e) => e.sourceName).toList(),
-        RuleSubFetchKind.replaceRule =>
-          replaceRules.map((e) => e.name.isEmpty ? e.pattern : e.name).toList(),
-      };
+    RuleSubFetchKind.bookSource =>
+      bookSources.map((e) => e.bookSourceName).toList(),
+    RuleSubFetchKind.rssSource => rssSources.map((e) => e.sourceName).toList(),
+    RuleSubFetchKind.replaceRule =>
+      replaceRules.map((e) => e.name.isEmpty ? e.pattern : e.name).toList(),
+  };
 }

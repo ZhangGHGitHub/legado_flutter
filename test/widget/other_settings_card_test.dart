@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/features/settings/other_settings_card.dart';
 import 'package:legado_flutter/services/app_paths.dart';
@@ -10,9 +11,15 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late Directory tempRoot;
+  const pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
 
   setUp(() async {
     tempRoot = Directory.systemTemp.createTempSync('legado_other_settings_');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathProviderChannel, (call) async {
+          if (call.method == 'getTemporaryDirectory') return tempRoot.path;
+          return null;
+        });
     SharedPreferences.setMockInitialValues({
       AppDataPrefs.dataDirKey: tempRoot.path,
     });
@@ -20,6 +27,8 @@ void main() {
   });
 
   tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathProviderChannel, null);
     if (tempRoot.existsSync()) {
       tempRoot.deleteSync(recursive: true);
     }
@@ -51,6 +60,36 @@ void main() {
     expect(find.text('清书籍缓存'), findsOneWidget);
     expect(find.text('清 Cookie/JS'), findsOneWidget);
     expect(find.text('清本地备份'), findsOneWidget);
+    expect(find.text('清理 HTTP TTS 缓存'), findsOneWidget);
     expect(find.text('一键清理'), findsOneWidget);
+  });
+
+  testWidgets('clears HTTP TTS cache and shows a success message', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: SingleChildScrollView(child: OtherSettingsCard())),
+      ),
+    );
+    await tester.pump();
+    for (var i = 0; i < 30; i++) {
+      if (find.text('清理 HTTP TTS 缓存').evaluate().isNotEmpty) break;
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pump();
+    }
+
+    final clearButton = find.text('清理 HTTP TTS 缓存');
+    await tester.ensureVisible(clearButton);
+    await tester.tap(clearButton);
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('HTTP TTS 缓存已清理'), findsOneWidget);
   });
 }

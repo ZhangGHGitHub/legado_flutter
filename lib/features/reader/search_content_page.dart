@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../domain/ports/chapter_content_cache_port.dart';
 import '../../help/content_processor.dart';
-import '../../infrastructure/cache/file_chapter_content_cache.dart';
 import '../../models/chapter.dart';
 import '../../providers/replace_provider.dart';
 import '../../services/search_content_prefs.dart';
@@ -32,11 +31,11 @@ class SearchContentPage extends StatefulWidget {
     required this.chapters,
     required this.durChapterIndex,
     required this.currentChapterContent,
+    required this.contentCache,
     this.initialQuery,
     this.initialResults,
     this.initialResultIndex = 0,
     this.onlineContentLoader,
-    this.contentCache = const FileChapterContentCache(),
   });
 
   static Future<SearchContentNavigate?> open(
@@ -46,11 +45,11 @@ class SearchContentPage extends StatefulWidget {
     required List<Chapter> chapters,
     required int durChapterIndex,
     required String currentChapterContent,
+    required ChapterContentCachePort contentCache,
     String? initialQuery,
     List<SearchContentResult>? initialResults,
     int initialResultIndex = 0,
     Future<String?> Function(Chapter chapter)? onlineContentLoader,
-    ChapterContentCachePort? contentCache,
   }) {
     return Navigator.push<SearchContentNavigate>(
       context,
@@ -61,11 +60,11 @@ class SearchContentPage extends StatefulWidget {
           chapters: chapters,
           durChapterIndex: durChapterIndex,
           currentChapterContent: currentChapterContent,
+          contentCache: contentCache,
           initialQuery: initialQuery,
           initialResults: initialResults,
           initialResultIndex: initialResultIndex,
           onlineContentLoader: onlineContentLoader,
-          contentCache: contentCache ?? const FileChapterContentCache(),
         ),
       ),
     );

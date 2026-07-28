@@ -38,8 +38,7 @@ String exploreUrlOf(BookSource source) {
   return '';
 }
 
-bool hasExploreUrl(BookSource source) =>
-    exploreUrlOf(source).trim().isNotEmpty;
+bool hasExploreUrl(BookSource source) => exploreUrlOf(source).trim().isNotEmpty;
 
 bool isExploreEnabled(BookSource source) => source.enabledExplore;
 
@@ -69,7 +68,9 @@ List<ExploreSection> groupExploreSections(List<ExploreCategory> categories) {
 
   void flush() {
     if (items.isEmpty) return;
-    sections.add(ExploreSection(title: currentTitle, categories: List.of(items)));
+    sections.add(
+      ExploreSection(title: currentTitle, categories: List.of(items)),
+    );
     items = [];
   }
 

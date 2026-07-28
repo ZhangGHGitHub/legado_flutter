@@ -13,7 +13,8 @@ import '../../widgets/legado_list_tile.dart';
 import '../../widgets/quick_action_button.dart';
 import '../../pages/ai/ai_config_dialog.dart';
 import '../../features/book/bookmark_page.dart';
-import '../../pages/cache/cache_book_page.dart';
+import '../../providers/book_provider.dart';
+import '../cache/cache_book_page.dart';
 import '../../features/settings/config_page.dart';
 import '../../pages/obsidian/obsidian_export_dialog.dart';
 import '../../features/reader/ai_chat_page.dart';
@@ -336,7 +337,11 @@ class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
                   icon: Icons.download_for_offline_outlined,
                   title: '离线缓存',
                   subtitle: '按书管理缓存并下载章节',
-                  onTap: () => _openPage(const CacheBookPage()),
+                  onTap: () => _openPage(
+                    CacheBookPage(
+                      contentCache: context.read<BookProvider>().contentCache,
+                    ),
+                  ),
                 ),
                 LegadoListTile(
                   icon: Icons.cleaning_services_outlined,

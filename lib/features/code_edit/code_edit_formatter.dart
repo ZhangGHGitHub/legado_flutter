@@ -98,7 +98,9 @@ abstract final class CodeEditFormatter {
     if ((src.startsWith('{') && src.endsWith('}')) ||
         (src.startsWith('[') && src.endsWith(']'))) {
       try {
-        return const JsonEncoder.withIndent(indentUnit).convert(jsonDecode(src));
+        return const JsonEncoder.withIndent(
+          indentUnit,
+        ).convert(jsonDecode(src));
       } catch (_) {}
     }
 
@@ -240,9 +242,12 @@ abstract final class CodeEditFormatter {
     var depth = 0;
     for (final line in compact) {
       final closing = RegExp(r'^</\w').hasMatch(line);
-      final selfClose = line.endsWith('/>') ||
-          RegExp(r'^<(br|hr|img|meta|link|input)\b', caseSensitive: false)
-              .hasMatch(line);
+      final selfClose =
+          line.endsWith('/>') ||
+          RegExp(
+            r'^<(br|hr|img|meta|link|input)\b',
+            caseSensitive: false,
+          ).hasMatch(line);
       if (closing) depth = depth > 0 ? depth - 1 : 0;
       buf.writeln('${indentUnit * depth}$line');
       if (!closing &&

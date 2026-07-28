@@ -23,8 +23,8 @@ import '../../utils/chinese_convert.dart';
 import '../../features/book/change_source_page.dart';
 import '../../features/book/toc_sheet.dart';
 import '../../features/book/book_info_page.dart';
-import '../../pages/cache/download_choice_dialog.dart';
-import '../../pages/cache/download_helpers.dart';
+import '../cache/download_choice_dialog.dart';
+import '../cache/download_helpers.dart';
 import 'ai_chat_page.dart';
 import '../../help/bookmark_hint.dart';
 import '../../models/book_progress.dart';
@@ -55,7 +55,7 @@ import 'simulated_reading_dialog.dart';
 import 'tts_panel.dart';
 import 'turn/page_direction.dart';
 import 'turn/reader_turn_view.dart';
-import '../../pages/audio/audio_play_page.dart';
+import 'audio_play_page.dart';
 import '../../pages/manga/manga_reader_page.dart';
 import '../../widgets/bookplate_overlay.dart';
 import '../../widgets/bookmark_editor_sheet.dart';
@@ -1525,6 +1525,7 @@ class _ReaderPageState extends State<ReaderPage> {
           : widget.allChapters,
       durChapterIndex: _currentIndex,
       currentChapterContent: _content,
+      contentCache: context.read<BookProvider>().contentCache,
       onlineContentLoader: (chapter) async {
         final source = context.read<SourceProvider>().findSourceForBook(
           widget.book,

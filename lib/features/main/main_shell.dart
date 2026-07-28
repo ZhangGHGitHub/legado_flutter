@@ -13,10 +13,10 @@ import '../../services/rule_sub_import_service.dart';
 import '../../theme/legado_chrome.dart';
 import '../../widgets/legado_bottom_nav.dart';
 import '../bookshelf/bookshelf_page.dart';
-import '../../pages/explore/explore_tab_page.dart';
+import '../explore/explore_tab_page.dart';
 import '../../features/my/my_page.dart';
 import '../../features/rss/rss_tab_page.dart';
-import '../../pages/rule_sub/rule_sub_page.dart';
+import '../sources/rule_sub_page.dart';
 
 const _privacyAcceptedKey = 'legado_privacy_accepted';
 

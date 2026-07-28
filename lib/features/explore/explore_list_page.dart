@@ -7,7 +7,7 @@ import '../../providers/book_provider.dart';
 import '../../services/book_source_service.dart';
 import '../../widgets/book_list_tile.dart';
 import '../../widgets/empty_state.dart';
-import '../../features/book/book_info_page.dart';
+import '../book/book_info_page.dart';
 
 /// 发现分类书籍列表 — 对齐 book/explore
 ///
@@ -98,7 +98,10 @@ class _ExploreListPageState extends State<ExploreListPage> {
             Text(widget.title),
             Text(
               widget.source.bookSourceName,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.normal,
+              ),
             ),
           ],
         ),

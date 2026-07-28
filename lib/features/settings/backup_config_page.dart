@@ -1,17 +1,16 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
+import 'package:provider/provider.dart';
 
-import '../../application/database/legacy_room_import_service.dart';
 import '../../domain/ports/backup_local_file_port.dart';
+import '../../domain/ports/legacy_room_import_use_case.dart';
 import '../../domain/remote/webdav_entry.dart';
 import '../../services/backup_service.dart';
 import '../../services/database_status_service.dart';
 import '../../services/engine_status_service.dart';
 import '../../services/app_paths.dart';
-import '../../services/legacy_room_import_service_factory.dart';
 import '../../services/webdav_prefs.dart';
-import '../../infrastructure/file_system/backup_local_file_adapter.dart';
 import '../../theme/legado_tokens.dart';
 
 enum BackupOperation { other, list, upload, restore, delete, rename }
@@ -90,18 +89,19 @@ class BackupConfigPage extends StatefulWidget {
   final BackupLocalFilePort? localFilePort;
 
   @visibleForTesting
-  final LegacyRoomImportService? legacyRoomImportService;
+  final LegacyRoomImportUseCase? legacyRoomImportService;
 
   @override
   State<BackupConfigPage> createState() => _BackupConfigPageState();
 }
 
 class _BackupConfigPageState extends State<BackupConfigPage> {
-  late final BackupService _service = widget.service ?? BackupService();
+  late final BackupService _service =
+      widget.service ?? context.read<BackupService>();
   late final BackupLocalFilePort _localFilePort =
-      widget.localFilePort ?? FileSystemBackupLocalFileAdapter(_service);
-  late final LegacyRoomImportService _legacyRoomImportService =
-      widget.legacyRoomImportService ?? LegacyRoomImportServices.create();
+      widget.localFilePort ?? context.read<BackupLocalFilePort>();
+  late final LegacyRoomImportUseCase _legacyRoomImportService =
+      widget.legacyRoomImportService ?? context.read<LegacyRoomImportUseCase>();
   bool _busy = false;
   WebDavConfig? _webdav;
   List<LocalBackupEntry> _localBackups = [];

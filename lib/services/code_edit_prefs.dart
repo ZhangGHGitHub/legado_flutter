@@ -1,5 +1,5 @@
-import '../../domain/ports/code_edit_prefs_store.dart';
-import '../../infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
+import '../domain/ports/code_edit_prefs_store.dart';
+import '../infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
 
 /// 代码编辑器偏好 — 对齐 Jingshiro [PreferKey] / [AppConfig] 编辑项。
 abstract final class CodeEditPrefs {
