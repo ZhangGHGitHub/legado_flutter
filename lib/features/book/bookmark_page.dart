@@ -20,7 +20,7 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/bookmark_editor_sheet.dart';
 import '../../widgets/note_editor_sheet.dart';
 import '../../widgets/note_share_card.dart';
-import '../../pages/obsidian/obsidian_export_dialog.dart';
+import '../obsidian/obsidian_export_dialog.dart';
 import '../../features/reader/reader_page.dart';
 
 bool _isBookmarkNote(NoteSnapshot n) => n.noteContent.startsWith('书签');

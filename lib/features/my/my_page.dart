@@ -16,7 +16,7 @@ import '../../features/book/bookmark_page.dart';
 import '../../providers/book_provider.dart';
 import '../cache/cache_book_page.dart';
 import '../../features/settings/config_page.dart';
-import '../../pages/obsidian/obsidian_export_dialog.dart';
+import '../obsidian/obsidian_export_dialog.dart';
 import '../../features/reader/ai_chat_page.dart';
 import 'replace_page.dart';
 import '../../features/sources/sources_page.dart';

@@ -1986,3 +1986,19 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - 旧 `pages/ai` 路径引用扫描：无残留。
 
 边界结论：AI 配置页面已进入 `features/ai` 功能域；真实 AI 外部服务继续按范围外处理，R6 仍需处理通用 WebView、Obsidian 等共享页面，并完成 UI/发布验收。
+
+## 95. 2026-07-29：R6 Obsidian 导出功能域收敛
+
+迁移范围：
+
+- 将 `lib/pages/obsidian/obsidian_export_dialog.dart` 迁移至 `lib/features/obsidian/obsidian_export_dialog.dart`，更新书签页和“我的”页入口。
+- 保持本地文件导出、Obsidian API 配置、连接测试、章节选择和导出结果提示行为不变；未修改书签身份、阅读位置或外部 WebDAV 行为。
+- 涉及 Flutter app，无 Rust crate；未修改原版基线。
+
+测试结果：
+
+- Obsidian 对话框、书签页和“我的”页 `flutter analyze --no-pub`：无诊断。
+- 书签相关 Widget 测试：`3/3` 通过。
+- 旧 `pages/obsidian` 路径引用扫描：无残留。
+
+边界结论：Obsidian 导出对话框已进入 `features/obsidian` 功能域；外部 Obsidian/WebDAV 服务继续按既有范围处理，R6 仍需处理通用 WebView 并完成 UI/发布验收。
