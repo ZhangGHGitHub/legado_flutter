@@ -34,6 +34,18 @@ abstract class LegadoEngineApiImplPlatform
   });
 
   @protected
+  AnyhowException dco_decode_AnyhowException(dynamic raw);
+
+  @protected
+  FutureOr<SourceBrowserResponseDto> Function(SourceBrowserRequestDto)
+  dco_decode_DartFn_Inputs_source_browser_request_dto_Output_source_browser_response_dto_AnyhowException(
+    dynamic raw,
+  );
+
+  @protected
+  Object dco_decode_DartOpaque(dynamic raw);
+
+  @protected
   Map<String, String> dco_decode_Map_String_String_None(dynamic raw);
 
   @protected
@@ -61,6 +73,11 @@ abstract class LegadoEngineApiImplPlatform
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  SourceBrowserRequestDto dco_decode_box_autoadd_source_browser_request_dto(
+    dynamic raw,
+  );
+
+  @protected
   ChapterItem dco_decode_chapter_item(dynamic raw);
 
   @protected
@@ -80,6 +97,9 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
+
+  @protected
+  PlatformInt64 dco_decode_isize(dynamic raw);
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
@@ -160,6 +180,12 @@ abstract class LegadoEngineApiImplPlatform
   SearchItem dco_decode_search_item(dynamic raw);
 
   @protected
+  SourceBrowserRequestDto dco_decode_source_browser_request_dto(dynamic raw);
+
+  @protected
+  SourceBrowserResponseDto dco_decode_source_browser_response_dto(dynamic raw);
+
+  @protected
   SourceValidation dco_decode_source_validation(dynamic raw);
 
   @protected
@@ -172,10 +198,19 @@ abstract class LegadoEngineApiImplPlatform
   void dco_decode_unit(dynamic raw);
 
   @protected
+  BigInt dco_decode_usize(dynamic raw);
+
+  @protected
   WebApiStatus dco_decode_web_api_status(dynamic raw);
 
   @protected
   WebDavEntry dco_decode_web_dav_entry(dynamic raw);
+
+  @protected
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+
+  @protected
+  Object sse_decode_DartOpaque(SseDeserializer deserializer);
 
   @protected
   Map<String, String> sse_decode_Map_String_String_None(
@@ -207,6 +242,11 @@ abstract class LegadoEngineApiImplPlatform
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  SourceBrowserRequestDto sse_decode_box_autoadd_source_browser_request_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ChapterItem sse_decode_chapter_item(SseDeserializer deserializer);
 
   @protected
@@ -226,6 +266,9 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64 sse_decode_isize(SseDeserializer deserializer);
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
@@ -320,6 +363,16 @@ abstract class LegadoEngineApiImplPlatform
   SearchItem sse_decode_search_item(SseDeserializer deserializer);
 
   @protected
+  SourceBrowserRequestDto sse_decode_source_browser_request_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  SourceBrowserResponseDto sse_decode_source_browser_response_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   SourceValidation sse_decode_source_validation(SseDeserializer deserializer);
 
   @protected
@@ -332,10 +385,29 @@ abstract class LegadoEngineApiImplPlatform
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
+  BigInt sse_decode_usize(SseDeserializer deserializer);
+
+  @protected
   WebApiStatus sse_decode_web_api_status(SseDeserializer deserializer);
 
   @protected
   WebDavEntry sse_decode_web_dav_entry(SseDeserializer deserializer);
+
+  @protected
+  void sse_encode_AnyhowException(
+    AnyhowException self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_DartFn_Inputs_source_browser_request_dto_Output_source_browser_response_dto_AnyhowException(
+    FutureOr<SourceBrowserResponseDto> Function(SourceBrowserRequestDto) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_DartOpaque(Object self, SseSerializer serializer);
 
   @protected
   void sse_encode_Map_String_String_None(
@@ -374,6 +446,12 @@ abstract class LegadoEngineApiImplPlatform
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_source_browser_request_dto(
+    SourceBrowserRequestDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_chapter_item(ChapterItem self, SseSerializer serializer);
 
   @protected
@@ -396,6 +474,9 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_isize(PlatformInt64 self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
@@ -524,6 +605,18 @@ abstract class LegadoEngineApiImplPlatform
   void sse_encode_search_item(SearchItem self, SseSerializer serializer);
 
   @protected
+  void sse_encode_source_browser_request_dto(
+    SourceBrowserRequestDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_source_browser_response_dto(
+    SourceBrowserResponseDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_source_validation(
     SourceValidation self,
     SseSerializer serializer,
@@ -537,6 +630,9 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_usize(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_web_api_status(WebApiStatus self, SseSerializer serializer);

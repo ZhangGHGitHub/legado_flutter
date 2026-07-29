@@ -760,6 +760,89 @@ fn register_login_check_host_apis(ctx: &Ctx<'_>) -> Result<(), String> {
         .set("__legado_lc_get_str_response", get_str)
         .map_err(|e| format!("注入 getStrResponse 失败: {e}"))?;
 
+    let start_browser = Function::new(ctx.clone(), {
+        move |ctx: Ctx<'_>,
+              url: String,
+              title: String,
+              refetch_after_success: bool,
+              has_html: bool,
+              html: String|
+              -> Result<String, rquickjs::Error> {
+            if url.encode_utf16().count() >= 64 * 1024 {
+                return Err(Exception::throw_message(
+                    &ctx,
+                    "startBrowser parameter url too long",
+                ));
+            }
+            let (source_key, mut headers) = LOGIN_CHECK_CTX.with(|c| {
+                let borrowed = c.borrow();
+                borrowed
+                    .as_ref()
+                    .map(|state| (state.source_key.clone(), state.header_map.clone()))
+                    .unwrap_or_default()
+            });
+            let config = crate::http::client::parse_url_config(&url, "");
+            headers.extend(config.headers.clone());
+            let mut initial_html = has_html.then_some(html);
+            if initial_html.is_none() && config.method.eq_ignore_ascii_case("POST") {
+                initial_html = Some(
+                    crate::http::client::fetch_blocking_with_header_map(
+                        &config.url,
+                        &config.method,
+                        config.body.as_deref(),
+                        &config.charset,
+                        &headers,
+                    )
+                    .map_err(|e| Exception::throw_message(&ctx, &e))?
+                    .1,
+                );
+            }
+            let response = crate::browser_host::invoke(crate::api::SourceBrowserRequestDto {
+                source_key,
+                url: config.url.clone(),
+                title,
+                html: initial_html.clone(),
+                headers: headers.clone(),
+                refetch_after_success,
+            })
+            .map_err(|e| Exception::throw_message(&ctx, &e))?;
+
+            let (final_url, body) = if refetch_after_success {
+                if let Some(html) = initial_html {
+                    (config.url, html)
+                } else {
+                    let (_, body, final_url) =
+                        crate::http::client::fetch_blocking_response_with_header_map(
+                            &config.url,
+                            &config.method,
+                            config.body.as_deref(),
+                            &config.charset,
+                            &headers,
+                        )
+                        .map_err(|e| Exception::throw_message(&ctx, &e))?;
+                    (final_url, body)
+                }
+            } else {
+                let final_url = if response.final_url.trim().is_empty() {
+                    config.url
+                } else {
+                    response.final_url
+                };
+                (final_url, response.body)
+            };
+            Ok(serde_json::json!({
+                "body": body,
+                "url": final_url,
+                "code": 200,
+            })
+            .to_string())
+        }
+    })
+    .map_err(|e| format!("注册 startBrowserAwait 失败: {e}"))?;
+    ctx.globals()
+        .set("__legado_lc_start_browser", start_browser)
+        .map_err(|e| format!("注入 startBrowserAwait 失败: {e}"))?;
+
     Ok(())
 }
 
@@ -768,7 +851,6 @@ fn register_login_check_host_apis(ctx: &Ctx<'_>) -> Result<(), String> {
 /// 绑定清单（reference/Jingshiro-legado）：
 /// - `result` = StrResponse；`java` ≈ AnalyzeUrl（getHeaderMap / initUrl / getStrResponse）
 /// - `source.putLoginHeader` / `getLoginHeader` / `getHeaderMap(true)`
-/// - 未实现：`java.startBrowserAwait` 真 WebView
 pub fn apply_login_check_js(
     source_json: &str,
     body: &str,
@@ -814,6 +896,43 @@ pub fn apply_login_check_js(
             fallback
         }
     }
+}
+
+/// 在专用阻塞线程执行同步 QuickJS。Dart 主 isolate 可在原 FRB Future 挂起期间处理 WebView 回调。
+pub async fn apply_login_check_js_async(
+    source_json: &str,
+    body: &str,
+    request_url: &str,
+    method: &str,
+    req_body: Option<&str>,
+    charset: &str,
+) -> LoginCheckResult {
+    let source_json = source_json.to_string();
+    let body = body.to_string();
+    let request_url = request_url.to_string();
+    let method = method.to_string();
+    let req_body = req_body.map(str::to_string);
+    let charset = charset.to_string();
+    let fallback = LoginCheckResult {
+        body: body.clone(),
+        url: request_url.clone(),
+        login_header: None,
+    };
+    tokio::task::spawn_blocking(move || {
+        apply_login_check_js(
+            &source_json,
+            &body,
+            &request_url,
+            &method,
+            req_body.as_deref(),
+            &charset,
+        )
+    })
+    .await
+    .unwrap_or_else(|e| {
+        eprintln!("[loginCheckJs] 阻塞线程失败（保留原响应）: {e}");
+        fallback
+    })
 }
 
 fn run_login_check_script(
@@ -981,12 +1100,20 @@ if (typeof java !== 'undefined') {
     try { o = JSON.parse(raw) || {}; } catch (e) { o = {}; }
     return new __StrResponse(o.body || '', o.url || '', o.code);
   };
-  if (typeof java.startBrowserAwait !== 'function') {
-    java.startBrowserAwait = function(_url, _title) {
-      java.log && java.log('[loginCheckJs] startBrowserAwait 未实现');
-      return new __StrResponse('', '', 500);
-    };
-  }
+  java.startBrowserAwait = function(url, title, refetchAfterSuccess, html) {
+    var refetch = (arguments.length < 3) ? true : !!refetchAfterSuccess;
+    var hasHtml = arguments.length >= 4 && html !== null && html !== undefined;
+    var raw = __legado_lc_start_browser(
+      String(url == null ? '' : url),
+      String(title == null ? '' : title),
+      refetch,
+      hasHtml,
+      hasHtml ? String(html) : ''
+    );
+    var o = {};
+    try { o = JSON.parse(raw) || {}; } catch (e) { o = {}; }
+    return new __StrResponse(o.body || '', o.url || '', o.code);
+  };
   if (typeof java.connect !== 'function') {
     java.connect = function(url) {
       var b = '';
@@ -1202,6 +1329,184 @@ fn json_escape(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct BrowserHostReset;
+
+    impl Drop for BrowserHostReset {
+        fn drop(&mut self) {
+            crate::browser_host::clear_test_host();
+        }
+    }
+
+    #[test]
+    #[serial_test::serial(source_browser_host)]
+    fn start_browser_await_matches_two_three_and_four_argument_contracts() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let _reset = BrowserHostReset;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/verify", listener.local_addr().unwrap());
+        let final_url = format!("http://{}/done", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            for (index, path) in ["/verify", "/done"].iter().enumerate() {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = [0_u8; 2048];
+                let size = stream.read(&mut request).unwrap();
+                let request = String::from_utf8_lossy(&request[..size]);
+                assert!(request.starts_with(&format!("GET {path} ")));
+                assert!(request.to_ascii_lowercase().contains("x-source: base"));
+                if index == 0 {
+                    stream
+                        .write_all(
+                            b"HTTP/1.1 302 Found\r\nLocation: /done\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                        )
+                        .unwrap();
+                } else {
+                    stream
+                        .write_all(
+                            b"HTTP/1.1 200 OK\r\nContent-Length: 9\r\nConnection: close\r\n\r\nrefetched",
+                        )
+                        .unwrap();
+                }
+            }
+        });
+
+        crate::browser_host::set_test_host({
+            let expected_url = url.clone();
+            move |request| {
+                assert_eq!(request.source_key, "https://source.example");
+                assert_eq!(request.url, expected_url);
+                assert_eq!(request.title, "验证");
+                assert!(request.html.is_none());
+                assert!(request.refetch_after_success);
+                assert_eq!(
+                    request.headers.get("X-Source").map(String::as_str),
+                    Some("base")
+                );
+                Ok(crate::api::SourceBrowserResponseDto {
+                    final_url: "https://ignored.example/done".into(),
+                    body: "ignored-dom".into(),
+                })
+            }
+        });
+        let source = serde_json::json!({
+            "bookSourceUrl": "https://source.example",
+            "header": {"X-Source": "base"},
+            "loginCheckJs": format!("java.startBrowserAwait({}, '验证')", json_escape(&url)),
+        })
+        .to_string();
+        let out = apply_login_check_js(&source, "before", &url, "GET", None, "UTF-8");
+        assert_eq!(out.body, "refetched");
+        assert_eq!(out.url, final_url);
+        server.join().unwrap();
+
+        crate::browser_host::set_test_host(|request| {
+            assert!(!request.refetch_after_success);
+            assert!(request.html.is_none());
+            Ok(crate::api::SourceBrowserResponseDto {
+                final_url: "https://source.example/verified".into(),
+                body: "verified-dom".into(),
+            })
+        });
+        let source = serde_json::json!({
+            "bookSourceUrl": "https://source.example",
+            "loginCheckJs": "var verified = java.startBrowserAwait('https://source.example/check', '验证', false); new __StrResponse(verified.body() + '|continued', verified.url(), verified.code())",
+        })
+        .to_string();
+        let out = apply_login_check_js(
+            &source,
+            "before",
+            "https://source.example/check",
+            "GET",
+            None,
+            "UTF-8",
+        );
+        assert_eq!(out.body, "verified-dom|continued");
+        assert_eq!(out.url, "https://source.example/verified");
+
+        crate::browser_host::set_test_host(|request| {
+            assert!(request.refetch_after_success);
+            assert_eq!(request.html.as_deref(), Some("<html>seed</html>"));
+            Ok(crate::api::SourceBrowserResponseDto {
+                final_url: "https://source.example/ignored".into(),
+                body: "ignored-dom".into(),
+            })
+        });
+        let source = serde_json::json!({
+            "bookSourceUrl": "https://source.example",
+            "loginCheckJs": "java.startBrowserAwait('https://source.example/check', '验证', true, '<html>seed</html>')",
+        })
+        .to_string();
+        let out = apply_login_check_js(
+            &source,
+            "before",
+            "https://source.example/check",
+            "GET",
+            None,
+            "UTF-8",
+        );
+        assert_eq!(out.body, "<html>seed</html>");
+        assert_eq!(out.url, "https://source.example/check");
+    }
+
+    #[test]
+    #[serial_test::serial(source_browser_host)]
+    fn start_browser_await_rejects_urls_at_64_kib_without_calling_host() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let _reset = BrowserHostReset;
+        let called = Arc::new(AtomicBool::new(false));
+        crate::browser_host::set_test_host({
+            let called = called.clone();
+            move |_request| {
+                called.store(true, Ordering::SeqCst);
+                Ok(crate::api::SourceBrowserResponseDto {
+                    final_url: String::new(),
+                    body: String::new(),
+                })
+            }
+        });
+        let long_url = format!("https://example.com/{}", "a".repeat(64 * 1024));
+        let source = serde_json::json!({
+            "bookSourceUrl": "https://source.example",
+            "loginCheckJs": format!("java.startBrowserAwait({}, '验证')", json_escape(&long_url)),
+        })
+        .to_string();
+        let out = apply_login_check_js(
+            &source,
+            "original",
+            "https://source.example/original",
+            "GET",
+            None,
+            "UTF-8",
+        );
+        assert_eq!(out.body, "original");
+        assert!(!called.load(Ordering::SeqCst));
+
+        let utf16_short_url = format!("https://example.com/{}", "界".repeat(22_000));
+        assert!(utf16_short_url.len() >= 64 * 1024);
+        assert!(utf16_short_url.encode_utf16().count() < 64 * 1024);
+        let source = serde_json::json!({
+            "bookSourceUrl": "https://source.example",
+            "loginCheckJs": format!(
+                "java.startBrowserAwait({}, '验证', false)",
+                json_escape(&utf16_short_url)
+            ),
+        })
+        .to_string();
+        let out = apply_login_check_js(
+            &source,
+            "original",
+            "https://source.example/original",
+            "GET",
+            None,
+            "UTF-8",
+        );
+        assert!(called.load(Ordering::SeqCst));
+        assert_eq!(out.url, utf16_short_url);
+    }
 
     #[test]
     fn js_block_markers_are_case_insensitive_and_keep_suffix() {

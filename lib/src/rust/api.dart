@@ -6,10 +6,22 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 初始化 Rust 书源引擎
 void initEngine() => LegadoEngine.instance.api.crateApiInitEngine();
+
+/// 运行可见 WebView 宿主循环。Flutter 启动后保持此 Future，Rust 后台规则线程按请求等待回调。
+Future<void> serveSourceBrowserHost({
+  required FutureOr<SourceBrowserResponseDto> Function(SourceBrowserRequestDto)
+  host,
+}) => LegadoEngine.instance.api.crateApiServeSourceBrowserHost(host: host);
+
+/// FRB 回调契约探针；供桥接测试确认 Dart 回调可在 Rust 异步任务等待期间完成。
+Future<SourceBrowserResponseDto> probeSourceBrowserHost({
+  required SourceBrowserRequestDto request,
+}) =>
+    LegadoEngine.instance.api.crateApiProbeSourceBrowserHost(request: request);
 
 /// 引擎版本号
 String engineVersion() => LegadoEngine.instance.api.crateApiEngineVersion();
@@ -830,6 +842,65 @@ class SearchItem {
           bookUrl == other.bookUrl &&
           kind == other.kind &&
           note == other.note;
+}
+
+/// `java.startBrowserAwait` 发往 Flutter 可见 WebView 宿主的请求。
+class SourceBrowserRequestDto {
+  final String sourceKey;
+  final String url;
+  final String title;
+  final String? html;
+  final Map<String, String> headers;
+  final bool refetchAfterSuccess;
+
+  const SourceBrowserRequestDto({
+    required this.sourceKey,
+    required this.url,
+    required this.title,
+    this.html,
+    required this.headers,
+    required this.refetchAfterSuccess,
+  });
+
+  @override
+  int get hashCode =>
+      sourceKey.hashCode ^
+      url.hashCode ^
+      title.hashCode ^
+      html.hashCode ^
+      headers.hashCode ^
+      refetchAfterSuccess.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SourceBrowserRequestDto &&
+          runtimeType == other.runtimeType &&
+          sourceKey == other.sourceKey &&
+          url == other.url &&
+          title == other.title &&
+          html == other.html &&
+          headers == other.headers &&
+          refetchAfterSuccess == other.refetchAfterSuccess;
+}
+
+/// Flutter WebView 完成验证后返回的最终页面。
+class SourceBrowserResponseDto {
+  final String finalUrl;
+  final String body;
+
+  const SourceBrowserResponseDto({required this.finalUrl, required this.body});
+
+  @override
+  int get hashCode => finalUrl.hashCode ^ body.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SourceBrowserResponseDto &&
+          runtimeType == other.runtimeType &&
+          finalUrl == other.finalUrl &&
+          body == other.body;
 }
 
 /// 书源校验结果

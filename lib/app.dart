@@ -12,7 +12,9 @@ import 'theme/legado_chrome.dart';
 
 /// App 根组件 — MD3 主题 + Dynamic Color + 路由
 class LegadoApp extends StatelessWidget {
-  const LegadoApp({super.key});
+  const LegadoApp({super.key, this.navigatorKey});
+
+  final GlobalKey<NavigatorState>? navigatorKey;
 
   @override
   Widget build(BuildContext context) {
@@ -21,6 +23,7 @@ class LegadoApp extends StatelessWidget {
     return DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {
         return MaterialApp(
+          navigatorKey: navigatorKey,
           title: 'Legado Flutter',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light(

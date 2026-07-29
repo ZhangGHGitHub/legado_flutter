@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
@@ -7,6 +8,19 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 typedef AppWebViewCookieCallback =
     Future<void> Function(String pageUrl, String cookie);
+
+class AppWebViewResult {
+  const AppWebViewResult({required this.finalUrl, required this.body});
+
+  final String finalUrl;
+  final String body;
+}
+
+@visibleForTesting
+abstract final class AppWebViewPageStateTestApi {
+  static String htmlFromJavaScriptResult(Object result) =>
+      _AppWebViewPageState.htmlFromJavaScriptResult(result);
+}
 
 /// 通用内嵌 WebView — 对齐 Jingshiro WebViewActivity 轻量路径。
 ///
@@ -20,6 +34,7 @@ class AppWebViewPage extends StatefulWidget {
     this.baseUrl,
     this.headers = const {},
     this.onCookiesChanged,
+    this.returnsPageResult = false,
   });
 
   final String title;
@@ -28,6 +43,7 @@ class AppWebViewPage extends StatefulWidget {
   final String? baseUrl;
   final Map<String, String> headers;
   final AppWebViewCookieCallback? onCookiesChanged;
+  final bool returnsPageResult;
 
   static Future<void> openUrl(
     BuildContext context, {
@@ -67,6 +83,30 @@ class AppWebViewPage extends StatefulWidget {
     );
   }
 
+  static Future<AppWebViewResult?> openForResult(
+    BuildContext context, {
+    required String title,
+    required String url,
+    String? html,
+    Map<String, String> headers = const {},
+    AppWebViewCookieCallback? onCookiesChanged,
+  }) {
+    final loadsHtml = html != null && html.isNotEmpty;
+    return Navigator.of(context).push<AppWebViewResult>(
+      MaterialPageRoute(
+        builder: (_) => AppWebViewPage(
+          title: title,
+          initialUrl: loadsHtml ? null : url,
+          htmlContent: loadsHtml ? html : null,
+          baseUrl: loadsHtml ? url : null,
+          headers: headers,
+          onCookiesChanged: onCookiesChanged,
+          returnsPageResult: true,
+        ),
+      ),
+    );
+  }
+
   static String cookieHeaderFor(Iterable<WebViewCookie> cookies) {
     final values = <String, String>{};
     for (final cookie in cookies) {
@@ -94,6 +134,8 @@ class _AppWebViewPageState extends State<AppWebViewPage> {
   Future<void> _cookieSync = Future<void>.value();
   WebViewController? _controller;
   var _loading = true;
+  var _completing = false;
+  String? _lastPageUrl;
   String? _error;
 
   @override
@@ -117,10 +159,12 @@ class _AppWebViewPageState extends State<AppWebViewPage> {
         ..setNavigationDelegate(
           NavigationDelegate(
             onPageStarted: (url) {
+              _lastPageUrl = url;
               if (mounted) setState(() => _loading = true);
               _scheduleCookieSync(url);
             },
             onPageFinished: (url) {
+              _lastPageUrl = url;
               if (mounted) setState(() => _loading = false);
               _scheduleCookieSync(url);
             },
@@ -183,6 +227,49 @@ class _AppWebViewPageState extends State<AppWebViewPage> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  Future<void> _completeWithPageResult() async {
+    if (_completing) return;
+    final controller = _controller;
+    if (controller == null) return;
+    setState(() => _completing = true);
+    try {
+      final finalUrl =
+          await controller.currentUrl() ??
+          _lastPageUrl ??
+          widget.initialUrl ??
+          widget.baseUrl ??
+          '';
+      if (finalUrl.isNotEmpty) _scheduleCookieSync(finalUrl);
+      await _cookieSync;
+      final rawBody = await controller.runJavaScriptReturningResult(
+        'document.documentElement.outerHTML',
+      );
+      final result = AppWebViewResult(
+        finalUrl: finalUrl,
+        body: htmlFromJavaScriptResult(rawBody),
+      );
+      if (mounted) Navigator.of(context).pop(result);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _completing = false;
+        _error = error.toString();
+      });
+    }
+  }
+
+  static String htmlFromJavaScriptResult(Object result) {
+    if (result is! String) return result.toString();
+    final value = result.trim();
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is String) return decoded;
+      } catch (_) {}
+    }
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -194,6 +281,17 @@ class _AppWebViewPageState extends State<AppWebViewPage> {
               tooltip: '浏览器打开',
               icon: const Icon(Icons.open_in_browser),
               onPressed: _openExternal,
+            ),
+          if (widget.returnsPageResult)
+            IconButton(
+              tooltip: '完成验证',
+              icon: _completing
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.check),
+              onPressed: _completing ? null : _completeWithPageResult,
             ),
         ],
       ),

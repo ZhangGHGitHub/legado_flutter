@@ -122,7 +122,9 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 把搜索、发现、详情、目录、正文和规则调试统一收敛到应用用例；`BookSourceService` 只做门面，Rust API/生成绑定集中在 infrastructure 适配层。网络、规则解析、登录头、Cookie 和错误语义不散落到页面。
 
-当前进度：R2-1 至 R2-7 已完成。核心书源请求和规则调试页面已经通过领域端口调用，FRB 生成类型仅保留在 `lib/infrastructure/engine` 与既有底层兼容桥中。R0 扩展复核后已移除 Rust HTTP 无效证书绕过，书源、规则订阅、书单 URL、RSS 订阅源 URL 和主题 URL 文本抓取均已收敛到统一 Rust HTTP 文本端口；RSS 与主题入口保留各自的 URL trim、SSRF 拒绝和错误契约。字典查询也已移除 Dio 和占位结果，改由 Rust 执行 AnalyzeUrl 与 showRule，当前覆盖 GET/POST、headers/body/charset、`data:`、HTML/JSON/JS、Jsoup 可变 DOM，以及内置规则使用的 `JavaImporter`、Jayway `JsonPath`、`java.base64Encode`、`java.hexDecodeToString` 和 `with(aly)` 包装。当前五条内置字典规则已由离线 fixture 覆盖，百度普通释义和成语分支均已验证。AI 配置与 Obsidian REST API 也已移除 Dio，统一通过 application HTTP port 和 Rust 客户端；AI 固定公网 SSRF 策略，Obsidian 固定允许 localhost/LAN 的本地网络策略，二者共享默认 TLS、逐跳重定向检查、超时和响应大小门禁。统一二进制 HTTP port 已建立，正文图片缓存、阅读样式 ZIP、HTTP TTS 以及书源、漫画、封面、RSS、字典结果等页面远程图片均已迁入；生产代码中的 `Image.network/NetworkImage`、生产/测试 Dio import、pubspec 声明及 lockfile 条目均已清零。书源登录 WebView 已按当前页面读取 Cookie，并按 source key/eTLD+1 持久化到 Rust 网络会话，搜索、详情、目录和正文可跨请求域复用；`enabledCookieJar` 的发送前实际域覆盖、条件式响应保存，以及 source/login/URL option 优先级均已按原版代码路径覆盖测试。Android/iOS/macOS 已通过定域平台端口删除 source host/eTLD+1 WebView Cookie，不使用全局清空；iOS/macOS 真机构建待对应平台执行。`java.startBrowserAwait` 真实 WebView 宿主仍待完成；通过最终门禁前，R2 不退出。
+当前进度：R2-1 至 R2-7 已完成。核心书源请求和规则调试页面已经通过领域端口调用，FRB 生成类型仅保留在 `lib/infrastructure/engine` 与既有底层兼容桥中。R0 扩展复核后已移除 Rust HTTP 无效证书绕过，书源、规则订阅、书单 URL、RSS 订阅源 URL 和主题 URL 文本抓取均已收敛到统一 Rust HTTP 文本端口；RSS 与主题入口保留各自的 URL trim、SSRF 拒绝和错误契约。字典查询也已移除 Dio 和占位结果，改由 Rust 执行 AnalyzeUrl 与 showRule，当前覆盖 GET/POST、headers/body/charset、`data:`、HTML/JSON/JS、Jsoup 可变 DOM，以及内置规则使用的 `JavaImporter`、Jayway `JsonPath`、`java.base64Encode`、`java.hexDecodeToString` 和 `with(aly)` 包装。当前五条内置字典规则已由离线 fixture 覆盖，百度普通释义和成语分支均已验证。AI 配置与 Obsidian REST API 也已移除 Dio，统一通过 application HTTP port 和 Rust 客户端；AI 固定公网 SSRF 策略，Obsidian 固定允许 localhost/LAN 的本地网络策略，二者共享默认 TLS、逐跳重定向检查、超时和响应大小门禁。统一二进制 HTTP port 已建立，正文图片缓存、阅读样式 ZIP、HTTP TTS 以及书源、漫画、封面、RSS、字典结果等页面远程图片均已迁入；生产代码中的 `Image.network/NetworkImage`、生产/测试 Dio import、pubspec 声明及 lockfile 条目均已清零。书源登录 WebView 已按当前页面读取 Cookie，并按 source key/eTLD+1 持久化到 Rust 网络会话，搜索、详情、目录和正文可跨请求域复用；`enabledCookieJar` 的发送前实际域覆盖、条件式响应保存，以及 source/login/URL option 优先级均已按原版代码路径覆盖测试。Android/iOS/macOS 已通过定域平台端口删除 source host/eTLD+1 WebView Cookie，不使用全局清空；iOS/macOS 真机构建待对应平台执行。`java.startBrowserAwait` 已通过长期 FRB Dart callback 服务接入可见 WebView，支持原版 2/3/4 参数、UTF-16 64 KiB URL 门禁、默认重新抓取、HTML/最终 URL/DOM 返回、Cookie 同步、取消与错误恢复；QuickJS 在专用阻塞线程等待后继续同一脚本上下文。
+
+当前判定：R2 已最终退出。书源入口、统一网络/Cookie、规则 fixture、JS 兼容、错误恢复、FRB 适配和可见 WebView 宿主门禁均通过；架构扫描没有新增违规。后台 `java.webView*`、文件/压缩及其它未命中的第三方 JS API 继续作为兼容性 backlog，不回写为 R2 已完整支持全部原版宿主 API。
 
 退出条件：所有书源入口通过统一用例，规则 fixture、JS 兼容和错误恢复测试通过，页面不再直接调用生成绑定。
 
@@ -182,7 +184,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 ### 0.5 当前状态
 
-当前已完成 **R0 架构盘点与行为基线** 和 **R1（含 R1-12 Kotlin Room v99 数据迁移门禁）**。R1 扩展边界复核后的默认适配器、组合根和领域模型归属均已收敛，核心层具体基础设施违规为 `0`。当前按固定顺序推进 R2：统一文本/应用/二进制网络端口及其业务调用者、页面远程图片迁移均已完成，正在清理 Dio 依赖并核查 WebView Cookie 边界和 R2 退出条件。R3-1 至 R3-4、R4-2A/2B、R5 本地 WebDAV/备份和 R6 功能域/analyze/构建记录保留为历史迁移证据，不替代当前阶段退出条件。发布前正式或主流 WebDAV 真实验收仍待执行；Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)。不得用线性近似替换原版行布局或改变第 3 条断行规则。
+当前已完成 **R0 架构盘点与行为基线**、**R1（含 R1-12 Kotlin Room v99 数据迁移门禁）** 和 **R2 书源引擎与 FRB 适配边界**。R1 扩展边界复核后的默认适配器、组合根和领域模型归属均已收敛，核心层具体基础设施违规为 `0`；R2 的统一文本/应用/二进制网络、Dio 清理、页面远程图片、Cookie 生命周期和 `java.startBrowserAwait` 可见 WebView 宿主均已通过退出门禁。下一步按固定顺序复核并推进 R3；R3-1 至 R3-4、R4-2A/2B、R5 本地 WebDAV/备份和 R6 功能域/analyze/构建记录保留为历史迁移证据，不自动替代当前阶段退出条件。发布前正式或主流 WebDAV 真实验收仍待执行；Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)。不得用线性近似替换原版行布局或改变第 3 条断行规则。
 
 ### 0.6 版本控制与变更追溯状态（2026-07-26）
 

@@ -2440,3 +2440,36 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 
 边界结论：书源 Cookie 捕获、持久化、请求优先级、响应保存和定域清除均已闭环。R2 剩余实现项为
 规则宿主 `java.startBrowserAwait` 的真实 WebView 能力及其退出门禁。
+
+## 117. 2026-07-29：R2 `java.startBrowserAwait` 可见 WebView 宿主与最终退出
+
+- 对照只读原版 `JsExtensions.kt`、`SourceVerificationHelp.kt`、`WebViewActivity.kt` 和
+  `WebViewModel.kt`：实现 2/3/4 参数重载、默认 `refetchAfterSuccess=true`、按 UTF-16 计算的
+  64 KiB URL 门禁、URL/HTML 两种加载、用户完成后 Cookie 保存、DOM 或重新抓取结果及最终 URL。
+- Rust 新增长期 FRB Dart callback 服务。QuickJS 整段 `loginCheckJs` 在 `spawn_blocking` 专用线程
+  执行；同步 `startBrowserAwait` 通过通道等待 Dart 主 isolate 导航，返回后继续同一个 JS context，
+  不重跑脚本、不丢局部变量，也不占用 Tokio 异步工作线程。并发验证请求由宿主循环串行处理。
+- Flutter 新增纯 Dart `SourceVerificationBrowserPort`、Navigator 实现和 infrastructure FRB adapter；
+  根组合层持有 `navigatorKey` 并注入 Cookie capture，Feature 不直接依赖业务 service 或生成绑定。
+  `AppWebViewPage` 增加完成动作，完成前等待当前 URL Cookie 队列，再返回最终 URL 与
+  `document.documentElement.outerHTML`；返回键取消和宿主异常通过 FRB 错误返回，Rust 保留原响应。
+- AnalyzeUrl URL option headers 继续覆盖 source/login headers；重新抓取使用已同步的 Rust CookieJar，
+  并保留重定向后的最终 URL。RSS loginCheck 最小上下文补齐 `sourceUrl/sourceName/header`。
+- 固定 `flutter_rust_bridge_codegen 2.11.1` 生成绑定；真实 Dart callback → Rust 后台探针 → Dart
+  response → Rust Future 往返 `1/1` 通过，release DLL 重建通过。
+
+验证结果：
+
+- `startBrowserAwait` 参数/继续执行/UTF-16/重定向定向 `2/2`，宿主通道 `1/1`；JS compatibility
+  `18/18`、模块 1 离线 fixture `4/4`。
+- `cargo test -p legado_engine`：核心 `166/166`，其余集成与文档测试无失败。
+- Flutter 宿主定向 `5/5`；`flutter test --no-pub --concurrency=1`：`629` 通过、`3` 项既有条件
+  跳过；`flutter analyze --no-pub` 无诊断。
+- `flutter build apk --debug --no-pub` 通过，包含 armv7、arm64、x86_64 Rust 引擎。当前 Windows
+  环境无 Xcode，iOS/macOS 未登记为构建通过。
+- 架构扫描按设计以非零退出并保持既有 `146` 条 backlog：SharedPreferences `14`、Feature
+  业务 service `132`；核心层、domain/model 和展示层直连基础设施均为 `0`，本批无新增违规。
+
+边界结论：R2 的统一书源入口、网络/TLS、Cookie、规则 fixture、JS 兼容、错误恢复、FRB 适配和
+可见 WebView 宿主退出条件均已满足，R2 最终退出。后台 `java.webView*`、文件/压缩及其它第三方
+宿主 API 继续保留在兼容性 backlog，不宣称完整覆盖原版 `JsExtensions`。

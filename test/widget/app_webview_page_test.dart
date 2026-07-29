@@ -15,4 +15,17 @@ void main() {
       expect(header, 'sid=new; token=abc=123');
     },
   );
+
+  test('normalizes JavaScript string results without corrupting raw HTML', () {
+    expect(
+      AppWebViewPageStateTestApi.htmlFromJavaScriptResult(
+        '"<html>\\n<body>ok</body></html>"',
+      ),
+      '<html>\n<body>ok</body></html>',
+    );
+    expect(
+      AppWebViewPageStateTestApi.htmlFromJavaScriptResult('<html>raw</html>'),
+      '<html>raw</html>',
+    );
+  });
 }

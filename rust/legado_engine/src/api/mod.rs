@@ -16,7 +16,7 @@ pub mod webdav;
 
 pub use dict::query_dict_rule;
 
-use flutter_rust_bridge::frb;
+use flutter_rust_bridge::{frb, DartFnFuture};
 
 /// FRB 默认初始化（日志等）
 #[frb(init)]
@@ -39,6 +39,40 @@ pub struct SourceValidation {
     pub content_ok: bool,
     pub search_time_ms: u64,
     pub errors: Vec<String>,
+}
+
+/// `java.startBrowserAwait` 发往 Flutter 可见 WebView 宿主的请求。
+#[derive(Debug, Clone)]
+pub struct SourceBrowserRequestDto {
+    pub source_key: String,
+    pub url: String,
+    pub title: String,
+    pub html: Option<String>,
+    pub headers: std::collections::HashMap<String, String>,
+    pub refetch_after_success: bool,
+}
+
+/// Flutter WebView 完成验证后返回的最终页面。
+#[derive(Debug, Clone)]
+pub struct SourceBrowserResponseDto {
+    pub final_url: String,
+    pub body: String,
+}
+
+/// 运行可见 WebView 宿主循环。Flutter 启动后保持此 Future，Rust 后台规则线程按请求等待回调。
+pub async fn serve_source_browser_host(
+    host: impl Fn(SourceBrowserRequestDto) -> DartFnFuture<anyhow::Result<SourceBrowserResponseDto>>,
+) -> Result<(), String> {
+    crate::browser_host::serve(host).await
+}
+
+/// FRB 回调契约探针；供桥接测试确认 Dart 回调可在 Rust 异步任务等待期间完成。
+pub async fn probe_source_browser_host(
+    request: SourceBrowserRequestDto,
+) -> Result<SourceBrowserResponseDto, String> {
+    tokio::task::spawn_blocking(move || crate::browser_host::invoke(request))
+        .await
+        .map_err(|e| format!("浏览器宿主探针线程失败: {e}"))?
 }
 
 /// 本地书籍章节（含正文）

@@ -45,6 +45,7 @@ import '../infrastructure/engine/frb_reading_record_port.dart';
 import '../infrastructure/engine/frb_rss_port.dart';
 import '../infrastructure/engine/frb_rss_sort_url_js_port.dart';
 import '../infrastructure/engine/frb_source_login_cookie_port.dart';
+import '../infrastructure/engine/frb_source_verification_browser_host.dart';
 import '../infrastructure/file_system/backup_local_file_adapter.dart';
 import '../infrastructure/network/frb_public_text_fetch_port.dart';
 import '../infrastructure/network/frb_application_binary_http_request_port.dart';
@@ -58,6 +59,7 @@ import '../infrastructure/webdav/frb_webdav_repository.dart';
 import '../providers/replace_provider.dart';
 import '../providers/rss_provider.dart';
 import '../providers/source_provider.dart';
+import '../features/common/navigator_source_verification_browser_port.dart';
 import '../services/backup_service.dart';
 import '../services/book_group_store.dart';
 import '../services/book_progress_sync.dart';
@@ -89,6 +91,7 @@ abstract final class AppCompositionRoot {
   }
 
   static Future<({Widget app})> _compose() async {
+    final navigatorKey = GlobalKey<NavigatorState>();
     const contentCache = FileChapterContentCache();
     const networkEnginePort = FrbNetworkEnginePort();
     const sourceLoginCookiePort = FrbSourceLoginCookiePort();
@@ -155,6 +158,19 @@ abstract final class AppCompositionRoot {
       webdavRepository: webdavRepository,
     ).initialize();
 
+    if (LegadoEngineBridge.isAvailable) {
+      FrbSourceVerificationBrowserHost(
+        browserPort: NavigatorSourceVerificationBrowserPort(
+          navigatorKey: navigatorKey,
+          captureCookie: ({required sourceKey, required cookie}) =>
+              SourceLoginCookieService.capture(
+                sourceUrl: sourceKey,
+                cookie: cookie,
+              ),
+        ),
+      ).start();
+    }
+
     return (
       app: MultiProvider(
         providers: [
@@ -209,7 +225,7 @@ abstract final class AppCompositionRoot {
             )..loadSources(),
           ),
         ],
-        child: const LegadoApp(),
+        child: LegadoApp(navigatorKey: navigatorKey),
       ),
     );
   }

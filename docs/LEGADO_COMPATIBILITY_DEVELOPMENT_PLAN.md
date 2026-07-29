@@ -1064,11 +1064,11 @@ $env:RUN_ONLINE_SMOKE='1'; flutter test test/integration/src_7497_smoke_test.dar
 约束编号：§3.2、§3.3
 功能模块：JavaScript 宿主 API
 原版行为：JsExtensions.kt 暴露 base64Encode、摘要/编码、文件与压缩、WebView、connect/get/post、ajaxAll 等完整宿主能力。
-重写版行为：QuickJS 宿主已覆盖当前内置书源和 fixture 使用的 cache、base64Decode、java.ajax、AES createSymmetricCrypto 及基础 URL 辅助；未提供上述完整 API 面。
+重写版行为：QuickJS 宿主已覆盖当前内置书源和 fixture 使用的 cache、base64Decode、java.ajax、AES createSymmetricCrypto、基础 URL 辅助，以及可见验证路径 `java.startBrowserAwait`；后者支持 2/3/4 参数、默认重新抓取、HTML/DOM、最终 URL 与 Cookie 同步。仍未提供完整宿主 API 面。
 差异表现：依赖未实现 API 的第三方书源脚本仍可能返回空值或执行失败。
 影响范围：仅限调用缺失宿主 API 的规则；当前模块固定 fixture 和现有 7565/7497 书源未触发该差异。
-复现条件：在 JS 规则中调用 base64Encode、文件/压缩、WebView、connect/get/post、ajaxAll 或摘要 API。
-根因判断：Rust + QuickJS 当前宿主边界只实现已验证的书源依赖，尚未建立 Android 文件、WebView 和并发网络适配层。
+复现条件：在 JS 规则中调用尚未实现的文件/压缩、后台 `java.webView*`、connect/get/post、ajaxAll 或摘要 API；`java.startBrowserAwait` 不再属于此偏差。
+根因判断：Rust + QuickJS 当前宿主边界按 fixture 补齐实际依赖；可见验证 WebView 已建立 Flutter 适配层，但后台 WebView、文件系统和其它扩展仍没有跨平台适配。
 临时规避方案：第三方书源使用已覆盖 API，或在 Flutter/平台层提供对应代理；不能通过修改断言掩盖失败。
 最终修复计划：在模块 1 后续宿主 API 子步骤中按原版 JsHelp 方法逐项增加离线 fixture 和平台能力验证，再缩小该偏差。
 

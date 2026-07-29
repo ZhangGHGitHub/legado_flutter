@@ -96,11 +96,16 @@ pub async fn get_articles(
     } else {
         // 构造最小 JSON 供 apply_login_check_js 读取字段
         let mini = serde_json::json!({
+            "sourceUrl": source.source_url,
+            "sourceName": source.source_name,
+            "header": source.header,
             "loginCheckJs": source.login_check_js,
             "jsLib": source.js_lib,
         })
         .to_string();
-        js_engine::apply_login_check_js(&mini, &body, &url, "GET", None, "UTF-8").body
+        js_engine::apply_login_check_js_async(&mini, &body, &url, "GET", None, "UTF-8")
+            .await
+            .body
     };
     parse_xml(sort_name, &url, &url, &body, &source)
 }

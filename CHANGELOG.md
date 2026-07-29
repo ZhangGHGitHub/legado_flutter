@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R2：完成 `java.startBrowserAwait` 可见 WebView 宿主并通过阶段退出门禁。QuickJS 在专用阻塞线程保持同一脚本上下文，Rust 通过长期 FRB Dart callback 服务串行请求 Flutter 导航；支持原版 2/3/4 参数、默认 `refetchAfterSuccess=true`、UTF-16 64 KiB URL 门禁、URL/HTML 两种加载、最终页面 Cookie 同步、DOM 返回、重新抓取和重定向最终 URL。组合根持有 `navigatorKey`，Feature 仅依赖纯 Dart port，取消或宿主错误保留原响应。固定 FRB `2.11.1` 生成与真实 callback 往返通过；Rust 核心 `166/166`、JS compatibility `18/18`、离线规则 fixture `4/4`、Flutter 全量 `629` 通过（`3` 项既有跳过）、analyze、Android debug APK 和三个 Rust ABI 构建通过。架构扫描保持既有 `146` 条 backlog，无新增违规；iOS/macOS 因 Windows 环境未执行 Xcode 构建。
+
 - R2：补齐书源 Cookie 的平台 WebView 定域清除。新增独立平台端口和 `legado_flutter/source_login_cookies` MethodChannel，Rust 通过固定 FRB `2.11.1` 返回 Public Suffix eTLD+1；Android 对 source host/eTLD+1 的 Cookie 逐个写过期值并 flush，iOS/macOS 通过 WK CookieStore 只删除精确目标域，均不调用全局清空。持久/Rust 清除不因平台尽力删除失败而回滚。Rust 核心 `163/163`、Flutter 定向 `5/5`、真实 FRB domain/set/clear 往返、analyze、Flutter 串行全量 `625`（`3` 项既有跳过）和 Android debug APK 构建通过；iOS/macOS 因本机无 Xcode 仅完成静态 API 校验。
 
 - R2：对齐书源 `enabledCookieJar` 与 Cookie 优先级。普通请求按“持久 source-key Cookie < source header < login header < URL option”合并；开关启用时，发送前再由实际请求域 CookieJar 按键覆盖，并仅在启用时保存响应 `Set-Cookie`。搜索请求恢复传递 AnalyzeUrl method/body/charset 之外的 URL option headers，loginCheckJs 与 GE-UA 重试继续走同一请求链。Cookie 策略/响应保存定向 `4/4`、Rust 核心 `162/162`、Flutter 串行全量 `625` 通过（`3` 项既有跳过），analyze 无诊断。

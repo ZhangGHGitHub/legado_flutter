@@ -268,7 +268,7 @@ rust/legado_engine/src/rule/
 
 - HTTP：`reqwest` async + `tokio`（非阻塞 UI）
 - JS：`js_engine`（QuickJS）执行 `<js>` / `@js:` / `jsLib` / `cache`
-- **loginCheckJs（EN-09）**：`fetch_with_source_meta` 成功（及失败）后执行。`result`=StrResponse；`java` 绑定 `getHeaderMap` / `initUrl` / `getStrResponse`；`source.putLoginHeader` / `getLoginHeader` / `getHeaderMap(true)` 写入 Rust 登录头缓存并经 bridge 回写 `SourceLoginPrefs`。失败时若脚本返回可用 body 可采纳。**未实现** `java.startBrowserAwait` 真 WebView。
+- **loginCheckJs（EN-09）**：`fetch_with_source_meta` 成功（及失败）后执行。`result`=StrResponse；`java` 绑定 `getHeaderMap` / `initUrl` / `getStrResponse`；`source.putLoginHeader` / `getLoginHeader` / `getHeaderMap(true)` 写入 Rust 登录头缓存并经 bridge 回写 `SourceLoginPrefs`。失败时若脚本返回可用 body 可采纳。`java.startBrowserAwait` 通过串行 FRB Dart callback 打开 Flutter 可见 WebView；QuickJS 在专用阻塞线程等待，返回后继续同一脚本上下文，并支持 2/3/4 参数、默认重新抓取、HTML/DOM、最终 URL 和 Cookie 同步。
 - **preUpdateJs（EN-10）**：`get_toc` 入口在拉目录前执行 `ruleToc.preUpdateJs`；失败打日志不阻断
 
 ### Phase D — Jingshiro 增强

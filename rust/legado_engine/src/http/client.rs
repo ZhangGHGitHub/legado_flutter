@@ -1052,6 +1052,18 @@ pub fn fetch_blocking_with_header_map(
     charset: &str,
     extra_headers: &std::collections::HashMap<String, String>,
 ) -> Result<(u16, String), String> {
+    fetch_blocking_response_with_header_map(url, method, body, charset, extra_headers)
+        .map(|(status, body, _)| (status, body))
+}
+
+/// 同步请求并保留重定向后的最终 URL（`startBrowserAwait` 返回 StrResponse 使用）。
+pub fn fetch_blocking_response_with_header_map(
+    url: &str,
+    method: &str,
+    body: Option<&str>,
+    charset: &str,
+    extra_headers: &std::collections::HashMap<String, String>,
+) -> Result<(u16, String, String), String> {
     let url = url.to_string();
     let method = method.to_string();
     let body = body.map(|s| s.to_string());
@@ -1080,10 +1092,11 @@ pub fn fetch_blocking_with_header_map(
             }
             let response = send_request(&url, &method, body.as_deref(), &charset, headers).await?;
             let status = response.status().as_u16();
+            let final_url = response.url().to_string();
             save_cookies(&url, &response);
             let bytes = read_response_bytes(response).await?;
             let text = charset::decode_bytes(&bytes, &charset)?;
-            Ok((status, text))
+            Ok((status, text, final_url))
         })
     })
     .join()
@@ -1353,14 +1366,15 @@ async fn fetch_with_source_meta_and_headers(
         {
             Ok(r) => r,
             Err(e) => {
-                let lc = crate::rule::js_engine::apply_login_check_js(
+                let lc = crate::rule::js_engine::apply_login_check_js_async(
                     source_json,
                     &format!("Error Response\n{e}"),
                     url,
                     method,
                     body,
                     charset,
-                );
+                )
+                .await;
                 if !lc.body.is_empty() && !lc.body.starts_with("Error Response") {
                     return Ok(FetchResponse {
                         status_code: 200,
@@ -1372,14 +1386,15 @@ async fn fetch_with_source_meta_and_headers(
                 return Err(e);
             }
         };
-    let lc = crate::rule::js_engine::apply_login_check_js(
+    let lc = crate::rule::js_engine::apply_login_check_js_async(
         source_json,
         &resp.body,
         url,
         method,
         body,
         charset,
-    );
+    )
+    .await;
     let new_body = if lc.body.is_empty() {
         resp.body
     } else {
