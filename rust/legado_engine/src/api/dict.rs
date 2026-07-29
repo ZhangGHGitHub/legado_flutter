@@ -224,6 +224,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rhino_dict_helpers_run_in_the_query_pipeline() {
+        let show_rule = r#"@js:
+let key = java.hexDecodeToString(result);
+var aly = new JavaImporter(Packages.com.jayway.jsonpath);
+with (aly) {
+  var rr = JsonPath.using(
+    Configuration.builder().options(Option.SUPPRESS_EXCEPTIONS).build()
+  ).parse('{"data":{"pinyin":"pin"}}');
+}
+key + ':' + rr.read('$.data.pinyin');"#;
+        let result = query_dict_rule(
+            rule_json("data:;base64,{{java.base64Encode(key)}}", show_rule),
+            "测试".to_string(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result, "测试:pin");
+    }
+
+    #[tokio::test]
     async fn rejects_empty_inputs_and_private_hosts() {
         assert!(
             query_dict_rule(rule_json("https://example.com", ""), " ".to_string())

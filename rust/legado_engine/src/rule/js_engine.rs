@@ -1,3 +1,4 @@
+use base64::Engine;
 use rquickjs::{
     Array, CatchResultExt, CaughtError, Context, Ctx, Exception, Function, Runtime, Value,
 };
@@ -59,6 +60,44 @@ fn format_caught_err(prefix: &str, err: CaughtError<'_>) -> String {
 }
 
 fn register_host_apis(ctx: &Ctx<'_>) -> Result<(), String> {
+    let base64_encode = Function::new(ctx.clone(), {
+        move |_ctx: Ctx<'_>, value: String| {
+            Ok::<String, rquickjs::Error>(
+                base64::engine::general_purpose::STANDARD.encode(value.as_bytes()),
+            )
+        }
+    })
+    .map_err(|e| format!("注册 Base64 encode 失败: {e}"))?;
+    ctx.globals()
+        .set("__legado_base64_encode", base64_encode)
+        .map_err(|e| format!("注入 Base64 encode 失败: {e}"))?;
+
+    let hex_decode = Function::new(ctx.clone(), {
+        move |_ctx: Ctx<'_>, value: String| {
+            Ok::<String, rquickjs::Error>(decode_hex_or_original(&value))
+        }
+    })
+    .map_err(|e| format!("注册 hex decode 失败: {e}"))?;
+    ctx.globals()
+        .set("__legado_hex_decode", hex_decode)
+        .map_err(|e| format!("注入 hex decode 失败: {e}"))?;
+
+    let jsonpath_read = Function::new(ctx.clone(), {
+        move |_ctx: Ctx<'_>, json: String, path: String| {
+            let result = serde_json::from_str::<serde_json::Value>(&json)
+                .ok()
+                .and_then(|value| super::json_util::resolve_path(&value, &path).ok())
+                .unwrap_or(serde_json::Value::Null);
+            Ok::<String, rquickjs::Error>(
+                serde_json::to_string(&result).unwrap_or_else(|_| "null".to_string()),
+            )
+        }
+    })
+    .map_err(|e| format!("注册 JSONPath read 失败: {e}"))?;
+    ctx.globals()
+        .set("__legado_jsonpath_read", jsonpath_read)
+        .map_err(|e| format!("注入 JSONPath read 失败: {e}"))?;
+
     let encrypt = Function::new(ctx.clone(), {
         move |ctx: Ctx<'_>, transformation: String, key: String, iv: String, data: String| {
             match super::js_crypto::encrypt_base64(&transformation, &key, &iv, &data) {
@@ -176,6 +215,27 @@ fn register_host_apis(ctx: &Ctx<'_>) -> Result<(), String> {
     Ok(())
 }
 
+fn decode_hex_or_original(value: &str) -> String {
+    let compact: String = value.chars().filter(|ch| !ch.is_whitespace()).collect();
+    if compact.is_empty()
+        || compact.len() % 2 != 0
+        || !compact.chars().all(|ch| ch.is_ascii_hexdigit())
+    {
+        return value.to_string();
+    }
+    let bytes = compact
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let text = std::str::from_utf8(pair).ok()?;
+            u8::from_str_radix(text, 16).ok()
+        })
+        .collect::<Option<Vec<_>>>();
+    bytes
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+        .unwrap_or_else(|| value.to_string())
+}
+
 fn init_context(ctx: &Ctx<'_>, js_lib: &str, base_url: &str) -> Result<(), String> {
     AJAX_REFERER.with(|r| {
         *r.borrow_mut() = base_url.to_string();
@@ -240,6 +300,7 @@ pub fn run_eval_script(script: &str, js_lib: &str, base_url: &str) -> Result<Str
     let ctx = Context::full(&rt).map_err(|e| format!("JS Context 失败: {e}"))?;
     ctx.with(|ctx| {
         init_context(&ctx, js_lib, base_url)?;
+        let script = normalize_rhino_with(script);
         let v: Value = ctx
             .eval(script.as_bytes())
             .catch(&ctx)
@@ -346,6 +407,7 @@ fn run_with_result_opts_internal(
     let ctx = Context::full(&rt).map_err(|e| format!("JS Context 失败: {e}"))?;
     ctx.with(|ctx| {
         init_context(&ctx, js_lib, base_url)?;
+        let script = normalize_rhino_with(script);
         let escaped = serde_json::to_string(result).unwrap_or_else(|_| "\"\"".to_string());
         let book_url = book_url.unwrap_or(base_url);
         let book_inject = format!(
@@ -365,6 +427,13 @@ fn run_with_result_opts_internal(
             value_to_string(&ctx, v)
         }
     })
+}
+
+fn normalize_rhino_with(script: &str) -> std::borrow::Cow<'_, str> {
+    static WITH_BLOCK: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    WITH_BLOCK
+        .get_or_init(|| regex::Regex::new(r"(?i)\bwith\s*\([^)]*\)\s*\{").unwrap())
+        .replace_all(script, "{")
 }
 
 /// 纯 property 规则名（如 `chaptername` / `chapterurl`），无 CSS/`@`
@@ -1366,6 +1435,34 @@ crypto.encryptBase64(key);
         )
         .unwrap();
         assert_eq!(out, "ok");
+    }
+
+    #[test]
+    fn java_base64_and_hex_helpers_match_dict_rule_usage() {
+        let encoded = run_eval_script("java.base64Encode('测试')", "", "").unwrap();
+        assert_eq!(encoded, "5rWL6K+V");
+        let decoded = run_eval_script("java.hexDecodeToString('e6b58be8af95')", "", "").unwrap();
+        assert_eq!(decoded, "测试");
+        let unchanged = run_eval_script("java.hexDecodeToString('测试')", "", "").unwrap();
+        assert_eq!(unchanged, "测试");
+    }
+
+    #[test]
+    fn java_importer_exposes_jayway_jsonpath() {
+        let script = r#"
+var aly = new JavaImporter(Packages.com.jayway.jsonpath);
+var value = null;
+with (aly) {
+  var rr = JsonPath.using(
+    Configuration.builder().options(Option.SUPPRESS_EXCEPTIONS).build()
+  ).parse(result);
+  value = rr.read('$.data.pinyin');
+}
+value;
+"#;
+        let out =
+            run_with_result_as_string(script, r#"{"data":{"pinyin":"ce shi"}}"#, "", "").unwrap();
+        assert_eq!(out, "ce shi");
     }
 
     #[test]

@@ -7,9 +7,53 @@ var Packages = {
         }
       }
     }
+  },
+  com: {
+    jayway: {
+      jsonpath: {}
+    }
   }
 };
 var org = Packages.org;
+
+function _JsonPathDocument(value) {
+  this._value = value;
+}
+_JsonPathDocument.prototype.read = function(path) {
+  if (typeof __legado_jsonpath_read !== 'function') return null;
+  var raw = __legado_jsonpath_read(JSON.stringify(this._value), String(path || ''));
+  try { return JSON.parse(raw); } catch (_) { return null; }
+};
+
+var _JsonPathPackage = Packages.com.jayway.jsonpath;
+_JsonPathPackage.Option = { SUPPRESS_EXCEPTIONS: 'SUPPRESS_EXCEPTIONS' };
+_JsonPathPackage.Configuration = {
+  builder: function() {
+    return {
+      options: function() { return this; },
+      build: function() { return {}; }
+    };
+  }
+};
+_JsonPathPackage.JsonPath = {
+  using: function() {
+    return {
+      parse: function(value) {
+        var parsed = typeof value === 'string' ? JSON.parse(value) : value;
+        return new _JsonPathDocument(parsed);
+      }
+    };
+  }
+};
+
+function JavaImporter(packageObject) {
+  if (!(this instanceof JavaImporter)) return new JavaImporter(packageObject);
+  packageObject = packageObject || {};
+  for (var key in packageObject) {
+    this[key] = packageObject[key];
+    globalThis[key] = packageObject[key];
+  }
+}
 
 function _JsoupDocument(html) {
   this._root = _parseHtml(html);

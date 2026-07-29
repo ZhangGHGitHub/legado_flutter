@@ -154,6 +154,14 @@ var cookie = {
 };
 
 var java = {
+  base64Encode: function(value) {
+    return typeof __legado_base64_encode === 'function'
+      ? __legado_base64_encode(String(value == null ? '' : value)) : '';
+  },
+  hexDecodeToString: function(value) {
+    return typeof __legado_hex_decode === 'function'
+      ? __legado_hex_decode(String(value == null ? '' : value)) : String(value || '');
+  },
   createSymmetricCrypto: function(transformation, key, iv) {
     return new _SymmetricCrypto(transformation, key, iv);
   },

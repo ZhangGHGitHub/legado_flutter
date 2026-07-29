@@ -2209,3 +2209,29 @@ fixture 测试通过。真实扫描仍为既有 `146` 条：Feature SharedPrefer
 边界结论：字典网络与基础 AnalyzeUrl/showRule 已进入 Rust 端口，Dart Dio 和占位结果已移除；内置
 百度汉语等规则使用的 `JavaImporter/JsonPath` 高级 Rhino API 尚未完成兼容，必须继续以 fixture
 推进，不能据本批结果宣称所有内置字典规则已通过。R2 仍未退出。
+
+## 107. 2026-07-29：R2 字典 Rhino 与 JsonPath 高级兼容
+
+- Rust JS host 新增 `java.base64Encode`、`java.hexDecodeToString` 和内部 JSONPath 读取桥，复用既有
+  `json_util::resolve_path`，没有另建一套路径解析语义。
+- JS 标准库补齐 Rhino `JavaImporter`、Jayway `JsonPath`、`Configuration.builder()` 和
+  `Option.SUPPRESS_EXCEPTIONS`；导入成员同时暴露给全局作用域，以适配原版 `with(aly)` 脚本。
+- 字典执行入口只剥离 QuickJS 不支持的 `with(...)` 包装，保留其中脚本主体；新增管线 fixture 覆盖
+  `data:` Base64 URL、十六进制解码、JavaImporter 和 JsonPath 的连续执行。
+
+验证结果：
+
+- `cargo test -p legado_engine`：核心单测 `135/135`，其余离线与集成测试通过；既有网络/人工场景
+  按原条件 ignored。
+- `cargo build -p legado_engine --release`：通过；真实 release DLL 经 FRB 加载，字典 port、偏好和
+  查词面板联合回归 `12/12`。
+- `scripts/run_js_compat.ps1`：Rust JS `18/18`、Flutter JS `4/4` 通过；可选在线 7565 因既有
+  HTTP 400 条件跳过。
+- `flutter analyze --no-pub` 与架构脚本 fixture 通过；真实架构审计按设计以非零退出并保持 `145`
+  项存量：SharedPreferences `14`、Feature 业务 service `131`，没有新增或白名单化。
+- `git diff --check` 通过，仅有 LF/CRLF 提示；未修改 `legado-main/`、正文、目录、分页、章节身份、
+  阅读位置或断行规则。
+
+边界结论：百度汉语等规则依赖的 JavaImporter/JsonPath 主链路已由离线 fixture 覆盖，但不能据此宣称
+全部内置字典规则通过。Jsoup DOM 修改 API（包括 `remove`、`before`、`after`、`replaceWith`、
+Element 构造/追加、属性和文本 setter、Elements 可迭代）仍待后续 fixture 驱动实现，R2 尚未退出。
