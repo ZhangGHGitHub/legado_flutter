@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app.dart';
 import '../application/app_bootstrap.dart';
 import '../application/crash/crash_log_service.dart';
+import '../application/diagnostics/app_diagnostics_monitor.dart';
 import '../application/lifecycle/app_lifecycle_coordinator.dart';
 import '../application/preferences/shared_preferences_runtime.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
@@ -56,6 +59,7 @@ import '../infrastructure/file_system/backup_local_file_adapter.dart';
 import '../infrastructure/network/frb_public_text_fetch_port.dart';
 import '../infrastructure/network/frb_application_binary_http_request_port.dart';
 import '../infrastructure/network/frb_application_http_request_port.dart';
+import '../infrastructure/platform/flutter_frame_diagnostics_observer.dart';
 import '../infrastructure/platform/flutter_lifecycle_observer.dart';
 import '../infrastructure/platform/method_channel_source_login_web_cookie_port.dart';
 import '../infrastructure/preferences/shared_preferences_book_group_prefs.dart';
@@ -67,6 +71,7 @@ import '../providers/replace_provider.dart';
 import '../providers/rss_provider.dart';
 import '../providers/source_provider.dart';
 import '../features/common/navigator_source_verification_browser_port.dart';
+import '../services/app_log.dart';
 import '../services/backup_service.dart';
 import '../services/book_group_store.dart';
 import '../services/book_progress_sync.dart';
@@ -77,6 +82,7 @@ import '../services/bookplate_service.dart';
 import '../services/cache_service.dart';
 import '../services/code_edit_prefs.dart';
 import '../services/database_status_service.dart';
+import '../services/diagnostics_prefs.dart';
 import '../services/engine_status_service.dart';
 import '../services/legacy_room_import_service_factory.dart';
 import '../services/local_book_service.dart';
@@ -108,6 +114,12 @@ abstract final class AppCompositionRoot {
     crashLog.updateStartupStage('基础设施组装');
     final navigatorKey = GlobalKey<NavigatorState>();
     final lifecycleCoordinator = AppLifecycleCoordinator();
+    final diagnosticsMonitor = AppDiagnosticsMonitor(
+      config: AppDiagnosticsConfig(
+        enabled: await DiagnosticsPrefs.isMonitoringEnabled(),
+      ),
+      sink: (event) => AppLog.put(event.toLogLine(), level: event.level),
+    );
     const contentCache = FileChapterContentCache();
     const networkEnginePort = FrbNetworkEnginePort();
     const sourceLoginCookiePort = FrbSourceLoginCookiePort();
@@ -200,6 +212,7 @@ abstract final class AppCompositionRoot {
         crashLog.updateStartupStage(
           '启动任务 ${report.id} ${report.status.name}$suffix',
         );
+        unawaited(diagnosticsMonitor.recordStartupTask(report));
       },
     ).initialize();
 
@@ -223,6 +236,7 @@ abstract final class AppCompositionRoot {
           ChangeNotifierProvider.value(value: lifecycleCoordinator),
           ChangeNotifierProvider.value(value: AppConfig.instance),
           ChangeNotifierProvider.value(value: bootstrap.bookProvider),
+          Provider<AppDiagnosticsMonitor>.value(value: diagnosticsMonitor),
           Provider<BookSourceService>.value(value: bookSourceService),
           Provider<PublicTextFetchPort>.value(value: publicTextPort),
           Provider<ApplicationHttpRequestPort>(
@@ -250,6 +264,12 @@ abstract final class AppCompositionRoot {
             lazy: false,
             create: (_) =>
                 FlutterLifecycleObserver(lifecycleCoordinator)..start(),
+            dispose: (_, observer) => observer.stop(),
+          ),
+          Provider<FlutterFrameDiagnosticsObserver>(
+            lazy: false,
+            create: (_) =>
+                FlutterFrameDiagnosticsObserver(diagnosticsMonitor)..start(),
             dispose: (_, observer) => observer.stop(),
           ),
           Provider<RemoteArchiveImportService>.value(

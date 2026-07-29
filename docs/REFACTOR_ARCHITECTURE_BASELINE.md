@@ -2585,3 +2585,22 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，其余集成、`legado_webdav` 和文档测试无失败。
 
 边界结论：P1-1 已满足当前计划的 application 生命周期协调、平台 observer 收口、页面订阅状态和前台恢复刷新要求。下一固定任务为 P1-2 卡顿与调度监控；更完整的通知/后台服务/TLS/WebView 启动能力继续按 P1-4 独立盘点，不在本批扩大范围。
+
+## 124. 2026-07-30：R6/P1-2 卡顿与调度监控
+
+- 对照只读原版 `AppFreezeMonitor.kt` 与 `DispatchersMonitor.kt`：原版仅在 `recordLog` 开启时运行，冻结采样每 3 秒检查额外延迟，Dispatcher 5 秒未响应写运行日志。本批未修改 `legado-main/`。
+- 新增 application 级 `AppDiagnosticsMonitor`，定义慢帧、应用冻结、调度超时、启动任务超时和启动任务失败诊断事件；默认 `AppDiagnosticsConfig.enabled=false`，关闭时不发事件、不写日志。
+- 新增 infrastructure 级 `FlutterFrameDiagnosticsObserver`，仅在诊断开关开启时注册 `SchedulerBinding.addTimingsCallback` 和主 isolate 冻结计时器；Provider dispose 时移除帧回调并取消计时器，避免默认启动成本。
+- 新增 `DiagnosticsPrefs`，通过 SharedPreferencesRuntime 读取/保存诊断监控开关；默认关闭，存储不可用时安全返回 false。
+- 组合根创建 diagnostics monitor，以 AppLog 作为 sink；启动任务失败/超时通过 monitor 写入诊断日志，CrashLogService 仍只记录未处理异常、Flutter/平台错误和启动阶段，不把普通慢帧、冻结或后台任务失败误记为崩溃。
+- 本批未修改正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- 诊断 monitor、诊断偏好和启动任务回归定向 `8/8`。
+- `flutter analyze --no-pub`：`No issues found`。
+- 架构扫描保持 `144` 条既有 backlog：Feature 直接 SharedPreferences `12`、Feature 业务 service `132`，无新增类别。
+- `flutter test --no-pub --concurrency=1 --reporter compact`：`672` 通过、`3` 项既有条件跳过。
+- `cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，其余集成、`legado_webdav` 和文档测试无失败。
+
+边界结论：P1-2 已满足当前计划的可开关帧耗时、主 isolate 冻结采样、后台任务超时诊断、AppLog 接入和非崩溃边界要求。下一固定任务为 P1-3 全局日志与诊断信息；通知/后台服务/TLS/WebView 启动能力继续留给 P1-4 逐项盘点。

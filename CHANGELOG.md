@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R6/P1-2：完成卡顿与调度监控边界。新增默认关闭的 `AppDiagnosticsMonitor`，覆盖慢帧、主 isolate 冻结采样、调度超时和启动后台任务超时/失败诊断；新增 Flutter 帧/冻结 observer 与 `DiagnosticsPrefs` 开关，组合根仅在开关开启时注册高成本监控，并将诊断事件写入 AppLog，不写入 CrashLogService 崩溃记录。定向 `8/8`、Flutter 串行全量 `672` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断、架构扫描保持 `144` 条既有 backlog；未修改正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
 - R6/P1-1：完成全局生命周期边界。新增 application 级 `AppLifecycleCoordinator` 与 infrastructure 级 `FlutterLifecycleObserver`，由组合根统一注册 Flutter 生命周期并在根树销毁时注销；页面不再直接挂 `WidgetsBindingObserver`，`MyPage` 仅订阅 coordinator 的恢复计数并在前台恢复时刷新 Web 服务状态。定向 `5/5`、Flutter 串行全量 `668` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断、架构扫描保持 `144` 条既有 backlog；未修改正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 
 - R6/P0-3：完成启动任务隔离。新增 `StartupTaskRunner`，将网络/Web API 恢复、WebDAV 初始化、书架加载后的缓存维护/章节元数据、阅读进度同步、RSS 源加载、替换规则加载、内置书源补齐、书源加载和规则订阅自动更新拆为可观测后台任务；每项独立超时、错误捕获、状态报告、不重复执行和失败重试，条件不满足时显式跳过。AppConfig 与书架布局偏好仍同步读取以保留默认首页/底栏语义。定向 `22/22`、Flutter 串行全量 `667` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断、架构扫描保持 `144` 条既有 backlog；未修改正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
