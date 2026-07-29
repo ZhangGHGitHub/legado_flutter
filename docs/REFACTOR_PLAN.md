@@ -160,7 +160,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 退出条件：核心用户流程在目标平台构建并通过，UI 与原版对照测试通过，平台差异有明确适配记录。
 
-当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 崩溃防护与启动恢复、P0-2 存储初始化安全均已完成，Flutter 全量 `663` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过。R6 下一固定任务是 P0-3 启动任务隔离；其后仍有应用用例依赖、受控 UI/目标平台和发布门禁。真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
+当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 崩溃防护与启动恢复、P0-2 存储初始化安全、P0-3 启动任务隔离均已完成，Flutter 全量 `667` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过。R6 下一固定任务是 P1-1 全局生命周期边界；其后仍有应用用例依赖、受控 UI/目标平台和发布门禁。真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
 
 #### 横切基础设施：全局能力与启动可靠性（跨 R1-R6，新增）
 
@@ -170,7 +170,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 - P0-1 崩溃防护与启动恢复（已完成）：新增 CrashLogService 或等价 application/infrastructure 边界；在 main 最早阶段安装同步错误、Flutter 框架错误、平台 dispatcher 错误和未处理异步错误捕获；持久化最近一次崩溃摘要、堆栈、平台/版本/引擎信息和启动阶段；下次启动安全读取并显示一次崩溃提示，支持进入日志、清除标记和失败降级。崩溃写入路径自身不得依赖尚未初始化的数据库、WebDAV 或完整 UI。
 - P0-2 存储初始化安全（已完成）：新增 SharedPreferences 进程级运行时状态和并发初始化合并；启动关键偏好/崩溃存储 adapter 在未初始化或初始化失败时返回默认值、空值或明确失败结果。Rust DB 记录 `uninitialized/initializing/ready/failed`，初始化失败不阻塞首屏，数据库业务仍以可识别的不可用错误拒绝；文件缓存探测失败返回安全空值。MainShell 隐私偏好、AppConfig、书架布局、主题、WebDAV 和启动 adapter 均不再因存储初始化竞态阻塞首屏。此项不引入 Hive。
-- P0-3 启动任务隔离：将默认数据升级、过期缓存/搜索清理、书源排序修复、阅读进度同步、WebDAV 初始化和其它非首屏任务纳入可观测的启动任务清单；每项独立超时、捕获错误、记录结果，不阻塞首屏，不重复执行，支持重启后重试。保留原版键名、版本门禁、排序和清理语义。
+- P0-3 启动任务隔离（已完成）：新增 `StartupTaskRunner`，将网络/Web API 恢复、WebDAV 初始化、书架加载后的缓存维护/章节元数据、阅读进度同步、RSS 源加载、替换规则加载、内置书源补齐、书源加载和规则订阅自动更新纳入可观测任务；每项独立超时、捕获错误、记录结果，不阻塞首屏。成功任务同进程不重复，失败任务可重试，条件不满足任务显式跳过。AppConfig 与书架布局偏好仍作为首屏布局输入同步读取，保留默认首页和底栏显隐语义。
 - P1-1 全局生命周期边界：建立 application 级生命周期协调器，统一承接前后台、暂停/恢复、应用退出和资源释放；页面只订阅状态，不各自注册同一类全局回调。对照原版 LifecycleHelp，明确 Flutter 多窗口、Android Activity、桌面窗口和 Web 平台的差异。
 - P1-2 卡顿与调度监控：增加可开关的帧耗时、主 isolate/后台任务超时和应用冻结观测，接入 AppLog/CrashLogService，默认关闭高成本监控；对照原版 AppFreezeMonitor、DispatchersMonitor，不把普通业务异常误记为崩溃。
 - P1-3 全局日志与诊断信息：统一 AppLog 的错误、异常、启动阶段、设备/平台、应用版本和 Rust 引擎版本格式；限制敏感信息、条数和文件大小；让崩溃日志、运行日志和手动导出日志复用同一诊断模型，但保留清理和脱敏边界。
@@ -179,6 +179,8 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 P0-1 当前证据：纯 Dart 报告/存储 port、`FlutterError`/`PlatformDispatcher`/Zone 捕获、启动阶段记录、真实应用/平台/引擎版本和原版顺序的一次性提示均已接入；错误与堆栈有 UTF-16 安全长度上限，存储/元数据失败不阻塞启动。崩溃链定向 `13/13`、启动相关回归 `15/15`、Flutter/Rust 全量与双平台构建通过。
 
 P0-2 当前证据：SharedPreferences 运行时状态/并发竞态/失败重试和三个启动 adapter 定向 `4/4`，AppConfig、主题、书架、网络、文件缓存、MainShell 及备份回归 `43/43`；`flutter analyze --no-pub` 无诊断；Flutter 串行全量 `663` 通过、`3` 项既有条件跳过；Rust workspace 核心 `184/184`，其余集成、WebDAV 和文档测试无失败。全量测试中发现的 mock 存储污染已通过逐测试 reset 修复，未修改任何业务断言。下一项严格进入 P0-3。
+
+P0-3 当前证据：启动任务 runner、启动 WebDAV、阅读进度同步、书架缓存维护、MainShell 和 Welcome 定向 `22/22`；`flutter analyze --no-pub` 无诊断；架构扫描保持 `144` 条既有 backlog，无新增类别；Flutter 串行全量 `667` 通过、`3` 项既有条件跳过；Rust workspace 核心 `184/184`，其余集成、WebDAV 和文档测试无失败。下一项严格进入 P1-1。
 
 横切任务验收：每个任务必须有纯 Dart 单元测试；涉及启动顺序、平台错误或通知/后台能力时补充 Android 和 Windows smoke；至少验证“正常冷启动、初始化失败冷启动、同步任务失败、模拟未处理异常、重启后读取崩溃记录、清理后不重复提示”六条路径。实现应位于 lib/application、lib/infrastructure 和 lib/services，禁止页面直接安装全局 handler。
 
@@ -192,7 +194,7 @@ P0-2 当前证据：SharedPreferences 运行时状态/并发竞态/失败重试�
 
 ### 0.5 当前状态
 
-当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 崩溃防护与启动恢复、P0-2 存储初始化安全现已通过；下一步按固定顺序推进 P0-3 启动任务隔离。架构扫描当前为 `144` 条 Feature 偏好/业务 service backlog（本批从 `146` 降至 `144`，无新增），不能当作例外或最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
+当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 崩溃防护与启动恢复、P0-2 存储初始化安全、P0-3 启动任务隔离现已通过；下一步按固定顺序推进 P1-1 全局生命周期边界。架构扫描当前为 `144` 条 Feature 偏好/业务 service backlog，不能当作例外或最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
 
 ### 0.6 版本控制与变更追溯状态（2026-07-26）
 

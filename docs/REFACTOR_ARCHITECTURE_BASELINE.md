@@ -2550,3 +2550,21 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 架构扫描为 `144` 条 backlog（本批从 `146` 降至 `144`，未新增或白名单化）；`legado-main/` 保持只读。
 
 边界结论：P0-2 已满足当前计划的存储初始化失败降级、并发初始化安全、数据库失败可识别和文件缓存安全探测要求。下一固定任务为 P0-3 启动任务隔离；偏好业务全面 port 化和统一诊断模型仍分别属于后续 backlog/P1-3，不在本批扩大范围。
+
+## 122. 2026-07-30：R6/P0-3 启动任务隔离
+
+- 新增 `StartupTaskRunner`，统一记录启动后台任务的 `running/succeeded/failed/skipped`、attempt、起止时间、错误和堆栈；同一任务运行中合并 Future，成功后同进程不重复执行，失败任务允许后续重试，默认 30 秒超时。
+- `AppBootstrap` 不再把网络恢复、Web API 恢复、WebDAV 初始化、书架加载、缓存维护和阅读进度同步串联到首屏组装链路。首屏依赖组装和主题加载完成后即返回应用状态，后台任务通过 runner 独立执行和上报。
+- `BookProvider.loadBooks` 新增 `runMaintenance` 参数；启动路径只加载书架数据，文件缓存孤儿目录清理和章节元数据刷新移入独立 `bookshelf.maintenance` 任务，避免维护操作阻塞首屏。
+- `MainShell` 保留 AppConfig 与书架布局偏好的同步读取，以维持默认首页和底栏显隐；RSS 源、替换规则、内置书源补齐、书源加载和规则订阅自动更新改为 runner 管理的后台任务。规则订阅仍保留原版约 1 秒延迟语义。
+- `legado-main/` 未修改；本批未改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- 启动任务 runner、启动 WebDAV、阅读进度同步、书架缓存维护、MainShell 和 Welcome 定向 `22/22`。
+- `flutter analyze --no-pub`：`No issues found`。
+- 架构扫描保持 `144` 条既有 backlog：Feature 直接 SharedPreferences `12`、Feature 业务 service `132`，无新增类别。
+- `flutter test --no-pub --concurrency=1`：`667` 通过、`3` 项既有条件跳过。
+- `cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，其余集成、`legado_webdav` 和文档测试无失败。
+
+边界结论：P0-3 已满足启动任务独立超时、失败隔离、结果可观测、不阻塞首屏、不重复执行和失败可重试要求。下一固定任务为 P1-1 全局生命周期边界；默认数据版本门禁与更细粒度业务 port 化仍按后续独立任务推进，不在本批扩大范围。

@@ -236,18 +236,16 @@ class BookProvider extends ChangeNotifier {
   }
 
   /// 加载书架
-  Future<void> loadBooks() async {
+  Future<void> loadBooks({bool runMaintenance = true}) async {
     _isLoading = true;
     _loadError = null;
     notifyListeners();
     try {
       _books = await _repository.getAll();
-      // 缓存清理是启动维护任务，不应阻塞书架首屏初始化。
-      unawaited(
-        _contentCache.clearInvalid(_books.map((book) => book.id).toSet()),
-      );
-      // 章节元数据只影响未读角标，不能阻塞书架首帧。
-      unawaited(_refreshShelfChapterMetaInBackground());
+      if (runMaintenance) {
+        // 缓存清理和章节元数据只影响维护状态，不能阻塞书架首帧。
+        unawaited(runStartupMaintenance());
+      }
       _loadError = null;
     } catch (e) {
       _loadError = '加载书架失败: $e';
@@ -256,6 +254,12 @@ class BookProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// 执行书架加载后的启动维护；由启动任务 runner 独立观测和限时。
+  Future<void> runStartupMaintenance() async {
+    await _contentCache.clearInvalid(_books.map((book) => book.id).toSet());
+    await _refreshShelfChapterMetaInBackground();
   }
 
   /// 从本地导入 TXT/EPUB

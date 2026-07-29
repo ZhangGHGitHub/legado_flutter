@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R6/P0-3：完成启动任务隔离。新增 `StartupTaskRunner`，将网络/Web API 恢复、WebDAV 初始化、书架加载后的缓存维护/章节元数据、阅读进度同步、RSS 源加载、替换规则加载、内置书源补齐、书源加载和规则订阅自动更新拆为可观测后台任务；每项独立超时、错误捕获、状态报告、不重复执行和失败重试，条件不满足时显式跳过。AppConfig 与书架布局偏好仍同步读取以保留默认首页/底栏语义。定向 `22/22`、Flutter 串行全量 `667` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断、架构扫描保持 `144` 条既有 backlog；未修改正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
 - R6/P0-2：完成存储初始化安全。新增 SharedPreferences 进程级状态、并发初始化合并、失败重试和安全降级；启动关键偏好/崩溃 adapter、AppConfig、主题、书架布局、WebDAV、隐私流程和 AppLog 在存储不可用时返回默认值或空写入，不阻塞首屏。Rust DB 增加未初始化/初始化中/就绪/失败状态和失败保留，文件缓存探测失败返回安全值；修复全量串行测试中的 mock 存储污染隔离。定向 `43/43`、Flutter 串行全量 `663` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断，未修改正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 
 - R6/P0-1：完成全局崩溃防护与启动恢复。新增纯 Dart 崩溃报告/存储端口、SharedPreferences 安全适配器及 `CrashLogService`，在 `main` 同一 Zone 内安装 Flutter 框架、平台 dispatcher 和未处理 Zone 错误捕获；记录受限长度且 UTF-16 安全的错误、堆栈、启动阶段及真实应用/平台/Rust 引擎版本。下一次启动按原版隐私流程之后清除待提示标记并显示一次崩溃提示，可查看完整日志；存储、损坏 JSON 和元数据失败均降级且不依赖数据库/WebDAV。崩溃链定向 `13/13`、启动相关回归 `15/15`、Flutter 串行全量 `659` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze、Android/Windows debug 构建及两平台 5 秒冷启动 smoke 通过。并修复 WebDAV 代理测试短暂污染全局 Rust HTTP 客户端的并行隔离问题；架构 backlog 保持 `146`。

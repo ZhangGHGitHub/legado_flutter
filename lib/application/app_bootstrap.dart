@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'database/legacy_room_import_service.dart';
+import 'startup/startup_task_runner.dart';
 import '../domain/ports/chapter_content_cache_port.dart';
 import '../domain/ports/content_processing_port.dart';
 import '../domain/ports/webdav_repository.dart';
@@ -62,6 +65,7 @@ class AppBootstrapResult {
     required this.bookmarkSyncService,
     required this.cacheService,
     required this.webdavRepository,
+    required this.startupTasks,
   });
 
   final BookProvider bookProvider;
@@ -73,6 +77,7 @@ class AppBootstrapResult {
   final BookmarkSyncService bookmarkSyncService;
   final CacheService cacheService;
   final WebDavRepository webdavRepository;
+  final StartupTaskRunner startupTasks;
 }
 
 /// 启动用例：集中编排 Rust、数据库、网络配置和首屏数据加载。
@@ -96,6 +101,7 @@ class AppBootstrap {
     required CacheService cacheService,
     required WebDavRepository webdavRepository,
     void Function(String stage)? reportStartupStage,
+    void Function(StartupTaskReport report)? reportStartupTask,
   }) : _initializePlatform = initializePlatform,
        _isEngineAvailable = isEngineAvailable,
        _isBookProgressSyncEnabled = isBookProgressSyncEnabled,
@@ -113,7 +119,8 @@ class AppBootstrap {
        _bookmarkSyncService = bookmarkSyncService,
        _cacheService = cacheService,
        _webdavRepository = webdavRepository,
-       _reportStartupStage = reportStartupStage;
+       _reportStartupStage = reportStartupStage,
+       _reportStartupTask = reportStartupTask;
 
   final Future<void> Function() _initializePlatform;
   final bool Function() _isEngineAvailable;
@@ -133,25 +140,11 @@ class AppBootstrap {
   final CacheService _cacheService;
   final WebDavRepository _webdavRepository;
   final void Function(String stage)? _reportStartupStage;
+  final void Function(StartupTaskReport report)? _reportStartupTask;
 
   Future<AppBootstrapResult> initialize() async {
     _reportStartupStage?.call('平台、配置与引擎初始化');
     await _initializePlatform();
-    if (_isEngineAvailable()) {
-      _reportStartupStage?.call('网络与本地服务恢复');
-      await _restoreNetwork();
-      await _restoreWebApi();
-      _reportStartupStage?.call('WebDAV 配置恢复');
-      final webdav = await _loadWebDavConfig();
-      await initializeStartupWebDav(
-        config: webdav,
-        initialize: () => WebDavSetupService.initialize(
-          webdav,
-          repository: _webdavRepository,
-        ),
-      );
-    }
-
     _reportStartupStage?.call('阅读会话依赖组装');
     ReadBook.instance.configureDependencies(
       sourceService: _bookSourceService,
@@ -165,19 +158,17 @@ class AppBootstrap {
       localService: _localBookService,
       contentCache: _contentCache,
     );
-    _reportStartupStage?.call('书架与阅读进度加载');
-    await loadStartupBookProgress(
-      loadBooks: bookProvider.loadBooks,
-      enabled: _isEngineAvailable() && _isBookProgressSyncEnabled(),
-      downloadAllBookProgress: () =>
-          bookProvider.downloadAllBookProgress(sync: _bookProgressSync),
-    );
-
     _reportStartupStage?.call('主题配置加载');
     final themeController = ThemeModeController();
     await themeController.load();
     _reportStartupStage?.call('应用状态组装完成');
-    return AppBootstrapResult(
+    final startupTasks = StartupTaskRunner(
+      onReport: (report) {
+        _reportStartupTask?.call(report);
+        _reportStartupStage?.call('启动任务:${report.id}:${report.status.name}');
+      },
+    );
+    final result = AppBootstrapResult(
       bookProvider: bookProvider,
       bookSourceService: _bookSourceService,
       themeController: themeController,
@@ -187,6 +178,60 @@ class AppBootstrap {
       bookmarkSyncService: _bookmarkSyncService,
       cacheService: _cacheService,
       webdavRepository: _webdavRepository,
+      startupTasks: startupTasks,
     );
+    _startStartupTasks(startupTasks, bookProvider);
+    return result;
+  }
+
+  void _startStartupTasks(StartupTaskRunner runner, BookProvider bookProvider) {
+    final engineAvailable = _isEngineAvailable();
+    if (engineAvailable) {
+      unawaited(runner.run('network.restore', _restoreNetwork));
+      unawaited(runner.run('web_api.restore', _restoreWebApi));
+      unawaited(
+        runner.run('webdav.initialize', () async {
+          final webdav = await _loadWebDavConfig();
+          if (!webdav.isReady) throw const StartupTaskSkipped();
+          await WebDavSetupService.initialize(
+            webdav,
+            repository: _webdavRepository,
+          );
+        }),
+      );
+    } else {
+      unawaited(runner.skip('network.restore'));
+      unawaited(runner.skip('web_api.restore'));
+      unawaited(runner.skip('webdav.initialize'));
+    }
+
+    final books = runner.run('bookshelf.load', () async {
+      await bookProvider.loadBooks(runMaintenance: false);
+      final error = bookProvider.loadError;
+      if (error != null) throw StateError(error);
+    });
+    unawaited(
+      runner.run('bookshelf.maintenance', () async {
+        final report = await books;
+        if (report.status != StartupTaskStatus.succeeded) {
+          throw StateError('书架加载任务未完成');
+        }
+        await bookProvider.runStartupMaintenance();
+      }),
+    );
+
+    if (engineAvailable && _isBookProgressSyncEnabled()) {
+      unawaited(
+        runner.run('book_progress.sync', () async {
+          final report = await books;
+          if (report.status != StartupTaskStatus.succeeded) {
+            throw StateError('书架加载任务未完成');
+          }
+          await bookProvider.downloadAllBookProgress(sync: _bookProgressSync);
+        }),
+      );
+    } else {
+      unawaited(runner.skip('book_progress.sync'));
+    }
   }
 }

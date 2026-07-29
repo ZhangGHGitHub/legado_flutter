@@ -6,6 +6,7 @@ import '../application/app_bootstrap.dart';
 import '../application/crash/crash_log_service.dart';
 import '../application/preferences/shared_preferences_runtime.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
+import '../application/startup/startup_task_runner.dart';
 import '../application/web_api/repository_web_api_data_port.dart';
 import '../bridge/legado_db_bridge.dart';
 import '../bridge/legado_engine_bridge.dart';
@@ -191,6 +192,12 @@ abstract final class AppCompositionRoot {
       cacheService: cacheService,
       webdavRepository: webdavRepository,
       reportStartupStage: crashLog.updateStartupStage,
+      reportStartupTask: (report) {
+        final suffix = report.error == null ? '' : ': ${report.error}';
+        crashLog.updateStartupStage(
+          '启动任务 ${report.id} ${report.status.name}$suffix',
+        );
+      },
     ).initialize();
 
     if (LegadoEngineBridge.isAvailable) {
@@ -234,6 +241,7 @@ abstract final class AppCompositionRoot {
           Provider<BookProgressSync>.value(value: bookProgressSync),
           Provider<BookmarkSyncService>.value(value: bookmarkSyncService),
           Provider<CacheService>.value(value: cacheService),
+          Provider<StartupTaskRunner>.value(value: bootstrap.startupTasks),
           Provider<RemoteArchiveImportService>.value(
             value: remoteArchiveImportService,
           ),
@@ -257,12 +265,12 @@ abstract final class AppCompositionRoot {
             create: (_) => ReplaceProvider(
               repository: ReplaceRuleDao(),
               contentProcessor: contentProcessor,
-            )..loadRules(),
+            ),
           ),
           ChangeNotifierProvider(
             create: (context) => RssProvider(
               sourceImportPort: context.read<RssSourceImportPort>(),
-            )..loadSources(),
+            ),
           ),
         ],
         child: LegadoApp(

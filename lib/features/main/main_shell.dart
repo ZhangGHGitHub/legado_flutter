@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../domain/crash/crash_report.dart';
+import '../../application/startup/startup_task_runner.dart';
 import '../../config/app_config.dart';
 import '../../domain/ports/public_text_fetch_port.dart';
 import '../../providers/book_provider.dart';
@@ -68,13 +71,53 @@ class _MainShellState extends State<MainShell> {
   }
 
   Future<void> _initProviders() async {
-    await AppConfig.instance.load();
-    if (!mounted) return;
     final sourceProvider = context.read<SourceProvider>();
     final rssProvider = context.read<RssProvider>();
+    final replaceProvider = context.read<ReplaceProvider>();
+    final runner = context.read<StartupTaskRunner>();
 
+    await AppConfig.instance.load();
+    if (!mounted) return;
     await BookshelfPrefs.load();
-    await rssProvider.loadSources();
+    if (!mounted) return;
+
+    final rssSources = runner.run('rss.sources.load', rssProvider.loadSources);
+    final replaceRules = runner.run(
+      'replace_rules.load',
+      replaceProvider.loadRules,
+    );
+    final builtInSources = runner.run(
+      'sources.built_in.ensure',
+      sourceProvider.ensureBuiltInSources,
+    );
+    final sources = runner.run('sources.load', () async {
+      final report = await builtInSources;
+      if (report.status != StartupTaskStatus.succeeded) {
+        throw StateError('内置书源任务未完成');
+      }
+      await sourceProvider.loadSources();
+      final error = sourceProvider.loadError;
+      if (error != null) throw StateError(error);
+    });
+    unawaited(
+      runner.run('rule_subscriptions.update', () async {
+        final sourceReport = await sources;
+        final rssReport = await rssSources;
+        if (sourceReport.status != StartupTaskStatus.succeeded ||
+            rssReport.status != StartupTaskStatus.succeeded) {
+          throw StateError('书源或 RSS 加载任务未完成');
+        }
+        await Future<void>.delayed(const Duration(seconds: 1));
+        await _ruleSubsUp();
+      }),
+    );
+    for (final task in [rssSources, replaceRules, sources]) {
+      unawaited(
+        task.then((_) {
+          if (mounted) setState(() {});
+        }),
+      );
+    }
 
     final defaultHome = AppConfig.instance.defaultHomePage;
     final homeIndex = switch (defaultHome) {
@@ -87,9 +130,6 @@ class _MainShellState extends State<MainShell> {
     final slots = _visiblePageSlots(AppConfig.instance);
     final validatedIndex = slots.contains(homeIndex) ? homeIndex : slots.first;
 
-    await sourceProvider.ensureBuiltInSources();
-    await sourceProvider.loadSources();
-
     if (mounted) {
       if (validatedIndex != 0) {
         setState(() => _pageIndex = validatedIndex);
@@ -98,8 +138,6 @@ class _MainShellState extends State<MainShell> {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _showStartupPrompts(),
       );
-      // 对齐 Jingshiro MainActivity：启动约 1s 后检查规则订阅自动更新
-      Future<void>.delayed(const Duration(seconds: 1), _ruleSubsUp);
     }
   }
 
