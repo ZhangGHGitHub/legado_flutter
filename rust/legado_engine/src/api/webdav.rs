@@ -26,17 +26,26 @@ fn map_items(items: Vec<WebDavItem>) -> Vec<WebDavEntry> {
         .collect()
 }
 
-fn build_webdav_proxy() -> Option<WebDavProxy> {
-    let cfg = network_config::get_network_config();
-    network_config::build_proxy_url(&cfg).map(|url| WebDavProxy {
+fn build_webdav_proxy(cfg: &network_config::NetworkConfig) -> Option<WebDavProxy> {
+    network_config::build_proxy_url(cfg).map(|url| WebDavProxy {
         url,
-        username: cfg.proxy_username,
-        password: cfg.proxy_password,
+        username: cfg.proxy_username.clone(),
+        password: cfg.proxy_password.clone(),
     })
 }
 
 fn new_webdav_client(url: &str, username: &str, password: &str) -> Result<WebDavClient, String> {
-    let proxy = build_webdav_proxy();
+    let cfg = network_config::get_network_config();
+    new_webdav_client_with_config(url, username, password, &cfg)
+}
+
+fn new_webdav_client_with_config(
+    url: &str,
+    username: &str,
+    password: &str,
+    cfg: &network_config::NetworkConfig,
+) -> Result<WebDavClient, String> {
+    let proxy = build_webdav_proxy(cfg);
     WebDavClient::new_with_proxy(url, username, password, proxy.as_ref()).map_err(|e| e.to_string())
 }
 
@@ -156,19 +165,16 @@ pub async fn webdav_move(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http::network_config::{self, NetworkConfig};
-    use serial_test::serial;
+    use crate::http::network_config::NetworkConfig;
 
     #[test]
-    #[serial]
     fn disabled_network_proxy_keeps_webdav_client_constructible_without_proxy() {
-        network_config::set_network_config(NetworkConfig::default()).unwrap();
-        assert!(build_webdav_proxy().is_none());
-        new_webdav_client("https://dav.example.com/", "", "").unwrap();
+        let cfg = NetworkConfig::default();
+        assert!(build_webdav_proxy(&cfg).is_none());
+        new_webdav_client_with_config("https://dav.example.com/", "", "", &cfg).unwrap();
     }
 
     #[test]
-    #[serial]
     fn network_proxy_is_mapped_to_webdav_with_credentials() {
         let cfg = NetworkConfig {
             proxy_enabled: true,
@@ -179,14 +185,10 @@ mod tests {
             proxy_password: "proxy-pass".into(),
             ..Default::default()
         };
-        network_config::set_network_config(cfg).unwrap();
-
-        let proxy = build_webdav_proxy().unwrap();
+        let proxy = build_webdav_proxy(&cfg).unwrap();
         assert_eq!(proxy.url, "socks5://127.0.0.1:1080");
         assert_eq!(proxy.username, "proxy-user");
         assert_eq!(proxy.password, "proxy-pass");
-        new_webdav_client("https://dav.example.com/", "", "").unwrap();
-
-        network_config::set_network_config(NetworkConfig::default()).unwrap();
+        new_webdav_client_with_config("https://dav.example.com/", "", "", &cfg).unwrap();
     }
 }

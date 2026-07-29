@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../domain/crash/crash_report.dart';
 import '../../config/app_config.dart';
 import '../../domain/ports/public_text_fetch_port.dart';
 import '../../providers/book_provider.dart';
@@ -19,6 +20,7 @@ import '../explore/explore_tab_page.dart';
 import '../../features/my/my_page.dart';
 import '../../features/rss/rss_tab_page.dart';
 import '../sources/rule_sub_page.dart';
+import 'crash_recovery_prompt.dart';
 
 const _privacyAcceptedKey = 'legado_privacy_accepted';
 
@@ -26,7 +28,14 @@ const _privacyAcceptedKey = 'legado_privacy_accepted';
 ///
 /// 页面槽位固定：0=书架 1=发现 2=订阅 3=我的；底栏按 [AppConfig] 动态显隐。
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  const MainShell({
+    super.key,
+    this.pendingCrashReport,
+    this.onCrashReportPresented,
+  });
+
+  final CrashReport? pendingCrashReport;
+  final Future<void> Function()? onCrashReportPresented;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -86,7 +95,9 @@ class _MainShellState extends State<MainShell> {
         setState(() => _pageIndex = validatedIndex);
       }
       setState(() => _initialized = true);
-      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowPrivacy());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _showStartupPrompts(),
+      );
       // 对齐 Jingshiro MainActivity：启动约 1s 后检查规则订阅自动更新
       Future<void>.delayed(const Duration(seconds: 1), _ruleSubsUp);
     }
@@ -111,6 +122,16 @@ class _MainShellState extends State<MainShell> {
     } catch (e) {
       debugPrint('ruleSubsUp failed: $e');
     }
+  }
+
+  Future<void> _showStartupPrompts() async {
+    await _maybeShowPrivacy();
+    if (!mounted) return;
+    final report = widget.pendingCrashReport;
+    if (report == null) return;
+    await widget.onCrashReportPresented?.call();
+    if (!mounted) return;
+    await showCrashRecoveryPrompt(context, report);
   }
 
   Future<void> _maybeShowPrivacy() async {

@@ -28,6 +28,7 @@ dependencies:
   # ── 工具 ──
   uuid: ^4.5.1
   intl: ^0.20.2
+  package_info_plus: ^9.0.1
   shared_preferences: ^2.3.5
   file_picker: ^8.1.6
   charset_converter: ^2.3.0

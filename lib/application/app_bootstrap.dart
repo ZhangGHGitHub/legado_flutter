@@ -95,6 +95,7 @@ class AppBootstrap {
     required BookmarkSyncService bookmarkSyncService,
     required CacheService cacheService,
     required WebDavRepository webdavRepository,
+    void Function(String stage)? reportStartupStage,
   }) : _initializePlatform = initializePlatform,
        _isEngineAvailable = isEngineAvailable,
        _isBookProgressSyncEnabled = isBookProgressSyncEnabled,
@@ -111,7 +112,8 @@ class AppBootstrap {
        _bookProgressSync = bookProgressSync,
        _bookmarkSyncService = bookmarkSyncService,
        _cacheService = cacheService,
-       _webdavRepository = webdavRepository;
+       _webdavRepository = webdavRepository,
+       _reportStartupStage = reportStartupStage;
 
   final Future<void> Function() _initializePlatform;
   final bool Function() _isEngineAvailable;
@@ -130,12 +132,16 @@ class AppBootstrap {
   final BookmarkSyncService _bookmarkSyncService;
   final CacheService _cacheService;
   final WebDavRepository _webdavRepository;
+  final void Function(String stage)? _reportStartupStage;
 
   Future<AppBootstrapResult> initialize() async {
+    _reportStartupStage?.call('平台、配置与引擎初始化');
     await _initializePlatform();
     if (_isEngineAvailable()) {
+      _reportStartupStage?.call('网络与本地服务恢复');
       await _restoreNetwork();
       await _restoreWebApi();
+      _reportStartupStage?.call('WebDAV 配置恢复');
       final webdav = await _loadWebDavConfig();
       await initializeStartupWebDav(
         config: webdav,
@@ -146,6 +152,7 @@ class AppBootstrap {
       );
     }
 
+    _reportStartupStage?.call('阅读会话依赖组装');
     ReadBook.instance.configureDependencies(
       sourceService: _bookSourceService,
       repository: _bookRepository,
@@ -158,6 +165,7 @@ class AppBootstrap {
       localService: _localBookService,
       contentCache: _contentCache,
     );
+    _reportStartupStage?.call('书架与阅读进度加载');
     await loadStartupBookProgress(
       loadBooks: bookProvider.loadBooks,
       enabled: _isEngineAvailable() && _isBookProgressSyncEnabled(),
@@ -165,8 +173,10 @@ class AppBootstrap {
           bookProvider.downloadAllBookProgress(sync: _bookProgressSync),
     );
 
+    _reportStartupStage?.call('主题配置加载');
     final themeController = ThemeModeController();
     await themeController.load();
+    _reportStartupStage?.call('应用状态组装完成');
     return AppBootstrapResult(
       bookProvider: bookProvider,
       bookSourceService: _bookSourceService,

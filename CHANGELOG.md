@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R6/P0-1：完成全局崩溃防护与启动恢复。新增纯 Dart 崩溃报告/存储端口、SharedPreferences 安全适配器及 `CrashLogService`，在 `main` 同一 Zone 内安装 Flutter 框架、平台 dispatcher 和未处理 Zone 错误捕获；记录受限长度且 UTF-16 安全的错误、堆栈、启动阶段及真实应用/平台/Rust 引擎版本。下一次启动按原版隐私流程之后清除待提示标记并显示一次崩溃提示，可查看完整日志；存储、损坏 JSON 和元数据失败均降级且不依赖数据库/WebDAV。崩溃链定向 `13/13`、启动相关回归 `15/15`、Flutter 串行全量 `659` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze、Android/Windows debug 构建及两平台 5 秒冷启动 smoke 通过。并修复 WebDAV 代理测试短暂污染全局 Rust HTTP 客户端的并行隔离问题；架构 backlog 保持 `146`。
+
 - R5：完成本地 Web API 归属迁移。监听、路由、Token 认证、响应和运行状态迁至 Dart IO，业务数据通过 `WebApiDataPort`、Repository 和既有 Rust 数据库能力提供；删除 Rust `axum` Server、FRB 生命周期 API/DTO、旧适配器和旧 Rust HTTP 集成测试。保留 `/api/health`、books、chapters、sources、records 的认证、状态码和错误契约，并由 Dart 协议测试及真实临时 Rust 数据库 HTTP 集成覆盖。Rust HTTP 并发闸改按主机和有效端口隔离，消除并行 fixture 跨端口争抢。Rust workspace 核心 `184/184`、Flutter 串行全量 `648` 通过（`3` 项既有跳过）、analyze、Android/Windows debug 构建通过；架构 backlog 保持 `146`，无新增类别。正式或主流 WebDAV 发布验收仍按暂停条件待执行。
 
 - R3：完成阅读会话、正文处理、缓存和远端书籍 ZIP 的阶段退出门禁。阅读位置按当前页起始 UTF-16 章内位置保存；全局/书源替换、标题去重、重新分段和多行正则统一到 Rust，生产阅读、全文搜索、替换预览共用 `ContentProcessingPort`；正文下一页支持串行/并行规则顺序、循环终止、下一章边界和 100 页显式上限。文件/DB 缓存生命周期、桌面 59 项分页/断行/选区/像素门禁及 Android 4 项真实 ReaderPage/SVG 门禁通过。远端书籍 ZIP 由 Rust 负责格式识别、路径安全、50MB 输入/解压总量和损坏包错误，Flutter 仅写入 Rust 返回的安全文件；固定 FRB `2.11.1` 生成并移除陈旧重复正文出口。Rust workspace 核心 `185/185`、正文/ZIP 真实 Windows FRB `5/5`、Flutter 串行全量 `641` 通过（`3` 项既有跳过）、analyze、Android debug APK、`git diff --check` 均通过；架构 backlog 保持 `146`，无新增违规。

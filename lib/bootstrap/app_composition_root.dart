@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../app.dart';
 import '../application/app_bootstrap.dart';
+import '../application/crash/crash_log_service.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
 import '../application/web_api/repository_web_api_data_port.dart';
 import '../bridge/legado_db_bridge.dart';
@@ -88,12 +89,17 @@ import '../services/web_api_service.dart';
 import '../services/webdav_prefs.dart';
 
 abstract final class AppCompositionRoot {
-  static Future<void> run() async {
-    final composition = await _compose();
+  static Future<void> run({required CrashLogService crashLog}) async {
+    final composition = await _compose(crashLog);
+    crashLog.updateStartupStage('首屏挂载');
     runApp(composition.app);
+    crashLog.updateStartupStage('首屏运行');
   }
 
-  static Future<({Widget app})> _compose() async {
+  static Future<({Widget app})> _compose(CrashLogService crashLog) async {
+    crashLog.updateStartupStage('读取上次崩溃记录');
+    final pendingCrashReport = await crashLog.pendingReport();
+    crashLog.updateStartupStage('基础设施组装');
     final navigatorKey = GlobalKey<NavigatorState>();
     const contentCache = FileChapterContentCache();
     const networkEnginePort = FrbNetworkEnginePort();
@@ -150,10 +156,13 @@ abstract final class AppCompositionRoot {
     );
     final bootstrap = await AppBootstrap(
       initializePlatform: () async {
+        crashLog.updateStartupStage('应用配置加载');
         await EngineConfig.load();
         await AppConfig.instance.load();
+        crashLog.updateStartupStage('Rust 引擎初始化');
         await LegadoEngineBridge.tryInit();
         if (LegadoEngineBridge.isAvailable) {
+          crashLog.updateStartupStage('Rust 数据库初始化');
           await LegadoDbBridge.init();
         }
       },
@@ -178,6 +187,7 @@ abstract final class AppCompositionRoot {
       bookmarkSyncService: bookmarkSyncService,
       cacheService: cacheService,
       webdavRepository: webdavRepository,
+      reportStartupStage: crashLog.updateStartupStage,
     ).initialize();
 
     if (LegadoEngineBridge.isAvailable) {
@@ -252,7 +262,13 @@ abstract final class AppCompositionRoot {
             )..loadSources(),
           ),
         ],
-        child: LegadoApp(navigatorKey: navigatorKey),
+        child: LegadoApp(
+          navigatorKey: navigatorKey,
+          pendingCrashReport: pendingCrashReport,
+          onCrashReportPresented: () async {
+            await crashLog.acknowledgePending();
+          },
+        ),
       ),
     );
   }

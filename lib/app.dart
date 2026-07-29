@@ -2,6 +2,7 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'domain/crash/crash_report.dart';
 import 'features/main/main_shell.dart';
 import 'features/my/my_page.dart';
 import 'features/search/search_page.dart';
@@ -12,9 +13,16 @@ import 'theme/legado_chrome.dart';
 
 /// App 根组件 — MD3 主题 + Dynamic Color + 路由
 class LegadoApp extends StatelessWidget {
-  const LegadoApp({super.key, this.navigatorKey});
+  const LegadoApp({
+    super.key,
+    this.navigatorKey,
+    this.pendingCrashReport,
+    this.onCrashReportPresented,
+  });
 
   final GlobalKey<NavigatorState>? navigatorKey;
+  final CrashReport? pendingCrashReport;
+  final Future<void> Function()? onCrashReportPresented;
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +52,10 @@ class LegadoApp extends StatelessWidget {
             final themed = LegadoChrome.applyTo(context, Theme.of(context));
             return Theme(data: themed, child: child ?? const SizedBox.shrink());
           },
-          home: const _StartupHome(),
+          home: _StartupHome(
+            pendingCrashReport: pendingCrashReport,
+            onCrashReportPresented: onCrashReportPresented,
+          ),
           routes: {
             '/search': (context) => const SearchPage(),
             '/sources': (context) => const SourcesPage(),
@@ -59,7 +70,13 @@ class LegadoApp extends StatelessWidget {
 /// 冷启 → [WelcomePage] 闪屏（对齐 WelcomeActivity）→ [MainShell]。
 /// 隐私协议 Dialog 由 MainShell 首次弹出（对齐 Jingshiro 主路径）。
 class _StartupHome extends StatefulWidget {
-  const _StartupHome();
+  const _StartupHome({
+    required this.pendingCrashReport,
+    required this.onCrashReportPresented,
+  });
+
+  final CrashReport? pendingCrashReport;
+  final Future<void> Function()? onCrashReportPresented;
 
   @override
   State<_StartupHome> createState() => _StartupHomeState();
@@ -77,6 +94,9 @@ class _StartupHomeState extends State<_StartupHome> {
         },
       );
     }
-    return const MainShell();
+    return MainShell(
+      pendingCrashReport: widget.pendingCrashReport,
+      onCrashReportPresented: widget.onCrashReportPresented,
+    );
   }
 }

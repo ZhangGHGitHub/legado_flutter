@@ -1,6 +1,6 @@
 # Legado Flutter 架构重构基线
 
-状态：R0-R4 已完成；R5 本地开发退出门禁和本地 Web API 归属迁移已完成，发布前正式/主流 WebDAV 验收待执行；R6 已完成 UI 状态直连清理，并已迁移 main、bookshelf、reader、book、sources、rss、settings、my 功能域；sync 无独立 UI 页面，阶段退出门禁尚未完成
+状态：R0-R5 本地门禁已完成；R6 功能域迁移及 P0-1 崩溃防护与启动恢复已完成，下一项为 P0-2 存储初始化安全；发布前正式/主流 WebDAV 和其余目标平台验收待执行
 日期：2026-07-29
 依据：当前工作区代码、`docs/REFACTOR_PLAN.md`、根目录 `legado-main/`
 
@@ -2514,3 +2514,22 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 架构扫描按设计报告既有 `146` 条 backlog：SharedPreferences `14`、Feature 业务 service `132`；无新增类别。`legado-main/` 保持只读。
 
 边界结论：R5 本地 Web API 归属迁移完成，监听和协议属于 Dart IO，业务查询经 application port 进入 Repository/Rust 数据能力。正式或主流 WebDAV 发布验收仍需外部服务或凭证，继续按暂停条件登记，不宣称发布验收完成。
+
+## 120. 2026-07-29：R6/P0-1 全局崩溃防护与启动恢复
+
+- 对照只读原版 `App.kt`、`CrashHandler.kt` 和 `MainActivity.notifyAppCrash()`：原版在 Application 最早安装 handler，写入崩溃日志/标记，并在隐私流程后提示一次。`legado-main/` 未修改。
+- 新增纯 Dart `CrashReport`、`CrashReportStore` 和 `CrashLogService`；报告保存时间、捕获来源、启动阶段、错误/堆栈、平台、应用版本和 Rust 引擎版本。字段有长度上限，截断不拆分 UTF-16 代理对。
+- SharedPreferences adapter 只保存最近一条报告和独立待提示标记；确认提示只清标记、保留最新报告，损坏 JSON、读取/写入或元数据失败均返回安全空值/失败状态，不依赖 Rust DB、WebDAV 或完整 UI。
+- `main` 在同一 `runZonedGuarded` 内初始化 Flutter binding、安装 `FlutterError.onError` 和 `PlatformDispatcher.onError`，保留并调用既有 handler；组合根和 `AppBootstrap` 只上报启动阶段，不改变初始化顺序。
+- MainShell 严格先完成原版隐私流程，再确认待提示标记并显示崩溃提示；用户可暂不查看或打开完整崩溃日志。Feature 只依赖纯领域报告与回调，没有新增 Feature → service 违规。
+- Rust WebDAV 代理测试改用显式 `NetworkConfig` 构造客户端，不再短暂改写全局 HTTP 客户端，消除与目录/正文 localhost fixture 的并行污染；代理映射和客户端构造断言保持不变。
+
+验证结果：
+
+- 崩溃 service/store/global handler/平台元数据/提示/MainShell 顺序定向 `13/13`；启动 WebDAV、进度同步、AppLog、MainShell 和 Welcome 回归 `15/15`。
+- `flutter test --no-pub --concurrency=1`：`659` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断。
+- Rust WebDAV 代理定向 `2/2`、目录/正文 HTTP fixture `6/6`；Rust workspace 核心 `184/184`，其余集成、WebDAV 和文档测试无失败。
+- Android debug APK 与 Windows debug 应用构建通过；Windows debug 进程隐藏冷启动 5 秒保持运行，Android APK 安装到 `emulator-5556` 后 `MainActivity` 启动成功且 5 秒后进程仍存活。
+- 架构扫描保持既有 `146` 条：SharedPreferences `14`、Feature 业务 service `132`；无新增类别，`legado-main/` 保持只读。
+
+边界结论：P0-1 已满足当前计划的捕获、持久化、启动阶段、一次性提示、日志查看和失败降级要求。下一固定任务为 P0-2 存储初始化安全；`MainShell` 隐私偏好迁移和 `AppLog` 统一分别留给 P0-2/P1-3，不混入本 checkpoint。
