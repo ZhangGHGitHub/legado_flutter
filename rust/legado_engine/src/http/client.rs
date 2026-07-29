@@ -4,7 +4,9 @@ use super::network_config::{self, NetworkConfig};
 use crate::model::book_source::custom_headers;
 use once_cell::sync::Lazy;
 use reqwest::dns::{Addrs, Name, Resolve, Resolving};
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, ACCEPT_LANGUAGE, USER_AGENT};
+use reqwest::header::{
+    HeaderMap, HeaderName, HeaderValue, ACCEPT, ACCEPT_LANGUAGE, CONTENT_TYPE, USER_AGENT,
+};
 use reqwest::{Client, ClientBuilder, Method, Proxy};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -151,6 +153,13 @@ pub enum ApplicationNetworkPolicy {
 pub struct ApplicationHttpResponse {
     pub status_code: u16,
     pub body: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ApplicationBinaryHttpResponse {
+    pub status_code: u16,
+    pub content_type: Option<String>,
+    pub body: Vec<u8>,
 }
 
 fn assert_http_url(url: &str) -> Result<(), String> {
@@ -433,7 +442,7 @@ mod application_http_policy_tests {
 
     #[tokio::test]
     async fn request_timeout_includes_waiting_for_host_permit() {
-        let url = "http://127.0.0.1:9/permit-timeout";
+        let url = "http://application-permit-timeout.invalid/permit-timeout";
         let first = super::super::rate_limit::acquire_host_permit(url)
             .await
             .unwrap();
@@ -465,6 +474,34 @@ pub async fn send_application_http_request(
     timeout: Duration,
     policy: ApplicationNetworkPolicy,
 ) -> Result<ApplicationHttpResponse, String> {
+    let response = send_application_binary_http_request(
+        url,
+        method,
+        headers,
+        body.map(str::as_bytes),
+        timeout,
+        policy,
+        Some(MAX_RESPONSE_BYTES),
+    )
+    .await?;
+    let body =
+        String::from_utf8(response.body).map_err(|error| format!("响应不是 UTF-8: {error}"))?;
+    Ok(ApplicationHttpResponse {
+        status_code: response.status_code,
+        body,
+    })
+}
+
+/// 应用服务使用的二进制 HTTP 请求；`max_response_bytes = None` 保留旧调用者的无上限行为。
+pub async fn send_application_binary_http_request(
+    url: &str,
+    method: &str,
+    headers: &HashMap<String, String>,
+    body: Option<&[u8]>,
+    timeout: Duration,
+    policy: ApplicationNetworkPolicy,
+    max_response_bytes: Option<usize>,
+) -> Result<ApplicationBinaryHttpResponse, String> {
     assert_application_url(url, policy)?;
     let method = method
         .trim()
@@ -492,7 +529,7 @@ pub async fn send_application_http_request(
             build_application_http_client(&network_config::get_network_config(), timeout, policy)?;
         let mut request = client.request(method, url).headers(request_headers);
         if let Some(body) = body {
-            request = request.body(body.to_string());
+            request = request.body(body.to_vec());
         }
         let response = match request.send().await {
             Ok(response) => response,
@@ -502,10 +539,18 @@ pub async fn send_application_http_request(
             }
         };
         let status_code = response.status().as_u16();
+        let content_type = response
+            .headers()
+            .get(CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
         record_request_trace(url, &method_name, status_code, started);
-        let bytes = read_response_bytes(response).await?;
-        let body = String::from_utf8(bytes).map_err(|error| format!("响应不是 UTF-8: {error}"))?;
-        Ok(ApplicationHttpResponse { status_code, body })
+        let body = read_response_bytes_with_limit(response, max_response_bytes).await?;
+        Ok(ApplicationBinaryHttpResponse {
+            status_code,
+            content_type,
+            body,
+        })
     })
     .await
     .map_err(|_| format!("请求超时: {} ms", timeout.as_millis()))?
@@ -1262,36 +1307,45 @@ async fn send_request(
     Ok(response)
 }
 
-async fn read_response_bytes(mut response: reqwest::Response) -> Result<Vec<u8>, String> {
+async fn read_response_bytes(response: reqwest::Response) -> Result<Vec<u8>, String> {
+    read_response_bytes_with_limit(response, Some(MAX_RESPONSE_BYTES)).await
+}
+
+async fn read_response_bytes_with_limit(
+    mut response: reqwest::Response,
+    max_response_bytes: Option<usize>,
+) -> Result<Vec<u8>, String> {
     if response
         .content_length()
-        .is_some_and(|size| size > MAX_RESPONSE_BYTES as u64)
+        .is_some_and(|size| max_response_bytes.is_some_and(|max| size > max as u64))
     {
-        return Err(format!(
-            "响应过大: 超过 {} MiB",
-            MAX_RESPONSE_BYTES / (1024 * 1024)
-        ));
+        return Err(response_too_large_error(max_response_bytes.unwrap()));
     }
-    let mut bytes = Vec::with_capacity(
-        response
-            .content_length()
-            .unwrap_or_default()
-            .min(MAX_RESPONSE_BYTES as u64) as usize,
-    );
+    let initial_capacity = response
+        .content_length()
+        .unwrap_or_default()
+        .min(max_response_bytes.unwrap_or(64 * 1024) as u64)
+        .min(64 * 1024) as usize;
+    let mut bytes = Vec::with_capacity(initial_capacity);
     while let Some(chunk) = response
         .chunk()
         .await
         .map_err(|e| format!("读取响应失败: {e}"))?
     {
-        if bytes.len().saturating_add(chunk.len()) > MAX_RESPONSE_BYTES {
-            return Err(format!(
-                "响应过大: 超过 {} MiB",
-                MAX_RESPONSE_BYTES / (1024 * 1024)
-            ));
+        if max_response_bytes.is_some_and(|max| bytes.len().saturating_add(chunk.len()) > max) {
+            return Err(response_too_large_error(max_response_bytes.unwrap()));
         }
         bytes.extend_from_slice(&chunk);
     }
     Ok(bytes)
+}
+
+fn response_too_large_error(max_response_bytes: usize) -> String {
+    if max_response_bytes % (1024 * 1024) == 0 {
+        format!("响应过大: 超过 {} MiB", max_response_bytes / (1024 * 1024))
+    } else {
+        format!("响应过大: 超过 {max_response_bytes} 字节")
+    }
 }
 
 fn save_cookies(url: &str, response: &reqwest::Response) {

@@ -2291,3 +2291,26 @@ AI/Obsidian JSON 网络入口，Obsidian localhost 策略必须与仅允许公�
 边界结论：AI/Obsidian JSON 网络请求已进入 application port 和 Rust HTTP 边界，公网与本地网络策略
 保持显式分离。本批未修改 `legado-main/`、正文、目录、分页、章节身份、阅读位置或断行规则；R2
 继续按顺序审计和迁移二进制网络入口，尚未最终退出。
+
+## 110. 2026-07-29：R2 统一二进制 HTTP 基础端口
+
+- 新增 `ApplicationBinaryHttpRequestPort` 与 `FrbApplicationBinaryHttpRequestPort`，根组合层提供单一
+  infrastructure adapter；业务层可取得状态码、Content-Type 和原始响应字节。
+- Rust 二进制请求复用文本应用请求的 HTTP/HTTPS、默认 TLS、public/local 网络策略、逐跳重定向、
+  DNS/IP SSRF、主机限流和总超时，不另建第二套网络安全语义。
+- 调用者可传正数作为流式响应硬上限；`0` 表示保留旧二进制调用者的无上限行为。文本入口继续固定
+  8 MiB 并在同一字节核心之上执行 UTF-8 解码。
+- 固定 FRB `2.11.1` 重新生成 Dart/Rust 绑定；本批只建立端口，不提前修改 HTTP TTS、阅读样式 ZIP、
+  正文图片缓存或页面图片展示行为。
+
+验证结果：
+
+- Rust 网络 API `5/5`、应用网络策略 `6/6`；`cargo test -p legado_engine` 核心 `153/153`，其余
+  集成与文档测试无失败。
+- `cargo build -p legado_engine --release` 通过；Windows release DLL 的文本与二进制真实 FRB 本地
+  往返 `2/2`，验证非 2xx、Content-Type 和非 UTF-8 字节保持。
+- `flutter analyze --no-pub` 无诊断；`flutter test --no-pub --concurrency=1`：`602` 通过、
+  `3` 项既有条件跳过。
+
+边界结论：统一二进制传输能力已就绪，但生产 Dio 二进制入口和 `Image.network/NetworkImage` 仍存在；
+R2 下一批先迁移正文图片缓存、阅读样式 ZIP 与 HTTP TTS，前一批全绿后再处理页面远程图片直连。

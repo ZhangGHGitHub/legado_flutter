@@ -22,6 +22,13 @@ pub struct ApplicationHttpResponseDto {
     pub body: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct ApplicationBinaryHttpResponseDto {
+    pub status_code: i32,
+    pub content_type: String,
+    pub body: Vec<u8>,
+}
+
 /// 应用代理 / DNS 配置
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_network_config(
@@ -125,6 +132,45 @@ pub async fn send_application_http_request(
     .await?;
     Ok(ApplicationHttpResponseDto {
         status_code: i32::from(response.status_code),
+        body: response.body,
+    })
+}
+
+/// 发送应用服务二进制 HTTP 请求。`max_response_bytes = 0` 表示保持调用者原有的无上限行为。
+#[flutter_rust_bridge::frb]
+pub async fn send_application_binary_http_request(
+    url: String,
+    method: String,
+    headers: HashMap<String, String>,
+    body: Option<Vec<u8>>,
+    timeout_seconds: i32,
+    allow_private_network: bool,
+    max_response_bytes: i32,
+) -> Result<ApplicationBinaryHttpResponseDto, String> {
+    if timeout_seconds <= 0 {
+        return Err("请求超时秒数必须大于 0".to_string());
+    }
+    if max_response_bytes < 0 {
+        return Err("最大响应字节数不能小于 0".to_string());
+    }
+    let policy = if allow_private_network {
+        client::ApplicationNetworkPolicy::LocalNetwork
+    } else {
+        client::ApplicationNetworkPolicy::PublicOnly
+    };
+    let response = client::send_application_binary_http_request(
+        &url,
+        &method,
+        &headers,
+        body.as_deref(),
+        Duration::from_secs(timeout_seconds as u64),
+        policy,
+        (max_response_bytes > 0).then_some(max_response_bytes as usize),
+    )
+    .await?;
+    Ok(ApplicationBinaryHttpResponseDto {
+        status_code: i32::from(response.status_code),
+        content_type: response.content_type.unwrap_or_default(),
         body: response.body,
     })
 }
@@ -313,5 +359,40 @@ mod tests {
         .await
         .unwrap_err();
         assert!(error.contains("响应过大"), "unexpected error: {error}");
+    }
+
+    #[tokio::test]
+    async fn binary_request_preserves_bytes_content_type_and_non_success_status() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0_u8; 2048];
+            let size = stream.read(&mut request).unwrap();
+            assert!(request[..size].ends_with(&[0, 127, 255]));
+            stream
+                .write_all(
+                    b"HTTP/1.1 409 Conflict\r\nContent-Type: application/octet-stream\r\nContent-Length: 3\r\nConnection: close\r\n\r\n\x00\x80\xff",
+                )
+                .unwrap();
+        });
+
+        let response = send_application_binary_http_request(
+            format!("http://{address}/binary"),
+            "POST".to_string(),
+            HashMap::from([(
+                "Content-Type".to_string(),
+                "application/octet-stream".to_string(),
+            )]),
+            Some(vec![0, 127, 255]),
+            5,
+            true,
+            1024,
+        )
+        .await
+        .unwrap();
+        assert_eq!(response.status_code, 409);
+        assert_eq!(response.content_type, "application/octet-stream");
+        assert_eq!(response.body, vec![0, 128, 255]);
     }
 }

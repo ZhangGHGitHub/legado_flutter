@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
 
 /// 应用代理 / DNS 配置
 void setNetworkConfig({
@@ -71,6 +71,50 @@ Future<ApplicationHttpResponseDto> sendApplicationHttpRequest({
   timeoutSeconds: timeoutSeconds,
   allowPrivateNetwork: allowPrivateNetwork,
 );
+
+/// 发送应用服务二进制 HTTP 请求。`max_response_bytes = 0` 表示保持调用者原有的无上限行为。
+Future<ApplicationBinaryHttpResponseDto> sendApplicationBinaryHttpRequest({
+  required String url,
+  required String method,
+  required Map<String, String> headers,
+  Uint8List? body,
+  required int timeoutSeconds,
+  required bool allowPrivateNetwork,
+  required int maxResponseBytes,
+}) => LegadoEngine.instance.api.crateApiNetworkSendApplicationBinaryHttpRequest(
+  url: url,
+  method: method,
+  headers: headers,
+  body: body,
+  timeoutSeconds: timeoutSeconds,
+  allowPrivateNetwork: allowPrivateNetwork,
+  maxResponseBytes: maxResponseBytes,
+);
+
+class ApplicationBinaryHttpResponseDto {
+  final int statusCode;
+  final String contentType;
+  final Uint8List body;
+
+  const ApplicationBinaryHttpResponseDto({
+    required this.statusCode,
+    required this.contentType,
+    required this.body,
+  });
+
+  @override
+  int get hashCode =>
+      statusCode.hashCode ^ contentType.hashCode ^ body.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ApplicationBinaryHttpResponseDto &&
+          runtimeType == other.runtimeType &&
+          statusCode == other.statusCode &&
+          contentType == other.contentType &&
+          body == other.body;
+}
 
 class ApplicationHttpResponseDto {
   final int statusCode;

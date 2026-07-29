@@ -40,6 +40,10 @@ abstract class LegadoEngineApiImplPlatform
   String dco_decode_String(dynamic raw);
 
   @protected
+  ApplicationBinaryHttpResponseDto
+  dco_decode_application_binary_http_response_dto(dynamic raw);
+
+  @protected
   ApplicationHttpResponseDto dco_decode_application_http_response_dto(
     dynamic raw,
   );
@@ -135,6 +139,9 @@ abstract class LegadoEngineApiImplPlatform
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
   ReadingStats dco_decode_reading_stats(dynamic raw);
 
   @protected
@@ -177,6 +184,10 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
+
+  @protected
+  ApplicationBinaryHttpResponseDto
+  sse_decode_application_binary_http_response_dto(SseDeserializer deserializer);
 
   @protected
   ApplicationHttpResponseDto sse_decode_application_http_response_dto(
@@ -284,6 +295,9 @@ abstract class LegadoEngineApiImplPlatform
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
   ReadingStats sse_decode_reading_stats(SseDeserializer deserializer);
 
   @protected
@@ -331,6 +345,12 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_application_binary_http_response_dto(
+    ApplicationBinaryHttpResponseDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_application_http_response_dto(
@@ -472,6 +492,12 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_list_prim_u_8_strict(
+    Uint8List? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_reading_stats(ReadingStats self, SseSerializer serializer);
