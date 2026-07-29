@@ -12,6 +12,7 @@ import '../database/dao/book_dao.dart';
 import '../database/dao/replace_rule_dao.dart';
 import '../database/dao/source_dao.dart';
 import '../domain/ports/backup_local_file_port.dart';
+import '../domain/ports/application_http_request_port.dart';
 import '../domain/ports/book_source_debug_port.dart';
 import '../domain/ports/book_source_validation_port.dart';
 import '../domain/ports/dict_rule_query_port.dart';
@@ -44,6 +45,7 @@ import '../infrastructure/engine/frb_rss_port.dart';
 import '../infrastructure/engine/frb_rss_sort_url_js_port.dart';
 import '../infrastructure/file_system/backup_local_file_adapter.dart';
 import '../infrastructure/network/frb_public_text_fetch_port.dart';
+import '../infrastructure/network/frb_application_http_request_port.dart';
 import '../infrastructure/preferences/shared_preferences_book_group_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
 import '../infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
@@ -152,6 +154,9 @@ abstract final class AppCompositionRoot {
           ChangeNotifierProvider.value(value: bootstrap.bookProvider),
           Provider<BookSourceService>.value(value: bookSourceService),
           Provider<PublicTextFetchPort>.value(value: publicTextPort),
+          Provider<ApplicationHttpRequestPort>(
+            create: (_) => const FrbApplicationHttpRequestPort(),
+          ),
           Provider<BookSourceDebugPort>(
             create: (_) => FrbBookSourceDebugPort(),
           ),

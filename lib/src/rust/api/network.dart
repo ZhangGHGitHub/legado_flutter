@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 
 /// 应用代理 / DNS 配置
 void setNetworkConfig({
@@ -54,6 +54,44 @@ Future<String> fetchPublicText({
   url: url,
   userAgent: userAgent,
 );
+
+/// 发送应用服务 HTTP 请求。`allow_private_network` 仅供用户显式配置的本地服务使用。
+Future<ApplicationHttpResponseDto> sendApplicationHttpRequest({
+  required String url,
+  required String method,
+  required Map<String, String> headers,
+  String? body,
+  required int timeoutSeconds,
+  required bool allowPrivateNetwork,
+}) => LegadoEngine.instance.api.crateApiNetworkSendApplicationHttpRequest(
+  url: url,
+  method: method,
+  headers: headers,
+  body: body,
+  timeoutSeconds: timeoutSeconds,
+  allowPrivateNetwork: allowPrivateNetwork,
+);
+
+class ApplicationHttpResponseDto {
+  final int statusCode;
+  final String body;
+
+  const ApplicationHttpResponseDto({
+    required this.statusCode,
+    required this.body,
+  });
+
+  @override
+  int get hashCode => statusCode.hashCode ^ body.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ApplicationHttpResponseDto &&
+          runtimeType == other.runtimeType &&
+          statusCode == other.statusCode &&
+          body == other.body;
+}
 
 /// 网络配置 DTO
 class NetworkConfigDto {

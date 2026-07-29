@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
+import 'package:provider/provider.dart';
 
+import '../../domain/ports/application_http_request_port.dart';
 import '../../services/note_export_service.dart';
 import '../../services/note_service.dart';
 import '../../services/obsidian_export_prefs.dart';
@@ -30,7 +32,7 @@ class ObsidianExportDialog extends StatefulWidget {
 }
 
 class _ObsidianExportDialogState extends State<ObsidianExportDialog> {
-  final _apiService = ObsidianApiService();
+  late final ObsidianApiService _apiService;
   ObsidianExportMethod _method = ObsidianExportMethod.localFile;
   late final TextEditingController _apiUrl;
   late final TextEditingController _apiKey;
@@ -44,6 +46,9 @@ class _ObsidianExportDialogState extends State<ObsidianExportDialog> {
   @override
   void initState() {
     super.initState();
+    _apiService = ObsidianApiService(
+      context.read<ApplicationHttpRequestPort>(),
+    );
     _apiUrl = TextEditingController();
     _apiKey = TextEditingController();
     _localPath = TextEditingController();

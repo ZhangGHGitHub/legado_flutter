@@ -3,11 +3,14 @@ use super::cookie::CookieJar;
 use super::network_config::{self, NetworkConfig};
 use crate::model::book_source::custom_headers;
 use once_cell::sync::Lazy;
+use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, ACCEPT_LANGUAGE, USER_AGENT};
-use reqwest::{Client, Proxy};
+use reqwest::{Client, ClientBuilder, Method, Proxy};
 use serde::Serialize;
+use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 static CLIENT: Lazy<Mutex<Client>> =
@@ -85,7 +88,7 @@ fn trace_url(raw: &str) -> String {
 pub(crate) const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 
 fn build_http_client(cfg: &NetworkConfig) -> Client {
-    let mut builder = Client::builder()
+    let builder = Client::builder()
         // 网络代理只由 legado 的 NetworkConfig 控制，避免继承机器环境代理干扰离线测试。
         .no_proxy()
         .timeout(Duration::from_secs(30))
@@ -100,6 +103,12 @@ fn build_http_client(cfg: &NetworkConfig) -> Client {
             attempt.follow()
         }));
 
+    apply_network_proxy(builder, cfg)
+        .build()
+        .expect("failed to build HTTP client")
+}
+
+fn apply_network_proxy(mut builder: ClientBuilder, cfg: &NetworkConfig) -> ClientBuilder {
     if let Some(proxy_url) = network_config::build_proxy_url(cfg) {
         if let Ok(mut proxy) = Proxy::all(&proxy_url) {
             if !cfg.proxy_username.is_empty() {
@@ -108,8 +117,7 @@ fn build_http_client(cfg: &NetworkConfig) -> Client {
             builder = builder.proxy(proxy);
         }
     }
-
-    builder.build().expect("failed to build HTTP client")
+    builder
 }
 
 /// 应用网络配置后重建 HTTP 客户端
@@ -131,6 +139,376 @@ fn http_client() -> Result<Client, String> {
         .lock()
         .map_err(|_| "HTTP 客户端锁失败".to_string())?
         .clone())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApplicationNetworkPolicy {
+    PublicOnly,
+    LocalNetwork,
+}
+
+#[derive(Debug, Clone)]
+pub struct ApplicationHttpResponse {
+    pub status_code: u16,
+    pub body: String,
+}
+
+fn assert_http_url(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url.trim()).map_err(|_| "无效的 URL".to_string())?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("仅允许 http/https 请求".to_string());
+    }
+    if parsed.host_str().is_none() {
+        return Err("无效的 URL".to_string());
+    }
+    Ok(())
+}
+
+fn assert_application_url(url: &str, policy: ApplicationNetworkPolicy) -> Result<(), String> {
+    match policy {
+        ApplicationNetworkPolicy::PublicOnly => {
+            // ssrf 模块为旧书源单测保留了带端口回环 fixture；应用公网策略不继承该例外。
+            let parsed = url::Url::parse(url.trim()).map_err(|_| "无效的 URL".to_string())?;
+            match parsed.host() {
+                Some(url::Host::Ipv4(address)) => {
+                    super::ssrf::assert_public_ip(std::net::IpAddr::V4(address))?
+                }
+                Some(url::Host::Ipv6(address)) => {
+                    super::ssrf::assert_public_ip(std::net::IpAddr::V6(address))?
+                }
+                _ => {}
+            }
+            super::ssrf::assert_public_http_url(url)
+        }
+        ApplicationNetworkPolicy::LocalNetwork => assert_http_url(url),
+    }
+}
+
+#[derive(Debug)]
+struct PublicOnlyDnsResolver;
+
+impl Resolve for PublicOnlyDnsResolver {
+    fn resolve(&self, name: Name) -> Resolving {
+        let host = name.as_str().to_string();
+        Box::pin(async move {
+            let addresses = tokio::net::lookup_host((host.as_str(), 0))
+                .await
+                .map_err(|error| -> Box<dyn std::error::Error + Send + Sync> { Box::new(error) })?
+                .collect::<Vec<_>>();
+            assert_public_dns_addresses(&host, &addresses).map_err(
+                |error| -> Box<dyn std::error::Error + Send + Sync> {
+                    Box::new(std::io::Error::other(error))
+                },
+            )?;
+            Ok(Box::new(addresses.into_iter()) as Addrs)
+        })
+    }
+}
+
+fn assert_public_dns_addresses(host: &str, addresses: &[SocketAddr]) -> Result<(), String> {
+    if addresses.is_empty() {
+        return Err(format!("域名未解析到地址: {host}"));
+    }
+    for address in addresses {
+        super::ssrf::assert_public_ip(address.ip())
+            .map_err(|error| format!("域名 {host} 解析到受限地址: {error}"))?;
+    }
+    Ok(())
+}
+
+fn assert_application_redirect(
+    url: &str,
+    previous_count: usize,
+    policy: ApplicationNetworkPolicy,
+) -> Result<(), String> {
+    if previous_count > 5 {
+        return Err("重定向次数过多".to_string());
+    }
+    assert_application_url(url, policy)
+}
+
+fn build_application_http_client(
+    cfg: &NetworkConfig,
+    timeout: Duration,
+    policy: ApplicationNetworkPolicy,
+) -> Result<Client, String> {
+    build_application_http_client_with_builder(Client::builder(), cfg, timeout, policy)
+}
+
+fn build_application_http_client_with_builder(
+    builder: ClientBuilder,
+    cfg: &NetworkConfig,
+    timeout: Duration,
+    policy: ApplicationNetworkPolicy,
+) -> Result<Client, String> {
+    let mut builder = builder
+        // 与共享客户端一致：不继承环境代理，仅接受 NetworkConfig 的显式代理。
+        .no_proxy()
+        .timeout(timeout)
+        .connect_timeout(Duration::from_secs(15).min(timeout))
+        .redirect(reqwest::redirect::Policy::custom(move |attempt| {
+            if let Err(error) = assert_application_redirect(
+                attempt.url().as_str(),
+                attempt.previous().len(),
+                policy,
+            ) {
+                return attempt.error(error);
+            }
+            attempt.follow()
+        }));
+
+    if policy == ApplicationNetworkPolicy::PublicOnly {
+        builder = builder.dns_resolver(Arc::new(PublicOnlyDnsResolver));
+    }
+
+    apply_network_proxy(builder, cfg)
+        .build()
+        .map_err(|error| format!("创建 HTTP 客户端失败: {error}"))
+}
+
+#[cfg(test)]
+mod application_http_policy_tests {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::net::{SocketAddr, TcpListener};
+    use std::thread::{self, JoinHandle};
+
+    fn start_redirect_fixture(request_count: usize) -> (SocketAddr, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let handle = thread::spawn(move || {
+            for index in 0..request_count {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let mut request = [0_u8; 2048];
+                let size = stream.read(&mut request).unwrap();
+                let request = String::from_utf8_lossy(&request[..size]);
+                if index == 0 {
+                    assert!(request.starts_with("GET /redirect HTTP/1.1"));
+                    let response = format!(
+                        "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{}/target\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                        address.port()
+                    );
+                    stream.write_all(response.as_bytes()).unwrap();
+                } else {
+                    assert!(request.starts_with("GET /target HTTP/1.1"));
+                    stream
+                        .write_all(
+                            b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\nConnection: close\r\n\r\nredirect-ok",
+                        )
+                        .unwrap();
+                }
+            }
+        });
+        (address, handle)
+    }
+
+    fn start_redirect_chain(
+        redirects: usize,
+        serve_terminal_response: bool,
+    ) -> (SocketAddr, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let handle = thread::spawn(move || {
+            let request_count = redirects + usize::from(serve_terminal_response);
+            for index in 0..request_count {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = [0_u8; 2048];
+                let size = stream.read(&mut request).unwrap();
+                let request = String::from_utf8_lossy(&request[..size]);
+                assert!(request.starts_with(&format!("GET /{index} HTTP/1.1")));
+                if index < redirects {
+                    let response = format!(
+                        "HTTP/1.1 302 Found\r\nLocation: /{}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                        index + 1
+                    );
+                    stream.write_all(response.as_bytes()).unwrap();
+                } else {
+                    stream
+                        .write_all(
+                            b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok",
+                        )
+                        .unwrap();
+                }
+            }
+        });
+        (address, handle)
+    }
+
+    fn redirect_client(address: SocketAddr, policy: ApplicationNetworkPolicy) -> Client {
+        build_application_http_client_with_builder(
+            Client::builder().resolve("public.example", address),
+            &NetworkConfig::default(),
+            Duration::from_secs(5),
+            policy,
+        )
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn redirect_closure_rejects_private_target_for_public_only() {
+        let (address, fixture) = start_redirect_fixture(1);
+        let error = redirect_client(address, ApplicationNetworkPolicy::PublicOnly)
+            .get(format!("http://public.example:{}/redirect", address.port()))
+            .send()
+            .await
+            .unwrap_err();
+        let error = format!("{error:?}");
+        assert!(error.contains("SSRF"), "unexpected error: {error}");
+        fixture.join().unwrap();
+    }
+
+    #[tokio::test]
+    async fn redirect_closure_follows_private_target_for_local_network() {
+        let (address, fixture) = start_redirect_fixture(2);
+        let response = redirect_client(address, ApplicationNetworkPolicy::LocalNetwork)
+            .get(format!("http://public.example:{}/redirect", address.port()))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status().as_u16(), 200);
+        assert_eq!(response.text().await.unwrap(), "redirect-ok");
+        fixture.join().unwrap();
+    }
+
+    #[tokio::test]
+    async fn redirect_client_allows_five_hops_and_rejects_sixth() {
+        let (address, fixture) = start_redirect_chain(5, true);
+        let response = redirect_client(address, ApplicationNetworkPolicy::LocalNetwork)
+            .get(format!("http://{address}/0"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.text().await.unwrap(), "ok");
+        fixture.join().unwrap();
+
+        let (address, fixture) = start_redirect_chain(6, false);
+        let error = redirect_client(address, ApplicationNetworkPolicy::LocalNetwork)
+            .get(format!("http://{address}/0"))
+            .send()
+            .await
+            .unwrap_err();
+        assert!(
+            format!("{error:?}").contains("重定向次数过多"),
+            "unexpected error: {error:?}"
+        );
+        fixture.join().unwrap();
+    }
+
+    #[test]
+    fn redirect_policy_enforces_five_hop_limit() {
+        assert!(assert_application_redirect(
+            "https://example.com/next",
+            5,
+            ApplicationNetworkPolicy::PublicOnly,
+        )
+        .is_ok());
+        assert_eq!(
+            assert_application_redirect(
+                "https://example.com/next",
+                6,
+                ApplicationNetworkPolicy::PublicOnly,
+            )
+            .unwrap_err(),
+            "重定向次数过多"
+        );
+    }
+
+    #[test]
+    fn public_dns_rejects_private_ipv4_and_ipv6_results() {
+        assert!(
+            assert_public_dns_addresses("private.example", &["127.0.0.1:0".parse().unwrap()],)
+                .is_err()
+        );
+        assert!(
+            assert_public_dns_addresses("private-v6.example", &["[::1]:0".parse().unwrap()],)
+                .is_err()
+        );
+        assert!(
+            assert_public_dns_addresses("public.example", &["8.8.8.8:0".parse().unwrap()],).is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn request_timeout_includes_waiting_for_host_permit() {
+        let url = "http://127.0.0.1:9/permit-timeout";
+        let first = super::super::rate_limit::acquire_host_permit(url)
+            .await
+            .unwrap();
+        let second = super::super::rate_limit::acquire_host_permit(url)
+            .await
+            .unwrap();
+        let error = send_application_http_request(
+            url,
+            "GET",
+            &HashMap::new(),
+            None,
+            Duration::from_millis(50),
+            ApplicationNetworkPolicy::LocalNetwork,
+        )
+        .await
+        .unwrap_err();
+        assert!(error.contains("请求超时"), "unexpected error: {error}");
+        drop(first);
+        drop(second);
+    }
+}
+
+/// 应用服务使用的通用 HTTP 请求，不把非 2xx 状态转换为传输错误。
+pub async fn send_application_http_request(
+    url: &str,
+    method: &str,
+    headers: &HashMap<String, String>,
+    body: Option<&str>,
+    timeout: Duration,
+    policy: ApplicationNetworkPolicy,
+) -> Result<ApplicationHttpResponse, String> {
+    assert_application_url(url, policy)?;
+    let method = method
+        .trim()
+        .to_ascii_uppercase()
+        .parse::<Method>()
+        .map_err(|_| format!("不支持的 HTTP 方法: {method}"))?;
+    if method != Method::GET && method != Method::POST && method != Method::PUT {
+        return Err(format!("不支持的 HTTP 方法: {method}"));
+    }
+
+    let mut request_headers = HeaderMap::new();
+    for (name, value) in headers {
+        let name = HeaderName::from_bytes(name.as_bytes())
+            .map_err(|error| format!("无效的请求头名称 {name}: {error}"))?;
+        let value = HeaderValue::from_str(value)
+            .map_err(|error| format!("无效的请求头值 {}: {error}", name.as_str()))?;
+        request_headers.insert(name, value);
+    }
+
+    tokio::time::timeout(timeout, async move {
+        let _permit = super::rate_limit::acquire_host_permit(url).await?;
+        let started = Instant::now();
+        let method_name = method.as_str().to_string();
+        let client =
+            build_application_http_client(&network_config::get_network_config(), timeout, policy)?;
+        let mut request = client.request(method, url).headers(request_headers);
+        if let Some(body) = body {
+            request = request.body(body.to_string());
+        }
+        let response = match request.send().await {
+            Ok(response) => response,
+            Err(error) => {
+                record_request_trace(url, &method_name, 0, started);
+                return Err(format!("{method_name} 请求失败: {error:?}"));
+            }
+        };
+        let status_code = response.status().as_u16();
+        record_request_trace(url, &method_name, status_code, started);
+        let bytes = read_response_bytes(response).await?;
+        let body = String::from_utf8(bytes).map_err(|error| format!("响应不是 UTF-8: {error}"))?;
+        Ok(ApplicationHttpResponse { status_code, body })
+    })
+    .await
+    .map_err(|_| format!("请求超时: {} ms", timeout.as_millis()))?
 }
 
 const USER_AGENT_STR: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
@@ -884,7 +1262,7 @@ async fn send_request(
     Ok(response)
 }
 
-async fn read_response_bytes(response: reqwest::Response) -> Result<Vec<u8>, String> {
+async fn read_response_bytes(mut response: reqwest::Response) -> Result<Vec<u8>, String> {
     if response
         .content_length()
         .is_some_and(|size| size > MAX_RESPONSE_BYTES as u64)
@@ -894,17 +1272,26 @@ async fn read_response_bytes(response: reqwest::Response) -> Result<Vec<u8>, Str
             MAX_RESPONSE_BYTES / (1024 * 1024)
         ));
     }
-    let bytes = response
-        .bytes()
+    let mut bytes = Vec::with_capacity(
+        response
+            .content_length()
+            .unwrap_or_default()
+            .min(MAX_RESPONSE_BYTES as u64) as usize,
+    );
+    while let Some(chunk) = response
+        .chunk()
         .await
-        .map_err(|e| format!("读取响应失败: {e}"))?;
-    if bytes.len() > MAX_RESPONSE_BYTES {
-        return Err(format!(
-            "响应过大: 超过 {} MiB",
-            MAX_RESPONSE_BYTES / (1024 * 1024)
-        ));
+        .map_err(|e| format!("读取响应失败: {e}"))?
+    {
+        if bytes.len().saturating_add(chunk.len()) > MAX_RESPONSE_BYTES {
+            return Err(format!(
+                "响应过大: 超过 {} MiB",
+                MAX_RESPONSE_BYTES / (1024 * 1024)
+            ));
+        }
+        bytes.extend_from_slice(&chunk);
     }
-    Ok(bytes.to_vec())
+    Ok(bytes)
 }
 
 fn save_cookies(url: &str, response: &reqwest::Response) {

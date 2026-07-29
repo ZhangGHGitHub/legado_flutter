@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../domain/ports/application_http_request_port.dart';
 import '../../services/ai_config_prefs.dart';
 import '../../services/ai_config_http_service.dart';
 
@@ -21,7 +23,7 @@ class AiConfigDialog extends StatefulWidget {
 }
 
 class _AiConfigDialogState extends State<AiConfigDialog> {
-  final _httpService = AiConfigHttpService();
+  late final AiConfigHttpService _httpService;
   late final TextEditingController _apiUrl;
   late final TextEditingController _apiKey;
   late final TextEditingController _model;
@@ -37,6 +39,9 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
   @override
   void initState() {
     super.initState();
+    _httpService = AiConfigHttpService(
+      context.read<ApplicationHttpRequestPort>(),
+    );
     _apiUrl = TextEditingController();
     _apiKey = TextEditingController();
     _model = TextEditingController();

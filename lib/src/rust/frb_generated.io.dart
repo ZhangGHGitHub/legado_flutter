@@ -34,7 +34,15 @@ abstract class LegadoEngineApiImplPlatform
   });
 
   @protected
+  Map<String, String> dco_decode_Map_String_String_None(dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
+
+  @protected
+  ApplicationHttpResponseDto dco_decode_application_http_response_dto(
+    dynamic raw,
+  );
 
   @protected
   BookInfoItem dco_decode_book_info_item(dynamic raw);
@@ -97,6 +105,9 @@ abstract class LegadoEngineApiImplPlatform
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
+
+  @protected
   List<RssArticleDto> dco_decode_list_rss_article_dto(dynamic raw);
 
   @protected
@@ -125,6 +136,9 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   ReadingStats dco_decode_reading_stats(dynamic raw);
+
+  @protected
+  (String, String) dco_decode_record_string_string(dynamic raw);
 
   @protected
   RssArticleDto dco_decode_rss_article_dto(dynamic raw);
@@ -157,7 +171,17 @@ abstract class LegadoEngineApiImplPlatform
   WebDavEntry dco_decode_web_dav_entry(dynamic raw);
 
   @protected
+  Map<String, String> sse_decode_Map_String_String_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
+
+  @protected
+  ApplicationHttpResponseDto sse_decode_application_http_response_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BookInfoItem sse_decode_book_info_item(SseDeserializer deserializer);
@@ -224,6 +248,11 @@ abstract class LegadoEngineApiImplPlatform
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<(String, String)> sse_decode_list_record_string_string(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<RssArticleDto> sse_decode_list_rss_article_dto(
     SseDeserializer deserializer,
   );
@@ -258,6 +287,11 @@ abstract class LegadoEngineApiImplPlatform
   ReadingStats sse_decode_reading_stats(SseDeserializer deserializer);
 
   @protected
+  (String, String) sse_decode_record_string_string(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RssArticleDto sse_decode_rss_article_dto(SseDeserializer deserializer);
 
   @protected
@@ -290,7 +324,19 @@ abstract class LegadoEngineApiImplPlatform
   WebDavEntry sse_decode_web_dav_entry(SseDeserializer deserializer);
 
   @protected
+  void sse_encode_Map_String_String_None(
+    Map<String, String> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_application_http_response_dto(
+    ApplicationHttpResponseDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_book_info_item(BookInfoItem self, SseSerializer serializer);
@@ -377,6 +423,12 @@ abstract class LegadoEngineApiImplPlatform
   );
 
   @protected
+  void sse_encode_list_record_string_string(
+    List<(String, String)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_rss_article_dto(
     List<RssArticleDto> self,
     SseSerializer serializer,
@@ -423,6 +475,12 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   void sse_encode_reading_stats(ReadingStats self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_record_string_string(
+    (String, String) self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_rss_article_dto(RssArticleDto self, SseSerializer serializer);

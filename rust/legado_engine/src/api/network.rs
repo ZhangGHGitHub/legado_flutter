@@ -1,6 +1,8 @@
 use crate::http::client;
 use crate::http::network_config::{self, NetworkConfig};
 use crate::rule::js_engine;
+use std::collections::HashMap;
+use std::time::Duration;
 
 /// 网络配置 DTO
 #[derive(Debug, Clone)]
@@ -12,6 +14,12 @@ pub struct NetworkConfigDto {
     pub proxy_username: String,
     pub proxy_password: String,
     pub dns_servers: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ApplicationHttpResponseDto {
+    pub status_code: i32,
+    pub body: String,
 }
 
 /// 应用代理 / DNS 配置
@@ -86,4 +94,224 @@ pub async fn fetch_public_text(url: String, user_agent: String) -> Result<String
         .to_string()
     };
     client::fetch_with_source(&url, "GET", None, "UTF-8", &source_json).await
+}
+
+/// 发送应用服务 HTTP 请求。`allow_private_network` 仅供用户显式配置的本地服务使用。
+#[flutter_rust_bridge::frb]
+pub async fn send_application_http_request(
+    url: String,
+    method: String,
+    headers: HashMap<String, String>,
+    body: Option<String>,
+    timeout_seconds: i32,
+    allow_private_network: bool,
+) -> Result<ApplicationHttpResponseDto, String> {
+    if timeout_seconds <= 0 {
+        return Err("请求超时秒数必须大于 0".to_string());
+    }
+    let policy = if allow_private_network {
+        client::ApplicationNetworkPolicy::LocalNetwork
+    } else {
+        client::ApplicationNetworkPolicy::PublicOnly
+    };
+    let response = client::send_application_http_request(
+        &url,
+        &method,
+        &headers,
+        body.as_deref(),
+        Duration::from_secs(timeout_seconds as u64),
+        policy,
+    )
+    .await?;
+    Ok(ApplicationHttpResponseDto {
+        status_code: i32::from(response.status_code),
+        body: response.body,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+
+    fn start_fixture(status: u16, body: &'static str) -> (String, Arc<Mutex<String>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let captured = Arc::new(Mutex::new(String::new()));
+        let request = Arc::clone(&captured);
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0_u8; 4096];
+            loop {
+                let size = stream.read(&mut buffer).unwrap_or_default();
+                if size == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buffer[..size]);
+                let headers_end = bytes
+                    .windows(4)
+                    .position(|window| window == b"\r\n\r\n")
+                    .map(|position| position + 4);
+                let Some(headers_end) = headers_end else {
+                    continue;
+                };
+                let headers = String::from_utf8_lossy(&bytes[..headers_end]);
+                let content_length = headers
+                    .lines()
+                    .find_map(|line| {
+                        line.split_once(':').and_then(|(name, value)| {
+                            name.eq_ignore_ascii_case("content-length")
+                                .then(|| value.trim().parse::<usize>().ok())
+                                .flatten()
+                        })
+                    })
+                    .unwrap_or(0);
+                if bytes.len() >= headers_end + content_length {
+                    break;
+                }
+            }
+            *request.lock().unwrap() = String::from_utf8_lossy(&bytes).to_string();
+            let response = format!(
+                "HTTP/1.1 {status} Fixture\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+        });
+        (format!("http://{address}"), captured)
+    }
+
+    async fn request_fixture(
+        url: String,
+        method: &str,
+        headers: HashMap<String, String>,
+        body: Option<&str>,
+    ) -> ApplicationHttpResponseDto {
+        send_application_http_request(
+            url,
+            method.to_string(),
+            headers,
+            body.map(str::to_string),
+            5,
+            true,
+        )
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn supports_get_post_put_headers_raw_body_and_non_success_status() {
+        for (method, request_body, status, response_body) in [
+            ("GET", None, 200, "get"),
+            ("POST", Some(r#"{"prompt":"测试"}"#), 201, "post"),
+            ("PUT", Some("raw=body"), 409, "put-conflict"),
+        ] {
+            let (base, captured) = start_fixture(status, response_body);
+            let response = request_fixture(
+                format!("{base}/api"),
+                method,
+                HashMap::from([("X-Application-Test".to_string(), method.to_string())]),
+                request_body,
+            )
+            .await;
+
+            assert_eq!(response.status_code, i32::from(status));
+            assert_eq!(response.body, response_body);
+            let captured = captured.lock().unwrap();
+            assert!(captured.starts_with(&format!("{method} /api HTTP/1.1")));
+            assert!(captured.to_ascii_lowercase().contains(&format!(
+                "x-application-test: {}",
+                method.to_ascii_lowercase()
+            )));
+            if let Some(body) = request_body {
+                assert!(captured.ends_with(body));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn public_only_rejects_localhost_and_local_network_allows_loopback() {
+        let error = send_application_http_request(
+            "http://localhost:4567/private".to_string(),
+            "GET".to_string(),
+            HashMap::new(),
+            None,
+            5,
+            false,
+        )
+        .await
+        .unwrap_err();
+        assert!(error.contains("SSRF"), "unexpected error: {error}");
+
+        let (base, _) = start_fixture(200, "local-ok");
+        let response =
+            request_fixture(format!("{base}/private"), "GET", HashMap::new(), None).await;
+        assert_eq!(response.body, "local-ok");
+    }
+
+    #[tokio::test]
+    async fn rejects_response_larger_than_eight_mib() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0_u8; 1024];
+            let _ = stream.read(&mut request);
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                client::MAX_RESPONSE_BYTES + 1
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+        });
+
+        let error = send_application_http_request(
+            format!("http://{address}/large"),
+            "GET".to_string(),
+            HashMap::new(),
+            None,
+            5,
+            true,
+        )
+        .await
+        .unwrap_err();
+        assert!(error.contains("响应过大"), "unexpected error: {error}");
+    }
+
+    #[tokio::test]
+    async fn rejects_streamed_response_without_content_length_over_eight_mib() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0_u8; 1024];
+            let _ = stream.read(&mut request);
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n")
+                .unwrap();
+            let chunk = [b'x'; 64 * 1024];
+            for _ in 0..=client::MAX_RESPONSE_BYTES / chunk.len() {
+                if stream.write_all(&chunk).is_err() {
+                    break;
+                }
+            }
+        });
+
+        let error = send_application_http_request(
+            format!("http://{address}/streamed-large"),
+            "GET".to_string(),
+            HashMap::new(),
+            None,
+            5,
+            true,
+        )
+        .await
+        .unwrap_err();
+        assert!(error.contains("响应过大"), "unexpected error: {error}");
+    }
 }

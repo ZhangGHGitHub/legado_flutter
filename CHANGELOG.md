@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R2：AI 配置与 Obsidian REST API 删除 Dio 直连，统一通过 `ApplicationHttpRequestPort` 和 Rust HTTP 客户端执行 GET/POST/PUT。AI 固定公网策略并对初始 URL、每跳重定向、IPv4/IPv6 字面量和 DNS 解析结果执行 SSRF 防护，直连时固定校验后的解析地址；Obsidian 固定本地网络策略以保留 localhost/LAN。二者均限制 HTTP/HTTPS、默认 TLS、最多 5 次重定向、包含限流等待的总超时和 8 MiB 流式响应上限，非 2xx 保留状态码与正文；AI 模型列表恢复原 Dio 的非 2xx 失败语义。固定 FRB `2.11.1` 重新生成绑定；Rust 核心 `152/152`、Flutter 服务与真实 FRB 往返 `9/9`、串行全量 `601` 通过（`3` 项既有跳过），全仓 analyze 无诊断；架构存量保持 `145`，R2 继续处理二进制网络入口。
+
 - R2：完成当前五条内置字典规则的离线 fixture。Jsoup shim 新增可变 DOM、逗号/`:has` 选择器、Elements 迭代和 Element 构造/修改 API；Jayway shim 保留递归/通配单命中的列表语义并兼容 `[*]field`，Legado DSL 的 `@all` 按原版修正为 outer HTML。海词英文/中文、有道、哔哩、百度普通释义与成语分支经真实 release DLL/FRB `7/7` 验证；Rust 核心 `141/141`、Flutter 串行全量 `592` 通过（`3` 项既有跳过），R2 下一批处理 AI/Obsidian JSON 网络入口。
 
 - R2：补齐字典规则所需的 Rhino/Java 兼容层：新增 `java.base64Encode`、`java.hexDecodeToString`、`JavaImporter`、Jayway `JsonPath`/`Configuration`/`SUPPRESS_EXCEPTIONS`，并兼容字典脚本的 `with(aly)` 包装。Rust 查询管线 fixture 已验证 helper 组合；Rust 核心全量 `135/135`、JS 兼容 Rust `18/18` + Flutter `4/4`、真实 FRB/Dart 字典回归 `12/12`、全仓 analyze 通过。Jsoup DOM 修改 API 和全部内置字典规则仍未完成，R2 未退出。

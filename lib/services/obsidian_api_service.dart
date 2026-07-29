@@ -1,25 +1,23 @@
-import 'package:dio/dio.dart';
+import '../domain/ports/application_http_request_port.dart';
 
 /// Obsidian Local REST API 的 HTTP 适配器。
 class ObsidianApiService {
-  ObsidianApiService({Dio? dio}) : _dio = dio ?? Dio();
+  const ObsidianApiService(this._httpPort);
 
-  final Dio _dio;
+  final ApplicationHttpRequestPort _httpPort;
 
   Future<int> testConnection({required String url, String apiKey = ''}) async {
-    final response = await _dio.get<dynamic>(
-      url.trim(),
-      options: Options(
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 15),
-        headers: {
-          if (apiKey.trim().isNotEmpty)
-            'Authorization': 'Bearer ${apiKey.trim()}',
-        },
-        validateStatus: (_) => true,
-      ),
+    final response = await _httpPort.send(
+      url: url.trim(),
+      method: 'GET',
+      headers: {
+        if (apiKey.trim().isNotEmpty)
+          'Authorization': 'Bearer ${apiKey.trim()}',
+      },
+      timeoutSeconds: 15,
+      policy: ApplicationHttpPolicy.localNetwork,
     );
-    return response.statusCode ?? 0;
+    return response.statusCode;
   }
 
   Future<String> exportMarkdown({
@@ -31,23 +29,22 @@ class ObsidianApiService {
     final target = url.contains('{path}')
         ? url.replaceAll('{path}', Uri.encodeComponent(fileName))
         : (url.endsWith('/') ? '$url$fileName' : '$url/$fileName');
-    final response = await _dio.put<dynamic>(
-      target,
-      data: markdown,
-      options: Options(
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
-        headers: {
-          'Content-Type': 'text/markdown',
-          if (apiKey.trim().isNotEmpty)
-            'Authorization': 'Bearer ${apiKey.trim()}',
-        },
-      ),
+    final response = await _httpPort.send(
+      url: target,
+      method: 'PUT',
+      body: markdown,
+      headers: {
+        'Content-Type': 'text/markdown',
+        if (apiKey.trim().isNotEmpty)
+          'Authorization': 'Bearer ${apiKey.trim()}',
+      },
+      timeoutSeconds: 30,
+      policy: ApplicationHttpPolicy.localNetwork,
     );
-    final code = response.statusCode ?? 0;
+    final code = response.statusCode;
     if (code >= 200 && code < 300) {
       return '已通过 REST API 导出（HTTP $code）';
     }
-    throw Exception('HTTP $code: ${response.data}');
+    throw Exception('HTTP $code: ${response.body}');
   }
 }

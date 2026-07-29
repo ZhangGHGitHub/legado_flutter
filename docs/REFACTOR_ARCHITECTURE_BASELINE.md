@@ -2263,3 +2263,31 @@ Element 构造/追加、属性和文本 setter、Elements 可迭代）仍待后�
 边界结论：当前内置字典规则的离线网络输入、AnalyzeUrl/showRule、主要 Rhino/JsonPath 与 DOM 修改
 链路均已覆盖；本批不宣称外部站点长期在线或所有第三方自定义规则均兼容。R2 下一批按顺序迁移
 AI/Obsidian JSON 网络入口，Obsidian localhost 策略必须与仅允许公网的文本端口分离。
+
+## 109. 2026-07-29：R2 AI/Obsidian 应用 HTTP 请求边界
+
+- 新增 `ApplicationHttpRequestPort` 与 `FrbApplicationHttpRequestPort`，由根组合层提供；AI 配置和
+  Obsidian 页面不再构造 Dio，服务保留原有 URL、headers、JSON/Markdown body 和返回文案契约。
+- Rust 新增通用应用 HTTP 请求入口，支持 GET/POST/PUT、原始 body、包含限流等待的总超时及非 2xx
+  状态码/正文；响应按流读取并严格限制为 8 MiB，固定 FRB `2.11.1` 重新生成绑定。
+- AI 固定 `publicOnly`：初始 URL、每跳重定向、IPv4/IPv6 字面量及 DNS 解析结果均执行 SSRF 防护，
+  直连时由过滤 DNS resolver 固定校验后的地址；Obsidian 固定 `localNetwork`：保留 localhost/LAN，
+  并仍限制为 HTTP/HTTPS。两种策略均使用默认 TLS 校验和最多 5 次重定向。
+- AI 模型列表恢复迁移前 Dio 对非 2xx 的失败语义；模型可用性测试和 Obsidian 继续按原行为读取
+  状态码，Obsidian 导出错误继续包含服务端正文。
+
+验证结果：
+
+- `cargo test -p legado_engine api::network::tests -- --nocapture`：`4/4` 通过；应用 HTTP 策略回归
+  `6/6`，覆盖 IPv6/DNS 私网拒绝、逐跳策略、恰好 5 跳成功/第 6 跳拒绝和限流等待超时。
+- `cargo build -p legado_engine --release` 通过；`cargo test -p legado_engine` 核心单测 `152/152`，
+  其余集成与文档测试无失败。
+- AI/Obsidian Flutter 服务契约和 Windows release DLL 真实 FRB 本地往返 `9/9`；
+  `flutter test --no-pub --concurrency=1`：`601` 通过、`3` 项既有条件跳过；
+  `flutter analyze --no-pub` 无诊断。
+- 架构脚本 fixture 通过；真实扫描按设计以非零退出并保持 `145` 项存量：SharedPreferences `14`、
+  Feature 业务 service `131`，没有新增、削弱或白名单化。
+
+边界结论：AI/Obsidian JSON 网络请求已进入 application port 和 Rust HTTP 边界，公网与本地网络策略
+保持显式分离。本批未修改 `legado-main/`、正文、目录、分页、章节身份、阅读位置或断行规则；R2
+继续按顺序审计和迁移二进制网络入口，尚未最终退出。
