@@ -2356,3 +2356,17 @@ R2 下一批先迁移正文图片缓存、阅读样式 ZIP 与 HTTP TTS，前一
 
 边界结论：页面图片展示已进入统一 Rust/FRB 二进制网络边界。R2 尚需移除 Dio 依赖声明、核查
 WebView Cookie 边界并执行阶段退出门禁，当前不提前宣称退出。
+
+## 113. 2026-07-29：R2 Dio 依赖清理
+
+- 从 `pubspec.yaml` 删除已无调用者的 Dio 直接依赖；`flutter pub get` 同步移除 lockfile 中的 `dio`
+  与传递依赖 `dio_web_adapter`，没有升级其余依赖版本。
+- 源码扫描确认生产/测试 `package:dio` import、pubspec 声明和 lockfile 条目均为 `0`。
+
+验证结果：
+
+- `flutter pub get` 成功；`flutter analyze --no-pub` 无诊断。
+- `flutter test --no-pub --concurrency=1`：`618` 通过、`3` 项既有条件跳过。
+
+边界结论：Dart/Flutter Dio 依赖已完整移除。R2 下一批处理书源登录 WebView Cookie 到 Rust 网络会话的
+同步闭环；普通 RSS WebView 不共享书源 Cookie，`java.startBrowserAwait` 真实宿主另列后续独立批次。

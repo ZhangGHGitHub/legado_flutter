@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R2：移除已无调用者的 Dio 直接依赖及传递的 `dio_web_adapter` lockfile 条目；生产/测试 import、pubspec 声明和 lockfile 条目均为 `0`，其余依赖版本未升级。`flutter pub get`、全仓 analyze 与 Flutter 串行全量 `618` 通过（`3` 项既有跳过）；R2 继续处理书源登录 WebView Cookie 闭环。
+
 - R2：页面远程图片统一迁入 `RemoteBinaryImage` 和 `ApplicationBinaryHttpRequestPort`。书源、漫画、封面、RSS 与正文图片保留 `localNetwork`，漫画继续携带书源 headers；字典结果图片固定 `publicOnly`。统一组件限制 32 MiB 响应，提供 64 MiB/128 项内存 LRU 和同请求并发合并，端口缺失或请求失败时仅显示调用者占位，不再回退 Flutter 网络栈。定向回归 `18/18`、Flutter 串行全量 `618` 通过（`3` 项既有跳过），analyze 无诊断；生产代码中的 `Image.network/NetworkImage` 与生产/测试 Dio import 均清零，Dio 依赖声明待下一批移除。
 
 - R2：迁移剩余三个 Dio 二进制业务入口。正文图片缓存改由统一二进制 port 下载，保留书源/登录 headers、缓存键、并发去重和磁盘缓存，并增加 32 MiB 流式上限；阅读样式 ZIP 改走 binary port，保留 localhost/LAN 与 30 秒行为，增加 64 MiB 下载、32 MiB 单文件、128 MiB 解压总量和路径穿越门禁；HTTP TTS 保留 GET/POST、原始 body、headers、Content-Type 正则、本地网络与 16 MiB 上限，由根组合层配置端口，真实 Android 系统 TTS 不变。三组定向 `28/28`、Flutter 串行全量 `611` 通过（`3` 项既有跳过），analyze 无诊断；生产与测试中的 Dio 导入清零，页面远程图片直连仍待下一批。

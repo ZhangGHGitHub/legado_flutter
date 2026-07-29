@@ -19,8 +19,7 @@ dependencies:
   path_provider: ^2.1.5
   path: ^1.9.1
 
-  # ── 网络请求 ──
-  dio: ^5.7.0
+  # ── 加密与摘要 ──
   crypto: ^3.0.7
 
   # ── HTML 解析（用于书源规则） ──
