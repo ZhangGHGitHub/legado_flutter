@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/ports/application_binary_http_request_port.dart';
+import '../domain/ports/application_http_request_port.dart';
 import '../domain/ports/http_tts_cache_port.dart';
 import 'http_tts_cache_service.dart';
 import 'http_tts_service.dart';
@@ -46,8 +48,18 @@ class TtsEngineOption {
 }
 
 class TtsService extends ChangeNotifier {
-  TtsService._() : this();
-  static final TtsService instance = TtsService._();
+  static TtsService? _instance;
+  static ApplicationBinaryHttpRequestPort? _defaultBinaryHttpPort;
+
+  static TtsService get instance => _instance ??= TtsService();
+
+  static void configureBinaryHttpPort(ApplicationBinaryHttpRequestPort port) {
+    _defaultBinaryHttpPort = port;
+    final instance = _instance;
+    if (instance != null) {
+      instance._httpClient = HttpTtsClient(port);
+    }
+  }
 
   /// 依赖可注入，便于验证 HTTP TTS 的请求和缓存语义；默认构造仍使用
   /// 应用实际的 HTTP 客户端和临时目录缓存。
@@ -57,7 +69,8 @@ class TtsService extends ChangeNotifier {
     HttpTtsCachePort? httpCache,
     HttpTtsAudioSink? httpAudioSink,
   }) : _flutterTts = flutterTts ?? _createEngine(),
-       _httpClient = httpClient ?? HttpTtsClient(),
+       _httpClient =
+           httpClient ?? HttpTtsClient(_requireDefaultBinaryHttpPort()),
        _httpCache = httpCache ?? HttpTtsCacheService(),
        _httpAudioSink = httpAudioSink;
 
@@ -77,8 +90,12 @@ class TtsService extends ChangeNotifier {
     return FlutterTts();
   }
 
+  static ApplicationBinaryHttpRequestPort _requireDefaultBinaryHttpPort() {
+    return _defaultBinaryHttpPort ?? const _UnavailableBinaryHttpRequestPort();
+  }
+
   final FlutterTts? _flutterTts;
-  final HttpTtsClient _httpClient;
+  HttpTtsClient _httpClient;
   final HttpTtsCachePort _httpCache;
   final HttpTtsAudioSink? _httpAudioSink;
   AudioPlayer? _httpPlayer;
@@ -584,5 +601,23 @@ class TtsService extends ChangeNotifier {
     player.onPlayerComplete.listen((_) => _onUtteranceDone());
     _httpPlayer = player;
     return player;
+  }
+}
+
+class _UnavailableBinaryHttpRequestPort
+    implements ApplicationBinaryHttpRequestPort {
+  const _UnavailableBinaryHttpRequestPort();
+
+  @override
+  Future<ApplicationBinaryHttpResponse> send({
+    required String url,
+    required String method,
+    Map<String, String> headers = const {},
+    Uint8List? body,
+    int timeoutSeconds = 30,
+    int maxResponseBytes = 0,
+    required ApplicationHttpPolicy policy,
+  }) {
+    return Future.error(StateError('HTTP TTS 二进制网络端口尚未配置'));
   }
 }

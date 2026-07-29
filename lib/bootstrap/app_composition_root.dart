@@ -75,6 +75,7 @@ import '../services/reading_record_service.dart';
 import '../services/rss_service.dart';
 import '../services/rss_sort_urls.dart';
 import '../services/source_login_service.dart';
+import '../services/tts_service.dart';
 import '../services/web_api_service.dart';
 import '../services/webdav_prefs.dart';
 
@@ -89,10 +90,12 @@ abstract final class AppCompositionRoot {
     const networkEnginePort = FrbNetworkEnginePort();
     const webdavRepository = FrbWebDavRepository();
     const publicTextPort = FrbPublicTextFetchPort();
+    const binaryHttpPort = FrbApplicationBinaryHttpRequestPort();
     final bookRepository = BookDao();
     final progressStore = await SharedPreferencesBookProgressSyncStore.load();
 
     await _configureStaticServices(networkEnginePort);
+    TtsService.configureBinaryHttpPort(binaryHttpPort);
 
     final bookSourceService = BookSourceService(
       searchPort: FrbBookSourceSearchPort(),
@@ -160,7 +163,7 @@ abstract final class AppCompositionRoot {
             create: (_) => const FrbApplicationHttpRequestPort(),
           ),
           Provider<ApplicationBinaryHttpRequestPort>(
-            create: (_) => const FrbApplicationBinaryHttpRequestPort(),
+            create: (_) => binaryHttpPort,
           ),
           Provider<BookSourceDebugPort>(
             create: (_) => FrbBookSourceDebugPort(),

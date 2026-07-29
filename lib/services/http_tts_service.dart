@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
+import '../domain/ports/application_binary_http_request_port.dart';
+import '../domain/ports/application_http_request_port.dart';
 
 /// HTTP TTS 书源配置。URL 兼容 Legado 常用的 `{{speakText}}`、
 /// `{{speakSpeed}}` 和 `{{speed}}` 占位符。
@@ -123,34 +124,35 @@ class HttpTtsRequest {
 }
 
 class HttpTtsClient {
-  HttpTtsClient({Dio? dio}) : _dio = dio ?? Dio();
+  const HttpTtsClient(this._httpPort);
 
   static const maxAudioBytes = 16 * 1024 * 1024;
-  final Dio _dio;
+  final ApplicationBinaryHttpRequestPort _httpPort;
 
   Future<Uint8List> fetchAudio(HttpTtsRequest request) async {
-    final response = await _dio.request<List<int>>(
-      request.url,
-      data: request.body,
-      options: Options(
-        method: request.method,
-        headers: request.headers,
-        responseType: ResponseType.bytes,
-        validateStatus: (status) =>
-            status != null && status >= 200 && status < 300,
-        followRedirects: true,
-        maxRedirects: 5,
-      ),
+    final response = await _httpPort.send(
+      url: request.url,
+      method: request.method,
+      headers: request.headers,
+      body: request.body == null
+          ? null
+          : Uint8List.fromList(utf8.encode(request.body!)),
+      timeoutSeconds: 30,
+      maxResponseBytes: maxAudioBytes,
+      policy: ApplicationHttpPolicy.localNetwork,
     );
-    final data = response.data;
-    if (data == null || data.isEmpty) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError('HTTP TTS 请求失败 HTTP ${response.statusCode}');
+    }
+    final data = response.body;
+    if (data.isEmpty) {
       throw StateError('HTTP TTS 返回空音频');
     }
     if (data.length > maxAudioBytes) {
       throw StateError('HTTP TTS 音频过大');
     }
-    final responseContentType = response.headers.value('content-type');
-    if (responseContentType != null) {
+    final responseContentType = response.contentType;
+    if (responseContentType.isNotEmpty) {
       final mediaType = responseContentType.split(';').first.trim();
       if (mediaType == 'application/json' ||
           mediaType.toLowerCase().startsWith('text/')) {
@@ -168,6 +170,6 @@ class HttpTtsClient {
         }
       }
     }
-    return Uint8List.fromList(data);
+    return data;
   }
 }

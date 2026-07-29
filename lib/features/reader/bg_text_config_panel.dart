@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
+import '../../domain/ports/application_binary_http_request_port.dart';
 import '../../models/read_style_config.dart';
 import '../../services/read_style_zip_service.dart';
 import 'reader_settings.dart';
@@ -67,7 +69,7 @@ class _BgTextConfigSheet extends StatefulWidget {
 }
 
 class _BgTextConfigSheetState extends State<_BgTextConfigSheet> {
-  final _zip = ReadStyleZipService();
+  late final ReadStyleZipService _zip;
   late String _name;
   late Color _bg;
   late Color _text;
@@ -80,6 +82,9 @@ class _BgTextConfigSheetState extends State<_BgTextConfigSheet> {
   @override
   void initState() {
     super.initState();
+    _zip = ReadStyleZipService(
+      context.read<ApplicationBinaryHttpRequestPort>(),
+    );
     final o = widget.initialOverride;
     _name = o?.name?.isNotEmpty == true ? o!.name! : widget.themeLabel;
     _bg = o?.background ?? widget.baseTheme.background;

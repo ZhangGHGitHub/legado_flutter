@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R2：迁移剩余三个 Dio 二进制业务入口。正文图片缓存改由统一二进制 port 下载，保留书源/登录 headers、缓存键、并发去重和磁盘缓存，并增加 32 MiB 流式上限；阅读样式 ZIP 改走 binary port，保留 localhost/LAN 与 30 秒行为，增加 64 MiB 下载、32 MiB 单文件、128 MiB 解压总量和路径穿越门禁；HTTP TTS 保留 GET/POST、原始 body、headers、Content-Type 正则、本地网络与 16 MiB 上限，由根组合层配置端口，真实 Android 系统 TTS 不变。三组定向 `28/28`、Flutter 串行全量 `611` 通过（`3` 项既有跳过），analyze 无诊断；生产与测试中的 Dio 导入清零，页面远程图片直连仍待下一批。
+
 - R2：新增统一 `ApplicationBinaryHttpRequestPort` 与 Rust/FRB 二进制 HTTP 入口，复用既有 HTTP/HTTPS、默认 TLS、public/local 策略、逐跳重定向、DNS/IP SSRF、限流和总超时；支持原始请求/响应字节、状态码、Content-Type 与调用者可选的流式响应上限，`0` 保留旧调用者无上限语义。固定 FRB `2.11.1` 生成绑定；Rust `153/153`、Windows release DLL 文本/字节真实往返 `2/2`、Flutter 串行全量 `602` 通过（`3` 项既有跳过），全仓 analyze 无诊断。本批只建立底层端口，三个 Dio 二进制调用者尚待下一批迁移。
 
 - R2：AI 配置与 Obsidian REST API 删除 Dio 直连，统一通过 `ApplicationHttpRequestPort` 和 Rust HTTP 客户端执行 GET/POST/PUT。AI 固定公网策略并对初始 URL、每跳重定向、IPv4/IPv6 字面量和 DNS 解析结果执行 SSRF 防护，直连时固定校验后的解析地址；Obsidian 固定本地网络策略以保留 localhost/LAN。二者均限制 HTTP/HTTPS、默认 TLS、最多 5 次重定向、包含限流等待的总超时和 8 MiB 流式响应上限，非 2xx 保留状态码与正文；AI 模型列表恢复原 Dio 的非 2xx 失败语义。固定 FRB `2.11.1` 重新生成绑定；Rust 核心 `152/152`、Flutter 服务与真实 FRB 往返 `9/9`、串行全量 `601` 通过（`3` 项既有跳过），全仓 analyze 无诊断；架构存量保持 `145`，R2 继续处理二进制网络入口。

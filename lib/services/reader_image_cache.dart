@@ -3,12 +3,13 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
-import 'package:dio/dio.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:xml/xml.dart';
 
 import 'app_paths.dart';
+import '../domain/ports/application_binary_http_request_port.dart';
+import '../domain/ports/application_http_request_port.dart';
 
 typedef ReaderImageDownloader =
     Future<Uint8List> Function(Uri uri, Map<String, String> headers);
@@ -38,27 +39,36 @@ class ReaderImageCache {
 
   ReaderImageCache({required this.directory, required this.downloader});
 
-  static Future<ReaderImageCache> createDefault() async {
-    final bookCache = await AppPaths.bookCacheDir();
-    final directory = Directory(p.join(bookCache.path, 'reader_images'));
-    final dio = Dio(
-      BaseOptions(
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 20),
-      ),
-    );
+  static const maxImageBytes = 32 * 1024 * 1024;
+
+  static Future<ReaderImageCache> createDefault(
+    ApplicationBinaryHttpRequestPort httpPort, {
+    Directory? directoryOverride,
+  }) async {
+    final directory =
+        directoryOverride ??
+        Directory(
+          p.join((await AppPaths.bookCacheDir()).path, 'reader_images'),
+        );
     return ReaderImageCache(
       directory: directory,
       downloader: (uri, headers) async {
-        final response = await dio.get<List<int>>(
-          uri.toString(),
-          options: Options(responseType: ResponseType.bytes, headers: headers),
+        final response = await httpPort.send(
+          url: uri.toString(),
+          method: 'GET',
+          headers: headers,
+          timeoutSeconds: 20,
+          maxResponseBytes: maxImageBytes,
+          policy: ApplicationHttpPolicy.localNetwork,
         );
-        final data = response.data;
-        if (data == null || data.isEmpty) {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw StateError('reader image HTTP ${response.statusCode}');
+        }
+        final data = response.body;
+        if (data.isEmpty) {
           throw StateError('empty reader image response');
         }
-        return Uint8List.fromList(data);
+        return data;
       },
     );
   }

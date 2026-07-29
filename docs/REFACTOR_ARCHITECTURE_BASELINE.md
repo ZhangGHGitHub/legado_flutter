@@ -2314,3 +2314,24 @@ AI/Obsidian JSON 网络入口，Obsidian localhost 策略必须与仅允许公�
 
 边界结论：统一二进制传输能力已就绪，但生产 Dio 二进制入口和 `Image.network/NetworkImage` 仍存在；
 R2 下一批先迁移正文图片缓存、阅读样式 ZIP 与 HTTP TTS，前一批全绿后再处理页面远程图片直连。
+
+## 111. 2026-07-29：R2 Dio 二进制调用者迁移
+
+- `ReaderImageCache.createDefault` 删除 Dio，改由根组合层二进制 port 下载；保留 URL+headers 缓存键、
+  书源/登录 headers、内存/磁盘缓存、并发去重和失败返回空结果，并增加 32 MiB 流式响应上限。
+- `ReadStyleZipService` 删除 Dio，通过构造参数取得二进制 port；URL 导入保留 trim、GET、30 秒和
+  localhost/LAN。新增 64 MiB 下载上限、32 MiB 解压单文件、128 MiB 解压总量，以及绝对路径和
+  `..` 路径穿越拒绝；readConfig、字体和背景落盘语义不变。
+- `HttpTtsClient` 删除 Dio，保留 GET/POST、原始 UTF-8 body、headers、非 2xx 失败、文本/JSON 错误、
+  Content-Type 正则和 16 MiB 上限，使用 `localNetwork` 保留本地 TTS 端点。`TtsService` 仅增加根组合
+  层端口配置，系统 TTS、播放器、句子推进和真实 Android TTS 暂停条件不变。
+
+验证结果：
+
+- HTTP TTS、正文图片缓存和阅读样式 ZIP 定向回归 `28/28`；`flutter analyze --no-pub` 无诊断。
+- `flutter test --no-pub --concurrency=1`：`611` 通过、`3` 项既有条件跳过。
+- `git grep` 已确认生产代码和测试代码中的 `package:dio` import 均为 `0`；依赖声明待页面远程图片
+  批次完成后统一清理。
+
+边界结论：三个业务二进制 Dio 入口已收敛到 Rust/FRB port；页面中的 `Image.network/NetworkImage`
+仍绕过该边界。R2 下一批按前一批全绿原则迁移书源/漫画/封面，再迁移 RSS/字典远程图片。

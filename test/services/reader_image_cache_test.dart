@@ -4,7 +4,47 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
+import 'package:legado_flutter/domain/ports/application_binary_http_request_port.dart';
+import 'package:legado_flutter/domain/ports/application_http_request_port.dart';
 import 'package:legado_flutter/services/reader_image_cache.dart';
+
+class _FakeBinaryHttpPort implements ApplicationBinaryHttpRequestPort {
+  ApplicationBinaryHttpResponse response = ApplicationBinaryHttpResponse(
+    statusCode: 200,
+    contentType: 'image/png',
+    body: Uint8List(0),
+  );
+  ({
+    String url,
+    String method,
+    Map<String, String> headers,
+    int timeoutSeconds,
+    int maxResponseBytes,
+    ApplicationHttpPolicy policy,
+  })?
+  call;
+
+  @override
+  Future<ApplicationBinaryHttpResponse> send({
+    required String url,
+    required String method,
+    Map<String, String> headers = const {},
+    Uint8List? body,
+    int timeoutSeconds = 30,
+    int maxResponseBytes = 0,
+    required ApplicationHttpPolicy policy,
+  }) async {
+    call = (
+      url: url,
+      method: method,
+      headers: Map.of(headers),
+      timeoutSeconds: timeoutSeconds,
+      maxResponseBytes: maxResponseBytes,
+      policy: policy,
+    );
+    return response;
+  }
+}
 
 void main() {
   late Directory directory;
@@ -17,6 +57,36 @@ void main() {
     if (await directory.exists()) {
       await directory.delete(recursive: true);
     }
+  });
+
+  test('default cache downloads through the binary Rust port', () async {
+    final bytes = Uint8List.fromList(
+      img.encodePng(img.Image(width: 3, height: 2)),
+    );
+    final port = _FakeBinaryHttpPort()
+      ..response = ApplicationBinaryHttpResponse(
+        statusCode: 200,
+        contentType: 'image/png',
+        body: bytes,
+      );
+    final cache = await ReaderImageCache.createDefault(
+      port,
+      directoryOverride: directory,
+    );
+
+    expect(
+      await cache.loadBytes(
+        'http://127.0.0.1/image.png',
+        headers: const {'Cookie': 'reader=1'},
+      ),
+      bytes,
+    );
+    expect(port.call?.url, 'http://127.0.0.1/image.png');
+    expect(port.call?.method, 'GET');
+    expect(port.call?.headers, {'Cookie': 'reader=1'});
+    expect(port.call?.timeoutSeconds, 20);
+    expect(port.call?.maxResponseBytes, ReaderImageCache.maxImageBytes);
+    expect(port.call?.policy, ApplicationHttpPolicy.localNetwork);
   });
 
   test('decodes raster dimensions and caches by source headers', () async {

@@ -13,6 +13,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../application/reader/reading_position_mapper.dart';
 import '../../application/reader/book_progress_factory.dart';
+import '../../domain/ports/application_binary_http_request_port.dart';
 import '../../domain/reader/book_progress.dart';
 import '../../model/read_book.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -235,7 +236,9 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Future<void> _loadReaderImageCache() async {
     try {
-      final cache = await ReaderImageCache.createDefault();
+      final cache = await ReaderImageCache.createDefault(
+        context.read<ApplicationBinaryHttpRequestPort>(),
+      );
       if (!mounted) return;
       setState(() => _readerImageCache = cache);
       unawaited(_loadReaderImageSizes());

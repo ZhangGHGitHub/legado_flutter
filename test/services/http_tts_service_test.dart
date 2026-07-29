@@ -1,15 +1,17 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/domain/ports/application_binary_http_request_port.dart';
+import 'package:legado_flutter/domain/ports/application_http_request_port.dart';
 import 'package:legado_flutter/services/http_tts_cache_service.dart';
 import 'package:legado_flutter/services/http_tts_service.dart';
 import 'package:legado_flutter/services/tts_service.dart';
 
 class _CountingHttpTtsClient extends HttpTtsClient {
-  _CountingHttpTtsClient() : super(dio: Dio());
+  _CountingHttpTtsClient() : super(_FakeBinaryHttpPort());
 
   int fetchCount = 0;
 
@@ -17,6 +19,59 @@ class _CountingHttpTtsClient extends HttpTtsClient {
   Future<Uint8List> fetchAudio(HttpTtsRequest request) async {
     fetchCount++;
     return Uint8List.fromList([1, 2, 3]);
+  }
+}
+
+class _BinaryCall {
+  const _BinaryCall({
+    required this.url,
+    required this.method,
+    required this.headers,
+    required this.body,
+    required this.timeoutSeconds,
+    required this.maxResponseBytes,
+    required this.policy,
+  });
+
+  final String url;
+  final String method;
+  final Map<String, String> headers;
+  final Uint8List? body;
+  final int timeoutSeconds;
+  final int maxResponseBytes;
+  final ApplicationHttpPolicy policy;
+}
+
+class _FakeBinaryHttpPort implements ApplicationBinaryHttpRequestPort {
+  ApplicationBinaryHttpResponse response = ApplicationBinaryHttpResponse(
+    statusCode: 200,
+    contentType: 'audio/mpeg',
+    body: Uint8List.fromList([1, 2, 3]),
+  );
+  final calls = <_BinaryCall>[];
+
+  @override
+  Future<ApplicationBinaryHttpResponse> send({
+    required String url,
+    required String method,
+    Map<String, String> headers = const {},
+    Uint8List? body,
+    int timeoutSeconds = 30,
+    int maxResponseBytes = 0,
+    required ApplicationHttpPolicy policy,
+  }) async {
+    calls.add(
+      _BinaryCall(
+        url: url,
+        method: method,
+        headers: Map.of(headers),
+        body: body,
+        timeoutSeconds: timeoutSeconds,
+        maxResponseBytes: maxResponseBytes,
+        policy: policy,
+      ),
+    );
+    return response;
   }
 }
 
@@ -57,41 +112,72 @@ void main() {
   test(
     'rejects a JSON error response instead of passing it to the player',
     () async {
-      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      server.listen((request) {
-        request.response.headers.contentType = ContentType.json;
-        request.response.write('{"error":"quota"}');
-        request.response.close();
-      });
-      addTearDown(() => server.close(force: true));
-
-      final request = HttpTtsRequest(
-        url: 'http://127.0.0.1:${server.port}/tts',
+      final port = _FakeBinaryHttpPort()
+        ..response = ApplicationBinaryHttpResponse(
+          statusCode: 200,
+          contentType: 'application/json; charset=utf-8',
+          body: Uint8List.fromList(utf8.encode('{"error":"quota"}')),
+        );
+      const request = HttpTtsRequest(
+        url: 'http://127.0.0.1:8080/tts',
         method: 'GET',
       );
       expect(
-        () => HttpTtsClient(dio: Dio()).fetchAudio(request),
+        () => HttpTtsClient(port).fetchAudio(request),
         throwsA(isA<StateError>()),
       );
     },
   );
 
   test('enforces the original response content type pattern', () async {
-    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    server.listen((request) {
-      request.response.headers.contentType = ContentType('audio', 'wav');
-      request.response.add([0, 1, 2]);
-      request.response.close();
-    });
-    addTearDown(() => server.close(force: true));
-
-    final request = HttpTtsRequest(
-      url: 'http://127.0.0.1:${server.port}/tts',
+    final port = _FakeBinaryHttpPort()
+      ..response = ApplicationBinaryHttpResponse(
+        statusCode: 200,
+        contentType: 'audio/wav',
+        body: Uint8List.fromList([0, 1, 2]),
+      );
+    const request = HttpTtsRequest(
+      url: 'http://127.0.0.1:8080/tts',
       method: 'GET',
       responseContentTypePattern: r'audio/mpeg',
     );
     expect(
-      () => HttpTtsClient(dio: Dio()).fetchAudio(request),
+      () => HttpTtsClient(port).fetchAudio(request),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test('fetchAudio forwards request semantics and the 16 MiB limit', () async {
+    final port = _FakeBinaryHttpPort();
+    const request = HttpTtsRequest(
+      url: 'http://127.0.0.1:8080/tts',
+      method: 'POST',
+      body: 'text=测试',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    );
+
+    expect(await HttpTtsClient(port).fetchAudio(request), [1, 2, 3]);
+    final call = port.calls.single;
+    expect(call.url, request.url);
+    expect(call.method, 'POST');
+    expect(call.headers, request.headers);
+    expect(utf8.decode(call.body!), request.body);
+    expect(call.timeoutSeconds, 30);
+    expect(call.maxResponseBytes, HttpTtsClient.maxAudioBytes);
+    expect(call.policy, ApplicationHttpPolicy.localNetwork);
+  });
+
+  test('fetchAudio rejects non-success status', () async {
+    final port = _FakeBinaryHttpPort()
+      ..response = ApplicationBinaryHttpResponse(
+        statusCode: 429,
+        contentType: 'audio/mpeg',
+        body: Uint8List.fromList([1]),
+      );
+    expect(
+      () => HttpTtsClient(port).fetchAudio(
+        const HttpTtsRequest(url: 'http://localhost/tts', method: 'GET'),
+      ),
       throwsA(isA<StateError>()),
     );
   });

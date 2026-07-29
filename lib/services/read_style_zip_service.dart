@@ -3,20 +3,24 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
-import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../domain/ports/application_binary_http_request_port.dart';
+import '../domain/ports/application_http_request_port.dart';
 import '../models/read_style_config.dart';
 
 /// 阅读排版 zip 导入/导出（对齐 legado `ReadBookConfig.import` / `exportConfig`）
 ///
 /// zip 内至少含 `readConfig.json`；可选字体与背景图片文件。
 class ReadStyleZipService {
-  ReadStyleZipService({Dio? dio}) : _dio = dio ?? Dio();
+  ReadStyleZipService(this._httpPort);
 
-  final Dio _dio;
+  final ApplicationBinaryHttpRequestPort _httpPort;
   static const configFileName = 'readConfig.json';
+  static const maxDownloadBytes = 64 * 1024 * 1024;
+  static const maxArchiveFileBytes = 32 * 1024 * 1024;
+  static const maxArchiveTotalBytes = 128 * 1024 * 1024;
 
   Future<Directory> _bgDir() async {
     final root = await getApplicationSupportDirectory();
@@ -35,6 +39,7 @@ class ReadStyleZipService {
   /// 从 zip 字节解析并落盘字体/背景；返回 Config。
   Future<ReadStyleConfig> importBytes(Uint8List bytes) async {
     final archive = ZipDecoder().decodeBytes(bytes);
+    _validateArchive(archive);
     ArchiveFile? configEntry;
     for (final f in archive.files) {
       if (!f.isFile) continue;
@@ -47,13 +52,12 @@ class ReadStyleZipService {
     if (configEntry == null) {
       throw const FormatException('zip 中缺少 readConfig.json');
     }
-    final jsonText = utf8.decode(configEntry.content as List<int>);
+    final jsonText = utf8.decode(_archiveBytes(configEntry));
     final decoded = jsonDecode(jsonText);
     if (decoded is! Map) {
       throw const FormatException('readConfig.json 须为对象');
     }
-    var config =
-        ReadStyleConfig.fromJson(Map<String, dynamic>.from(decoded));
+    var config = ReadStyleConfig.fromJson(Map<String, dynamic>.from(decoded));
 
     // 字体
     if (config.textFont.isNotEmpty) {
@@ -103,10 +107,42 @@ class ReadStyleZipService {
     for (final f in archive.files) {
       if (!f.isFile) continue;
       if (p.basename(f.name) == fileName) {
-        return Uint8List.fromList(f.content as List<int>);
+        return _archiveBytes(f);
       }
     }
     return null;
+  }
+
+  void _validateArchive(Archive archive) {
+    var totalBytes = 0;
+    for (final file in archive.files) {
+      final normalizedName = file.name.replaceAll('\\', '/');
+      final isAbsolute =
+          normalizedName.startsWith('/') ||
+          RegExp(r'^[A-Za-z]:/').hasMatch(normalizedName);
+      final hasParentTraversal = normalizedName
+          .split('/')
+          .any((segment) => segment == '..');
+      if (isAbsolute || hasParentTraversal) {
+        throw FormatException('zip 包含不安全路径：${file.name}');
+      }
+      if (!file.isFile) continue;
+      if (file.size < 0 || file.size > maxArchiveFileBytes) {
+        throw FormatException('zip 单文件解压后不得超过 32 MiB：${file.name}');
+      }
+      totalBytes += file.size;
+      if (totalBytes > maxArchiveTotalBytes) {
+        throw const FormatException('zip 解压后总量不得超过 128 MiB');
+      }
+    }
+  }
+
+  Uint8List _archiveBytes(ArchiveFile file) {
+    final bytes = file.content;
+    if (bytes.length > maxArchiveFileBytes) {
+      throw FormatException('zip 单文件解压后不得超过 32 MiB：${file.name}');
+    }
+    return Uint8List.fromList(bytes);
   }
 
   Future<ReadStyleConfig> importFile(File file) async {
@@ -114,18 +150,24 @@ class ReadStyleZipService {
   }
 
   Future<ReadStyleConfig> importFromUrl(String url) async {
-    final response = await _dio.get<List<int>>(
-      url.trim(),
-      options: Options(
-        responseType: ResponseType.bytes,
-        receiveTimeout: const Duration(seconds: 30),
-      ),
+    final trimmedUrl = url.trim();
+    final response = await _httpPort.send(
+      url: trimmedUrl,
+      method: 'GET',
+      timeoutSeconds: 30,
+      maxResponseBytes: maxDownloadBytes,
+      policy: ApplicationHttpPolicy.localNetwork,
     );
-    final data = response.data;
-    if (data == null || data.isEmpty) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw HttpException(
+        '主题 URL 请求失败（HTTP ${response.statusCode}）',
+        uri: Uri.tryParse(trimmedUrl),
+      );
+    }
+    if (response.body.isEmpty) {
       throw const FormatException('主题 URL 返回空内容');
     }
-    return importBytes(Uint8List.fromList(data));
+    return importBytes(response.body);
   }
 
   /// 导出为 zip 字节（含 readConfig.json + 可选背景文件）
@@ -135,9 +177,11 @@ class ReadStyleZipService {
 
     Future<void> addBgIfNeeded(String pathOrName, int bgType) async {
       if (bgType != 2 || pathOrName.isEmpty) return;
-      final file = File(pathOrName.contains(p.separator)
-          ? pathOrName
-          : p.join((await _bgDir()).path, pathOrName));
+      final file = File(
+        pathOrName.contains(p.separator)
+            ? pathOrName
+            : p.join((await _bgDir()).path, pathOrName),
+      );
       if (!await file.exists()) return;
       final name = p.basename(file.path);
       archive.addFile(
@@ -151,7 +195,11 @@ class ReadStyleZipService {
       if (await fontFile.exists()) {
         final name = p.basename(fontFile.path);
         archive.addFile(
-          ArchiveFile(name, await fontFile.length(), await fontFile.readAsBytes()),
+          ArchiveFile(
+            name,
+            await fontFile.length(),
+            await fontFile.readAsBytes(),
+          ),
         );
         export = export.copyWith(textFont: name);
       }
