@@ -43,6 +43,18 @@ String drainHttpRequestTrace() =>
 NetworkConfigDto getNetworkConfig() =>
     LegadoEngine.instance.api.crateApiNetworkGetNetworkConfig();
 
+/// 通过统一 Rust HTTP 客户端抓取公开文本资源。
+///
+/// `user_agent` 为空时使用引擎默认值；传入 `null` 对齐规则订阅
+/// `#requestWithoutUA` 的既有请求语义。
+Future<String> fetchPublicText({
+  required String url,
+  required String userAgent,
+}) => LegadoEngine.instance.api.crateApiNetworkFetchPublicText(
+  url: url,
+  userAgent: userAgent,
+);
+
 /// 网络配置 DTO
 class NetworkConfigDto {
   final bool proxyEnabled;

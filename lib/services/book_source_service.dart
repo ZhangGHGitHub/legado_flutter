@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -9,16 +8,17 @@ import '../domain/ports/book_source_content_port.dart';
 import '../domain/ports/book_source_explore_port.dart';
 import '../domain/ports/book_source_search_port.dart';
 import '../domain/ports/book_source_toc_port.dart';
+import '../domain/ports/public_text_fetch_port.dart';
 import '../infrastructure/engine/frb_book_source_book_info_port.dart';
 import '../infrastructure/engine/frb_book_source_content_port.dart';
 import '../infrastructure/engine/frb_book_source_explore_port.dart';
 import '../infrastructure/engine/frb_book_source_search_port.dart';
 import '../infrastructure/engine/frb_book_source_toc_port.dart';
+import '../infrastructure/network/frb_public_text_fetch_port.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/chapter.dart';
 import '../utils/site_busy_guard.dart';
-import '../utils/ssrf_guard.dart';
 
 /// 书源服务门面 — 全部书源操作走 Rust 引擎（Phase E-B：无 Dart 回退）
 class BookSourceService {
@@ -151,83 +151,13 @@ class BookSourceService {
   }
 
   /// 从 URL 获取书源 JSON 并解析
-  static Future<List<BookSource>> fetchSourcesFromUrl(String url) async {
-    SsrfGuard.assertPublicHttpUrl(url);
+  static Future<List<BookSource>> fetchSourcesFromUrl(
+    String url, {
+    PublicTextFetchPort fetchPort = const FrbPublicTextFetchPort(),
+  }) async {
     try {
-      final client = HttpClient();
-      client.badCertificateCallback = (cert, host, port) => true;
-      client.connectionTimeout = const Duration(seconds: 15);
-      client.userAgent =
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-          'AppleWebKit/537.36 (KHTML, like Gecko) '
-          'Chrome/131.0.0.0 Safari/537.36';
-      client.autoUncompress = true;
-
-      // 手动跟随重定向 + Cookie（yckceo `/d/` → `/jsons?id=`）
-      var currentUrl = url;
-      final cookieJar = <String, String>{};
-      String? body;
-      try {
-        for (var hop = 0; hop <= SsrfGuard.maxRedirects; hop++) {
-          SsrfGuard.assertPublicHttpUrl(currentUrl);
-          final uri = Uri.parse(currentUrl);
-          final req = await client.getUrl(uri);
-          req.followRedirects = false;
-          req.maxRedirects = 0;
-          // 部分站点对 GET + Content-Length: 0 返回 400
-          req.contentLength = -1;
-          req.headers.removeAll(HttpHeaders.contentLengthHeader);
-          req.headers.set(HttpHeaders.acceptHeader, '*/*');
-          if (cookieJar.isNotEmpty) {
-            req.headers.set(
-              HttpHeaders.cookieHeader,
-              cookieJar.entries.map((e) => '${e.key}=${e.value}').join('; '),
-            );
-          }
-          final response = await req.close().timeout(
-            const Duration(seconds: 30),
-          );
-          for (final raw
-              in response.headers[HttpHeaders.setCookieHeader] ??
-                  const <String>[]) {
-            final part = raw.split(';').first;
-            final eq = part.indexOf('=');
-            if (eq > 0) {
-              cookieJar[part.substring(0, eq).trim()] = part
-                  .substring(eq + 1)
-                  .trim();
-            }
-          }
-          final code = response.statusCode;
-          if (code >= 300 && code < 400) {
-            final location = response.headers.value(HttpHeaders.locationHeader);
-            await response.drain<void>();
-            if (location == null || location.isEmpty) {
-              debugPrint('从 $url 获取书源: 重定向缺少 Location');
-              return [];
-            }
-            if (hop == SsrfGuard.maxRedirects) {
-              debugPrint('从 $url 获取书源: 重定向次数过多');
-              return [];
-            }
-            SsrfGuard.assertRedirectTarget(currentUrl, location);
-            currentUrl = uri.resolve(location).toString();
-            continue;
-          }
-          if (code < 200 || code >= 300) {
-            await response.drain<void>();
-            debugPrint('从 $url 获取书源: HTTP $code @ $currentUrl');
-            return [];
-          }
-          body = await response.transform(utf8.decoder).join();
-          break;
-        }
-      } finally {
-        client.close(force: true);
-      }
-
-      final rawBody = body;
-      if (rawBody == null || rawBody.isEmpty) {
+      final rawBody = await fetchPort.fetch(url);
+      if (rawBody.isEmpty) {
         debugPrint('从 $url 获取书源: 空响应');
         return [];
       }

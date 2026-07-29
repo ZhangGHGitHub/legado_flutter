@@ -1,10 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 
+import '../domain/ports/public_text_fetch_port.dart';
+import '../infrastructure/network/frb_public_text_fetch_port.dart';
 import '../models/book_source.dart';
 import '../models/replace_rule.dart';
 import '../models/rss_source.dart';
@@ -25,66 +24,18 @@ class RuleSubImportService {
   static final Map<String, List<RssSource>> cacheRssSources = {};
   static final Map<String, List<ReplaceRule>> cacheReplaceRules = {};
 
-  static Future<String> fetchText(String url) async {
+  static Future<String> fetchText(
+    String url, {
+    PublicTextFetchPort fetchPort = const FrbPublicTextFetchPort(),
+  }) async {
     SsrfGuard.assertPublicHttpUrl(url);
     var requestUrl = url;
-    Map<String, String>? extraHeaders;
+    var userAgent = '';
     if (url.endsWith('#requestWithoutUA')) {
       requestUrl = url.substring(0, url.length - '#requestWithoutUA'.length);
-      extraHeaders = {'User-Agent': 'null'};
+      userAgent = 'null';
     }
-
-    final dio = Dio(
-      BaseOptions(
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 30),
-        followRedirects: false,
-        maxRedirects: 0,
-        validateStatus: (status) =>
-            status != null && status >= 200 && status < 400,
-        headers: {
-          'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-              'AppleWebKit/537.36 (KHTML, like Gecko) '
-              'Chrome/131.0.0.0 Safari/537.36',
-          'Accept': 'application/json, text/plain, */*',
-          ...?extraHeaders,
-        },
-      ),
-    );
-    dio.httpClientAdapter = IOHttpClientAdapter(
-      createHttpClient: () {
-        final client = HttpClient();
-        client.badCertificateCallback = (cert, host, port) => true;
-        return client;
-      },
-    );
-
-    var currentUrl = requestUrl;
-    late Response<dynamic> response;
-    for (var hop = 0; hop <= SsrfGuard.maxRedirects; hop++) {
-      SsrfGuard.assertPublicHttpUrl(currentUrl);
-      response = await dio.get<dynamic>(currentUrl);
-      final code = response.statusCode ?? 0;
-      if (code >= 300 && code < 400) {
-        final location = response.headers.value('location');
-        if (location == null || location.isEmpty) {
-          throw const FormatException('重定向缺少 Location');
-        }
-        if (hop == SsrfGuard.maxRedirects) {
-          throw const FormatException('重定向次数过多');
-        }
-        SsrfGuard.assertRedirectTarget(currentUrl, location);
-        currentUrl = Uri.parse(currentUrl).resolve(location).toString();
-        continue;
-      }
-      break;
-    }
-
-    final data = response.data;
-    if (data is String) return data;
-    if (data is List || data is Map) return jsonEncode(data);
-    return data?.toString() ?? '';
+    return fetchPort.fetch(requestUrl, userAgent: userAgent);
   }
 
   static List<BookSource> parseBookSources(String text) {
@@ -148,7 +99,10 @@ class RuleSubImportService {
   }
 
   /// 手动打开订阅：拉取并返回待导入项（优先用缓存）
-  static Future<RuleSubFetched> fetchForImport(RuleSub sub) async {
+  static Future<RuleSubFetched> fetchForImport(
+    RuleSub sub, {
+    PublicTextFetchPort fetchPort = const FrbPublicTextFetchPort(),
+  }) async {
     final url = sub.url;
     switch (sub.type) {
       case 0:
@@ -163,14 +117,14 @@ class RuleSubImportService {
         if (cached != null) {
           return RuleSubFetched.rssSources(cached);
         }
-        final text = await fetchText(url);
+        final text = await fetchText(url, fetchPort: fetchPort);
         return RuleSubFetched.rssSources(parseRssSources(text));
       case 2:
         final cached = cacheReplaceRules.remove(url);
         if (cached != null) {
           return RuleSubFetched.replaceRules(cached);
         }
-        final text = await fetchText(url);
+        final text = await fetchText(url, fetchPort: fetchPort);
         return RuleSubFetched.replaceRules(parseReplaceRules(text));
       default:
         throw FormatException('未知订阅类型: ${sub.type}');
@@ -185,6 +139,7 @@ class RuleSubImportService {
     required RssProvider rssProvider,
     required ReplaceProvider replaceProvider,
     @visibleForTesting Future<String> Function(String url)? fetchTextOverride,
+    PublicTextFetchPort fetchPort = const FrbPublicTextFetchPort(),
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final intervalMs = ruleSub.updateInterval * 3600 * 1000;
@@ -198,7 +153,8 @@ class RuleSubImportService {
     final url = stamped.url;
     final silent = stamped.silentUpdate;
     var needUi = false;
-    final fetch = fetchTextOverride ?? fetchText;
+    final fetch =
+        fetchTextOverride ?? (url) => fetchText(url, fetchPort: fetchPort);
 
     try {
       switch (stamped.type) {
@@ -271,6 +227,7 @@ class RuleSubImportService {
     required SourceProvider sourceProvider,
     required RssProvider rssProvider,
     required ReplaceProvider replaceProvider,
+    PublicTextFetchPort fetchPort = const FrbPublicTextFetchPort(),
   }) async {
     final needUi = <RuleSub>[];
     final all = await RuleSubPrefs.load();
@@ -281,6 +238,7 @@ class RuleSubImportService {
         sourceProvider: sourceProvider,
         rssProvider: rssProvider,
         replaceProvider: replaceProvider,
+        fetchPort: fetchPort,
       );
       if (openUi) needUi.add(sub);
     }

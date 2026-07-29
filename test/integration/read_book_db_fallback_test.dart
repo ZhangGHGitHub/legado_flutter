@@ -4,8 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/bridge/legado_db_bridge.dart';
 import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
 import 'package:legado_flutter/database/database_helper.dart';
+import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/help/book_help.dart';
 import 'package:legado_flutter/help/content_processor.dart';
+import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
+import 'package:legado_flutter/infrastructure/content/content_processor_adapter.dart';
 import 'package:legado_flutter/model/read_book.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
@@ -67,10 +70,13 @@ void main() {
       bookSourceName: 'db-fallback-source',
     );
     ReadBook.instance.reset();
-    ReadBook.instance.configure(
+    ReadBook.instance.configureDependencies(
       sourceService: service,
-      db: db,
-      processor: ContentProcessor.instance,
+      repository: BookDao(db),
+      contentProcessor: ContentProcessorAdapter(
+        processor: ContentProcessor.instance,
+      ),
+      contentCache: const FileChapterContentCache(),
     );
     await db.insertBook(book);
     await db.insertChapters([chapter]);

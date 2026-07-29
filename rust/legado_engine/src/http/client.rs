@@ -90,8 +90,15 @@ fn build_http_client(cfg: &NetworkConfig) -> Client {
         .no_proxy()
         .timeout(Duration::from_secs(30))
         .connect_timeout(Duration::from_secs(15))
-        .redirect(reqwest::redirect::Policy::limited(5))
-        .danger_accept_invalid_certs(true);
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() >= 5 {
+                return attempt.error("重定向次数过多");
+            }
+            if let Err(error) = super::ssrf::assert_public_http_url(attempt.url().as_str()) {
+                return attempt.error(error);
+            }
+            attempt.follow()
+        }));
 
     if let Some(proxy_url) = network_config::build_proxy_url(cfg) {
         if let Ok(mut proxy) = Proxy::all(&proxy_url) {

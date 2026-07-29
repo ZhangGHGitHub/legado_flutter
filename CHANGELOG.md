@@ -4,6 +4,10 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R0：扩展架构边界检查到 `application/model/services`，并检查 Feature 对业务服务和 SharedPreferences 的直接依赖；原有展示层规则仍保持，当前新增违规作为 R1-R6 迁移队列，不以旧版 `0` 条结果替代总架构门禁。
+- R1：`ReadBook` 移除 DAO、数据库、文件缓存和正文适配器默认构造，由 `AppBootstrap` 根组合层显式注入书籍仓储、正文处理和章节缓存端口；定向 analyze 和 8 项回归通过。
+- R2：书源 URL 与规则订阅文本抓取改走统一 Rust HTTP 端口，移除 Dart Dio/HttpClient 与证书绕过；Rust 客户端不再接受无效证书，并对每次重定向执行 SSRF 校验。Rust HTTP 16 项、Flutter 网络/订阅 12 项定向回归通过。
+
 - R0：明确根目录 `legado-main/` 仅作为只读原版核对基线，不作为主源码目录，也不参与 Flutter/Rust/Gradle/CI 构建。
 - R0：新增架构残留/工件分类记录和 `scripts/check_architecture_boundaries.ps1`；脚本当前报告 21 项待迁移越界，`flutter analyze --no-pub` 与 `git diff --check` 通过。未删除、提交或覆盖既有工作树改动。
 - R0：将未修改的 UI 复刻计划归档到 `docs/archive/` 并更新活跃文档入口；含未提交内容的 Phase/Wave 历史资料保留原位，待可追溯拆分后处理。

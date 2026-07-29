@@ -2,7 +2,10 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/domain/repositories/book_repository.dart';
 import 'package:legado_flutter/help/content_processor.dart';
+import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
+import 'package:legado_flutter/infrastructure/content/content_processor_adapter.dart';
 import 'package:legado_flutter/model/read_book.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
@@ -49,9 +52,13 @@ void main() {
     await AppDataPrefs.saveDataDir(tempRoot.path);
     service = _DelayedSourceService();
     ReadBook.instance.reset();
-    ReadBook.instance.configure(
+    ReadBook.instance.configureDependencies(
       sourceService: service,
-      processor: ContentProcessor.instance,
+      repository: _FakeBookRepository(),
+      contentProcessor: ContentProcessorAdapter(
+        processor: ContentProcessor.instance,
+      ),
+      contentCache: const FileChapterContentCache(),
     );
   });
 
@@ -137,4 +144,15 @@ void main() {
       service.complete(newChapter.url, '新预加载');
     },
   );
+}
+
+class _FakeBookRepository extends Fake implements BookRepository {
+  @override
+  Future<String?> getChapterContent(String chapterId) async => null;
+
+  @override
+  Future<void> insertChapters(List<Chapter> chapters) async {}
+
+  @override
+  Future<void> saveChapterContent(String chapterId, String content) async {}
 }

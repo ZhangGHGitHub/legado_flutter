@@ -70,3 +70,20 @@ pub fn get_network_config() -> NetworkConfigDto {
         dns_servers: cfg.dns_servers,
     }
 }
+
+/// 通过统一 Rust HTTP 客户端抓取公开文本资源。
+///
+/// `user_agent` 为空时使用引擎默认值；传入 `null` 对齐规则订阅
+/// `#requestWithoutUA` 的既有请求语义。
+pub async fn fetch_public_text(url: String, user_agent: String) -> Result<String, String> {
+    let source_json = if user_agent.is_empty() {
+        serde_json::json!({ "bookSourceUrl": url }).to_string()
+    } else {
+        serde_json::json!({
+            "bookSourceUrl": url,
+            "header": { "User-Agent": user_agent }
+        })
+        .to_string()
+    };
+    client::fetch_with_source(&url, "GET", None, "UTF-8", &source_json).await
+}

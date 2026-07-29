@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/domain/repositories/book_repository.dart';
 import 'package:legado_flutter/domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/help/content_processor.dart';
+import 'package:legado_flutter/infrastructure/content/content_processor_adapter.dart';
 import 'package:legado_flutter/model/read_book.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
@@ -14,9 +16,12 @@ void main() {
     cache = _FakeCache();
     book = Book(id: 'book', name: '测试书');
     ReadBook.instance.reset();
-    ReadBook.instance.configure(
+    ReadBook.instance.configureDependencies(
       sourceService: _FakeSourceService(),
-      processor: ContentProcessor.instance,
+      repository: _FakeBookRepository(),
+      contentProcessor: ContentProcessorAdapter(
+        processor: ContentProcessor.instance,
+      ),
       contentCache: cache,
     );
   });
@@ -69,6 +74,8 @@ final _source = BookSource(
   bookSourceUrl: 'https://example.com',
   bookSourceName: '测试源',
 );
+
+class _FakeBookRepository extends Fake implements BookRepository {}
 
 class _FakeCache implements ChapterContentCachePort {
   final values = <String, String>{};

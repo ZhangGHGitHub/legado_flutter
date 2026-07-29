@@ -7,8 +7,11 @@ import '../config/app_config.dart';
 import '../config/engine_config.dart';
 import '../database/dao/book_dao.dart';
 import '../infrastructure/cache/file_chapter_content_cache.dart';
+import '../infrastructure/content/content_processor_adapter.dart';
 import '../infrastructure/database/frb_legacy_room_import_port.dart';
+import '../model/read_book.dart';
 import '../providers/book_provider.dart';
+import '../services/book_source_service.dart';
 import '../services/network_prefs.dart';
 import '../services/web_api_service.dart';
 import '../services/webdav_prefs.dart';
@@ -80,9 +83,20 @@ class AppBootstrap {
       );
     }
 
+    final repository = BookDao();
+    const contentCache = FileChapterContentCache();
+    final sourceService = BookSourceService();
+    final contentProcessor = ContentProcessorAdapter();
+    ReadBook.instance.configureDependencies(
+      sourceService: sourceService,
+      repository: repository,
+      contentProcessor: contentProcessor,
+      contentCache: contentCache,
+    );
     final bookProvider = BookProvider(
-      repository: BookDao(),
-      contentCache: const FileChapterContentCache(),
+      repository: repository,
+      sourceService: sourceService,
+      contentCache: contentCache,
     );
     await loadStartupBookProgress(
       loadBooks: bookProvider.loadBooks,

@@ -1,13 +1,8 @@
 import 'package:flutter/foundation.dart';
 
-import '../database/dao/book_dao.dart';
-import '../database/database_helper.dart';
 import '../domain/repositories/book_repository.dart';
 import '../domain/ports/chapter_content_cache_port.dart';
 import '../domain/ports/content_processing_port.dart';
-import '../help/content_processor.dart';
-import '../infrastructure/cache/file_chapter_content_cache.dart';
-import '../infrastructure/content/content_processor_adapter.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/chapter.dart';
@@ -56,19 +51,31 @@ class ReadBook extends ChangeNotifier {
   @visibleForTesting
   Set<String> get preloadingKeys => Set.unmodifiable(_preloading);
 
+  /// 根组合层入口：生产启动和直接测试必须显式提供全部领域端口。
+  void configureDependencies({
+    required BookSourceService sourceService,
+    required BookRepository repository,
+    required ContentProcessingPort contentProcessor,
+    required ChapterContentCachePort contentCache,
+  }) {
+    _sourceService = sourceService;
+    _repository = repository;
+    _processor = contentProcessor;
+    _contentCache = contentCache;
+  }
+
+  /// 兼容 [BookProvider] 的会话依赖刷新；不创建或推断任何具体适配器。
   void configure({
     required BookSourceService sourceService,
     BookRepository? repository,
-    DatabaseHelper? db,
-    ContentProcessor? processor,
     ContentProcessingPort? contentProcessor,
     ChapterContentCachePort? contentCache,
+    Object? processor,
   }) {
     _sourceService = sourceService;
-    _repository = repository ?? (db == null ? null : BookDao(db));
-    _processor =
-        contentProcessor ?? ContentProcessorAdapter(processor: processor);
-    _contentCache = contentCache ?? FileChapterContentCache();
+    if (repository != null) _repository = repository;
+    if (contentProcessor != null) _processor = contentProcessor;
+    if (contentCache != null) _contentCache = contentCache;
   }
 
   /// 打开阅读会话
