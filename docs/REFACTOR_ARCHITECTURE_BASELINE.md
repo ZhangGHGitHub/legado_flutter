@@ -2172,3 +2172,16 @@ fixture 测试通过。真实扫描仍为既有 `146` 条：Feature SharedPrefer
 
 边界结论：RSS URL 文本导入已进入统一 Rust HTTP 边界；R2 继续审计并迁移其它文本/JSON 与二进制
 网络入口，本批未修改正文、目录、分页、章节身份、阅读位置或断行规则。
+
+## 105. 2026-07-29：R2 主题 URL 统一文本网络端口
+
+- `ThemeImportService` 删除 Dio 实例和具体网络配置，`fetchFromUrl` 改为显式接收
+  `PublicTextFetchPort`；主题页面从根组合层 Provider 取得同一 Rust 文本端口。
+- 保留主题 JSON 解析、预设/模式/颜色应用和空响应错误文本；新增 URL trim、网络错误透传和私有地址
+  前置拒绝契约。
+
+验证结果：主题服务与页面回归 `16/16`；`flutter analyze --no-pub` 无诊断；架构脚本 fixture 通过；
+真实扫描仍为既有 `146` 条后续 backlog。
+
+边界结论：主题公开文本已进入统一 Rust HTTP 边界；R2 下一批处理需要完整 AnalyzeUrl/JS 语义的
+字典请求，不复用只能表达简单 GET 文本的接口来削弱规则行为。

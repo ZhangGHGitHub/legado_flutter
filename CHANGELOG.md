@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R2：主题 URL 导入移除 Dio，改为显式使用统一 `PublicTextFetchPort`/Rust HTTP；保留 JSON 解析和主题应用语义，并新增 URL trim、空响应、网络错误和私有地址拒绝测试。主题服务与页面回归 `16/16`、全仓 analyze 和架构脚本 fixture 通过。
+
 - R2：RSS 订阅源 URL 导入移除 Dart `HttpClient` 实现，改由 application adapter 复用统一 `PublicTextFetchPort`/Rust HTTP；保留 URL trim、私有地址拒绝和可空失败契约。RSS 导入定向回归 `6/6`、全仓 analyze 和架构脚本 fixture 通过，真实架构扫描仍为既有 `146` 条后续 backlog。
 
 - R1：完成领域模型归属收尾。`BookProgress` 迁入纯 domain，带时钟的 `fromBook` 创建移入 application factory，WebDAV JSON 字段、UTF-16 章内位置和冲突比较不变；登录行 UI DTO 迁入 application，书源校验结果迁入 domain，默认校验词策略迁入 application，旧 `lib/models` 路径仅保留兼容导出。合并定向回归 `46/46`，Flutter 串行全量 `578` 通过（`3` 项按既有条件跳过），Rust `legado_engine` 全量通过，Android Room v99 两阶段 Driver smoke 再次通过；R1 最终退出，既有 `146` 条 Feature 偏好/服务依赖继续按 R2/R6 处理。

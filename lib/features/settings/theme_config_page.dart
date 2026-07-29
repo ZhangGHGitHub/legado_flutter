@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../domain/ports/public_text_fetch_port.dart';
 import '../../services/clipboard_port.dart';
 import '../../services/theme_import_service.dart';
 import '../../theme/app_theme.dart';
@@ -22,7 +23,7 @@ class ThemeConfigPage extends StatefulWidget {
 }
 
 class _ThemeConfigPageState extends State<ThemeConfigPage> {
-  final _importService = ThemeImportService();
+  final _importService = const ThemeImportService();
   final _marketUrlCtrl = TextEditingController();
   final _clipboardCtrl = TextEditingController();
   bool _loadingMarket = false;
@@ -256,7 +257,10 @@ class _ThemeConfigPageState extends State<ThemeConfigPage> {
 
     setState(() => _loadingMarket = true);
     try {
-      final config = await _importService.fetchFromUrl(_marketUrlCtrl.text);
+      final config = await _importService.fetchFromUrl(
+        _marketUrlCtrl.text,
+        fetchPort: context.read<PublicTextFetchPort>(),
+      );
       await _importService.applyTo(ctrl, config);
       if (mounted) {
         ScaffoldMessenger.of(
