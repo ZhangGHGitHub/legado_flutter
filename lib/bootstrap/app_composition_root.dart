@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../app.dart';
 import '../application/app_bootstrap.dart';
+import '../application/rss/public_text_rss_source_import_port.dart';
 import '../bridge/legado_db_bridge.dart';
 import '../bridge/legado_engine_bridge.dart';
 import '../config/app_config.dart';
@@ -41,7 +42,6 @@ import '../infrastructure/engine/frb_rss_port.dart';
 import '../infrastructure/engine/frb_rss_sort_url_js_port.dart';
 import '../infrastructure/file_system/backup_local_file_adapter.dart';
 import '../infrastructure/network/frb_public_text_fetch_port.dart';
-import '../infrastructure/network/io_rss_source_import_port.dart';
 import '../infrastructure/preferences/shared_preferences_book_group_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
 import '../infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
@@ -168,7 +168,7 @@ abstract final class AppCompositionRoot {
             value: bootstrap.legacyRoomImportService,
           ),
           Provider<RssSourceImportPort>(
-            create: (_) => const IoRssSourceImportPort(),
+            create: (_) => PublicTextRssSourceImportPort(publicTextPort),
           ),
           ChangeNotifierProvider(
             create: (context) => SourceProvider(

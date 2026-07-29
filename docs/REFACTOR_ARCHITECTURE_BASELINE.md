@@ -2157,3 +2157,18 @@ Flutter 对照结果：
 边界结论：R1 的领域模型、数据访问、Room v99 迁移、默认适配器和组合根退出条件均已满足，R1
 最终退出。后续按固定顺序进入 R2；`146` 条 Feature backlog 和全局启动可靠性 P0/P1 任务继续保留，
 不得描述为已完成或以白名单消除。
+
+## 104. 2026-07-29：R2 RSS 订阅源统一文本网络端口
+
+- 删除 `IoRssSourceImportPort` 的 Dart `HttpClient`、手写重定向和响应读取实现。
+- 新增 application 级 `PublicTextRssSourceImportPort`，组合既有 `PublicTextFetchPort`；根组合层复用同一
+  `FrbPublicTextFetchPort`，实际请求继续由 Rust HTTP 执行。
+- 保留 URL trim、Dart 侧私有地址前置拒绝和 `RssSourceImportPort` 的可空失败契约；Rust 侧继续执行
+  TLS、逐跳重定向 SSRF、超时和响应大小限制。
+
+验证结果：RSS adapter/provider/管理页回归 `6/6`；`flutter analyze --no-pub` 无诊断；架构脚本
+fixture 测试通过。真实扫描仍为既有 `146` 条：Feature SharedPreferences `14`、Feature 业务 service
+`132`，domain/model 与核心具体基础设施违规为 `0`。
+
+边界结论：RSS URL 文本导入已进入统一 Rust HTTP 边界；R2 继续审计并迁移其它文本/JSON 与二进制
+网络入口，本批未修改正文、目录、分页、章节身份、阅读位置或断行规则。
