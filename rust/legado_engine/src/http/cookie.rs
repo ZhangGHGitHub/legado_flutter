@@ -212,6 +212,10 @@ fn require_source_cookie_key(source_url: &str) -> Result<String, String> {
     source_cookie_key(source_url).ok_or_else(|| "无效的书源 URL".to_string())
 }
 
+pub fn source_cookie_domain(source_url: &str) -> Result<String, String> {
+    require_source_cookie_key(source_url)
+}
+
 fn source_cookie_key(source_url: &str) -> Option<String> {
     let parsed = url::Url::parse(source_url.trim()).ok()?;
     match parsed.host()? {

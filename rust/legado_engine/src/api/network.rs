@@ -71,6 +71,12 @@ pub fn clear_source_cookie(source_url: String) -> Result<(), String> {
     client::clear_source_cookie(&source_url)
 }
 
+/// 返回书源 Cookie 桶使用的 eTLD+1；IP 保持自身。
+#[flutter_rust_bridge::frb(sync)]
+pub fn source_cookie_domain(source_url: String) -> Result<String, String> {
+    client::source_cookie_domain(&source_url)
+}
+
 /// 开启一次 debug HTTP 请求轨迹采集。
 #[flutter_rust_bridge::frb(sync)]
 pub fn start_http_request_trace() -> Result<(), String> {
@@ -406,5 +412,18 @@ mod tests {
         assert_eq!(response.status_code, 409);
         assert_eq!(response.content_type, "application/octet-stream");
         assert_eq!(response.body, vec![0, 128, 255]);
+    }
+
+    #[test]
+    fn source_cookie_domain_uses_public_suffix_and_keeps_ip() {
+        assert_eq!(
+            source_cookie_domain("https://login.reader.example.co.uk/a".to_string()).unwrap(),
+            "example.co.uk"
+        );
+        assert_eq!(
+            source_cookie_domain("http://127.0.0.1:8080/a".to_string()).unwrap(),
+            "127.0.0.1"
+        );
+        assert!(source_cookie_domain("not-a-url".to_string()).is_err());
     }
 }

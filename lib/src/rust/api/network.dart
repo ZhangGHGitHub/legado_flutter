@@ -42,6 +42,12 @@ void setSourceCookie({required String sourceUrl, required String cookie}) =>
 void clearSourceCookie({required String sourceUrl}) => LegadoEngine.instance.api
     .crateApiNetworkClearSourceCookie(sourceUrl: sourceUrl);
 
+/// 返回书源 Cookie 桶使用的 eTLD+1；IP 保持自身。
+String sourceCookieDomain({required String sourceUrl}) => LegadoEngine
+    .instance
+    .api
+    .crateApiNetworkSourceCookieDomain(sourceUrl: sourceUrl);
+
 /// 开启一次 debug HTTP 请求轨迹采集。
 void startHttpRequestTrace() =>
     LegadoEngine.instance.api.crateApiNetworkStartHttpRequestTrace();

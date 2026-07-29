@@ -7,4 +7,7 @@ abstract interface class SourceLoginCookiePort {
 
   /// 仅清除 [sourceUrl] 对应的书源 Cookie 桶。
   void clearCookie(String sourceUrl);
+
+  /// 返回 Rust CookieJar 对 [sourceUrl] 使用的 eTLD+1；IP 保持自身。
+  String cookieDomain(String sourceUrl);
 }

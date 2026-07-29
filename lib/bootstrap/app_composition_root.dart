@@ -49,6 +49,7 @@ import '../infrastructure/file_system/backup_local_file_adapter.dart';
 import '../infrastructure/network/frb_public_text_fetch_port.dart';
 import '../infrastructure/network/frb_application_binary_http_request_port.dart';
 import '../infrastructure/network/frb_application_http_request_port.dart';
+import '../infrastructure/platform/method_channel_source_login_web_cookie_port.dart';
 import '../infrastructure/preferences/shared_preferences_book_group_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
 import '../infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
@@ -228,6 +229,9 @@ abstract final class AppCompositionRoot {
     RssSortUrls.configureJsPort(FrbRssSortUrlJsPort());
     SourceLoginService.configureJsPort(const FrbJsEvalPort());
     SourceLoginCookieService.configurePort(sourceLoginCookiePort);
+    SourceLoginCookieService.configureWebCookiePort(
+      const MethodChannelSourceLoginWebCookiePort(),
+    );
     WebApiService.configureWebApiPort(FrbWebApiPort());
     BookGroupStore.configurePrefsPort(
       await SharedPreferencesBookGroupPrefs.load(),

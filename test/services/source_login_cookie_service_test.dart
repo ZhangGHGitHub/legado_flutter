@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/source_login_cookie_port.dart';
+import 'package:legado_flutter/domain/ports/source_login_web_cookie_port.dart';
 import 'package:legado_flutter/services/source_login_cookie_service.dart';
 import 'package:legado_flutter/services/source_login_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,6 +20,24 @@ class _FakeSourceLoginCookiePort implements SourceLoginCookiePort {
   @override
   void clearCookie(String sourceUrl) {
     clears.add(sourceUrl);
+  }
+
+  @override
+  String cookieDomain(String sourceUrl) => 'example.com';
+}
+
+class _FakeSourceLoginWebCookiePort implements SourceLoginWebCookiePort {
+  @override
+  bool isSupported = true;
+
+  final clears = <({String sourceUrl, String registrableDomain})>[];
+
+  @override
+  Future<void> clearForSource({
+    required String sourceUrl,
+    required String registrableDomain,
+  }) async {
+    clears.add((sourceUrl: sourceUrl, registrableDomain: registrableDomain));
   }
 }
 
@@ -63,12 +82,17 @@ void main() {
 
   test('clears only the requested source cookie bucket', () async {
     final port = _FakeSourceLoginCookiePort();
+    final webPort = _FakeSourceLoginWebCookiePort();
     SourceLoginCookieService.configurePort(port);
+    SourceLoginCookieService.configureWebCookiePort(webPort);
     await SourceLoginPrefs.saveCookie(sourceUrl, 'sid=1');
 
     await SourceLoginCookieService.clear(sourceUrl);
 
     expect(await SourceLoginPrefs.loadCookie(sourceUrl), isNull);
     expect(port.clears, [sourceUrl]);
+    expect(webPort.clears, [
+      (sourceUrl: sourceUrl, registrableDomain: 'example.com'),
+    ]);
   });
 }

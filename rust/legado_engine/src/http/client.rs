@@ -1,5 +1,5 @@
 use super::charset;
-use super::cookie::CookieJar;
+use super::cookie::{source_cookie_domain as resolve_source_cookie_domain, CookieJar};
 use super::network_config::{self, NetworkConfig};
 use crate::model::book_source::custom_headers;
 use once_cell::sync::Lazy;
@@ -1114,6 +1114,10 @@ pub fn clear_source_cookie(source_url: &str) -> Result<(), String> {
         .clear_cookie_for_source(source_url)
 }
 
+pub fn source_cookie_domain(source_url: &str) -> Result<String, String> {
+    resolve_source_cookie_domain(source_url)
+}
+
 #[cfg(test)]
 mod source_cookie_tests {
     use super::*;
@@ -1170,8 +1174,7 @@ mod source_cookie_tests {
         })
         .to_string();
 
-        let headers =
-            prepare_source_headers("https://api.other.net/content", &source_json, None);
+        let headers = prepare_source_headers("https://api.other.net/content", &source_json, None);
 
         assert_eq!(cookie_header(&headers), "added=new; keep=old; shared=new");
         clear_http_cookies().unwrap();

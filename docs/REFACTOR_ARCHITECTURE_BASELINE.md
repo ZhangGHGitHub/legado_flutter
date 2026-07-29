@@ -2416,3 +2416,27 @@ WebView Cookie 边界并执行阶段退出门禁，当前不提前宣称退出�
 
 边界结论：`enabledCookieJar` 与实际代码优先级已对齐，搜索 URL option headers 已恢复。R2 剩余
 Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.startBrowserAwait` 真实 WebView。
+
+## 116. 2026-07-29：R2 平台 WebView Cookie 定域清除
+
+- 新增 `SourceLoginWebCookiePort` 与 MethodChannel adapter；组合根只在 Android/iOS/macOS 调用
+  `legado_flutter/source_login_cookies.clearForSource`，Windows/Linux/Web 保持无操作。
+- Rust 新增只读 `source_cookie_domain`，复用同一 Public Suffix 规则返回 eTLD+1，避免 Dart、Kotlin
+  和 Swift 各自近似域名；固定 FRB `2.11.1` 重新生成绑定。
+- Android 从 source URL 与 eTLD+1 读取 Cookie 名，逐个对 host-only 和 Domain Cookie 写入
+  `Max-Age=0`/过去 Expires 并 flush；iOS/macOS 从默认 WK CookieStore 中只删除 domain 等于 source
+  host 或 eTLD+1 的 Cookie。三端均未调用全局 Cookie 清空。
+- 持久偏好和 Rust CookieJar 始终完成定域清除；平台 Cookie 过期失败仅记录，不恢复已删除登录态，
+  对齐原版平台清除的尽力而为行为。普通 RSS/通用 WebView 不进入该端口。
+
+验证结果：
+
+- Rust network 定向 `6/6`；`cargo test -p legado_engine` 核心 `163/163`，其余集成与文档测试无失败。
+- release DLL 的 domain/set/clear 真实 FRB 往返与 Flutter Cookie 定向 `5/5` 通过。
+- `flutter analyze --no-pub` 无诊断；`flutter test --no-pub --concurrency=1`：`625` 通过、
+  `3` 项既有条件跳过。
+- `flutter build apk --debug --no-pub` 通过，包含 armv7、arm64、x86_64 Rust 引擎；iOS/macOS 因
+  当前 Windows 环境无 Xcode，仅完成 Swift API 与无全局清除静态校验，不登记为平台构建通过。
+
+边界结论：书源 Cookie 捕获、持久化、请求优先级、响应保存和定域清除均已闭环。R2 剩余实现项为
+规则宿主 `java.startBrowserAwait` 的真实 WebView 能力及其退出门禁。

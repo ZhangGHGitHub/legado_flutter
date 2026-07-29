@@ -15,6 +15,10 @@ void main() {
 
     const port = FrbSourceLoginCookiePort();
     expect(
+      port.cookieDomain('https://login.reader.example.co.uk/account'),
+      'example.co.uk',
+    );
+    expect(
       () => port.setCookie(
         sourceUrl: 'https://reader.example.co.uk',
         cookie: 'sid=frb; token=1',

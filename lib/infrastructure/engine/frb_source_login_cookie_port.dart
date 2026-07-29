@@ -20,4 +20,10 @@ class FrbSourceLoginCookiePort implements SourceLoginCookiePort {
     if (!isAvailable) return;
     network_api.clearSourceCookie(sourceUrl: sourceUrl);
   }
+
+  @override
+  String cookieDomain(String sourceUrl) {
+    if (!isAvailable) return Uri.tryParse(sourceUrl)?.host ?? '';
+    return network_api.sourceCookieDomain(sourceUrl: sourceUrl);
+  }
 }
