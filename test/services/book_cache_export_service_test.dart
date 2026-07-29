@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/help/book_help.dart';
+import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/chapter.dart';
 import 'package:legado_flutter/services/app_paths.dart';
@@ -11,7 +12,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory tempRoot;
-  const service = BookCacheExportService();
+  const service = BookCacheExportService(
+    contentCache: FileChapterContentCache(),
+  );
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});

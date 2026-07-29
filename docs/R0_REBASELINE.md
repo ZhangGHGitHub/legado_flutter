@@ -159,3 +159,15 @@ R1-12 已满足当前计划的数据库迁移退出条件。原版 `legado-main/
 
 因此，R1-12 标记为“数据库迁移门禁通过”。非核心表产品业务 port 和真实非空原版数据的补充采集属于后续
 独立工作；本轮没有推进新的 R2-R6 实现，也没有修改正文、目录、分页、章节身份或断行规则。
+
+## 11. R1 组合根与默认适配器复核（2026-07-29）
+
+- 新增 `lib/bootstrap/app_composition_root.dart` 作为唯一 Flutter 基础设施组合根；
+  `lib/application/app_bootstrap.dart` 只接收仓储、领域端口、应用服务和启动回调。
+- `BookSourceService`、备份/进度/书签同步、缓存、状态、书签、笔记、RSS、登录和 Web API
+  服务均移除 FRB、文件、WebDAV 或 SharedPreferences 的默认具体实现；测试 reset 只清空配置。
+- 架构脚本当前报告核心层具体基础设施违规 `0`；剩余 `146` 条为 Feature 到 application 的迁移队列，
+  包含 `14` 条 SharedPreferences 直连和 `132` 条 service 直连，未加入白名单或伪装为通过。
+- `flutter analyze --no-pub` 通过；R1 联合定向回归 `73/73`、RuleSub/书源网络回归 `12/12`、
+  `yckceo` 三源 smoke `4/4` 通过；串行 Flutter 全量 `563` 通过、`3` 项按既有条件跳过。
+  Android/FRB 设备测试调用点已完成显式端口编译门禁，设备重跑保留到阶段验收。

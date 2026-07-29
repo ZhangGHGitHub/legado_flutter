@@ -5,6 +5,9 @@ import 'package:integration_test/integration_test.dart';
 import 'package:legado_flutter/bridge/legado_db_bridge.dart';
 import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
 import 'package:legado_flutter/database/database_helper.dart';
+import 'package:legado_flutter/infrastructure/database/frb_backup_port.dart';
+import 'package:legado_flutter/infrastructure/database/frb_legacy_room_import_port.dart';
+import 'package:legado_flutter/infrastructure/webdav/frb_webdav_repository.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/services/backup_service.dart';
 import 'package:legado_flutter/services/legacy_room_import_service_factory.dart';
@@ -42,7 +45,13 @@ void main() {
     expect(LegadoDbBridge.isReady, isTrue);
 
     final database = DatabaseHelper();
-    final importService = LegacyRoomImportServices.create();
+    final importService = LegacyRoomImportServices.create(
+      FrbLegacyRoomImportPort(),
+    );
+    final backupService = BackupService(
+      webdav: const FrbWebDavRepository(),
+      backup: FrbBackupPort(),
+    );
 
     if (_phase == 'import') {
       final report = importService.importDatabase(
@@ -82,12 +91,12 @@ void main() {
     );
     expect(duplicate.skippedDuplicate, isTrue);
 
-    final backupFile = await BackupService().backupToLocalFile();
+    final backupFile = await backupService.backupToLocalFile();
     final backupBytes = await backupFile.readAsBytes();
     expect(backupBytes, isNotEmpty);
     await database.clearAll();
     expect(await database.getBooks(), isEmpty);
-    await BackupService().restoreFromBytes(backupBytes);
+    await backupService.restoreFromBytes(backupBytes);
     expect((await database.getBooks()).single.id, 'r1-device-book');
   });
 }

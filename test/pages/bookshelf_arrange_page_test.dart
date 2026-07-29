@@ -8,9 +8,12 @@ import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/database/dao/source_dao.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_book_source_validation_port.dart';
+import 'package:legado_flutter/infrastructure/preferences/shared_preferences_book_group_prefs.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
+import 'package:legado_flutter/services/book_group_store.dart';
 import 'package:legado_flutter/services/bookshelf_arrange_prefs.dart';
+import '../helpers/book_source_service_test_factory.dart';
 
 class _FakeBookshelfArrangePrefs implements BookshelfArrangePrefsPort {
   bool value = false;
@@ -33,10 +36,18 @@ class _FakeBookshelfArrangePrefs implements BookshelfArrangePrefsPort {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    BookGroupStore.configurePrefsPort(
+      await SharedPreferencesBookGroupPrefs.load(),
+    );
+  });
+
+  tearDown(BookGroupStore.resetPrefsPort);
+
   testWidgets('arrange page reads and writes the injected preference port', (
     tester,
   ) async {
-    SharedPreferences.setMockInitialValues({});
     final preferences = _FakeBookshelfArrangePrefs();
 
     await tester.pumpWidget(
@@ -46,12 +57,14 @@ void main() {
             create: (_) => BookProvider(
               repository: BookDao(),
               contentCache: const FileChapterContentCache(),
+              sourceService: createTestBookSourceService(),
             ),
           ),
           ChangeNotifierProvider(
             create: (_) => SourceProvider(
               repository: SourceDao(),
               validationPort: FrbBookSourceValidationPort(),
+              sourceService: createTestBookSourceService(),
             ),
           ),
         ],

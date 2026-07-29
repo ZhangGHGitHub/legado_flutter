@@ -26,11 +26,13 @@ import 'package:legado_flutter/features/reader/turn/reader_turn_view.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
 import 'package:legado_flutter/services/book_reader_prefs.dart';
+import 'package:legado_flutter/services/book_source_service.dart';
 import 'package:legado_flutter/services/read_book_config_prefs.dart';
 import 'package:legado_flutter/widgets/reader_selectable_text.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../test/helpers/book_source_service_test_factory.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -97,13 +99,16 @@ void main() {
     await BookHelp.saveContent(bookId, firstChapterId, firstText);
     await BookHelp.saveContent(bookId, secondChapterId, secondText);
 
+    final sourceService = createFrbBookSourceService();
     final sourceProvider = SourceProvider(
       repository: SourceDao(),
       validationPort: FrbBookSourceValidationPort(),
+      sourceService: sourceService,
     );
     await sourceProvider.addSource(bookSource);
     final bookProvider = BookProvider(
       repository: BookDao(),
+      sourceService: sourceService,
       contentCache: const FileChapterContentCache(),
     );
     final prefs = await SharedPreferences.getInstance();
@@ -147,6 +152,7 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
+          Provider<BookSourceService>.value(value: sourceService),
           ChangeNotifierProvider.value(value: bookProvider),
           ChangeNotifierProvider.value(value: sourceProvider),
         ],

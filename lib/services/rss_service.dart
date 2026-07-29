@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 import '../domain/ports/rss_port.dart';
-import '../infrastructure/engine/frb_rss_port.dart';
 import '../models/rss_article.dart';
 import '../models/rss_source.dart';
 
@@ -9,16 +8,15 @@ import '../models/rss_source.dart';
 class RssService {
   RssService._();
 
-  static RssPort _rssPort = FrbRssPort();
+  static RssPort? _rssPort;
 
-  @visibleForTesting
   static void configureRssPort(RssPort port) {
     _rssPort = port;
   }
 
   @visibleForTesting
   static void resetRssPort() {
-    _rssPort = FrbRssPort();
+    _rssPort = null;
   }
 
   /// 对齐 Rss.getArticlesAwait
@@ -28,10 +26,11 @@ class RssService {
     String sortUrl = '',
     int page = 1,
   }) async {
-    if (!_rssPort.isAvailable) {
+    final rssPort = _rssPort;
+    if (rssPort == null || !rssPort.isAvailable) {
       throw StateError('Rust 引擎不可用，无法拉取 RSS');
     }
-    final result = await _rssPort.getArticles(
+    final result = await rssPort.getArticles(
       source: source,
       sortUrl: sortUrl,
       sortName: sortName.isEmpty ? source.sourceName : sortName,
@@ -49,9 +48,10 @@ class RssService {
     if (source.ruleContent.trim().isEmpty) {
       return article.content ?? article.description ?? '';
     }
-    if (!_rssPort.isAvailable) {
+    final rssPort = _rssPort;
+    if (rssPort == null || !rssPort.isAvailable) {
       return article.content ?? article.description ?? '';
     }
-    return _rssPort.getContent(source: source, article: article);
+    return rssPort.getContent(source: source, article: article);
   }
 }

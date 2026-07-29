@@ -9,7 +9,7 @@ import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/models/chapter.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/services/app_paths.dart';
-import 'package:legado_flutter/services/book_source_service.dart';
+import '../helpers/book_source_service_test_factory.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _ShelfDao extends BookDao {
@@ -42,7 +42,7 @@ class _ShelfDao extends BookDao {
       List<Chapter>.from(chaptersByBook[bookId] ?? const []);
 }
 
-class _ShelfTocService extends BookSourceService {
+class _ShelfTocService extends TestBookSourceService {
   final Map<String, Future<List<Chapter>> Function(Book book)> handlers = {};
   final List<String> calls = [];
 

@@ -6,6 +6,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:legado_flutter/bridge/legado_db_bridge.dart';
 import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
 import 'package:legado_flutter/database/database_helper.dart';
+import 'package:legado_flutter/infrastructure/database/frb_backup_port.dart';
 import 'package:legado_flutter/infrastructure/webdav/frb_webdav_repository.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
@@ -41,7 +42,8 @@ void main() {
       device: 'R5 backup restore',
     );
     await WebDavPrefs.save(config);
-    await WebDavSetupService.initialize(config);
+    const repository = FrbWebDavRepository();
+    await WebDavSetupService.initialize(config, repository: repository);
 
     final database = DatabaseHelper();
     final book = Book(
@@ -61,7 +63,7 @@ void main() {
     await database.insertBook(book);
     await database.insertBookSource(source);
 
-    final service = BackupService();
+    final service = BackupService(webdav: repository, backup: FrbBackupPort());
     await service.backupToWebDav();
     final backups = await service.listWebDavBackups();
     expect(backups, isNotEmpty);
@@ -81,7 +83,6 @@ void main() {
 
     const invalidZipPath = '/r5-invalid-backup.zip';
     const missingDatabasePath = '/r5-missing-database.json';
-    const repository = FrbWebDavRepository();
     await repository.upload(
       url: _url,
       username: _user,

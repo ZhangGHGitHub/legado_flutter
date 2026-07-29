@@ -1,5 +1,4 @@
 import '../domain/ports/code_edit_prefs_store.dart';
-import '../infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
 
 /// 代码编辑器偏好 — 对齐 Jingshiro [PreferKey] / [AppConfig] 编辑项。
 abstract final class CodeEditPrefs {
@@ -21,6 +20,16 @@ abstract final class CodeEditPrefs {
   static const defaultAutoComplete = true;
   static const defaultThemeAuto = true;
   static const maxLogLines = 200;
+
+  static CodeEditPrefsStore? _configuredStore;
+
+  static void configureStore(CodeEditPrefsStore store) {
+    _configuredStore = store;
+  }
+
+  static void resetStore() {
+    _configuredStore = null;
+  }
 
   static Future<CodeEditSettings> load({CodeEditPrefsStore? store}) async {
     final p = await _resolve(store);
@@ -101,10 +110,12 @@ abstract final class CodeEditPrefs {
     await p.remove(editSessionLog);
   }
 
-  static Future<CodeEditPrefsStore> _resolve(CodeEditPrefsStore? store) {
-    return store == null
-        ? SharedPreferencesCodeEditPrefsStore.load()
-        : Future<CodeEditPrefsStore>.value(store);
+  static Future<CodeEditPrefsStore> _resolve(CodeEditPrefsStore? store) async {
+    final resolved = store ?? _configuredStore;
+    if (resolved == null) {
+      throw StateError('CodeEditPrefs 尚未配置 CodeEditPrefsStore');
+    }
+    return resolved;
   }
 }
 

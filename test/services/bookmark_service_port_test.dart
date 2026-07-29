@@ -13,6 +13,13 @@ void main() {
 
   tearDown(BookmarkService.resetBookmarkPort);
 
+  test('reset clears the configured bookmark port', () {
+    BookmarkService.resetBookmarkPort();
+
+    expect(BookmarkService.isReady, isFalse);
+    expect(BookmarkService.list(), isEmpty);
+  });
+
   test('list, save and delete use the injected bookmark port', () {
     const existing = BookmarkSnapshot(
       time: 100,

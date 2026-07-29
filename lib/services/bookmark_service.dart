@@ -5,23 +5,25 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/annotation/bookmark_snapshot.dart';
 import '../domain/ports/bookmark_port.dart';
-import '../infrastructure/engine/frb_bookmark_port.dart';
 import 'app_log.dart';
 
 /// 独立书签服务；字段对齐 Jingshiro Bookmark。
 class BookmarkService {
-  static BookmarkPort _bookmarkPort = FrbBookmarkPort();
+  static BookmarkPort? _configuredBookmarkPort;
 
-  static bool get isReady => _bookmarkPort.isAvailable;
+  static BookmarkPort get _bookmarkPort =>
+      _configuredBookmarkPort ??
+      (throw StateError('BookmarkService 尚未配置 BookmarkPort'));
 
-  @visibleForTesting
+  static bool get isReady => _configuredBookmarkPort?.isAvailable ?? false;
+
   static void configureBookmarkPort(BookmarkPort port) {
-    _bookmarkPort = port;
+    _configuredBookmarkPort = port;
   }
 
   @visibleForTesting
   static void resetBookmarkPort() {
-    _bookmarkPort = FrbBookmarkPort();
+    _configuredBookmarkPort = null;
   }
 
   static List<BookmarkSnapshot> list({String? bookId}) {

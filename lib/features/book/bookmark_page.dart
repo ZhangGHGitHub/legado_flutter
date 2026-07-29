@@ -210,9 +210,10 @@ class _BookmarkPageState extends State<BookmarkPage>
     setState(() => _syncing = true);
     try {
       final local = BookmarkService.list();
+      final syncService = context.read<BookmarkSyncService>();
       final count = upload
-          ? await BookmarkSyncService.uploadMerged(local: local)
-          : await BookmarkSyncService.downloadAndMerge(
+          ? await syncService.uploadMerged(local: local)
+          : await syncService.downloadAndMerge(
               local: local,
               apply: (json) async {
                 BookmarkService.importJson(json);

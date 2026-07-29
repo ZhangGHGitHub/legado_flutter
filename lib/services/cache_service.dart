@@ -4,8 +4,6 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/ports/chapter_content_cache_port.dart';
 import '../domain/ports/network_engine_port.dart';
-import '../infrastructure/cache/file_chapter_content_cache.dart';
-import '../infrastructure/engine/frb_network_engine_port.dart';
 import 'app_paths.dart';
 
 /// 缓存统计与清理（Phase 4.3）
@@ -35,10 +33,7 @@ class CacheStats {
 }
 
 class CacheService {
-  const CacheService({
-    this.contentCache = const FileChapterContentCache(),
-    this.enginePort = const FrbNetworkEnginePort(),
-  });
+  const CacheService({required this.contentCache, required this.enginePort});
 
   final ChapterContentCachePort contentCache;
   final NetworkEnginePort enginePort;

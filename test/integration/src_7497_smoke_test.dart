@@ -9,6 +9,7 @@ import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/services/book_source_service.dart';
+import '../helpers/book_source_service_test_factory.dart';
 
 import '../helpers/online_smoke_gate.dart';
 
@@ -26,7 +27,7 @@ void main() {
     await LegadoDbBridge.init(
       dbPathOverride: p.join(tempDir.path, 'legado.db'),
     );
-    service = BookSourceService();
+    service = createFrbBookSourceService();
 
     final file = File('tools/_src_7497.json').existsSync()
         ? File('tools/_src_7497.json')

@@ -14,10 +14,10 @@ import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/models/chapter.dart';
 import 'package:legado_flutter/services/app_paths.dart';
-import 'package:legado_flutter/services/book_source_service.dart';
+import '../helpers/book_source_service_test_factory.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class _FallbackSourceService extends BookSourceService {
+class _FallbackSourceService extends TestBookSourceService {
   int calls = 0;
 
   @override

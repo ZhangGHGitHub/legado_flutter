@@ -6,7 +6,7 @@ import 'package:legado_flutter/domain/ports/book_source_toc_port.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/models/chapter.dart';
-import 'package:legado_flutter/services/book_source_service.dart';
+import '../helpers/book_source_service_test_factory.dart';
 import 'package:legado_flutter/utils/site_busy_guard.dart';
 
 class _FakeBookInfoPort implements BookSourceBookInfoPort {
@@ -66,7 +66,10 @@ void main() {
   test('BookSourceService getChapters uses the injected TOC port', () async {
     final infoPort = _FakeBookInfoPort();
     final tocPort = _FakeTocPort();
-    final service = BookSourceService(bookInfoPort: infoPort, tocPort: tocPort);
+    final service = createTestBookSourceService(
+      bookInfoPort: infoPort,
+      tocPort: tocPort,
+    );
     final source = BookSource(
       bookSourceUrl: 'https://source.example',
       bookSourceName: '测试书源',
@@ -92,7 +95,10 @@ void main() {
   test('getChapters uses book tocUrl without querying book info', () async {
     final infoPort = _FakeBookInfoPort();
     final tocPort = _FakeTocPort();
-    final service = BookSourceService(bookInfoPort: infoPort, tocPort: tocPort);
+    final service = createTestBookSourceService(
+      bookInfoPort: infoPort,
+      tocPort: tocPort,
+    );
     final source = BookSource(
       bookSourceUrl: 'https://source.example',
       bookSourceName: '测试书源',
@@ -117,7 +123,10 @@ void main() {
   test('concurrent getChapters calls share one TOC port request', () async {
     final infoPort = _FakeBookInfoPort();
     final tocPort = _FakeTocPort(waitForRelease: true);
-    final service = BookSourceService(bookInfoPort: infoPort, tocPort: tocPort);
+    final service = createTestBookSourceService(
+      bookInfoPort: infoPort,
+      tocPort: tocPort,
+    );
     final source = BookSource(
       bookSourceUrl: 'https://source.example',
       bookSourceName: '测试书源',

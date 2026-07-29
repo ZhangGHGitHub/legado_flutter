@@ -3,7 +3,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
 import '../domain/ports/network_engine_port.dart';
-import '../infrastructure/engine/frb_network_engine_port.dart';
 
 /// 网络代理 / DNS 偏好（Phase 4.3）
 class NetworkPrefsConfig {
@@ -47,16 +46,15 @@ class NetworkPrefsConfig {
 }
 
 abstract final class NetworkPrefs {
-  static NetworkEnginePort _enginePort = FrbNetworkEnginePort();
+  static NetworkEnginePort? _enginePort;
 
-  @visibleForTesting
   static void configureEnginePort(NetworkEnginePort port) {
     _enginePort = port;
   }
 
   @visibleForTesting
   static void resetEnginePort() {
-    _enginePort = FrbNetworkEnginePort();
+    _enginePort = null;
   }
 
   static const enabledKey = 'net_proxy_enabled';
@@ -92,8 +90,9 @@ abstract final class NetworkPrefs {
   }
 
   static Future<void> applyToEngine(NetworkPrefsConfig config) async {
-    if (!_enginePort.isAvailable) return;
-    _enginePort.setNetworkConfig(
+    final enginePort = _enginePort;
+    if (enginePort == null || !enginePort.isAvailable) return;
+    enginePort.setNetworkConfig(
       proxyEnabled: config.proxyEnabled,
       proxyType: config.proxyType,
       proxyHost: config.proxyHost,

@@ -9,7 +9,7 @@ import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/models/chapter.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/services/app_paths.dart';
-import 'package:legado_flutter/services/book_source_service.dart';
+import '../helpers/book_source_service_test_factory.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _MemoryBookDao extends BookDao {
@@ -38,7 +38,7 @@ class _MemoryBookDao extends BookDao {
   }
 }
 
-class _RefreshSourceService extends BookSourceService {
+class _RefreshSourceService extends TestBookSourceService {
   _RefreshSourceService(this.remoteChapters);
 
   final List<Chapter> remoteChapters;

@@ -15,6 +15,12 @@ void main() {
 
   tearDown(BookGroupStore.resetPrefsPort);
 
+  test('requires an explicitly configured preferences port', () async {
+    BookGroupStore.resetPrefsPort();
+
+    await expectLater(BookGroupStore.load(), throwsA(isA<StateError>()));
+  });
+
   test(
     'missing storage keeps defaults and persists the original JSON shape',
     () async {

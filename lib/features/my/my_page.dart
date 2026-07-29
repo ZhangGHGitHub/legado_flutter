@@ -80,7 +80,7 @@ class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
     }
     setState(() => _localBackupBusy = true);
     try {
-      final file = await BackupService().backupToLocalFile();
+      final file = await context.read<BackupService>().backupToLocalFile();
       if (!mounted) return;
       _snack('本地备份完成：${file.uri.pathSegments.last}');
     } catch (e) {

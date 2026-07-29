@@ -6,6 +6,7 @@ import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/features/bookshelf/bookshelf_page.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
+import 'helpers/book_source_service_test_factory.dart';
 
 void main() {
   SharedPreferences.setMockInitialValues({});
@@ -13,6 +14,7 @@ void main() {
   testWidgets('BookshelfPage shows empty state', (WidgetTester tester) async {
     final bookProvider = BookProvider(
       repository: BookDao(),
+      sourceService: createTestBookSourceService(),
       contentCache: const FileChapterContentCache(),
     );
 

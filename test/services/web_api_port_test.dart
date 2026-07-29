@@ -48,6 +48,15 @@ void main() {
 
   tearDown(WebApiService.resetWebApiPort);
 
+  test('reset clears the configured Web API port', () async {
+    WebApiService.configureWebApiPort(_FakeWebApiPort());
+    WebApiService.resetWebApiPort();
+
+    expect(WebApiService.isAvailable, isFalse);
+    expect(WebApiService.currentStatus(), isNull);
+    await WebApiService.stop();
+  });
+
   test(
     'service starts through the replaceable port and persists status',
     () async {

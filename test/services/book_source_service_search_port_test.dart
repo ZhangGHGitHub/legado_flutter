@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/book_source_search_port.dart';
 import 'package:legado_flutter/models/book_source.dart';
-import 'package:legado_flutter/services/book_source_service.dart';
+import '../helpers/book_source_service_test_factory.dart';
 
 class _FakeBookSourceSearchPort implements BookSourceSearchPort {
   BookSource? source;
@@ -23,7 +23,7 @@ class _FakeBookSourceSearchPort implements BookSourceSearchPort {
 void main() {
   test('BookSourceService search uses the injected engine port', () async {
     final port = _FakeBookSourceSearchPort();
-    final service = BookSourceService(searchPort: port);
+    final service = createTestBookSourceService(searchPort: port);
     final source = BookSource(
       bookSourceUrl: 'https://source.example',
       bookSourceName: '测试书源',

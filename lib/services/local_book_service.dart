@@ -6,7 +6,6 @@ import 'package:path/path.dart' as p;
 import 'package:charset_converter/charset_converter.dart';
 import '../domain/repositories/book_repository.dart';
 import '../domain/ports/local_book_parser_port.dart';
-import '../infrastructure/engine/frb_local_book_parser_port.dart';
 import '../models/book.dart';
 import '../models/chapter.dart';
 import 'txt_toc_rule_prefs.dart';
@@ -23,9 +22,9 @@ class LocalBookImportException implements Exception {
 class LocalBookService {
   LocalBookService({
     required BookRepository repository,
-    LocalBookParserPort? parser,
+    required LocalBookParserPort parser,
   }) : _repository = repository,
-       _parser = parser ?? const FrbLocalBookParserPort();
+       _parser = parser;
 
   final BookRepository _repository;
   final LocalBookParserPort _parser;

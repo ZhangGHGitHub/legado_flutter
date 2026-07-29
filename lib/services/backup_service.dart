@@ -9,17 +9,15 @@ import 'package:path/path.dart' as p;
 import '../domain/ports/backup_port.dart';
 import '../domain/ports/webdav_repository.dart';
 import '../domain/remote/webdav_entry.dart';
-import '../infrastructure/database/frb_backup_port.dart';
-import '../infrastructure/webdav/frb_webdav_repository.dart';
 import '../services/app_paths.dart';
 import 'settings_backup.dart';
 import 'webdav_prefs.dart';
 
 /// 备份与恢复服务（DB + 设置打包，支持本地/WebDAV）
 class BackupService {
-  BackupService({WebDavRepository? webdav, BackupPort? backup})
-    : _webdav = webdav ?? const FrbWebDavRepository(),
-      _backup = backup ?? FrbBackupPort();
+  BackupService({required WebDavRepository webdav, required BackupPort backup})
+    : _webdav = webdav,
+      _backup = backup;
 
   final WebDavRepository _webdav;
   final BackupPort _backup;

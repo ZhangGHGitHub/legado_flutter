@@ -1,13 +1,10 @@
 import '../domain/ports/chapter_content_cache_port.dart';
-import '../infrastructure/cache/file_chapter_content_cache.dart';
 import '../models/book.dart';
 import '../models/chapter.dart';
 
 /// 书籍缓存导出 — 对齐 Jingshiro `CacheBook` 的纯文本导出路径。
 class BookCacheExportService {
-  const BookCacheExportService({
-    this.contentCache = const FileChapterContentCache(),
-  });
+  const BookCacheExportService({required this.contentCache});
 
   final ChapterContentCachePort contentCache;
 

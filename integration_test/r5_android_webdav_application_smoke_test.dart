@@ -7,6 +7,11 @@ import 'package:integration_test/integration_test.dart';
 import 'package:legado_flutter/bridge/legado_db_bridge.dart';
 import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
 import 'package:legado_flutter/domain/annotation/bookmark_snapshot.dart';
+import 'package:legado_flutter/infrastructure/database/frb_backup_port.dart';
+import 'package:legado_flutter/infrastructure/database/frb_legacy_room_import_port.dart';
+import 'package:legado_flutter/infrastructure/file_system/backup_local_file_adapter.dart';
+import 'package:legado_flutter/infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
+import 'package:legado_flutter/infrastructure/webdav/frb_webdav_repository.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_progress.dart';
 import 'package:legado_flutter/features/settings/backup_config_page.dart';
@@ -14,6 +19,7 @@ import 'package:legado_flutter/services/backup_service.dart';
 import 'package:legado_flutter/services/book_progress_sync.dart';
 import 'package:legado_flutter/services/bookmark_service.dart';
 import 'package:legado_flutter/services/bookmark_sync_service.dart';
+import 'package:legado_flutter/services/legacy_room_import_service_factory.dart';
 import 'package:legado_flutter/services/webdav_prefs.dart';
 import 'package:legado_flutter/services/webdav_setup_service.dart';
 
@@ -48,8 +54,19 @@ void main() {
     );
     await WebDavPrefs.save(config);
 
+    const webdavRepository = FrbWebDavRepository();
+    final backupService = BackupService(
+      webdav: webdavRepository,
+      backup: FrbBackupPort(),
+    );
+    final bookmarkSyncService = BookmarkSyncService(webdav: webdavRepository);
+    final bookProgressSync = BookProgressSync(
+      webdav: webdavRepository,
+      store: await SharedPreferencesBookProgressSyncStore.load(),
+    );
+
     // This uses the same repository path as application startup and settings.
-    await WebDavSetupService.initialize(config);
+    await WebDavSetupService.initialize(config, repository: webdavRepository);
 
     final localBookmark = BookmarkSnapshot(
       time: DateTime.now().millisecondsSinceEpoch,
@@ -62,10 +79,10 @@ void main() {
       bookText: 'bookmark text',
       content: 'bookmark note',
     );
-    expect(await BookmarkSyncService.uploadMerged(local: [localBookmark]), 1);
+    expect(await bookmarkSyncService.uploadMerged(local: [localBookmark]), 1);
 
     List<BookmarkSnapshot>? mergedBookmarks;
-    final mergedCount = await BookmarkSyncService.downloadAndMerge(
+    final mergedCount = await bookmarkSyncService.downloadAndMerge(
       local: const [],
       apply: (json) async {
         mergedBookmarks = BookmarkService.decodeJson(json);
@@ -87,13 +104,23 @@ void main() {
       durChapterTime: DateTime.now().millisecondsSinceEpoch,
       durChapterTitle: 'Chapter 3',
     );
-    await BookProgressSync.uploadBookProgress(progress);
-    final downloadedProgress = await BookProgressSync.getBookProgress(book);
+    await bookProgressSync.uploadBookProgress(progress);
+    final downloadedProgress = await bookProgressSync.getBookProgress(book);
     expect(downloadedProgress?.durChapterIndex, progress.durChapterIndex);
     expect(downloadedProgress?.durChapterPos, progress.durChapterPos);
 
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: BackupConfigPage())),
+      MaterialApp(
+        home: Scaffold(
+          body: BackupConfigPage(
+            service: backupService,
+            localFilePort: FileSystemBackupLocalFileAdapter(backupService),
+            legacyRoomImportService: LegacyRoomImportServices.create(
+              FrbLegacyRoomImportPort(),
+            ),
+          ),
+        ),
+      ),
     );
     await tester.pumpAndSettle(const Duration(seconds: 2));
     expect(find.text('上传到 WebDAV'), findsOneWidget);
@@ -102,11 +129,10 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 5));
     expect(find.text('已上传到 WebDAV'), findsOneWidget);
 
-    final backups = await BackupService().listWebDavBackups();
+    final backups = await backupService.listWebDavBackups();
     expect(backups, isNotEmpty);
 
     // Keep the payload assertion tied to the production backup format.
-    final backupService = BackupService();
     final json = await backupService.createFullBackupJson();
     expect(
       jsonDecode(json),

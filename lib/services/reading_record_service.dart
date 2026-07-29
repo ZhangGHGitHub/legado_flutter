@@ -2,22 +2,24 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/ports/reading_record_port.dart';
 import '../domain/reading_stats.dart';
-import '../infrastructure/engine/frb_reading_record_port.dart';
 
 /// 阅读记录服务（Rust DB）
 class ReadingRecordService {
-  static ReadingRecordPort _recordPort = FrbReadingRecordPort();
+  static ReadingRecordPort? _configuredRecordPort;
 
-  static bool get isReady => _recordPort.isAvailable;
+  static ReadingRecordPort get _recordPort =>
+      _configuredRecordPort ??
+      (throw StateError('ReadingRecordService 尚未配置 ReadingRecordPort'));
 
-  @visibleForTesting
+  static bool get isReady => _configuredRecordPort?.isAvailable ?? false;
+
   static void configureRecordPort(ReadingRecordPort port) {
-    _recordPort = port;
+    _configuredRecordPort = port;
   }
 
   @visibleForTesting
   static void resetRecordPort() {
-    _recordPort = FrbReadingRecordPort();
+    _configuredRecordPort = null;
   }
 
   static bool recordReading({

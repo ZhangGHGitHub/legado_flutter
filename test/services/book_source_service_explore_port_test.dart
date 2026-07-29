@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/book_source_explore_port.dart';
 import 'package:legado_flutter/models/book_source.dart';
-import 'package:legado_flutter/services/book_source_service.dart';
+import '../helpers/book_source_service_test_factory.dart';
 
 class _FakeBookSourceExplorePort implements BookSourceExplorePort {
   BookSource? source;
@@ -30,7 +30,7 @@ class _FakeBookSourceExplorePort implements BookSourceExplorePort {
 void main() {
   test('BookSourceService explore uses the injected engine port', () async {
     final port = _FakeBookSourceExplorePort();
-    final service = BookSourceService(explorePort: port);
+    final service = createTestBookSourceService(explorePort: port);
     final source = BookSource(
       bookSourceUrl: 'https://source.example',
       bookSourceName: '测试书源',

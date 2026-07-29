@@ -35,6 +35,13 @@ void main() {
 
   tearDown(RssSortUrls.resetJsPort);
 
+  test('reset clears the configured sortUrl JS port', () async {
+    RssSortUrls.configureJsPort(_FakeSortUrlJsPort());
+    RssSortUrls.resetJsPort();
+
+    expect((await RssSortUrls.resolve(source)).single.$2, source.sourceUrl);
+  });
+
   test('sortUrl JS is evaluated through the port and cached', () async {
     final port = _FakeSortUrlJsPort();
     RssSortUrls.configureJsPort(port);

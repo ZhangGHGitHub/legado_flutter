@@ -5,6 +5,13 @@ import 'package:legado_flutter/services/source_login_service.dart';
 void main() {
   tearDown(SourceLoginService.resetJsPort);
 
+  test('reset clears the configured JS port', () {
+    SourceLoginService.configureJsPort(_FakeJsEvalPort());
+    SourceLoginService.resetJsPort();
+
+    expect(() => SourceLoginService.eval('login()'), throwsStateError);
+  });
+
   test('SourceLoginService forwards JS execution through the port', () {
     final port = _FakeJsEvalPort(result: '[{"name":"账号"}]');
     SourceLoginService.configureJsPort(port);

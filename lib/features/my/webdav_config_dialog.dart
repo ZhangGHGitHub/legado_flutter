@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../domain/ports/webdav_repository.dart';
 import '../../services/webdav_prefs.dart';
 import '../../services/webdav_setup_service.dart';
 
@@ -64,6 +66,7 @@ class _WebDavConfigDialogState extends State<WebDavConfigDialog> {
 
   Future<void> _save() async {
     setState(() => _saving = true);
+    final repository = context.read<WebDavRepository>();
     final config = WebDavConfig(
       url: _url.text.trim(),
       account: _account.text.trim(),
@@ -76,7 +79,7 @@ class _WebDavConfigDialogState extends State<WebDavConfigDialog> {
     await WebDavPrefs.save(config);
     if (config.isReady) {
       try {
-        await WebDavSetupService.initialize(config);
+        await WebDavSetupService.initialize(config, repository: repository);
       } catch (e) {
         if (!mounted) return;
         setState(() => _saving = false);

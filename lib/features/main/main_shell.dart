@@ -4,11 +4,13 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/app_config.dart';
+import '../../domain/ports/public_text_fetch_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/replace_provider.dart';
 import '../../providers/rss_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/bookshelf_prefs.dart';
+import '../../services/book_source_service.dart';
 import '../../services/rule_sub_import_service.dart';
 import '../../theme/legado_chrome.dart';
 import '../../widgets/legado_bottom_nav.dart';
@@ -95,9 +97,11 @@ class _MainShellState extends State<MainShell> {
     if (!mounted) return;
     try {
       final needUi = await RuleSubImportService.checkAutoUpdates(
+        sourceService: context.read<BookSourceService>(),
         sourceProvider: context.read<SourceProvider>(),
         rssProvider: context.read<RssProvider>(),
         replaceProvider: context.read<ReplaceProvider>(),
+        fetchPort: context.read<PublicTextFetchPort>(),
       );
       if (!mounted || needUi.isEmpty) return;
       for (final sub in needUi) {

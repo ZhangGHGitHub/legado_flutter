@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/domain/ports/public_text_fetch_port.dart';
 import 'package:legado_flutter/domain/repositories/book_source_repository.dart';
 import 'package:legado_flutter/domain/repositories/replace_rule_repository.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_book_source_validation_port.dart';
@@ -10,6 +11,7 @@ import 'package:legado_flutter/providers/replace_provider.dart';
 import 'package:legado_flutter/providers/rss_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
 import 'package:legado_flutter/services/rule_sub_import_service.dart';
+import '../helpers/book_source_service_test_factory.dart';
 import 'package:legado_flutter/services/rule_sub_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -108,14 +110,17 @@ void main() {
       );
       final result = await RuleSubImportService.cacheSource(
         ruleSub: ruleSub,
+        sourceService: createTestBookSourceService(),
         sourceProvider: SourceProvider(
           repository: _FakeBookSourceRepository(),
           validationPort: FrbBookSourceValidationPort(),
+          sourceService: createTestBookSourceService(),
         ),
         rssProvider: rssProvider,
         replaceProvider: ReplaceProvider(
           repository: _FakeReplaceRuleRepository(),
         ),
+        fetchPort: const _UnexpectedPublicTextFetchPort(),
         fetchTextOverride: (_) async =>
             '[{"sourceUrl":"https://rss.example/source",'
             '"sourceName":"新名称","sourceGroup":"远端分组",'
@@ -148,14 +153,17 @@ void main() {
           type: 1,
           silentUpdate: true,
         ),
+        sourceService: createTestBookSourceService(),
         sourceProvider: SourceProvider(
           repository: _FakeBookSourceRepository(),
           validationPort: FrbBookSourceValidationPort(),
+          sourceService: createTestBookSourceService(),
         ),
         rssProvider: rssProvider,
         replaceProvider: ReplaceProvider(
           repository: _FakeReplaceRuleRepository(),
         ),
+        fetchPort: const _UnexpectedPublicTextFetchPort(),
         fetchTextOverride: (_) async =>
             '[{"sourceUrl":"https://rss.example/source",'
             '"sourceName":"旧名称","lastUpdateTime":10}]',
@@ -181,14 +189,17 @@ void main() {
 
       final result = await RuleSubImportService.cacheSource(
         ruleSub: RuleSub(id: 5, url: 'https://rules.example/rss.json', type: 1),
+        sourceService: createTestBookSourceService(),
         sourceProvider: SourceProvider(
           repository: _FakeBookSourceRepository(),
           validationPort: FrbBookSourceValidationPort(),
+          sourceService: createTestBookSourceService(),
         ),
         rssProvider: rssProvider,
         replaceProvider: ReplaceProvider(
           repository: _FakeReplaceRuleRepository(),
         ),
+        fetchPort: const _UnexpectedPublicTextFetchPort(),
         fetchTextOverride: (_) async =>
             '[{"sourceUrl":"https://rss.example/source",'
             '"sourceName":"新名称","lastUpdateTime":20}]',
@@ -258,4 +269,13 @@ class _FakeReplaceRuleRepository implements ReplaceRuleRepository {
 
   @override
   Future<void> clear() async => rules.clear();
+}
+
+class _UnexpectedPublicTextFetchPort implements PublicTextFetchPort {
+  const _UnexpectedPublicTextFetchPort();
+
+  @override
+  Future<String> fetch(String url, {String userAgent = ''}) {
+    throw StateError('fetchTextOverride should prevent network access');
+  }
 }

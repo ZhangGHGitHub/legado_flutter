@@ -6,8 +6,6 @@ import '../config/app_config.dart';
 import '../domain/ports/book_progress_sync_store.dart';
 import '../domain/ports/webdav_repository.dart';
 import '../domain/remote/webdav_entry.dart';
-import '../infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
-import '../infrastructure/webdav/frb_webdav_repository.dart';
 import '../models/book.dart';
 import '../models/book_progress.dart';
 import 'webdav_prefs.dart';
@@ -60,9 +58,14 @@ enum BookProgressSyncDecision { skipUnchangedRemote, keepLocal, applyRemote }
 
 /// WebDAV 单书进度同步 — 对齐 Jingshiro `AppWebDav` bookProgress
 class BookProgressSync {
-  BookProgressSync._();
+  const BookProgressSync({
+    required WebDavRepository webdav,
+    required BookProgressSyncStore store,
+  }) : _webdav = webdav,
+       _store = store;
 
-  static const WebDavRepository _webdav = FrbWebDavRepository();
+  final WebDavRepository _webdav;
+  final BookProgressSyncStore _store;
 
   static const _maxConditionalUploadRetries = 1;
 
@@ -93,7 +96,7 @@ class BookProgressSync {
     return '$base${'bookProgress/'}'.replaceAll(RegExp(r'/{2,}'), '/');
   }
 
-  static Future<String?> _readRemoteEtag({
+  Future<String?> _readRemoteEtag({
     required String url,
     required String username,
     required String password,
@@ -121,23 +124,16 @@ class BookProgressSync {
     return message.contains('412') || message.contains('precondition failed');
   }
 
-  static Future<int> loadSyncTime(
-    String name,
-    String author, {
-    BookProgressSyncStore? store,
-  }) async {
-    final syncStore = await _resolveStore(store);
-    return await syncStore.read(syncTimeKey(name, author)) ?? 0;
+  Future<int> loadSyncTime(String name, String author) async {
+    return await _store.read(syncTimeKey(name, author)) ?? 0;
   }
 
-  static Future<void> saveSyncTime(
+  Future<void> saveSyncTime(
     String name,
     String author, {
     required int syncTime,
-    BookProgressSyncStore? store,
   }) async {
-    final syncStore = await _resolveStore(store);
-    await syncStore.write(syncTimeKey(name, author), syncTime);
+    await _store.write(syncTimeKey(name, author), syncTime);
   }
 
   static BookProgressSyncDecision decideRemoteProgress({
@@ -174,12 +170,12 @@ class BookProgressSync {
     );
   }
 
-  static Future<bool> isConfigured() async {
+  Future<bool> isConfigured() async {
     final c = await WebDavPrefs.load();
     return c.isReady;
   }
 
-  static Future<BookProgress?> getBookProgress(Book book) async {
+  Future<BookProgress?> getBookProgress(Book book) async {
     final config = await WebDavPrefs.load();
     if (!config.isReady) return null;
     final remote = progressRemotePath(config, book.name, book.author);
@@ -200,19 +196,19 @@ class BookProgressSync {
     }
   }
 
-  static Future<int> downloadAllBookProgress({
+  Future<int> downloadAllBookProgress({
     required Iterable<Book> books,
     required Future<void> Function(Book book, BookProgress progress) apply,
-    WebDavListInvoker list = _defaultList,
-    WebDavDownloadInvoker download = _defaultDownload,
+    WebDavListInvoker? list,
+    WebDavDownloadInvoker? download,
     int Function()? nowMillis,
-    BookProgressSyncStore? store,
   }) async {
     final config = await WebDavPrefs.load();
     if (!config.isReady) return 0;
-    final syncStore = await _resolveStore(store);
+    final effectiveList = list ?? _defaultList;
+    final effectiveDownload = download ?? _defaultDownload;
 
-    final entries = await list(
+    final entries = await effectiveList(
       url: config.url,
       username: config.account,
       password: config.password,
@@ -228,15 +224,11 @@ class BookProgressSync {
       final entry = files[fileName];
       if (entry == null) continue;
 
-      final localSyncTime = await loadSyncTime(
-        book.name,
-        book.author,
-        store: syncStore,
-      );
+      final localSyncTime = await loadSyncTime(book.name, book.author);
       if (entry.lastModified <= localSyncTime) continue;
 
       try {
-        final bytes = await download(
+        final bytes = await effectiveDownload(
           url: config.url,
           username: config.account,
           password: config.password,
@@ -259,7 +251,6 @@ class BookProgressSync {
           book.name,
           book.author,
           syncTime: nowMillis?.call() ?? DateTime.now().millisecondsSinceEpoch,
-          store: syncStore,
         );
         appliedCount++;
       } catch (e) {
@@ -269,14 +260,13 @@ class BookProgressSync {
     return appliedCount;
   }
 
-  static Future<void> uploadBookProgress(
+  Future<void> uploadBookProgress(
     BookProgress progress, {
     bool toast = false,
     WebDavUploadInvoker? upload,
-    WebDavEtagReader readEtag = _readRemoteEtag,
-    WebDavUploadIfMatchInvoker uploadIfMatch = _defaultUploadIfMatch,
+    WebDavEtagReader? readEtag,
+    WebDavUploadIfMatchInvoker? uploadIfMatch,
     int Function()? nowMillis,
-    BookProgressSyncStore? store,
   }) async {
     await AppConfig.instance.load();
     if (!AppConfig.instance.syncBookProgress) return;
@@ -284,7 +274,6 @@ class BookProgressSync {
     if (!config.isReady) {
       throw StateError('请先配置 WebDAV');
     }
-    final syncStore = await _resolveStore(store);
     final remote = progressRemotePath(config, progress.name, progress.author);
     final data = utf8.encode(jsonEncode(progress.toJson()));
     if (upload != null) {
@@ -296,7 +285,9 @@ class BookProgressSync {
         data: data,
       );
     } else {
-      var etag = await readEtag(
+      final effectiveReadEtag = readEtag ?? _readRemoteEtag;
+      final effectiveUploadIfMatch = uploadIfMatch ?? _defaultUploadIfMatch;
+      var etag = await effectiveReadEtag(
         url: config.url,
         username: config.account,
         password: config.password,
@@ -305,7 +296,7 @@ class BookProgressSync {
       var retryCount = 0;
       while (true) {
         try {
-          await uploadIfMatch(
+          await effectiveUploadIfMatch(
             url: config.url,
             username: config.account,
             password: config.password,
@@ -320,7 +311,7 @@ class BookProgressSync {
             rethrow;
           }
           retryCount++;
-          etag = await readEtag(
+          etag = await effectiveReadEtag(
             url: config.url,
             username: config.account,
             password: config.password,
@@ -333,18 +324,11 @@ class BookProgressSync {
       progress.name,
       progress.author,
       syncTime: nowMillis?.call() ?? DateTime.now().millisecondsSinceEpoch,
-      store: syncStore,
     );
     debugPrint('上传进度成功: $remote toast=$toast');
   }
 
-  static Future<BookProgressSyncStore> _resolveStore(
-    BookProgressSyncStore? store,
-  ) async {
-    return store ?? await SharedPreferencesBookProgressSyncStore.load();
-  }
-
-  static Future<List<WebDavEntry>> _defaultList({
+  Future<List<WebDavEntry>> _defaultList({
     required String url,
     required String username,
     required String password,
@@ -358,7 +342,7 @@ class BookProgressSync {
     );
   }
 
-  static Future<List<int>> _defaultDownload({
+  Future<List<int>> _defaultDownload({
     required String url,
     required String username,
     required String password,
@@ -372,7 +356,7 @@ class BookProgressSync {
     );
   }
 
-  static Future<void> _defaultUploadIfMatch({
+  Future<void> _defaultUploadIfMatch({
     required String url,
     required String username,
     required String password,

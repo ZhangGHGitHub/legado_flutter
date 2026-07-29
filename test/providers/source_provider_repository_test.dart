@@ -3,6 +3,7 @@ import 'package:legado_flutter/domain/repositories/book_source_repository.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_book_source_validation_port.dart';
 import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
+import '../helpers/book_source_service_test_factory.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeBookSourceRepository implements BookSourceRepository {
@@ -52,6 +53,7 @@ void main() {
     final provider = SourceProvider(
       repository: repository,
       validationPort: FrbBookSourceValidationPort(),
+      sourceService: createTestBookSourceService(),
     );
     final source = BookSource(
       bookSourceUrl: 'https://source.example',
@@ -78,6 +80,7 @@ void main() {
       final provider = SourceProvider(
         repository: repository,
         validationPort: FrbBookSourceValidationPort(),
+        sourceService: createTestBookSourceService(),
         builtInSourcesLoader: () async {
           loadCount++;
           return [builtIn];
@@ -107,6 +110,7 @@ void main() {
       final provider = SourceProvider(
         repository: repository,
         validationPort: FrbBookSourceValidationPort(),
+        sourceService: createTestBookSourceService(),
         builtInSourcesLoader: () async {
           invoked = true;
           return const [];
@@ -125,6 +129,7 @@ void main() {
     final provider = SourceProvider(
       repository: _FailingBookSourceRepository(),
       validationPort: FrbBookSourceValidationPort(),
+      sourceService: createTestBookSourceService(),
       builtInSourcesLoader: () async => const [],
     );
 

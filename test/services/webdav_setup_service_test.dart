@@ -92,33 +92,11 @@ void main() {
       password: 'password',
       dir: '/legado',
     );
-    final calls = <String>[];
+    final repository = _FakeWebDavRepository();
 
-    Future<void> check({
-      required String url,
-      required String username,
-      required String password,
-      required String path,
-    }) async {
-      calls.add('check:$url:$username:$password:$path');
-    }
+    await WebDavSetupService.initialize(config, repository: repository);
 
-    Future<void> ensureDir({
-      required String url,
-      required String username,
-      required String password,
-      required String path,
-    }) async {
-      calls.add('mkdir:$url:$username:$password:$path');
-    }
-
-    await WebDavSetupService.initialize(
-      config,
-      check: check,
-      ensureDir: ensureDir,
-    );
-
-    expect(calls, [
+    expect(repository.calls, [
       'check:https://dav.example.com/dav:account:password:/legado',
       'mkdir:https://dav.example.com/dav:account:password:/legado',
       'mkdir:https://dav.example.com/dav:account:password:/legado/bookProgress',
@@ -171,29 +149,11 @@ void main() {
 
   test('requires complete WebDAV credentials before initialization', () async {
     const config = WebDavConfig(url: 'https://dav.example.com/dav');
-    var invoked = false;
+    final repository = _FakeWebDavRepository();
     await expectLater(
-      WebDavSetupService.initialize(
-        config,
-        check:
-            ({
-              required url,
-              required username,
-              required password,
-              required path,
-            }) async {
-              invoked = true;
-            },
-        ensureDir:
-            ({
-              required url,
-              required username,
-              required password,
-              required path,
-            }) async {},
-      ),
+      WebDavSetupService.initialize(config, repository: repository),
       throwsA(isA<StateError>()),
     );
-    expect(invoked, isFalse);
+    expect(repository.calls, isEmpty);
   });
 }

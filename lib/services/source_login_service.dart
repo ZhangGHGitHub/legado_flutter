@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../domain/ports/js_eval_port.dart';
-import '../infrastructure/engine/frb_js_eval_port.dart';
 import '../models/book_source.dart';
 import '../models/rss_source.dart';
 
@@ -39,16 +38,15 @@ class LoginJsResult {
 
 /// 书源登录 JS 辅助 — 对齐 Jingshiro SourceLoginDialog / SourceLoginJsExtensions。
 abstract final class SourceLoginService {
-  static JsEvalPort _jsPort = const FrbJsEvalPort();
+  static JsEvalPort? _jsPort;
 
-  @visibleForTesting
   static void configureJsPort(JsEvalPort port) {
     _jsPort = port;
   }
 
   @visibleForTesting
   static void resetJsPort() {
-    _jsPort = const FrbJsEvalPort();
+    _jsPort = null;
   }
 
   static String extractScript(String raw) {
@@ -84,7 +82,11 @@ abstract final class SourceLoginService {
   }
 
   static String eval(String script, {String jsLib = '', String baseUrl = ''}) {
-    return _jsPort.eval(script: script, jsLib: jsLib, baseUrl: baseUrl);
+    final jsPort = _jsPort;
+    if (jsPort == null || !jsPort.isAvailable) {
+      throw StateError('SourceLoginService 尚未配置可用的 JsEvalPort');
+    }
+    return jsPort.eval(script: script, jsLib: jsLib, baseUrl: baseUrl);
   }
 
   static String _prelude(

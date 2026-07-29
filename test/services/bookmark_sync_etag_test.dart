@@ -8,9 +8,14 @@ import 'package:legado_flutter/services/webdav_prefs.dart';
 import 'package:legado_flutter/domain/remote/webdav_entry.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../helpers/sync_test_ports.dart';
+
 void main() {
+  late BookmarkSyncService sync;
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    sync = BookmarkSyncService(webdav: const UnsupportedWebDavRepository());
   });
 
   const local = [
@@ -68,7 +73,7 @@ void main() {
     String? uploadedEtag;
     List<BookmarkSnapshot>? uploadedBookmarks;
 
-    final count = await BookmarkSyncService.uploadMerged(
+    final count = await sync.uploadMerged(
       local: local,
       list:
           ({
@@ -127,7 +132,7 @@ void main() {
       ),
     ];
 
-    final count = await BookmarkSyncService.uploadMerged(
+    final count = await sync.uploadMerged(
       local: local,
       list:
           ({
@@ -187,7 +192,7 @@ void main() {
     var downloadCalls = 0;
 
     await expectLater(
-      BookmarkSyncService.uploadMerged(
+      sync.uploadMerged(
         local: local,
         maxConflictRetries: 1,
         list:
@@ -250,7 +255,7 @@ void main() {
       var ordinaryUploadCalled = false;
 
       await expectLater(
-        BookmarkSyncService.uploadMerged(
+        sync.uploadMerged(
           local: local,
           list:
               ({

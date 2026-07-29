@@ -4,24 +4,25 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/annotation/note_snapshot.dart';
 import '../domain/ports/note_port.dart';
-import '../infrastructure/engine/frb_note_port.dart';
 import 'app_log.dart';
 
 /// 想法笔记服务（Phase 4.5）
 class NoteService {
-  static NotePort _notePort = FrbNotePort();
+  static NotePort? _configuredNotePort;
 
-  @visibleForTesting
+  static NotePort get _notePort =>
+      _configuredNotePort ?? (throw StateError('NoteService 尚未配置 NotePort'));
+
   static void configureNotePort(NotePort port) {
-    _notePort = port;
+    _configuredNotePort = port;
   }
 
   @visibleForTesting
   static void resetNotePort() {
-    _notePort = FrbNotePort();
+    _configuredNotePort = null;
   }
 
-  static bool get isReady => _notePort.isAvailable;
+  static bool get isReady => _configuredNotePort?.isAvailable ?? false;
 
   static List<NoteSnapshot> list({String? bookId}) {
     if (!isReady) return [];

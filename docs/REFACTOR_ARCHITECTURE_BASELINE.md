@@ -2034,3 +2034,23 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - 相关集成回归：`5/5` 通过；Flutter 全量：`540` 通过，3 个既有条件测试跳过。
 
 边界结论：AI、Obsidian 和通用 WebView 页面均已满足当前静态功能域边界；真实外部服务仍按暂停/范围外条件处理。
+
+## 98. 2026-07-29：R1 默认适配器与组合根收敛
+
+迁移范围：
+
+- 将 FRB、DAO、文件缓存、WebDAV 和 SharedPreferences 的实例化集中到
+  `lib/bootstrap/app_composition_root.dart`；`AppBootstrap` 改为显式依赖编排。
+- 书源、缓存、备份、进度同步、书签同步和静态状态服务移除默认具体 adapter；RuleSub 文本抓取
+  必须显式传入 `PublicTextFetchPort`。
+- 生产页面从 Provider 或构造参数消费同一服务实例；测试使用 fake/内存 port，不恢复生产默认值。
+
+验证结果：
+
+- `flutter analyze --no-pub`：无诊断。
+- R1 组合联合定向测试：`73/73`；RuleSub/书源网络：`12/12`；`yckceo` 三源 smoke：`4/4`。
+- `flutter test --no-pub --concurrency=1`：`563` 通过、`3` 项按既有条件跳过。
+- 架构检查：核心层具体基础设施违规从 `78` 降为 `0`；剩余 Feature 偏好/服务依赖 `146` 条进入后续阶段。
+- `git diff --check`：通过，仅有工作树 LF/CRLF 提示。
+
+边界结论：R1 默认适配器和组合根边界已收敛；领域模型归属仍按独立批次迁移，R1 尚未最终退出。

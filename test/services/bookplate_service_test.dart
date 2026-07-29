@@ -7,6 +7,13 @@ import 'package:legado_flutter/services/bookplate_service.dart';
 void main() {
   tearDown(BookplateService.resetBookplatePort);
 
+  test('reset clears the configured bookplate port', () {
+    BookplateService.configureBookplatePort(_FakeBookplatePort());
+    BookplateService.resetBookplatePort();
+
+    expect(BookplateService.loadBookStats('book-1'), isNull);
+  });
+
   test('ratingFromProgress maps 0-1 to 0-5 stars', () {
     expect(BookplateService.ratingFromProgress(0), 0);
     expect(BookplateService.ratingFromProgress(0.5), 2.5);

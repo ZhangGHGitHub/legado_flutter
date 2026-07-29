@@ -29,7 +29,7 @@ class ExploreListPage extends StatefulWidget {
 }
 
 class _ExploreListPageState extends State<ExploreListPage> {
-  final _service = BookSourceService();
+  late final BookSourceService _service;
   List<Book> _books = [];
   bool _loading = true;
   String? _error;
@@ -38,6 +38,7 @@ class _ExploreListPageState extends State<ExploreListPage> {
   @override
   void initState() {
     super.initState();
+    _service = context.read<BookSourceService>();
     _load();
   }
 

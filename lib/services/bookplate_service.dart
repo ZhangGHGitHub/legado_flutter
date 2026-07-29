@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/book_reading_stats.dart';
 import '../domain/ports/bookplate_port.dart';
-import '../infrastructure/engine/frb_bookplate_port.dart';
 import '../models/book.dart';
 import 'reading_record_service.dart';
 
@@ -35,20 +34,21 @@ class BookplateData {
 
 /// 阅读小票数据组装
 abstract final class BookplateService {
-  static BookplatePort _bookplatePort = FrbBookplatePort();
+  static BookplatePort? _bookplatePort;
 
-  @visibleForTesting
   static void configureBookplatePort(BookplatePort port) {
     _bookplatePort = port;
   }
 
   @visibleForTesting
   static void resetBookplatePort() {
-    _bookplatePort = FrbBookplatePort();
+    _bookplatePort = null;
   }
 
   static BookReadingStats? loadBookStats(String bookId) {
-    return _bookplatePort.loadBookStats(bookId);
+    final port = _bookplatePort;
+    if (port == null || !port.isAvailable) return null;
+    return port.loadBookStats(bookId);
   }
 
   static BookplateData build({

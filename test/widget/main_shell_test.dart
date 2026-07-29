@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/database/dao/replace_rule_dao.dart';
 import 'package:legado_flutter/database/dao/source_dao.dart';
+import 'package:legado_flutter/domain/ports/public_text_fetch_port.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_book_source_validation_port.dart';
 import 'package:path/path.dart' as p;
@@ -18,8 +19,10 @@ import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/replace_provider.dart';
 import 'package:legado_flutter/providers/rss_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
+import 'package:legado_flutter/services/book_source_service.dart';
 import 'package:legado_flutter/theme/app_theme.dart';
 import 'package:legado_flutter/widgets/legado_bottom_nav.dart';
+import '../helpers/book_source_service_test_factory.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -59,18 +62,26 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
+          Provider<PublicTextFetchPort>.value(
+            value: const _EmptyPublicTextFetchPort(),
+          ),
+          Provider<BookSourceService>(
+            create: (_) => createTestBookSourceService(),
+          ),
           ChangeNotifierProvider.value(value: themeController),
           ChangeNotifierProvider.value(value: AppConfig.instance),
           ChangeNotifierProvider(
             create: (_) => BookProvider(
               repository: BookDao(),
               contentCache: const FileChapterContentCache(),
+              sourceService: createTestBookSourceService(),
             ),
           ),
           ChangeNotifierProvider(
             create: (_) => SourceProvider(
               repository: SourceDao(),
               validationPort: FrbBookSourceValidationPort(),
+              sourceService: createTestBookSourceService(),
             ),
           ),
           ChangeNotifierProvider(create: (_) => RssProvider()),
@@ -108,18 +119,26 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
+          Provider<PublicTextFetchPort>.value(
+            value: const _EmptyPublicTextFetchPort(),
+          ),
+          Provider<BookSourceService>(
+            create: (_) => createTestBookSourceService(),
+          ),
           ChangeNotifierProvider.value(value: themeController),
           ChangeNotifierProvider.value(value: AppConfig.instance),
           ChangeNotifierProvider(
             create: (_) => BookProvider(
               repository: BookDao(),
               contentCache: const FileChapterContentCache(),
+              sourceService: createTestBookSourceService(),
             ),
           ),
           ChangeNotifierProvider(
             create: (_) => SourceProvider(
               repository: SourceDao(),
               validationPort: FrbBookSourceValidationPort(),
+              sourceService: createTestBookSourceService(),
             ),
           ),
           ChangeNotifierProvider(create: (_) => RssProvider()),
@@ -140,4 +159,11 @@ void main() {
     expect(find.descendant(of: bar, matching: find.text('发现')), findsNothing);
     expect(find.descendant(of: bar, matching: find.text('订阅')), findsNothing);
   });
+}
+
+class _EmptyPublicTextFetchPort implements PublicTextFetchPort {
+  const _EmptyPublicTextFetchPort();
+
+  @override
+  Future<String> fetch(String url, {String userAgent = ''}) async => '[]';
 }

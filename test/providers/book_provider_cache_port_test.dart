@@ -6,7 +6,7 @@ import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/models/chapter.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
-import 'package:legado_flutter/services/book_source_service.dart';
+import '../helpers/book_source_service_test_factory.dart';
 
 class _SpyCache implements ChapterContentCachePort {
   int clearInvalidCalls = 0;
@@ -92,7 +92,7 @@ class _BookDao extends BookDao {
   }
 }
 
-class _SourceService extends BookSourceService {
+class _SourceService extends TestBookSourceService {
   @override
   Future<List<Chapter>> getChapters(
     Book book, {

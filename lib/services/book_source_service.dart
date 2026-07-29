@@ -9,12 +9,6 @@ import '../domain/ports/book_source_explore_port.dart';
 import '../domain/ports/book_source_search_port.dart';
 import '../domain/ports/book_source_toc_port.dart';
 import '../domain/ports/public_text_fetch_port.dart';
-import '../infrastructure/engine/frb_book_source_book_info_port.dart';
-import '../infrastructure/engine/frb_book_source_content_port.dart';
-import '../infrastructure/engine/frb_book_source_explore_port.dart';
-import '../infrastructure/engine/frb_book_source_search_port.dart';
-import '../infrastructure/engine/frb_book_source_toc_port.dart';
-import '../infrastructure/network/frb_public_text_fetch_port.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/chapter.dart';
@@ -23,22 +17,25 @@ import '../utils/site_busy_guard.dart';
 /// 书源服务门面 — 全部书源操作走 Rust 引擎（Phase E-B：无 Dart 回退）
 class BookSourceService {
   BookSourceService({
-    BookSourceSearchPort? searchPort,
-    BookSourceBookInfoPort? bookInfoPort,
-    BookSourceContentPort? contentPort,
-    BookSourceExplorePort? explorePort,
-    BookSourceTocPort? tocPort,
-  }) : _searchPort = searchPort ?? FrbBookSourceSearchPort(),
-       _bookInfoPort = bookInfoPort ?? FrbBookSourceBookInfoPort(),
-       _contentPort = contentPort ?? FrbBookSourceContentPort(),
-       _explorePort = explorePort ?? FrbBookSourceExplorePort(),
-       _tocPort = tocPort ?? FrbBookSourceTocPort();
+    required BookSourceSearchPort searchPort,
+    required BookSourceBookInfoPort bookInfoPort,
+    required BookSourceContentPort contentPort,
+    required BookSourceExplorePort explorePort,
+    required BookSourceTocPort tocPort,
+    required PublicTextFetchPort publicTextPort,
+  }) : _searchPort = searchPort,
+       _bookInfoPort = bookInfoPort,
+       _contentPort = contentPort,
+       _explorePort = explorePort,
+       _tocPort = tocPort,
+       _publicTextPort = publicTextPort;
 
   final BookSourceSearchPort _searchPort;
   final BookSourceBookInfoPort _bookInfoPort;
   final BookSourceContentPort _contentPort;
   final BookSourceExplorePort _explorePort;
   final BookSourceTocPort _tocPort;
+  final PublicTextFetchPort _publicTextPort;
 
   /// 搜索书籍
   Future<List<Map<String, String>>> search(
@@ -151,12 +148,9 @@ class BookSourceService {
   }
 
   /// 从 URL 获取书源 JSON 并解析
-  static Future<List<BookSource>> fetchSourcesFromUrl(
-    String url, {
-    PublicTextFetchPort fetchPort = const FrbPublicTextFetchPort(),
-  }) async {
+  Future<List<BookSource>> fetchSourcesFromUrl(String url) async {
     try {
-      final rawBody = await fetchPort.fetch(url);
+      final rawBody = await _publicTextPort.fetch(url);
       if (rawBody.isEmpty) {
         debugPrint('从 $url 获取书源: 空响应');
         return [];

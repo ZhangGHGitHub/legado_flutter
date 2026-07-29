@@ -5,11 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/rule_sub.dart';
+import '../../domain/ports/public_text_fetch_port.dart';
 import '../../providers/replace_provider.dart';
 import '../../providers/rss_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/rule_sub_import_service.dart';
 import '../../services/rule_sub_prefs.dart';
+import '../../services/book_source_service.dart';
 
 /// 规则订阅 — 对齐 Jingshiro [RuleSubActivity] + `activity_rule_sub.xml`
 class RuleSubPage extends StatefulWidget {
@@ -23,7 +25,11 @@ class RuleSubPage extends StatefulWidget {
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      final fetched = await RuleSubImportService.fetchForImport(sub);
+      final fetched = await RuleSubImportService.fetchForImport(
+        sub,
+        sourceService: context.read<BookSourceService>(),
+        fetchPort: context.read<PublicTextFetchPort>(),
+      );
       if (!context.mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
       if (fetched.count == 0) {
@@ -73,9 +79,11 @@ class _RuleSubPageState extends State<RuleSubPage> {
 
   Future<void> _runDueAutoUpdates({required bool openUi}) async {
     final needUi = await RuleSubImportService.checkAutoUpdates(
+      sourceService: context.read<BookSourceService>(),
       sourceProvider: context.read<SourceProvider>(),
       rssProvider: context.read<RssProvider>(),
       replaceProvider: context.read<ReplaceProvider>(),
+      fetchPort: context.read<PublicTextFetchPort>(),
     );
     await _load();
     if (!mounted || !openUi) return;

@@ -9,10 +9,10 @@ import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/services/book_source_service.dart';
+import '../helpers/book_source_service_test_factory.dart';
 
 /// yckceo 三源验收（原 /d/ 分享已失效，用 jsons?id=）
-const jsonsUrl =
-    'https://www.yckceo.com/yuedu/shuyuan/jsons?id=7592-7591-7590';
+const jsonsUrl = 'https://www.yckceo.com/yuedu/shuyuan/jsons?id=7592-7591-7590';
 const expiredShareUrl =
     'https://www.yckceo.com/d/cc8156ea312f71173b1e1a5a50945da1';
 
@@ -33,10 +33,10 @@ void main() {
         dbPathOverride: p.join(tempDir.path, 'legado.db'),
       );
     }
-    service = BookSourceService();
+    service = createFrbBookSourceService();
 
-    sources = await BookSourceService.fetchSourcesFromUrl(jsonsUrl);
-    if (sources.isEmpty) {
+    sources = await service.fetchSourcesFromUrl(jsonsUrl);
+    if (sources.length != 3) {
       final local = File('tools/_yckceo_share.json');
       if (local.existsSync()) {
         final data = jsonDecode(await local.readAsString()) as List<dynamic>;
@@ -54,9 +54,9 @@ void main() {
   });
 
   test('jsons 网络导入得到 3 个书源（失败则用本地缓存）', () async {
-    var net = await BookSourceService.fetchSourcesFromUrl(jsonsUrl);
-    if (net.isEmpty) {
-      // yckceo 偶发对 Dart HttpClient 返回 400；本地缓存仍可验收三源
+    var net = await service.fetchSourcesFromUrl(jsonsUrl);
+    if (net.length != 3) {
+      // yckceo 偶发返回错误或不完整列表；本地缓存仍需验收完整三源
       final local = File('tools/_yckceo_share.json');
       expect(local.existsSync(), isTrue, reason: '需要 tools/_yckceo_share.json');
       final data = jsonDecode(await local.readAsString()) as List<dynamic>;
@@ -76,7 +76,7 @@ void main() {
   });
 
   test('原 /d/ 分享链已失效（期望空或非 JSON）', () async {
-    final net = await BookSourceService.fetchSourcesFromUrl(expiredShareUrl);
+    final net = await service.fetchSourcesFromUrl(expiredShareUrl);
     expect(net, isEmpty, reason: '/d/ 已返回失效页，不应解析出书源');
   });
 
@@ -144,17 +144,14 @@ void main() {
           print('  ch[$i]=${chapters[i].title} -> ${chapters[i].url}');
         }
 
-        final chapter = chapters.firstWhere(
-          (c) {
-            final u = c.url.trim();
-            if (u.isEmpty || u == '/' || u == '#') return false;
-            final uri = Uri.tryParse(u);
-            if (uri == null) return false;
-            final path = uri.path;
-            return path.isNotEmpty && path != '/';
-          },
-          orElse: () => chapters.first,
-        );
+        final chapter = chapters.firstWhere((c) {
+          final u = c.url.trim();
+          if (u.isEmpty || u == '/' || u == '#') return false;
+          final uri = Uri.tryParse(u);
+          if (uri == null) return false;
+          final path = uri.path;
+          return path.isNotEmpty && path != '/';
+        }, orElse: () => chapters.first);
         // ignore: avoid_print
         print('  contentUrl=${chapter.url}');
 

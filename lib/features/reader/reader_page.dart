@@ -2087,7 +2087,8 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _pullCloudProgress() async {
-    if (!await BookProgressSync.isConfigured()) {
+    final progressSync = context.read<BookProgressSync>();
+    if (!await progressSync.isConfigured()) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -2098,7 +2099,7 @@ class _ReaderPageState extends State<ReaderPage> {
     final localPos = _currentChapterPosition();
     BookProgress? progress;
     try {
-      progress = await BookProgressSync.getBookProgress(widget.book);
+      progress = await progressSync.getBookProgress(widget.book);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -2177,7 +2178,8 @@ class _ReaderPageState extends State<ReaderPage> {
 
   /// 对齐 ReadBook.syncProgress：本地更快则上传，云端更快则询问应用
   Future<void> _syncReadingProgress() async {
-    if (!await BookProgressSync.isConfigured()) {
+    final progressSync = context.read<BookProgressSync>();
+    if (!await progressSync.isConfigured()) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -2189,7 +2191,7 @@ class _ReaderPageState extends State<ReaderPage> {
     final chapter = widget.allChapters[_currentIndex];
     BookProgress? progress;
     try {
-      progress = await BookProgressSync.getBookProgress(widget.book);
+      progress = await progressSync.getBookProgress(widget.book);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -2201,7 +2203,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (progress == null ||
         progress.isBehind(chapterIndex: localIdx, chapterPos: localPos)) {
       try {
-        await BookProgressSync.uploadBookProgress(
+        await progressSync.uploadBookProgress(
           BookProgress.fromBook(
             widget.book,
             durChapterIndex: localIdx,
@@ -2252,7 +2254,8 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _coverCloudProgress() async {
-    if (!await BookProgressSync.isConfigured()) {
+    final progressSync = context.read<BookProgressSync>();
+    if (!await progressSync.isConfigured()) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -2261,7 +2264,7 @@ class _ReaderPageState extends State<ReaderPage> {
     }
     final chapter = widget.allChapters[_currentIndex];
     try {
-      await BookProgressSync.uploadBookProgress(
+      await progressSync.uploadBookProgress(
         BookProgress.fromBook(
           widget.book,
           durChapterIndex: _currentIndex,
@@ -2328,6 +2331,7 @@ class _ReaderPageState extends State<ReaderPage> {
     }
     if (!mounted) return;
     final sourceProvider = context.read<SourceProvider>();
+    final bookSourceService = context.read<BookSourceService>();
     await ContentEditDialog.show(
       context,
       bookId: bid,
@@ -2338,8 +2342,10 @@ class _ReaderPageState extends State<ReaderPage> {
           await readBook.invalidateChapterCache(chapter.id, bookId: bid);
           final source = sourceProvider.findSourceForBook(widget.book);
           if (source == null) return '';
-          final svc = BookSourceService();
-          final raw = await svc.getChapterContent(chapter.url, source: source);
+          final raw = await bookSourceService.getChapterContent(
+            chapter.url,
+            source: source,
+          );
           if (!ReadBook.shouldSkipCache(raw)) {
             await readBook.writeRawChapterCache(chapter.id, raw, bookId: bid);
           }

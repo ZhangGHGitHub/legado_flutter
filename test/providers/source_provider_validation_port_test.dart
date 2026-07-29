@@ -3,6 +3,7 @@ import 'package:legado_flutter/database/dao/source_dao.dart';
 import 'package:legado_flutter/domain/ports/book_source_validation_port.dart';
 import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
+import '../helpers/book_source_service_test_factory.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeBookSourceValidationPort implements BookSourceValidationPort {
@@ -41,6 +42,7 @@ void main() {
       final provider = SourceProvider(
         repository: SourceDao(),
         validationPort: port,
+        sourceService: createTestBookSourceService(),
       );
       final source = BookSource(
         bookSourceUrl: 'https://source.example',

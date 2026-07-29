@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/bridge/legado_db_bridge.dart';
 import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
 import 'package:legado_flutter/database/database_helper.dart';
+import 'package:legado_flutter/infrastructure/engine/frb_bookmark_port.dart';
+import 'package:legado_flutter/infrastructure/engine/frb_note_port.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/services/bookmark_migration_service.dart';
 import 'package:legado_flutter/services/bookmark_service.dart';
@@ -23,7 +25,14 @@ void main() {
       await LegadoDbBridge.init(
         dbPathOverride: p.join(tempDir.path, 'legado.db'),
       );
+      BookmarkService.configureBookmarkPort(FrbBookmarkPort());
+      NoteService.configureNotePort(FrbNotePort());
     }
+  });
+
+  tearDownAll(() {
+    BookmarkService.resetBookmarkPort();
+    NoteService.resetNotePort();
   });
 
   test(

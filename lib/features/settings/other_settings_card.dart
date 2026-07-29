@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../config/app_config.dart';
 import '../../services/app_paths.dart';
@@ -17,7 +18,7 @@ class OtherSettingsCard extends StatefulWidget {
 }
 
 class _OtherSettingsCardState extends State<OtherSettingsCard> {
-  final _cacheService = CacheService();
+  late final CacheService _cacheService;
   bool _loading = true;
   bool _proxyEnabled = false;
   String _proxyType = 'http';
@@ -32,6 +33,7 @@ class _OtherSettingsCardState extends State<OtherSettingsCard> {
   @override
   void initState() {
     super.initState();
+    _cacheService = context.read<CacheService>();
     _load();
   }
 

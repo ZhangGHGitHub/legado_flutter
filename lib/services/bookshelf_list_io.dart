@@ -1,13 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 
+import '../domain/ports/public_text_fetch_port.dart';
 import '../models/book.dart';
-import '../utils/ssrf_guard.dart';
 
 /// 书单条目 — 对齐 Jingshiro 导出 `{name, author, intro}`。
 typedef BookshelfListEntry = ({String name, String author, String intro});
@@ -55,31 +52,23 @@ abstract final class BookshelfListIo {
   }
 
   /// 拉取书单 URL（或直接返回 JSON 文本）。
-  static Future<String> resolveInput(String input) async {
+  static Future<String> resolveInput(
+    String input, {
+    required PublicTextFetchPort fetchPort,
+  }) async {
     final text = input.trim();
     if (text.isEmpty) throw FormatException('请输入 url 或 json');
     if (_looksLikeUrl(text)) {
-      return fetchUrl(text);
+      return fetchUrl(text, fetchPort: fetchPort);
     }
     return text;
   }
 
-  static Future<String> fetchUrl(String url) async {
-    SsrfGuard.assertPublicHttpUrl(url);
-    final dio = Dio(
-      BaseOptions(
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 30),
-        responseType: ResponseType.plain,
-        followRedirects: true,
-        validateStatus: (s) => s != null && s >= 200 && s < 400,
-      ),
-    );
-    if (!kIsWeb) {
-      dio.httpClientAdapter = IOHttpClientAdapter();
-    }
-    final res = await dio.get<String>(url);
-    final body = res.data?.toString() ?? '';
+  static Future<String> fetchUrl(
+    String url, {
+    required PublicTextFetchPort fetchPort,
+  }) async {
+    final body = await fetchPort.fetch(url);
     if (body.trim().isEmpty) {
       throw FormatException('书单 URL 返回为空');
     }
@@ -102,8 +91,9 @@ abstract final class BookshelfListIo {
           final m = Map<String, dynamic>.from(e);
           final name = (m['name'] ?? m['bookName'] ?? '').toString().trim();
           final author = (m['author'] ?? '').toString().trim();
-          final intro =
-              (m['intro'] ?? m['description'] ?? '').toString().trim();
+          final intro = (m['intro'] ?? m['description'] ?? '')
+              .toString()
+              .trim();
           return (name: name, author: author, intro: intro);
         })
         .where((e) => e.name.isNotEmpty)
@@ -111,10 +101,10 @@ abstract final class BookshelfListIo {
   }
 
   static Map<String, dynamic> _toExportMap(Book b) => {
-        'name': b.name,
-        'author': b.author,
-        'intro': b.description,
-      };
+    'name': b.name,
+    'author': b.author,
+    'intro': b.description,
+  };
 
   static bool _looksLikeUrl(String text) {
     if (text.contains('\n') || text.trimLeft().startsWith('[')) return false;

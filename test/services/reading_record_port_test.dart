@@ -13,6 +13,13 @@ void main() {
 
   tearDown(ReadingRecordService.resetRecordPort);
 
+  test('reset clears the configured reading record port', () {
+    ReadingRecordService.resetRecordPort();
+
+    expect(ReadingRecordService.isReady, isFalse);
+    expect(ReadingRecordService.getStats('month'), isNull);
+  });
+
   test('recordReading validates and forwards the persistence delta', () {
     expect(
       ReadingRecordService.recordReading(

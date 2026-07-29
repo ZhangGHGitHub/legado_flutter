@@ -5,6 +5,22 @@ import 'package:legado_flutter/services/code_edit_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  tearDown(CodeEditPrefs.resetStore);
+
+  test('requires an explicitly configured store when none is passed', () async {
+    await expectLater(CodeEditPrefs.load(), throwsA(isA<StateError>()));
+  });
+
+  test('uses the explicitly configured store', () async {
+    final store = _MemoryCodeEditPrefsStore({CodeEditPrefs.editTheme: 8});
+    CodeEditPrefs.configureStore(store);
+
+    expect((await CodeEditPrefs.load()).themeIndex, 8);
+
+    CodeEditPrefs.resetStore();
+    await expectLater(CodeEditPrefs.load(), throwsA(isA<StateError>()));
+  });
+
   test('loads defaults through the injected store', () async {
     final store = _MemoryCodeEditPrefsStore();
 

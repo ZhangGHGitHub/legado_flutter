@@ -2,23 +2,21 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/ports/rss_sort_url_js_port.dart';
-import '../infrastructure/engine/frb_rss_sort_url_js_port.dart';
 import '../models/rss_source.dart';
 
 /// 对齐 Jingshiro [RssSourceExtensions.sortUrls]
 class RssSortUrls {
   RssSortUrls._();
 
-  static RssSortUrlJsPort _jsPort = FrbRssSortUrlJsPort();
+  static RssSortUrlJsPort? _jsPort;
 
-  @visibleForTesting
   static void configureJsPort(RssSortUrlJsPort port) {
     _jsPort = port;
   }
 
   @visibleForTesting
   static void resetJsPort() {
-    _jsPort = FrbRssSortUrlJsPort();
+    _jsPort = null;
   }
 
   static String _cacheKey(RssSource source) {
@@ -58,10 +56,11 @@ class RssSortUrls {
         if (cached != null && cached.trim().isNotEmpty) {
           str = cached;
         } else {
-          if (!_jsPort.isAvailable) {
+          final jsPort = _jsPort;
+          if (jsPort == null || !jsPort.isAvailable) {
             throw StateError('Rust 引擎不可用，无法执行 sortUrl JS');
           }
-          str = _jsPort.evaluate(source: source, script: _extractJs(sortUrl));
+          str = jsPort.evaluate(source: source, script: _extractJs(sortUrl));
           await prefs.setString(key, str);
         }
       }

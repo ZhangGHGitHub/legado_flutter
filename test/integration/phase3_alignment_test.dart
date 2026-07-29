@@ -7,6 +7,7 @@ import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/models/chapter.dart';
 import 'package:legado_flutter/services/book_source_service.dart';
+import '../helpers/book_source_service_test_factory.dart';
 
 /// Phase 3.1 功能对齐验证（7565 在线，7497 使用本地 JSON fixture）
 /// 对照 REFACTOR_PLAN.md §3.1
@@ -25,7 +26,7 @@ BookSource _firstSource(String raw) {
   return BookSource.fromJson(jsonDecode(trimmed) as Map<String, dynamic>);
 }
 
-class _OfflineTomatoBookSourceService extends BookSourceService {
+class _OfflineTomatoBookSourceService extends TestBookSourceService {
   _OfflineTomatoBookSourceService(this._fixture);
 
   final Map<String, dynamic> _fixture;
@@ -120,7 +121,7 @@ void main() {
     setUpAll(() async {
       await LegadoEngineBridge.tryInit();
       rustReady = LegadoEngineBridge.isAvailable;
-      service = BookSourceService();
+      service = createFrbBookSourceService();
       offlineTomato = _firstSource(await _loadBuiltinJson('7497.json'));
       offlineTomatoService = _OfflineTomatoBookSourceService(
         jsonDecode(

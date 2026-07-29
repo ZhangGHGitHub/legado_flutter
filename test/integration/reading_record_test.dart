@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:legado_flutter/bridge/legado_db_bridge.dart';
 import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
+import 'package:legado_flutter/infrastructure/engine/frb_reading_record_port.dart';
 import 'package:legado_flutter/services/reading_record_service.dart';
 
 void main() {
@@ -21,8 +22,11 @@ void main() {
         await LegadoDbBridge.init(
           dbPathOverride: p.join(tempDir.path, 'legado.db'),
         );
+        ReadingRecordService.configureRecordPort(FrbReadingRecordPort());
       }
     });
+
+    tearDownAll(ReadingRecordService.resetRecordPort);
 
     test('record + stats + export', () {
       if (!rustReady) return;

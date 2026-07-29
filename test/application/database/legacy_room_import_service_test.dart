@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/application/database/legacy_room_import_service.dart';
 import 'package:legado_flutter/domain/ports/legacy_room_import_port.dart';
+import 'package:legado_flutter/services/legacy_room_import_service_factory.dart';
 
 class _FakeLegacyRoomImportPort implements LegacyRoomImportPort {
   String? sourcePath;
@@ -35,7 +35,7 @@ class _FakeLegacyRoomImportPort implements LegacyRoomImportPort {
 void main() {
   test('imports through the application port and parses the report', () {
     final port = _FakeLegacyRoomImportPort();
-    final service = LegacyRoomImportService(port);
+    final service = LegacyRoomImportServices.create(port);
 
     final report = service.importDatabase(
       sourcePath: '/legacy/legado.db',
@@ -55,7 +55,9 @@ void main() {
   });
 
   test('requires a source and durable backup path', () {
-    final service = LegacyRoomImportService(_FakeLegacyRoomImportPort());
+    final service = LegacyRoomImportServices.create(
+      _FakeLegacyRoomImportPort(),
+    );
 
     expect(
       () => service.importDatabase(sourcePath: '', backupPath: '/backup.json'),

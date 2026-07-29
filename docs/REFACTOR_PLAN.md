@@ -166,7 +166,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 ### 0.5 当前状态
 
-当前已完成 **R0 架构盘点与行为基线**，R1-1 至 R1-11 的数据访问和启动编排边界迁移已有复验证据；2026-07-27 用户确认必须支持原版 Kotlin Room 数据库迁移后，R1 新增 R1-12 门禁并重新打开。R2-1 至 R2-7、R3-1 至 R3-4、R4-2A/2B、R5 本地 WebDAV/备份和 R6 功能域/analyze/构建记录均保留为历史迁移证据，但在 R1-12 完成前不得作为当前阶段顺序已最终推进到 R6 的证明。发布前正式或主流 WebDAV 真实验收仍待执行；Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)。不得用线性近似替换原版行布局或改变第 3 条断行规则。
+当前已完成 **R0 架构盘点与行为基线** 和 R1-12 Kotlin Room v99 数据迁移门禁。2026-07-29 扩展边界复核后，R1 重新打开默认适配器、组合根和领域模型归属；默认适配器与组合根已收敛，核心层具体基础设施违规为 `0`，领域模型迁移仍在执行。R2-1 至 R2-7、R3-1 至 R3-4、R4-2A/2B、R5 本地 WebDAV/备份和 R6 功能域/analyze/构建记录均保留为历史迁移证据，但不得替代当前 R1 退出条件。发布前正式或主流 WebDAV 真实验收仍待执行；Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)。不得用线性近似替换原版行布局或改变第 3 条断行规则。
 
 ### 0.6 版本控制与变更追溯状态（2026-07-26）
 

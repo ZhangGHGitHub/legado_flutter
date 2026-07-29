@@ -7,7 +7,7 @@ import 'package:legado_flutter/model/read_book.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/models/chapter.dart';
-import 'package:legado_flutter/services/book_source_service.dart';
+import '../helpers/book_source_service_test_factory.dart';
 
 void main() {
   late _FakeCache cache;
@@ -138,7 +138,7 @@ class _FakeCache implements ChapterContentCachePort {
   }
 }
 
-class _FakeSourceService extends BookSourceService {
+class _FakeSourceService extends TestBookSourceService {
   var calls = 0;
 
   @override

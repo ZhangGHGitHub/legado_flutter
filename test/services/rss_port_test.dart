@@ -58,6 +58,13 @@ void main() {
 
   tearDown(RssService.resetRssPort);
 
+  test('reset clears the configured RSS port', () async {
+    RssService.configureRssPort(_FakeRssPort());
+    RssService.resetRssPort();
+
+    await expectLater(RssService.getArticles(source: source), throwsStateError);
+  });
+
   test(
     'RssService forwards article and content calls through the port',
     () async {

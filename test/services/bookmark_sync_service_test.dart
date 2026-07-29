@@ -8,9 +8,14 @@ import 'package:legado_flutter/services/bookmark_sync_service.dart';
 import 'package:legado_flutter/services/webdav_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../helpers/sync_test_ports.dart';
+
 void main() {
+  late BookmarkSyncService sync;
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    sync = BookmarkSyncService(webdav: const UnsupportedWebDavRepository());
   });
 
   const local = [
@@ -74,7 +79,7 @@ void main() {
     String? uploadedPath;
     String? uploadedJson;
 
-    final count = await BookmarkSyncService.uploadMerged(
+    final count = await sync.uploadMerged(
       local: local,
       download:
           ({
@@ -116,7 +121,7 @@ void main() {
     );
     String? uploadedJson;
 
-    final count = await BookmarkSyncService.uploadMerged(
+    final count = await sync.uploadMerged(
       local: local,
       download:
           ({
@@ -154,7 +159,7 @@ void main() {
     );
     String? appliedJson;
 
-    final count = await BookmarkSyncService.downloadAndMerge(
+    final count = await sync.downloadAndMerge(
       local: local,
       download:
           ({
@@ -179,10 +184,7 @@ void main() {
       const WebDavConfig(url: 'https://dav.example.com/dav'),
     );
     expect(
-      () => BookmarkSyncService.downloadAndMerge(
-        local: const [],
-        apply: (json) async {},
-      ),
+      () => sync.downloadAndMerge(local: const [], apply: (json) async {}),
       throwsA(isA<StateError>()),
     );
   });
@@ -241,13 +243,13 @@ void main() {
       await leaveOperation();
     }
 
-    final first = BookmarkSyncService.uploadMerged(
+    final first = sync.uploadMerged(
       local: const [],
       download: download,
       upload: upload,
     );
     await firstDownloadEntered.future;
-    final second = BookmarkSyncService.uploadMerged(
+    final second = sync.uploadMerged(
       local: const [],
       download: download,
       upload: upload,
@@ -294,19 +296,11 @@ void main() {
     }) async {}
 
     await expectLater(
-      BookmarkSyncService.uploadMerged(
-        local: const [],
-        download: download,
-        upload: upload,
-      ),
+      sync.uploadMerged(local: const [], download: download, upload: upload),
       throwsA(isA<StateError>()),
     );
     await expectLater(
-      BookmarkSyncService.uploadMerged(
-        local: const [],
-        download: download,
-        upload: upload,
-      ),
+      sync.uploadMerged(local: const [], download: download, upload: upload),
       completion(0),
     );
     expect(downloadCalls, 2);

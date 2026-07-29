@@ -8,8 +8,21 @@ import 'package:legado_flutter/features/settings/backup_config_page.dart';
 import 'package:legado_flutter/services/backup_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../helpers/sync_test_ports.dart';
+
+BackupService _backupService() {
+  return BackupService(
+    webdav: const UnsupportedWebDavRepository(),
+    backup: const UnavailableBackupPort(),
+  );
+}
+
 class _FailingBackupService extends BackupService {
-  _FailingBackupService({this.deleteError, this.restoreError});
+  _FailingBackupService({this.deleteError, this.restoreError})
+    : super(
+        webdav: const UnsupportedWebDavRepository(),
+        backup: const UnavailableBackupPort(),
+      );
 
   final Object? deleteError;
   final Object? restoreError;
@@ -105,7 +118,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: BackupConfigPage(
-            service: BackupService(),
+            service: _backupService(),
             localFilePort: _testLocalFilePort,
             legacyRoomImportService: _testLegacyRoomImport,
           ),
@@ -137,7 +150,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: BackupConfigPage(
-            service: BackupService(),
+            service: _backupService(),
             localFilePort: port,
             legacyRoomImportService: _testLegacyRoomImport,
           ),

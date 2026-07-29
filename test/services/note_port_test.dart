@@ -64,6 +64,13 @@ void main() {
 
   tearDown(NoteService.resetNotePort);
 
+  test('reset clears the configured note port', () {
+    NoteService.resetNotePort();
+
+    expect(NoteService.isReady, isFalse);
+    expect(NoteService.list(), isEmpty);
+  });
+
   test('NoteService forwards all note operations through the port', () {
     NoteService.save(
       id: 'n1',

@@ -5,7 +5,7 @@ import 'package:legado_flutter/models/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/models/chapter.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
-import 'package:legado_flutter/services/book_source_service.dart';
+import '../helpers/book_source_service_test_factory.dart';
 
 class _MemoryBookDao extends BookDao {
   final List<Book> books = [];
@@ -23,7 +23,7 @@ class _MemoryBookDao extends BookDao {
   Future<List<Chapter>> getChapters(String bookId) async => const [];
 }
 
-class _BookInfoService extends BookSourceService {
+class _BookInfoService extends TestBookSourceService {
   _BookInfoService(this.info);
 
   final Map<String, String> info;

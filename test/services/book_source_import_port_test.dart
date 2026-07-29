@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/public_text_fetch_port.dart';
-import 'package:legado_flutter/services/book_source_service.dart';
+import '../helpers/book_source_service_test_factory.dart';
 
 class _FakePublicTextFetchPort implements PublicTextFetchPort {
   _FakePublicTextFetchPort(this.body);
@@ -21,10 +21,9 @@ void main() {
       {"data":[{"bookSourceUrl":"https://source.example","bookSourceName":"示例书源"}]}
     ''');
 
-    final sources = await BookSourceService.fetchSourcesFromUrl(
-      'https://share.example/sources',
-      fetchPort: port,
-    );
+    final sources = await createTestBookSourceService(
+      publicTextPort: port,
+    ).fetchSourcesFromUrl('https://share.example/sources');
 
     expect(port.requestedUrl, 'https://share.example/sources');
     expect(sources, hasLength(1));
@@ -35,10 +34,9 @@ void main() {
   test('book source URL import keeps invalid response behavior', () async {
     final port = _FakePublicTextFetchPort('地址不存在');
 
-    final sources = await BookSourceService.fetchSourcesFromUrl(
-      'https://share.example/expired',
-      fetchPort: port,
-    );
+    final sources = await createTestBookSourceService(
+      publicTextPort: port,
+    ).fetchSourcesFromUrl('https://share.example/expired');
 
     expect(sources, isEmpty);
   });

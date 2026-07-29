@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/features/code_edit/code_edit_page.dart';
+import 'package:legado_flutter/infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
+import 'package:legado_flutter/services/code_edit_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUp(() {
+  setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    CodeEditPrefs.configureStore(
+      await SharedPreferencesCodeEditPrefsStore.load(),
+    );
   });
+
+  tearDown(CodeEditPrefs.resetStore);
 
   testWidgets('CodeEditPage shows Jingshiro chrome titles and toolbar', (
     WidgetTester tester,

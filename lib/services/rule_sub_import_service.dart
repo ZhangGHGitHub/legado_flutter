@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../domain/ports/public_text_fetch_port.dart';
-import '../infrastructure/network/frb_public_text_fetch_port.dart';
 import '../models/book_source.dart';
 import '../models/replace_rule.dart';
 import '../models/rss_source.dart';
@@ -26,7 +25,7 @@ class RuleSubImportService {
 
   static Future<String> fetchText(
     String url, {
-    PublicTextFetchPort fetchPort = const FrbPublicTextFetchPort(),
+    required PublicTextFetchPort fetchPort,
   }) async {
     SsrfGuard.assertPublicHttpUrl(url);
     var requestUrl = url;
@@ -101,7 +100,8 @@ class RuleSubImportService {
   /// 手动打开订阅：拉取并返回待导入项（优先用缓存）
   static Future<RuleSubFetched> fetchForImport(
     RuleSub sub, {
-    PublicTextFetchPort fetchPort = const FrbPublicTextFetchPort(),
+    required BookSourceService sourceService,
+    required PublicTextFetchPort fetchPort,
   }) async {
     final url = sub.url;
     switch (sub.type) {
@@ -110,7 +110,7 @@ class RuleSubImportService {
         if (cached != null) {
           return RuleSubFetched.bookSources(cached);
         }
-        final sources = await BookSourceService.fetchSourcesFromUrl(url);
+        final sources = await sourceService.fetchSourcesFromUrl(url);
         return RuleSubFetched.bookSources(sources);
       case 1:
         final cached = cacheRssSources.remove(url);
@@ -135,11 +135,12 @@ class RuleSubImportService {
   /// 静默则直接写入；非静默有更新则缓存并返回 true（应打开导入 UI）。
   static Future<bool> cacheSource({
     required RuleSub ruleSub,
+    required BookSourceService sourceService,
     required SourceProvider sourceProvider,
     required RssProvider rssProvider,
     required ReplaceProvider replaceProvider,
+    required PublicTextFetchPort fetchPort,
     @visibleForTesting Future<String> Function(String url)? fetchTextOverride,
-    PublicTextFetchPort fetchPort = const FrbPublicTextFetchPort(),
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final intervalMs = ruleSub.updateInterval * 3600 * 1000;
@@ -159,7 +160,7 @@ class RuleSubImportService {
     try {
       switch (stamped.type) {
         case 0:
-          final lists = await BookSourceService.fetchSourcesFromUrl(url);
+          final lists = await sourceService.fetchSourcesFromUrl(url);
           if (lists.isEmpty) return false;
           for (final remote in lists) {
             final local = _findBook(sourceProvider, remote.bookSourceUrl);
@@ -224,10 +225,11 @@ class RuleSubImportService {
 
   /// 对齐 MainViewModel.ruleSubsUp
   static Future<List<RuleSub>> checkAutoUpdates({
+    required BookSourceService sourceService,
     required SourceProvider sourceProvider,
     required RssProvider rssProvider,
     required ReplaceProvider replaceProvider,
-    PublicTextFetchPort fetchPort = const FrbPublicTextFetchPort(),
+    required PublicTextFetchPort fetchPort,
   }) async {
     final needUi = <RuleSub>[];
     final all = await RuleSubPrefs.load();
@@ -235,6 +237,7 @@ class RuleSubImportService {
       if (!sub.autoUpdate) continue;
       final openUi = await cacheSource(
         ruleSub: sub,
+        sourceService: sourceService,
         sourceProvider: sourceProvider,
         rssProvider: rssProvider,
         replaceProvider: replaceProvider,

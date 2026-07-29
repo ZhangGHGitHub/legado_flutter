@@ -4,7 +4,6 @@ import 'dart:convert';
 import '../domain/annotation/bookmark_snapshot.dart';
 import '../domain/ports/webdav_repository.dart';
 import '../domain/remote/webdav_entry.dart';
-import '../infrastructure/webdav/frb_webdav_repository.dart';
 import 'bookmark_service.dart';
 import 'webdav_prefs.dart';
 
@@ -45,9 +44,9 @@ typedef BookmarkWebDavConditionalUploadInvoker =
 
 /// WebDAV bookmark.json 同步；合并策略由 BookmarkService 统一定义。
 class BookmarkSyncService {
-  BookmarkSyncService._();
+  BookmarkSyncService({required WebDavRepository webdav}) : _webdav = webdav;
 
-  static const WebDavRepository _webdav = FrbWebDavRepository();
+  final WebDavRepository _webdav;
 
   // Keep the full read/merge/write operation ordered within this app process.
   static Future<void> _syncTail = Future<void>.value();
@@ -57,9 +56,9 @@ class BookmarkSyncService {
     return '${base}bookmark.json'.replaceAll(RegExp(r'/{2,}'), '/');
   }
 
-  static Future<int> uploadMerged({
+  Future<int> uploadMerged({
     required Iterable<BookmarkSnapshot> local,
-    BookmarkWebDavDownloadInvoker download = _defaultDownload,
+    BookmarkWebDavDownloadInvoker? download,
     BookmarkWebDavUploadInvoker? upload,
     BookmarkWebDavListInvoker? list,
     BookmarkWebDavConditionalUploadInvoker? uploadIfMatch,
@@ -75,13 +74,14 @@ class BookmarkSyncService {
       }
       final config = await _readyConfig();
       final localItems = local.toList(growable: false);
+      final effectiveDownload = download ?? _defaultDownload;
       final effectiveUpload = upload ?? _defaultUpload;
       final etagList = list ?? (upload == null ? _defaultList : null);
       final conditionalUpload =
           uploadIfMatch ?? (upload == null ? _defaultUploadIfMatch : null);
       var remote = await _readRemote(
         config: config,
-        download: download,
+        download: effectiveDownload,
         list: etagList,
       );
       var merged = _merge(localItems, remote);
@@ -124,7 +124,7 @@ class BookmarkSyncService {
           conflictRetries++;
           remote = await _readRemote(
             config: config,
-            download: download,
+            download: effectiveDownload,
             list: etagList,
           );
           if (remote?.etagKnown != true) {
@@ -136,14 +136,14 @@ class BookmarkSyncService {
     });
   }
 
-  static Future<int> downloadAndMerge({
+  Future<int> downloadAndMerge({
     required Iterable<BookmarkSnapshot> local,
     required Future<void> Function(String mergedJson) apply,
-    BookmarkWebDavDownloadInvoker download = _defaultDownload,
+    BookmarkWebDavDownloadInvoker? download,
   }) async {
     return _withSyncLock(() async {
       final config = await _readyConfig();
-      final bytes = await download(
+      final bytes = await (download ?? _defaultDownload)(
         url: config.url,
         username: config.account,
         password: config.password,
@@ -158,7 +158,7 @@ class BookmarkSyncService {
     });
   }
 
-  static Future<T> _withSyncLock<T>(Future<T> Function() action) async {
+  Future<T> _withSyncLock<T>(Future<T> Function() action) async {
     final previous = _syncTail;
     final release = Completer<void>();
     _syncTail = release.future;
@@ -250,7 +250,7 @@ class BookmarkSyncService {
     }
   }
 
-  static Future<List<int>> _defaultDownload({
+  Future<List<int>> _defaultDownload({
     required String url,
     required String username,
     required String password,
@@ -264,7 +264,7 @@ class BookmarkSyncService {
     );
   }
 
-  static Future<void> _defaultUpload({
+  Future<void> _defaultUpload({
     required String url,
     required String username,
     required String password,
@@ -280,7 +280,7 @@ class BookmarkSyncService {
     );
   }
 
-  static Future<List<WebDavEntry>> _defaultList({
+  Future<List<WebDavEntry>> _defaultList({
     required String url,
     required String username,
     required String password,
@@ -294,7 +294,7 @@ class BookmarkSyncService {
     );
   }
 
-  static Future<void> _defaultUploadIfMatch({
+  Future<void> _defaultUploadIfMatch({
     required String url,
     required String username,
     required String password,

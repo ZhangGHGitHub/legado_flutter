@@ -8,7 +8,7 @@ import 'package:legado_flutter/models/book_source.dart';
 import 'package:legado_flutter/models/chapter.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/features/book/toc_sheet.dart';
-import 'package:legado_flutter/services/book_source_service.dart';
+import '../../helpers/book_source_service_test_factory.dart';
 
 class _MemoryDao extends BookDao {
   _MemoryDao(this.chapters, {this.books = const []});
@@ -32,7 +32,7 @@ class _MemoryDao extends BookDao {
   }
 }
 
-class _RemoteTocService extends BookSourceService {
+class _RemoteTocService extends TestBookSourceService {
   _RemoteTocService(this.remote);
 
   final List<Chapter> remote;

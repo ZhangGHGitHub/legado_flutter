@@ -104,7 +104,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
 
   Future<void> _fetchCoverFromSource(BookSource source) async {
     try {
-      final service = BookSourceService();
+      final service = context.read<BookSourceService>();
       final results = await service.search(source, _book.name);
       String? foundCover;
       for (final r in results) {

@@ -904,7 +904,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
 
   Future<void> _clearCookie() async {
     try {
-      await CacheService().clearEngineCache();
+      await context.read<CacheService>().clearEngineCache();
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,

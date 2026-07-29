@@ -5,6 +5,7 @@ import 'package:legado_flutter/help/book_help.dart';
 import 'package:legado_flutter/help/content_processor.dart';
 import 'package:legado_flutter/domain/ports/network_engine_port.dart';
 import 'package:legado_flutter/models/replace_rule.dart';
+import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/services/app_paths.dart';
 import 'package:legado_flutter/services/cache_service.dart';
 import 'package:path/path.dart' as p;
@@ -12,12 +13,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   late Directory tempRoot;
-  final service = CacheService();
+  late CacheService service;
 
   setUp(() async {
     tempRoot = await Directory.systemTemp.createTemp('legado_cache_test_');
     SharedPreferences.setMockInitialValues({});
     await AppDataPrefs.saveDataDir(tempRoot.path);
+    service = CacheService(
+      contentCache: const FileChapterContentCache(),
+      enginePort: _FakeNetworkEnginePort(),
+    );
   });
 
   tearDown(() async {
@@ -73,7 +78,10 @@ void main() {
     'CacheService clearEngineCache delegates through the engine port',
     () async {
       final port = _FakeNetworkEnginePort();
-      final service = CacheService(enginePort: port);
+      final service = CacheService(
+        contentCache: const FileChapterContentCache(),
+        enginePort: port,
+      );
 
       await service.clearEngineCache();
 

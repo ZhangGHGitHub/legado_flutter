@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/config/app_config.dart';
-import 'package:legado_flutter/domain/ports/book_progress_sync_store.dart';
 import 'package:legado_flutter/domain/remote/webdav_entry.dart';
 import 'package:legado_flutter/models/book.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,10 +11,20 @@ import 'package:legado_flutter/models/book_progress.dart';
 import 'package:legado_flutter/services/book_progress_sync.dart';
 import 'package:legado_flutter/services/webdav_prefs.dart';
 
+import '../helpers/sync_test_ports.dart';
+
 void main() {
+  late MemoryBookProgressSyncStore store;
+  late BookProgressSync sync;
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     AppConfig.resetForTest();
+    store = MemoryBookProgressSyncStore();
+    sync = BookProgressSync(
+      webdav: const UnsupportedWebDavRepository(),
+      store: store,
+    );
   });
 
   const remote = BookProgress(
@@ -28,30 +37,26 @@ void main() {
   );
 
   test('sync time is persisted per book progress file', () async {
-    expect(await BookProgressSync.loadSyncTime('测试书', '作者'), 0);
+    expect(await sync.loadSyncTime('测试书', '作者'), 0);
 
-    await BookProgressSync.saveSyncTime('测试书', '作者', syncTime: 1234);
+    await sync.saveSyncTime('测试书', '作者', syncTime: 1234);
 
-    expect(await BookProgressSync.loadSyncTime('测试书', '作者'), 1234);
-    expect(await BookProgressSync.loadSyncTime('另一本书', '作者'), 0);
+    expect(await sync.loadSyncTime('测试书', '作者'), 1234);
+    expect(await sync.loadSyncTime('另一本书', '作者'), 0);
   });
 
   test('sync time uses the injected persistence boundary', () async {
-    final store = _MemorySyncStore();
-
-    await BookProgressSync.saveSyncTime(
-      '注入书',
-      '作者',
-      syncTime: 1234,
-      store: store,
+    final injectedStore = MemoryBookProgressSyncStore();
+    final injectedSync = BookProgressSync(
+      webdav: const UnsupportedWebDavRepository(),
+      store: injectedStore,
     );
 
+    await injectedSync.saveSyncTime('注入书', '作者', syncTime: 1234);
+
+    expect(await injectedSync.loadSyncTime('注入书', '作者'), 1234);
     expect(
-      await BookProgressSync.loadSyncTime('注入书', '作者', store: store),
-      1234,
-    );
-    expect(
-      store.values,
+      injectedStore.values,
       containsPair('webdav_book_progress_sync_注入书_作者.json', 1234),
     );
   });
@@ -62,7 +67,7 @@ void main() {
     );
 
     var called = false;
-    final result = await BookProgressSync.downloadAllBookProgress(
+    final result = await sync.downloadAllBookProgress(
       books: const [],
       list:
           ({
@@ -79,7 +84,7 @@ void main() {
 
     expect(result, 0);
     expect(called, isFalse);
-    expect(await BookProgressSync.isConfigured(), isFalse);
+    expect(await sync.isConfigured(), isFalse);
   });
 
   test('unchanged remote file is skipped before progress comparison', () {
@@ -143,7 +148,7 @@ void main() {
       Book? appliedBook;
       BookProgress? appliedProgress;
 
-      final count = await BookProgressSync.downloadAllBookProgress(
+      final count = await sync.downloadAllBookProgress(
         books: [book],
         list:
             ({
@@ -185,7 +190,7 @@ void main() {
       expect(count, 1);
       expect(appliedBook?.id, 'book-1');
       expect(appliedProgress?.durChapterIndex, 8);
-      expect(await BookProgressSync.loadSyncTime('测试书', '作者'), 300);
+      expect(await sync.loadSyncTime('测试书', '作者'), 300);
     },
   );
 
@@ -201,7 +206,7 @@ void main() {
     String? uploadedPath;
     String? uploadedJson;
 
-    await BookProgressSync.uploadBookProgress(
+    await sync.uploadBookProgress(
       remote,
       upload:
           ({
@@ -222,7 +227,7 @@ void main() {
 
     expect(uploadedPath, '/legado/bookProgress/测试书_作者.json');
     expect(jsonDecode(uploadedJson!), remote.toJson());
-    expect(await BookProgressSync.loadSyncTime('测试书', '作者'), 400);
+    expect(await sync.loadSyncTime('测试书', '作者'), 400);
   });
 
   test('disabled progress sync does not upload or update sync time', () async {
@@ -237,7 +242,7 @@ void main() {
     await AppConfig.instance.setSyncBookProgress(false);
     var called = false;
 
-    await BookProgressSync.uploadBookProgress(
+    await sync.uploadBookProgress(
       remote,
       upload:
           ({
@@ -253,18 +258,6 @@ void main() {
     );
 
     expect(called, isFalse);
-    expect(await BookProgressSync.loadSyncTime('测试书', '作者'), 0);
+    expect(await sync.loadSyncTime('测试书', '作者'), 0);
   });
-}
-
-final class _MemorySyncStore implements BookProgressSyncStore {
-  final values = <String, int>{};
-
-  @override
-  Future<int?> read(String key) async => values[key];
-
-  @override
-  Future<void> write(String key, int value) async {
-    values[key] = value;
-  }
 }

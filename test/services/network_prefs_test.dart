@@ -81,6 +81,16 @@ void main() {
 
     expect(port.lastConfig, isNull);
   });
+
+  test('reset clears the configured network engine port', () async {
+    final port = _FakeNetworkEnginePort();
+    NetworkPrefs.configureEnginePort(port);
+    NetworkPrefs.resetEnginePort();
+
+    await NetworkPrefs.applyToEngine(const NetworkPrefsConfig());
+
+    expect(port.lastConfig, isNull);
+  });
 }
 
 class _FakeNetworkEnginePort implements NetworkEnginePort {

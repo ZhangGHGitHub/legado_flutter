@@ -21,16 +21,18 @@ class SourceProvider extends ChangeNotifier {
   SourceProvider({
     required BookSourceRepository repository,
     required BookSourceValidationPort validationPort,
+    required BookSourceService sourceService,
     Future<List<BookSource>> Function()? builtInSourcesLoader,
   }) : _repository = repository,
        _validationPort = validationPort,
+       _sourceService = sourceService,
        _builtInSourcesLoader =
            builtInSourcesLoader ?? BookSourceService.loadBuiltInSources;
 
   final BookSourceRepository _repository;
   final BookSourceValidationPort _validationPort;
   final Future<List<BookSource>> Function() _builtInSourcesLoader;
-  final BookSourceService _sourceService = BookSourceService();
+  final BookSourceService _sourceService;
 
   List<BookSource> _sources = [];
   Map<String, List<Book>> _searchResults = {};
@@ -169,7 +171,7 @@ class SourceProvider extends ChangeNotifier {
 
     if (_looksLikeUrl(normalized)) {
       try {
-        final sources = await BookSourceService.fetchSourcesFromUrl(normalized);
+        final sources = await _sourceService.fetchSourcesFromUrl(normalized);
         return sources.isEmpty ? null : sources;
       } catch (e) {
         debugPrint('  ✗ 从 URL 解析书源失败: $e');

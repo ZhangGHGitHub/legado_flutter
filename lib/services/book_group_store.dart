@@ -1,9 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
-
 import '../domain/ports/book_group_prefs.dart';
-import '../infrastructure/preferences/shared_preferences_book_group_prefs.dart';
 import '../models/book_group.dart';
 
 /// 书架分组持久化 — 对齐 Jingshiro `book_groups` 表（SharedPreferences JSON）
@@ -13,13 +10,11 @@ abstract final class BookGroupStore {
   static List<BookGroup>? _cache;
   static BookGroupPrefsPort? _configuredPrefs;
 
-  @visibleForTesting
   static void configurePrefsPort(BookGroupPrefsPort prefs) {
     _configuredPrefs = prefs;
     _cache = null;
   }
 
-  @visibleForTesting
   static void resetPrefsPort() {
     _configuredPrefs = null;
     _cache = null;
@@ -32,7 +27,7 @@ abstract final class BookGroupStore {
   }
 
   static Future<List<BookGroup>> load() async {
-    final prefs = await _resolvePrefs();
+    final prefs = _resolvePrefs();
     final raw = await prefs.read(_prefsKey);
     if (raw == null || raw.isEmpty) {
       final defaults = BookGroup.defaultSystemGroups();
@@ -66,7 +61,7 @@ abstract final class BookGroupStore {
     List<BookGroup> list, {
     BookGroupPrefsPort? prefs,
   }) async {
-    final storage = prefs ?? await _resolvePrefs();
+    final storage = prefs ?? _resolvePrefs();
     await storage.write(
       _prefsKey,
       jsonEncode(list.map((g) => g.toJson()).toList()),
@@ -184,7 +179,11 @@ abstract final class BookGroupStore {
     if (changed) await saveAll(list);
   }
 
-  static Future<BookGroupPrefsPort> _resolvePrefs() async {
-    return _configuredPrefs ?? await SharedPreferencesBookGroupPrefs.load();
+  static BookGroupPrefsPort _resolvePrefs() {
+    final prefs = _configuredPrefs;
+    if (prefs == null) {
+      throw StateError('BookGroupStore 尚未配置 BookGroupPrefsPort');
+    }
+    return prefs;
   }
 }

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../domain/repositories/book_repository.dart';
 import '../domain/ports/chapter_content_cache_port.dart';
+import '../domain/ports/local_book_parser_port.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/chapter.dart';
@@ -35,17 +36,39 @@ class ShelfTocUpdateResult {
   final Map<String, String> failures;
 }
 
+class _UnavailableLocalBookParserPort implements LocalBookParserPort {
+  const _UnavailableLocalBookParserPort();
+
+  @override
+  bool get isAvailable => false;
+
+  @override
+  LocalBookEpubSnapshot parseEpub(List<int> data) {
+    throw StateError('本地书籍解析端口不可用');
+  }
+
+  @override
+  List<LocalBookChapterSnapshot> parseTxtChapters(String content) {
+    throw StateError('本地书籍解析端口不可用');
+  }
+}
+
 /// 书籍管理 Provider — 书架、阅读、章节、下载缓存
 class BookProvider extends ChangeNotifier {
   BookProvider({
     required BookRepository repository,
-    BookSourceService? sourceService,
+    required BookSourceService sourceService,
     LocalBookService? localService,
     required ChapterContentCachePort contentCache,
   }) : _repository = repository,
-       _sourceService = sourceService ?? BookSourceService(),
+       _sourceService = sourceService,
        _contentCache = contentCache {
-    _localService = localService ?? LocalBookService(repository: _repository);
+    _localService =
+        localService ??
+        LocalBookService(
+          repository: _repository,
+          parser: const _UnavailableLocalBookParserPort(),
+        );
     ReadBook.instance.configure(
       sourceService: _sourceService,
       repository: _repository,
@@ -1178,9 +1201,9 @@ class BookProvider extends ChangeNotifier {
   }
 
   /// 批量拉取 WebDAV 进度，并按原版规则只覆盖领先的本地书籍。
-  Future<int> downloadAllBookProgress() async {
+  Future<int> downloadAllBookProgress({required BookProgressSync sync}) async {
     final books = List<Book>.from(_books);
-    return BookProgressSync.downloadAllBookProgress(
+    return sync.downloadAllBookProgress(
       books: books,
       apply: (book, remote) async {
         final total = book.totalChapterNum;

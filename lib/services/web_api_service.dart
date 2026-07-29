@@ -4,41 +4,40 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/ports/web_api_port.dart';
 import '../domain/web_api_status.dart';
-import '../infrastructure/web_api/frb_web_api_port.dart';
 import 'web_api_prefs.dart';
 
 /// Web API 服务管理
 abstract final class WebApiService {
   static final _uuid = Uuid();
-  static WebApiPort _webApiPort = FrbWebApiPort();
+  static WebApiPort? _webApiPort;
 
-  @visibleForTesting
   static void configureWebApiPort(WebApiPort port) {
     _webApiPort = port;
   }
 
   @visibleForTesting
   static void resetWebApiPort() {
-    _webApiPort = FrbWebApiPort();
+    _webApiPort = null;
   }
 
-  static bool get isAvailable => _webApiPort.isAvailable;
+  static bool get isAvailable => _webApiPort?.isAvailable ?? false;
 
   static WebApiStatus? currentStatus() {
-    return _webApiPort.currentStatus();
+    return _webApiPort?.currentStatus();
   }
 
   static Future<WebApiStatus?> start({int? port, String? token}) async {
-    if (!_webApiPort.isAvailable) return null;
+    final webApiPort = _webApiPort;
+    if (webApiPort == null || !webApiPort.isAvailable) return null;
     final config = await WebApiPrefs.load();
     final p = port ?? config.port;
     final configuredToken = (token ?? config.token).trim();
     final t = configuredToken.isEmpty ? _uuid.v4() : configuredToken;
-    return _webApiPort.start(port: p, token: t);
+    return webApiPort.start(port: p, token: t);
   }
 
   static Future<void> stop() async {
-    await _webApiPort.stop();
+    await _webApiPort?.stop();
   }
 
   static Future<WebApiStatus?> setEnabled(bool enabled) async {

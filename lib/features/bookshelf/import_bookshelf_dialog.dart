@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../domain/ports/public_text_fetch_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/app_log.dart';
@@ -64,7 +65,10 @@ class _ImportBookshelfDialogState extends State<ImportBookshelfDialog> {
       _progress = '解析书单…';
     });
     try {
-      final raw = await BookshelfListIo.resolveInput(_controller.text);
+      final raw = await BookshelfListIo.resolveInput(
+        _controller.text,
+        fetchPort: context.read<PublicTextFetchPort>(),
+      );
       final entries = BookshelfListIo.parseEntries(raw);
       if (entries.isEmpty) {
         if (!mounted) return;

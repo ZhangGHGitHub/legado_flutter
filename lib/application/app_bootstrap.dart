@@ -1,19 +1,18 @@
 import 'package:flutter/foundation.dart';
 
 import 'database/legacy_room_import_service.dart';
-import '../bridge/legado_db_bridge.dart';
-import '../bridge/legado_engine_bridge.dart';
-import '../config/app_config.dart';
-import '../config/engine_config.dart';
-import '../database/dao/book_dao.dart';
-import '../infrastructure/cache/file_chapter_content_cache.dart';
-import '../infrastructure/content/content_processor_adapter.dart';
-import '../infrastructure/database/frb_legacy_room_import_port.dart';
+import '../domain/ports/chapter_content_cache_port.dart';
+import '../domain/ports/content_processing_port.dart';
+import '../domain/ports/webdav_repository.dart';
+import '../domain/repositories/book_repository.dart';
 import '../model/read_book.dart';
 import '../providers/book_provider.dart';
 import '../services/book_source_service.dart';
-import '../services/network_prefs.dart';
-import '../services/web_api_service.dart';
+import '../services/backup_service.dart';
+import '../services/book_progress_sync.dart';
+import '../services/bookmark_sync_service.dart';
+import '../services/cache_service.dart';
+import '../services/local_book_service.dart';
 import '../services/webdav_prefs.dart';
 import '../services/webdav_setup_service.dart';
 import '../theme/app_theme.dart';
@@ -55,64 +54,129 @@ Future<int> loadStartupBookProgress({
 class AppBootstrapResult {
   const AppBootstrapResult({
     required this.bookProvider,
+    required this.bookSourceService,
     required this.themeController,
     required this.legacyRoomImportService,
+    required this.backupService,
+    required this.bookProgressSync,
+    required this.bookmarkSyncService,
+    required this.cacheService,
+    required this.webdavRepository,
   });
 
   final BookProvider bookProvider;
+  final BookSourceService bookSourceService;
   final ThemeModeController themeController;
   final LegacyRoomImportService legacyRoomImportService;
+  final BackupService backupService;
+  final BookProgressSync bookProgressSync;
+  final BookmarkSyncService bookmarkSyncService;
+  final CacheService cacheService;
+  final WebDavRepository webdavRepository;
 }
 
 /// 启动用例：集中编排 Rust、数据库、网络配置和首屏数据加载。
 class AppBootstrap {
-  const AppBootstrap();
+  const AppBootstrap({
+    required Future<void> Function() initializePlatform,
+    required bool Function() isEngineAvailable,
+    required bool Function() isBookProgressSyncEnabled,
+    required Future<void> Function() restoreNetwork,
+    required Future<void> Function() restoreWebApi,
+    required Future<WebDavConfig> Function() loadWebDavConfig,
+    required BookRepository bookRepository,
+    required ChapterContentCachePort contentCache,
+    required ContentProcessingPort contentProcessor,
+    required BookSourceService bookSourceService,
+    required LocalBookService localBookService,
+    required LegacyRoomImportService legacyRoomImportService,
+    required BackupService backupService,
+    required BookProgressSync bookProgressSync,
+    required BookmarkSyncService bookmarkSyncService,
+    required CacheService cacheService,
+    required WebDavRepository webdavRepository,
+  }) : _initializePlatform = initializePlatform,
+       _isEngineAvailable = isEngineAvailable,
+       _isBookProgressSyncEnabled = isBookProgressSyncEnabled,
+       _restoreNetwork = restoreNetwork,
+       _restoreWebApi = restoreWebApi,
+       _loadWebDavConfig = loadWebDavConfig,
+       _bookRepository = bookRepository,
+       _contentCache = contentCache,
+       _contentProcessor = contentProcessor,
+       _bookSourceService = bookSourceService,
+       _localBookService = localBookService,
+       _legacyRoomImportService = legacyRoomImportService,
+       _backupService = backupService,
+       _bookProgressSync = bookProgressSync,
+       _bookmarkSyncService = bookmarkSyncService,
+       _cacheService = cacheService,
+       _webdavRepository = webdavRepository;
+
+  final Future<void> Function() _initializePlatform;
+  final bool Function() _isEngineAvailable;
+  final bool Function() _isBookProgressSyncEnabled;
+  final Future<void> Function() _restoreNetwork;
+  final Future<void> Function() _restoreWebApi;
+  final Future<WebDavConfig> Function() _loadWebDavConfig;
+  final BookRepository _bookRepository;
+  final ChapterContentCachePort _contentCache;
+  final ContentProcessingPort _contentProcessor;
+  final BookSourceService _bookSourceService;
+  final LocalBookService _localBookService;
+  final LegacyRoomImportService _legacyRoomImportService;
+  final BackupService _backupService;
+  final BookProgressSync _bookProgressSync;
+  final BookmarkSyncService _bookmarkSyncService;
+  final CacheService _cacheService;
+  final WebDavRepository _webdavRepository;
 
   Future<AppBootstrapResult> initialize() async {
-    await EngineConfig.load();
-    await AppConfig.instance.load();
-    await LegadoEngineBridge.tryInit();
-    if (LegadoEngineBridge.isAvailable) {
-      await LegadoDbBridge.init();
-      await NetworkPrefs.restoreToEngine();
-      await WebApiService.restoreIfEnabled();
-      final webdav = await WebDavPrefs.load();
+    await _initializePlatform();
+    if (_isEngineAvailable()) {
+      await _restoreNetwork();
+      await _restoreWebApi();
+      final webdav = await _loadWebDavConfig();
       await initializeStartupWebDav(
         config: webdav,
-        initialize: () => WebDavSetupService.initialize(webdav),
+        initialize: () => WebDavSetupService.initialize(
+          webdav,
+          repository: _webdavRepository,
+        ),
       );
     }
 
-    final repository = BookDao();
-    const contentCache = FileChapterContentCache();
-    final sourceService = BookSourceService();
-    final contentProcessor = ContentProcessorAdapter();
     ReadBook.instance.configureDependencies(
-      sourceService: sourceService,
-      repository: repository,
-      contentProcessor: contentProcessor,
-      contentCache: contentCache,
+      sourceService: _bookSourceService,
+      repository: _bookRepository,
+      contentProcessor: _contentProcessor,
+      contentCache: _contentCache,
     );
     final bookProvider = BookProvider(
-      repository: repository,
-      sourceService: sourceService,
-      contentCache: contentCache,
+      repository: _bookRepository,
+      sourceService: _bookSourceService,
+      localService: _localBookService,
+      contentCache: _contentCache,
     );
     await loadStartupBookProgress(
       loadBooks: bookProvider.loadBooks,
-      enabled:
-          LegadoEngineBridge.isAvailable && AppConfig.instance.syncBookProgress,
-      downloadAllBookProgress: bookProvider.downloadAllBookProgress,
+      enabled: _isEngineAvailable() && _isBookProgressSyncEnabled(),
+      downloadAllBookProgress: () =>
+          bookProvider.downloadAllBookProgress(sync: _bookProgressSync),
     );
 
     final themeController = ThemeModeController();
     await themeController.load();
     return AppBootstrapResult(
       bookProvider: bookProvider,
+      bookSourceService: _bookSourceService,
       themeController: themeController,
-      legacyRoomImportService: LegacyRoomImportService(
-        FrbLegacyRoomImportPort(),
-      ),
+      legacyRoomImportService: _legacyRoomImportService,
+      backupService: _backupService,
+      bookProgressSync: _bookProgressSync,
+      bookmarkSyncService: _bookmarkSyncService,
+      cacheService: _cacheService,
+      webdavRepository: _webdavRepository,
     );
   }
 }

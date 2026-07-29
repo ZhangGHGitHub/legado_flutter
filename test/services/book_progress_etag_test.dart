@@ -7,7 +7,11 @@ import 'package:legado_flutter/services/book_progress_sync.dart';
 import 'package:legado_flutter/services/webdav_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../helpers/sync_test_ports.dart';
+
 void main() {
+  late BookProgressSync sync;
+
   const progress = BookProgress(
     name: '测试书',
     author: '作者',
@@ -20,6 +24,10 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     AppConfig.resetForTest();
+    sync = BookProgressSync(
+      webdav: const UnsupportedWebDavRepository(),
+      store: MemoryBookProgressSyncStore(),
+    );
   });
 
   Future<void> configure() {
@@ -39,7 +47,7 @@ void main() {
     var readCount = 0;
     String? uploadedJson;
 
-    await BookProgressSync.uploadBookProgress(
+    await sync.uploadBookProgress(
       progress,
       readEtag:
           ({
@@ -73,7 +81,7 @@ void main() {
     expect(readCount, 1);
     expect(observedEtag, '"etag-v1"');
     expect(jsonDecode(uploadedJson!), progress.toJson());
-    expect(await BookProgressSync.loadSyncTime('测试书', '作者'), 700);
+    expect(await sync.loadSyncTime('测试书', '作者'), 700);
   });
 
   test('legacy upload injector bypasses ETag path', () async {
@@ -82,7 +90,7 @@ void main() {
     var etagRead = false;
     var conditionalCalled = false;
 
-    await BookProgressSync.uploadBookProgress(
+    await sync.uploadBookProgress(
       progress,
       upload:
           ({
@@ -121,18 +129,18 @@ void main() {
     expect(legacyCalled, isTrue);
     expect(etagRead, isFalse);
     expect(conditionalCalled, isFalse);
-    expect(await BookProgressSync.loadSyncTime('测试书', '作者'), 701);
+    expect(await sync.loadSyncTime('测试书', '作者'), 701);
   });
 
   test(
     '412 rereads ETag once and keeps local sync time until retry succeeds',
     () async {
       await configure();
-      await BookProgressSync.saveSyncTime('测试书', '作者', syncTime: 600);
+      await sync.saveSyncTime('测试书', '作者', syncTime: 600);
       final etags = <String?>['"stale"', '"fresh"'];
       final attemptedEtags = <String?>[];
 
-      await BookProgressSync.uploadBookProgress(
+      await sync.uploadBookProgress(
         progress,
         readEtag:
             ({
@@ -161,18 +169,18 @@ void main() {
       );
 
       expect(attemptedEtags, ['"stale"', '"fresh"']);
-      expect(await BookProgressSync.loadSyncTime('测试书', '作者'), 702);
+      expect(await sync.loadSyncTime('测试书', '作者'), 702);
     },
   );
 
   test('repeated 412 stops after one retry and preserves sync time', () async {
     await configure();
-    await BookProgressSync.saveSyncTime('测试书', '作者', syncTime: 600);
+    await sync.saveSyncTime('测试书', '作者', syncTime: 600);
     var readCount = 0;
     var uploadCount = 0;
 
     await expectLater(
-      BookProgressSync.uploadBookProgress(
+      sync.uploadBookProgress(
         progress,
         readEtag:
             ({
@@ -203,6 +211,6 @@ void main() {
 
     expect(readCount, 2);
     expect(uploadCount, 2);
-    expect(await BookProgressSync.loadSyncTime('测试书', '作者'), 600);
+    expect(await sync.loadSyncTime('测试书', '作者'), 600);
   });
 }

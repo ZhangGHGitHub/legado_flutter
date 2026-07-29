@@ -3,8 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/domain/ports/network_engine_port.dart';
 import 'package:legado_flutter/features/settings/other_settings_card.dart';
+import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/services/app_paths.dart';
+import 'package:legado_flutter/services/cache_service.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -38,8 +42,13 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(body: SingleChildScrollView(child: OtherSettingsCard())),
+      Provider<CacheService>.value(
+        value: _cacheService(),
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(child: OtherSettingsCard()),
+          ),
+        ),
       ),
     );
     await tester.pump();
@@ -68,8 +77,13 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(body: SingleChildScrollView(child: OtherSettingsCard())),
+      Provider<CacheService>.value(
+        value: _cacheService(),
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(child: OtherSettingsCard()),
+          ),
+        ),
       ),
     );
     await tester.pump();
@@ -92,4 +106,30 @@ void main() {
 
     expect(find.text('HTTP TTS 缓存已清理'), findsOneWidget);
   });
+}
+
+CacheService _cacheService() => CacheService(
+  contentCache: const FileChapterContentCache(),
+  enginePort: const _FakeNetworkEnginePort(),
+);
+
+class _FakeNetworkEnginePort implements NetworkEnginePort {
+  const _FakeNetworkEnginePort();
+
+  @override
+  bool get isAvailable => false;
+
+  @override
+  void clearEngineCache() {}
+
+  @override
+  void setNetworkConfig({
+    required bool proxyEnabled,
+    required String proxyType,
+    required String proxyHost,
+    required int proxyPort,
+    required String proxyUsername,
+    required String proxyPassword,
+    required String dnsServers,
+  }) {}
 }

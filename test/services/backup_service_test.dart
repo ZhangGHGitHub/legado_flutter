@@ -5,17 +5,28 @@ import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/bridge/legado_db_bridge.dart';
 import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
+import 'package:legado_flutter/domain/ports/backup_port.dart';
+import 'package:legado_flutter/infrastructure/database/frb_backup_port.dart';
 import 'package:legado_flutter/services/backup_service.dart';
 import 'package:legado_flutter/services/webdav_prefs.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../helpers/sync_test_ports.dart';
+
+BackupService _service({BackupPort backup = const UnavailableBackupPort()}) {
+  return BackupService(
+    webdav: const UnsupportedWebDavRepository(),
+    backup: backup,
+  );
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   SharedPreferences.setMockInitialValues({'legado_theme_mode': 'light'});
 
   test('BackupService follows the original cloud backup filename format', () {
-    final service = BackupService();
+    final service = _service();
     final date = DateTime(2026, 7, 23, 18, 30);
 
     expect(service.backupFileName(now: date), 'backup2026-07-23.zip');
@@ -160,10 +171,7 @@ void main() {
       const config = WebDavConfig(dir: '/legado', device: 'Pixel One');
 
       expect(
-        BackupService().remoteBackupPath(
-          config,
-          'backup2026-07-23-Pixel One.zip',
-        ),
+        _service().remoteBackupPath(config, 'backup2026-07-23-Pixel One.zip'),
         '/legado/backup2026-07-23-Pixel One.zip',
       );
     },
@@ -185,7 +193,7 @@ void main() {
       dbPathOverride: p.join(tempDir.path, 'legado.db'),
     );
 
-    final service = BackupService();
+    final service = _service(backup: FrbBackupPort());
     final raw = await service.createFullBackupJson();
     final map = jsonDecode(raw) as Map<String, dynamic>;
     expect(map['version'], 1);
@@ -200,7 +208,7 @@ void main() {
     });
 
     await expectLater(
-      BackupService().backupToWebDav(),
+      _service().backupToWebDav(),
       throwsA(
         isA<StateError>().having(
           (error) => error.message,
@@ -219,7 +227,7 @@ void main() {
     });
 
     await expectLater(
-      BackupService().renameWebDavBackup('/legado/device/backup.json', '../x'),
+      _service().renameWebDavBackup('/legado/device/backup.json', '../x'),
       throwsA(isA<FormatException>()),
     );
   });
