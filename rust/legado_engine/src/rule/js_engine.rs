@@ -431,9 +431,21 @@ fn run_with_result_opts_internal(
 
 fn normalize_rhino_with(script: &str) -> std::borrow::Cow<'_, str> {
     static WITH_BLOCK: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    WITH_BLOCK
-        .get_or_init(|| regex::Regex::new(r"(?i)\bwith\s*\([^)]*\)\s*\{").unwrap())
-        .replace_all(script, "{")
+    static IMPLICIT_FOR_OF: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let with_block =
+        WITH_BLOCK.get_or_init(|| regex::Regex::new(r"(?i)\bwith\s*\([^)]*\)\s*\{").unwrap());
+    let implicit_for_of = IMPLICIT_FOR_OF.get_or_init(|| {
+        regex::Regex::new(r"\bfor\s*\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s+of\s+").unwrap()
+    });
+    if !with_block.is_match(script) && !implicit_for_of.is_match(script) {
+        return std::borrow::Cow::Borrowed(script);
+    }
+    let without_with = with_block.replace_all(script, "{");
+    std::borrow::Cow::Owned(
+        implicit_for_of
+            .replace_all(without_with.as_ref(), "for (var $1 of ")
+            .into_owned(),
+    )
 }
 
 /// 纯 property 规则名（如 `chaptername` / `chapterurl`），无 CSS/`@`
@@ -1370,6 +1382,108 @@ el ? el.html() : '';
         );
     }
 
+    #[test]
+    fn run_jsoup_bilibili_show_rule_dom_mutations() {
+        let script = r#"
+var aly = new JavaImporter(Packages.org.jsoup.nodes.Element,
+Packages.org.jsoup.Jsoup,
+Packages.org.jsoup.select.Elements);
+with (aly) {
+  result = Jsoup.parse(result);
+  result.select("img").remove();
+  let bs = '<br><br>📺<br>';
+  result.select(".media-card-image").before(bs);
+  result.select(".video-list .bili-video-card").before(bs);
+  result.select("a:has(button)").after("　");
+  let links = result.select("a");
+  for (link of links) {
+    let h3 = link.selectFirst("h3");
+    if (h3 != null) {
+      let content = h3.text();
+      link.select("h3").remove();
+      let H3 = new Element("h3")
+        .appendChild(new Element("a").attr("href", link.attr("href")).text(content))
+        .appendText("　");
+      link.replaceWith(H3);
+    }
+  }
+}
+result.html();
+"#;
+        let html = r#"
+<div class="search-page">
+  <img src="cover.jpg" />
+  <div class="media-card-image">封面</div>
+  <div class="video-list"><div class="bili-video-card">视频卡片</div></div>
+  <a href="bilibili://space/1"><button>关注</button></a>
+  <a href="bilibili://video/BV1"><h3>测试视频</h3><span>简介</span></a>
+</div>
+"#;
+        let out = run_html_js(script, html, "", "").unwrap();
+
+        assert!(!out.contains("<img"), "img 应被移除: {out}");
+        assert_eq!(
+            out.matches('📺').count(),
+            2,
+            "两处卡片前均应插入标记: {out}"
+        );
+        assert!(
+            out.contains("</button></a>　"),
+            "含 button 的链接后应插入空格: {out}"
+        );
+        assert!(
+            out.contains("<h3><a href=\"bilibili://video/BV1\">测试视频</a>　</h3>"),
+            "视频链接应替换为新建 h3 节点: {out}"
+        );
+        assert!(
+            !out.contains("<span>简介</span>"),
+            "原链接应被整体替换: {out}"
+        );
+    }
+
+    #[test]
+    fn run_jsoup_han_dictionary_remove_rule() {
+        let script = r##"
+var jsoup = org.jsoup.Jsoup.parse(result);
+jsoup.select("script,#header,#footer,#page-share,.mslide,.title,#dictHcBtn,#dictHcBtnTop,#dictHc,#dictHc,#dictHcSettingArea,#dictHcClosetip").remove();
+jsoup.select("#cy").html();
+"##;
+        let html = r#"
+<html><body>
+  <header id="header">页头</header>
+  <div id="cy">
+    <p>中文释义</p><script>remove me</script><span class="title">也应删除</span>
+    <span class="keep">保留内容</span>
+  </div>
+  <footer id="footer">页尾</footer>
+</body></html>
+"#;
+        let out = run_html_js(script, html, "", "").unwrap();
+
+        assert!(out.contains("<p>中文释义</p>"), "应保留释义: {out}");
+        assert!(out.contains("<span class=\"keep\">保留内容</span>"));
+        assert!(!out.contains("remove me"), "script 应被删除: {out}");
+        assert!(!out.contains("也应删除"), ".title 应被删除: {out}");
+    }
+
+    #[test]
+    fn run_jsoup_youdao_id_selectors_keep_sibling_ranges_separate() {
+        let script = r#"
+let j = org.jsoup.Jsoup.parse(result);
+let yw = j.select('#inputText').text();
+let fy = j.select('#translateResult').text();
+result = '原文：<br>'+yw+'<br>翻译：<br>'+fy;
+"#;
+        let html = r#"
+<html><body>
+  <div id="inputText">hello world</div>
+  <div id="translateResult">你好世界</div>
+</body></html>
+"#;
+        let out = run_html_js(script, html, "", "").unwrap();
+        assert_eq!(out, "原文：<br>hello world<br>翻译：<br>你好世界");
+    }
+
     /// 可乐小说 searchUrl：AES-256-CBC + encryptBase64（Hutool/Legado java.createSymmetricCrypto）
     #[test]
     fn run_create_symmetric_crypto_aes_cbc_encrypt_base64() {
@@ -1463,6 +1577,44 @@ value;
         let out =
             run_with_result_as_string(script, r#"{"data":{"pinyin":"ce shi"}}"#, "", "").unwrap();
         assert_eq!(out, "ce shi");
+    }
+
+    #[test]
+    fn jayway_jsonpath_default_pinyin_path_stays_array() {
+        let script = r#"
+var aly = new JavaImporter(Packages.com.jayway.jsonpath);
+var rr = JsonPath.using(
+  Configuration.builder().options(Option.SUPPRESS_EXCEPTIONS).build()
+).parse(result);
+JSON.stringify(rr.read('$.data..comprehensiveDefinition[*].pinyin'));
+"#;
+        let out = run_with_result_as_string(
+            script,
+            r#"{"data":{"comprehensiveDefinition":[{"pinyin":"ce4"}]}}"#,
+            "",
+            "",
+        )
+        .unwrap();
+        assert_eq!(out, r#"["ce4"]"#);
+    }
+
+    #[test]
+    fn jayway_jsonpath_default_cixing_path_keeps_nested_array() {
+        let script = r#"
+var aly = new JavaImporter(Packages.com.jayway.jsonpath);
+var rr = JsonPath.using(
+  Configuration.builder().options(Option.SUPPRESS_EXCEPTIONS).build()
+).parse(result);
+JSON.stringify(rr.read('$.data..comprehensiveDefinition[0].basicDefinition[*]cixing'));
+"#;
+        let out = run_with_result_as_string(
+            script,
+            r#"{"data":{"comprehensiveDefinition":[{"basicDefinition":[{"cixing":["动"]}]}]}}"#,
+            "",
+            "",
+        )
+        .unwrap();
+        assert_eq!(out, r#"[["动"]]"#);
     }
 
     #[test]

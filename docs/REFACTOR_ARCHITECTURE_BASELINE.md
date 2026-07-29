@@ -2235,3 +2235,31 @@ fixture 测试通过。真实扫描仍为既有 `146` 条：Feature SharedPrefer
 边界结论：百度汉语等规则依赖的 JavaImporter/JsonPath 主链路已由离线 fixture 覆盖，但不能据此宣称
 全部内置字典规则通过。Jsoup DOM 修改 API（包括 `remove`、`before`、`after`、`replaceWith`、
 Element 构造/追加、属性和文本 setter、Elements 可迭代）仍待后续 fixture 驱动实现，R2 尚未退出。
+
+## 108. 2026-07-29：R2 内置字典离线 fixture 与 Jsoup DOM 兼容
+
+- 对照只读原版 `assets/defaultData/dictRules.json`，直接从 Flutter `DictRulePrefs.defaultRules` 读取
+  当前五条内置规则，只将远程输入替换为 `data:` fixture；没有复制或简化 showRule。
+- Jsoup shim 新增带父子关系的可变 DOM、逗号和 `:has` 选择器、Elements 迭代，以及 `remove`、
+  `before`、`after`、`replaceWith`、Element 构造、append、attr/text setter 等原规则 API。
+- Jayway shim 兼容原规则的递归路径、通配单命中列表语义及 `[*]field` 写法；百度普通释义和成语
+  两个分支均以原始路径执行。
+- 依据原版 `AnalyzeByJSoup.getResultLast("all") = elements.outerHtml()`，将 Rust Legado DSL 的
+  `@all` 从错误的纯文本语义修正为 outer HTML，并以完整标签断言替换旧错误预期。
+
+验证结果：
+
+- `cargo test -p legado_engine`：核心单测 `141/141`，其余离线与集成测试通过；既有网络/人工场景
+  按原条件 ignored。
+- `cargo build -p legado_engine --release`：通过；release DLL 经真实 FRB 加载，海词英文/中文、
+  有道、哔哩、百度普通释义和成语分支 fixture `7/7` 通过。
+- `scripts/run_js_compat.ps1`：Rust JS `18/18`、Flutter JS `4/4` 通过；可选在线 7565 因既有
+  HTTP 400 条件跳过。
+- `flutter test --no-pub --concurrency=1`：`592` 通过、`3` 项既有条件跳过；
+  `flutter analyze --no-pub` 无诊断。
+- 架构脚本 fixture 通过；真实扫描仍为 `145` 项存量：SharedPreferences `14`、Feature 业务 service
+  `131`，没有新增或白名单化。
+
+边界结论：当前内置字典规则的离线网络输入、AnalyzeUrl/showRule、主要 Rhino/JsonPath 与 DOM 修改
+链路均已覆盖；本批不宣称外部站点长期在线或所有第三方自定义规则均兼容。R2 下一批按顺序迁移
+AI/Obsidian JSON 网络入口，Obsidian localhost 策略必须与仅允许公网的文本端口分离。

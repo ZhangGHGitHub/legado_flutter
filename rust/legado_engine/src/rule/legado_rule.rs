@@ -101,6 +101,7 @@ pub fn is_legado_chain_rule(rule: &str) -> bool {
         || body.contains("@href")
         || body.contains("@src")
         || body.contains("@html")
+        || body.contains("@all")
         || body.contains("@ownText")
 }
 
@@ -261,7 +262,8 @@ fn apply_segment<'a>(parents: &[ElementRef<'a>], seg: &Segment) -> Vec<ElementRe
 
 fn extract_terminal(el: &ElementRef<'_>, seg: &Segment) -> String {
     match seg.terminal_type.as_deref() {
-        Some("text") | Some("all") | None => el.text().collect::<String>().trim().to_string(),
+        Some("text") | None => el.text().collect::<String>().trim().to_string(),
+        Some("all") => el.html(),
         Some("ownText") => el.text().collect::<String>().trim().to_string(),
         Some("html") => el.html(),
         Some("href") => el.value().attr("href").unwrap_or("").to_string(),
@@ -291,6 +293,19 @@ mod tests {
         let body = doc.select(&Selector::parse("div").unwrap()).next().unwrap();
         let out = extract_text(&body, "text.作者@text##.*作者[：:]\\s*##");
         assert_eq!(out, "天蚕土豆");
+    }
+
+    #[test]
+    fn all_terminal_returns_outer_html_like_analyze_by_jsoup() {
+        let document = Html::parse_fragment(
+            r#"<div class="search-page"><a href="/video"><h3>标题</h3></a></div>"#,
+        );
+        let root = document.root_element();
+
+        assert_eq!(
+            extract_text(&root, ".search-page@all"),
+            r#"<div class="search-page"><a href="/video"><h3>标题</h3></a></div>"#
+        );
     }
 
     #[test]

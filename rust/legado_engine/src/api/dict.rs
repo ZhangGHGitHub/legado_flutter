@@ -169,7 +169,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(result, "字典释义");
+        assert_eq!(result, "<body><b>字典释义</b></body>");
         assert!(request.lock().unwrap().contains("GET /dict?q="));
     }
 
