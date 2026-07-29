@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../providers/source_provider.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/section_header.dart';

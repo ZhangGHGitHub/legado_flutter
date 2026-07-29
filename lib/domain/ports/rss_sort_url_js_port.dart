@@ -1,4 +1,4 @@
-import '../../models/rss_source.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 
 abstract interface class RssSortUrlJsPort {
   bool get isAvailable;

@@ -1,5 +1,5 @@
 import '../../domain/repositories/book_source_repository.dart';
-import '../../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import '../database_helper.dart';
 
 /// 书源 DAO — 薄封装 [DatabaseHelper]（不引入第二套存储栈）

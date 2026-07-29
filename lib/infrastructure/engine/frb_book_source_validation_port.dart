@@ -1,6 +1,6 @@
 import '../../bridge/legado_engine_bridge.dart';
 import '../../domain/ports/book_source_validation_port.dart';
-import '../../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 
 /// Rust/FRB 书源校验适配器。
 class FrbBookSourceValidationPort implements BookSourceValidationPort {

@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/ports/rss_source_import_port.dart';
-import '../models/rss_source.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 
 const _rssSourcesKey = 'legado_rss_sources';
 

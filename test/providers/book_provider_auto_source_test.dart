@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import 'package:legado_flutter/models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/services/app_paths.dart';

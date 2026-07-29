@@ -11,7 +11,7 @@ import '../domain/ports/book_source_toc_port.dart';
 import '../domain/ports/public_text_fetch_port.dart';
 import '../domain/ports/reader_content_source_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import '../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../utils/site_busy_guard.dart';
 

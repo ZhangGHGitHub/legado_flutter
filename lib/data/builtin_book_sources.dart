@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
-import '../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 
 /// 内置推荐书源（来自 Legado 社区）
 /// - https://www.yckceo.com/yuedu/shuyuan/json/id/7497.json

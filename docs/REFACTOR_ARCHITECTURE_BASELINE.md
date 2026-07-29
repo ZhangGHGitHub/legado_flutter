@@ -2116,3 +2116,15 @@ Flutter 对照结果：
 `flutter analyze --no-pub` 无诊断；`git diff --check` 通过，仅有 LF/CRLF 提示。
 
 边界结论：Book/Chapter 核心契约归属完成；BookSource/RssSource 与阅读进度模型仍待迁移，R1 尚未退出。
+
+## 102. 2026-07-29：R1 BookSource/RssSource 领域模型归属
+
+- `BookSource` 和 `RssSource` 迁入纯 domain，旧 `lib/models` 路径仅保留 export。
+- 为保持既有静态 API 和无损往返，本批保留实体中的纯 Dart JSON 能力；没有把 domain 反向依赖到 infrastructure。
+- 嵌套/扁平规则优先级、`rawSourceJson`、未知字段、header 对象/字符串、登录字段、jsLib、
+  concurrentRate、RSS raw 和 engine JSON 语义不变。
+
+验证结果：关键源模型、仓储、五组书源端口、导入、RuleSub、RSS 端口/排序/编辑回归 `30/30`；
+完整批次另含 JS 兼容 `2/2`，可选在线检查按既定逻辑因 HTTP 400 跳过；全仓 analyze 无诊断。
+
+边界结论：书源与 RSS 源模型归属完成；阅读进度模型是 R1 模型归属的最后一批。

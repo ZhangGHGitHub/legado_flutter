@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/ports/rss_port.dart';
 import '../domain/rss/rss_article.dart';
-import '../models/rss_source.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 
 /// RSS 服务 — 对齐 Jingshiro [Rss.kt] 调用链。
 class RssService {

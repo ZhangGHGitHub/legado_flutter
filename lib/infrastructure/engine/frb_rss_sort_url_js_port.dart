@@ -1,6 +1,6 @@
 import '../../bridge/legado_engine_bridge.dart';
 import '../../domain/ports/rss_sort_url_js_port.dart';
-import '../../models/rss_source.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../src/rust/api.dart' as rust_api;
 
 class FrbRssSortUrlJsPort implements RssSortUrlJsPort {

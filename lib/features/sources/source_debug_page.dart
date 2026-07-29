@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../domain/ports/book_source_debug_port.dart';
-import '../../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../providers/source_provider.dart';
 import '../../services/source_debug_formatter.dart';
 import '../../widgets/source_debug_panel.dart';

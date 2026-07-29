@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
-import '../models/rss_source.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../providers/rss_provider.dart';
 
 /// Persistence boundary used by the RSS source editor.

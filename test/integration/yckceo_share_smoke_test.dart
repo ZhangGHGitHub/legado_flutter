@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:legado_flutter/bridge/legado_db_bridge.dart';
 import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import 'package:legado_flutter/models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/services/book_source_service.dart';
 import '../helpers/book_source_service_test_factory.dart';
 

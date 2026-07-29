@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/book_source_debug_port.dart';
 import 'package:legado_flutter/features/sources/source_debug_page.dart';
-import 'package:legado_flutter/models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 
 void main() {
   final source = BookSource(

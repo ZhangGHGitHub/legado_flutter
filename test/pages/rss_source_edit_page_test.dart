@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:legado_flutter/models/rss_source.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 import 'package:legado_flutter/features/rss/rss_source_edit_page.dart';
 import 'package:legado_flutter/services/rss_source_edit_port.dart';
 

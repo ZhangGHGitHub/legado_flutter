@@ -4,8 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../domain/ports/js_eval_port.dart';
-import '../models/book_source.dart';
-import '../models/rss_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 
 /// JS 侧 `java.*` 命令 — 对齐 Jingshiro [SourceLoginJsExtensions]
 class LoginJsCommand {

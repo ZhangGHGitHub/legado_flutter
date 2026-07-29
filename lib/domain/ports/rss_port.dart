@@ -1,4 +1,4 @@
-import '../../models/rss_source.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../rss/rss_article.dart';
 
 class RssArticlesResult {

@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import '../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import '../models/source_validation_result.dart';
 import '../domain/repositories/book_source_repository.dart';
 import '../domain/ports/book_source_validation_port.dart';

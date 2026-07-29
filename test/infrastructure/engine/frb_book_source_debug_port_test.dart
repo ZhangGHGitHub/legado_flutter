@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/book_source_debug_port.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_book_source_debug_port.dart';
-import 'package:legado_flutter/models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 
 void main() {
   test('debug port exposes a replaceable pure Dart contract', () {

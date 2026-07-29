@@ -1,4 +1,4 @@
-import '../../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 
 /// 书源正文用例所需的引擎端口。
 ///

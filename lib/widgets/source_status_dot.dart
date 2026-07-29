@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import '../models/source_validation_result.dart';
 import '../theme/legado_tokens.dart';
 

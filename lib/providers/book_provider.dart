@@ -6,7 +6,7 @@ import '../domain/repositories/book_repository.dart';
 import '../domain/ports/chapter_content_cache_port.dart';
 import '../domain/ports/local_book_parser_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import '../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../help/content_processor.dart';
 import '../help/shelf_unread.dart';

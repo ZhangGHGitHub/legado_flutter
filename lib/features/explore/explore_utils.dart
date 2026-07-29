@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import '../../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 
 /// 发现分类条目（exploreUrl JSON 数组元素）
 class ExploreCategory {

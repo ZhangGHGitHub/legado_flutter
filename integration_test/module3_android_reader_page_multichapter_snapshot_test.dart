@@ -14,7 +14,7 @@ import 'package:legado_flutter/database/dao/source_dao.dart';
 import 'package:legado_flutter/help/book_help.dart';
 import 'package:legado_flutter/model/read_book.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import 'package:legado_flutter/models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/features/reader/reader_page.dart';
 import 'package:legado_flutter/features/reader/reader_settings.dart';

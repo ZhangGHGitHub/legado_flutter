@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../domain/rss/rss_article.dart';
-import '../../models/rss_source.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../services/rss_service.dart';
 import '../../services/rss_sort_urls.dart';
 import '../../services/rss_star_prefs.dart';

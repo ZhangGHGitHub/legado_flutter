@@ -1,4 +1,4 @@
-import '../../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 
 /// Rust 书源校验结果在领域边界上的纯 Dart 快照。
 ///

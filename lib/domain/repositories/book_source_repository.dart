@@ -1,4 +1,4 @@
-import '../../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 
 /// 书源领域存储端口。
 ///

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/rss_sort_url_js_port.dart';
-import 'package:legado_flutter/models/rss_source.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 import 'package:legado_flutter/services/rss_sort_urls.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/book_source_content_port.dart';
-import 'package:legado_flutter/models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import '../helpers/book_source_service_test_factory.dart';
 
 class _FakeBookSourceContentPort implements BookSourceContentPort {

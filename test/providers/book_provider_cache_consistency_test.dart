@@ -6,7 +6,7 @@ import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.d
 import 'package:legado_flutter/help/book_help.dart';
 import 'package:legado_flutter/model/read_book.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import 'package:legado_flutter/models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/services/app_paths.dart';

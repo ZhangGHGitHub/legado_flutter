@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 import 'package:legado_flutter/domain/book/book.dart';
-import '../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../services/source_login_prefs.dart';
 import '../src/rust/api.dart' as rust_api;

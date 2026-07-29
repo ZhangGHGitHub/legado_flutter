@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/book_source_book_info_port.dart';
 import 'package:legado_flutter/domain/ports/book_source_toc_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import 'package:legado_flutter/models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../helpers/book_source_service_test_factory.dart';
 import 'package:legado_flutter/utils/site_busy_guard.dart';

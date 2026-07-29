@@ -1,4 +1,4 @@
-import '../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 
 List<BookSource> sourcesInManualOrder(List<BookSource> all) {
   final ordered = List<BookSource>.from(all);

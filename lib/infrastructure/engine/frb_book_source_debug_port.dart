@@ -1,6 +1,6 @@
 import '../../bridge/legado_engine_bridge.dart';
 import '../../domain/ports/book_source_debug_port.dart';
-import '../../models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../src/rust/api.dart' as rust_api;
 
 /// Rust/FRB 书源调试适配器。

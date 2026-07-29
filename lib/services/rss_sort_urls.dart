@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/ports/rss_sort_url_js_port.dart';
-import '../models/rss_source.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 
 /// 对齐 Jingshiro [RssSourceExtensions.sortUrls]
 class RssSortUrls {

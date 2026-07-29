@@ -11,7 +11,7 @@ import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.d
 import 'package:legado_flutter/infrastructure/content/content_processor_adapter.dart';
 import 'package:legado_flutter/model/read_book.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import 'package:legado_flutter/models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/services/app_paths.dart';
 import '../helpers/book_source_service_test_factory.dart';

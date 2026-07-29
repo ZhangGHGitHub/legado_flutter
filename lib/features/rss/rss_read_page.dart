@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/rss/rss_article.dart';
-import '../../models/rss_source.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../services/rss_service.dart';
 import '../common/app_webview_page.dart';
 

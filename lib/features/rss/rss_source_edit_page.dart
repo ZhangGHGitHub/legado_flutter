@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../models/rss_source.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../services/rss_source_edit_port.dart';
 import '../../services/source_login_service.dart';
 import '../../features/sources/source_login_page.dart';
