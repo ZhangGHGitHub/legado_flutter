@@ -13,8 +13,8 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../application/reader/reading_position_mapper.dart';
 import '../../model/read_book.dart';
-import '../../models/book.dart';
-import '../../models/chapter.dart';
+import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/reading_record_service.dart';

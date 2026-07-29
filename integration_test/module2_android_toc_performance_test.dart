@@ -7,8 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:legado_flutter/domain/ports/chapter_content_cache_port.dart';
-import 'package:legado_flutter/models/book.dart';
-import 'package:legado_flutter/models/chapter.dart';
+import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/features/book/toc_sheet.dart';
 import 'package:path_provider/path_provider.dart';
 

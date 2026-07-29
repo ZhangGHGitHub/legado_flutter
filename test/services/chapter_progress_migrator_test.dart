@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/services/chapter_progress_migrator.dart';
 
 Chapter _chapter({

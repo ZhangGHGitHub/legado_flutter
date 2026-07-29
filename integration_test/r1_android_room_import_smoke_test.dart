@@ -8,7 +8,7 @@ import 'package:legado_flutter/database/database_helper.dart';
 import 'package:legado_flutter/infrastructure/database/frb_backup_port.dart';
 import 'package:legado_flutter/infrastructure/database/frb_legacy_room_import_port.dart';
 import 'package:legado_flutter/infrastructure/webdav/frb_webdav_repository.dart';
-import 'package:legado_flutter/models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/services/backup_service.dart';
 import 'package:legado_flutter/services/legacy_room_import_service_factory.dart';
 import 'package:path/path.dart' as p;

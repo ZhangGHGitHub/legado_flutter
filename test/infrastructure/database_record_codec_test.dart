@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/infrastructure/database/database_record_codec.dart';
-import 'package:legado_flutter/models/book.dart';
-import 'package:legado_flutter/models/chapter.dart';
+import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 
 void main() {
   test('book database record preserves domain fields and defaults', () {
@@ -45,6 +45,22 @@ void main() {
 
     expect(decoded.tocUrl, isEmpty);
     expect(decoded.toJson()['tocUrl'], isEmpty);
+  });
+
+  test('book database record keeps legacy reverseToc and sim-read clamp', () {
+    final decoded = DatabaseRecordCodec.decodeBook(
+      jsonEncode({
+        'id': 'book-legacy',
+        'name': '旧记录',
+        'reverseToc': true,
+        'simReadDailyChapters': 0,
+      }),
+    );
+
+    expect(decoded.readConfig.reverseToc, isTrue);
+    expect(decoded.simReadDailyChapters, 1);
+    expect(decoded.toJson(), isNot(contains('reverseToc')));
+    expect(decoded.toJson()['readConfig'], containsPair('reverseToc', true));
   });
 
   test('chapter record preserves index identity and content metadata', () {

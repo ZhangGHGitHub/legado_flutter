@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-import '../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../models/book_source.dart';
-import '../models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import '../services/source_login_prefs.dart';
 import '../src/rust/api.dart' as rust_api;
 import '../src/rust/api/network.dart' as network_api;

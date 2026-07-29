@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../domain/ports/chapter_content_cache_port.dart';
-import '../../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/book_cache_export_service.dart';

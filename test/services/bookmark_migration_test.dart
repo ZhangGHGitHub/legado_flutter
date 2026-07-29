@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/annotation/note_snapshot.dart';
-import 'package:legado_flutter/models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/services/bookmark_migration_service.dart';
 import 'package:legado_flutter/services/bookmark_service.dart';
 

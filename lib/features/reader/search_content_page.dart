@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../domain/ports/chapter_content_cache_port.dart';
 import '../../help/content_processor.dart';
-import '../../models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../providers/replace_provider.dart';
 import '../../services/search_content_prefs.dart';
 import '../../widgets/legado_popup_menu.dart';

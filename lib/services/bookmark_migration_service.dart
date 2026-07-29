@@ -1,4 +1,4 @@
-import '../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../domain/annotation/bookmark_snapshot.dart';
 import '../domain/annotation/note_snapshot.dart';
 import 'bookmark_service.dart';

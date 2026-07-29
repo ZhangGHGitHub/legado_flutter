@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/database/database_helper.dart';
 import 'package:legado_flutter/infrastructure/database/rust_database_port.dart';
-import 'package:legado_flutter/models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 
 class _FakeRustDatabasePort implements RustDatabasePort {
   int readyChecks = 0;

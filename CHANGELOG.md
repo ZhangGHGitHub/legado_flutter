@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R1：`Book`、`BookReadConfig` 与 `Chapter` 迁入 `domain/book`，旧模型路径仅兼容导出；阅读轮次中文文案移入 application policy，数据库继续统一经过 `DatabaseRecordCodec`。UTF-16 FNV-1a、无 URL 章节 ID、目录合并、旧 `reverseToc`、模拟追读 clamp 和阅读位置联合回归 `29/29`，全仓 analyze 通过。
+
 - R1：扩展架构门禁到 `domain/model/models`，清除 `ReadBook` 对书源服务门面的依赖；阅读样式、主题排版、点击区及 6 个叶子实体迁入纯领域目录，Flutter 颜色/中文展示/时间戳 ID 创建策略留在 application/Feature。联合定向回归 `90/90`、全仓 analyze 通过，domain/models 纯度违规由 `2` 降为 `0`。
 
 - R0/R1/R6：新增“横切基础设施：全局能力与启动可靠性”计划。根据原版 Application.onCreate 对照审计，登记 P0 全局崩溃捕获/启动恢复、存储初始化安全、启动任务隔离，以及 P1 生命周期协调、卡顿/调度监控、统一诊断日志和通知/后台/TLS/WebView 等平台能力盘点；本次仅更新计划与架构证据，未宣称这些能力已实现。

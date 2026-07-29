@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../../widgets/empty_state.dart';
 
 /// 换封面页占位 — 对齐 changeCover

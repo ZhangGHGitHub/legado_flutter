@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 
 /// 内容编辑 — 对齐 Jingshiro `ContentEditDialog`
 class ContentEditDialog extends StatefulWidget {

@@ -4,9 +4,9 @@ import '../infrastructure/database/database_record_codec.dart';
 import '../infrastructure/database/frb_rust_database_port.dart';
 import '../infrastructure/database/rust_database_port.dart';
 import '../domain/content/replace_rule.dart';
-import '../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../models/book_source.dart';
-import '../models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 
 /// 数据库管理器 — 委托 Rust rusqlite（Phase C）
 class DatabaseHelper {

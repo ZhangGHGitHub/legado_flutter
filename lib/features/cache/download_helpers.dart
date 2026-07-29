@@ -1,4 +1,4 @@
-import '../../models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import 'download_choice_dialog.dart';
 
 /// 按下载选项筛选章节

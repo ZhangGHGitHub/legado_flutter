@@ -6,8 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../help/manga_image_extractor.dart';
-import '../../models/book.dart';
-import '../../models/chapter.dart';
+import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/manga_prefs.dart';

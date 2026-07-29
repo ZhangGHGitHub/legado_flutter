@@ -4,9 +4,9 @@ import 'package:legado_flutter/domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/help/content_processor.dart';
 import 'package:legado_flutter/infrastructure/content/content_processor_adapter.dart';
 import 'package:legado_flutter/model/read_book.dart';
-import 'package:legado_flutter/models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
-import 'package:legado_flutter/models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import '../helpers/book_source_service_test_factory.dart';
 
 void main() {

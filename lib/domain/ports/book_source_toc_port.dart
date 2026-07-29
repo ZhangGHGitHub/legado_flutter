@@ -1,6 +1,6 @@
-import '../../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../../models/book_source.dart';
-import '../../models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 
 /// 书源目录用例所需的引擎端口。
 ///

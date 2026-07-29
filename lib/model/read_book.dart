@@ -4,9 +4,9 @@ import '../domain/repositories/book_repository.dart';
 import '../domain/ports/chapter_content_cache_port.dart';
 import '../domain/ports/content_processing_port.dart';
 import '../domain/ports/reader_content_source_port.dart';
-import '../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../models/book_source.dart';
-import '../models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 
 /// 阅读会话 — 对齐 Legado `ReadBook.kt`
 ///

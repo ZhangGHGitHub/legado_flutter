@@ -1,6 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 
 /// 书架布局/排序偏好 — 对齐 Jingshiro PreferKey / AppConfig
 class BookshelfConfig {

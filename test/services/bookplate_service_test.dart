@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/book_reading_stats.dart';
 import 'package:legado_flutter/domain/ports/bookplate_port.dart';
-import 'package:legado_flutter/models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/services/bookplate_service.dart';
 
 void main() {

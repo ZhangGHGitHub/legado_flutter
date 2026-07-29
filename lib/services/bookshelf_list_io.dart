@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 
 import '../domain/ports/public_text_fetch_port.dart';
-import '../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 
 /// 书单条目 — 对齐 Jingshiro 导出 `{name, author, intro}`。
 typedef BookshelfListEntry = ({String name, String author, String intro});

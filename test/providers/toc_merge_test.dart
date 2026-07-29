@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 
 /// 与 BookProvider._mergeTocWithLocal 同源逻辑的轻量单测
 List<Chapter> mergeTocWithLocal(List<Chapter> remote, List<Chapter> local) {
@@ -26,6 +26,14 @@ void main() {
 
     expect(afterReorder, first);
     expect(other, isNot(first));
+  });
+
+  test('Chapter.idFor hashes Dart UTF-16 code units and keeps local IDs', () {
+    expect(
+      Chapter.idFor(bookId: 'book', url: 'https://example.com/章😀', index: 4),
+      'book_url_bf705269',
+    );
+    expect(Chapter.idFor(bookId: 'book', url: '', index: 4), 'book_ch_4');
   });
 
   test('mergeTocWithLocal keeps downloaded content matched by url', () {
@@ -60,6 +68,8 @@ void main() {
     final merged = mergeTocWithLocal(remote, local);
     expect(merged.length, 2);
     expect(merged[0].title, '新标题');
+    expect(merged[0].index, 0);
+    expect(merged[0].url, 'https://example.com/1.html');
     expect(merged[0].isDownloaded, isTrue);
     expect(merged[0].content, '正文缓存');
     expect(merged[1].isDownloaded, isFalse);

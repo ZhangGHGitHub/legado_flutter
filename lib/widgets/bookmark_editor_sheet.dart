@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain/annotation/bookmark_snapshot.dart';
-import '../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../services/bookmark_service.dart';
 
 /// 对齐原版 BookmarkDialog：确认后才创建或更新书签。

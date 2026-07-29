@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../../models/book_source.dart';
-import '../../models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/book_source_service.dart';

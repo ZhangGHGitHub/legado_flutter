@@ -10,9 +10,9 @@ import '../domain/ports/book_source_search_port.dart';
 import '../domain/ports/book_source_toc_port.dart';
 import '../domain/ports/public_text_fetch_port.dart';
 import '../domain/ports/reader_content_source_port.dart';
-import '../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../models/book_source.dart';
-import '../models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import '../utils/site_busy_guard.dart';
 
 /// 书源服务门面 — 全部书源操作走 Rust 引擎（Phase E-B：无 Dart 回退）

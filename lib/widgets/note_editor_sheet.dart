@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import '../domain/annotation/note_snapshot.dart';
-import '../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../services/note_service.dart';
 
 /// 半屏想法编辑器（Phase 4.5）

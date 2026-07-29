@@ -6,7 +6,7 @@ import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
 import 'package:legado_flutter/database/database_helper.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_bookmark_port.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_note_port.dart';
-import 'package:legado_flutter/models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/services/bookmark_migration_service.dart';
 import 'package:legado_flutter/services/bookmark_service.dart';
 import 'package:legado_flutter/services/note_service.dart';

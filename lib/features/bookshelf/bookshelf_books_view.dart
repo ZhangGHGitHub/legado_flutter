@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../../services/bookshelf_prefs.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_cover.dart';

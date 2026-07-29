@@ -2104,3 +2104,15 @@ Flutter 对照结果：
 - `flutter analyze --no-pub`：无诊断；`git diff --check`：通过，仅有 LF/CRLF 提示。
 
 边界结论：阅读配置和低耦合模型归属已收敛；Book/Chapter、BookSource/RssSource 和阅读进度仍按 R1 顺序迁移。
+
+## 101. 2026-07-29：R1 Book/Chapter 核心领域模型归属
+
+- `Book`、`BookReadConfig` 和 `Chapter` 迁入 `lib/domain/book`，旧 `lib/models` 路径仅保留 export。
+- 阅读轮次中文文案移入 application policy；数据库序列化继续统一由 `DatabaseRecordCodec` 负责。
+- 保持 `readConfig.reverseToc` 旧顶层兼容、模拟追读范围、章节 URL 身份、UTF-16 FNV-1a、
+  URL-less 本地 ID、目录合并和下载正文元数据语义。
+
+验证结果：核心仓储、codec、旧 schema、章节身份、目录合并/顺序和阅读位置联合回归 `29/29`；
+`flutter analyze --no-pub` 无诊断；`git diff --check` 通过，仅有 LF/CRLF 提示。
+
+边界结论：Book/Chapter 核心契约归属完成；BookSource/RssSource 与阅读进度模型仍待迁移，R1 尚未退出。

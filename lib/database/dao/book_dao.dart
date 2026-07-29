@@ -1,5 +1,5 @@
-import '../../models/book.dart';
-import '../../models/chapter.dart';
+import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../domain/repositories/book_repository.dart';
 import '../database_helper.dart';
 

@@ -1,6 +1,6 @@
 import '../domain/ports/chapter_content_cache_port.dart';
-import '../models/book.dart';
-import '../models/chapter.dart';
+import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 
 /// 书籍缓存导出 — 对齐 Jingshiro `CacheBook` 的纯文本导出路径。
 class BookCacheExportService {

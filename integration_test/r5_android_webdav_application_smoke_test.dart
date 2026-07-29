@@ -12,7 +12,7 @@ import 'package:legado_flutter/infrastructure/database/frb_legacy_room_import_po
 import 'package:legado_flutter/infrastructure/file_system/backup_local_file_adapter.dart';
 import 'package:legado_flutter/infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
 import 'package:legado_flutter/infrastructure/webdav/frb_webdav_repository.dart';
-import 'package:legado_flutter/models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/models/book_progress.dart';
 import 'package:legado_flutter/features/settings/backup_config_page.dart';
 import 'package:legado_flutter/services/backup_service.dart';

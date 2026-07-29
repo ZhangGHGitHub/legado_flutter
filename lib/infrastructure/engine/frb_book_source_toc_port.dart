@@ -1,8 +1,8 @@
 import '../../bridge/legado_engine_bridge.dart';
 import '../../domain/ports/book_source_toc_port.dart';
-import '../../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../../models/book_source.dart';
-import '../../models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 
 /// Rust/FRB 书源目录适配器。
 class FrbBookSourceTocPort implements BookSourceTocPort {

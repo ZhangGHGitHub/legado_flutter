@@ -1,5 +1,5 @@
-import '../../models/book.dart';
-import '../../models/chapter.dart';
+import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 
 /// 书架与章节的领域存储端口。
 ///

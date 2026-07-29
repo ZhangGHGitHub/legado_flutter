@@ -10,9 +10,9 @@ import 'package:legado_flutter/infrastructure/engine/frb_book_source_explore_por
 import 'package:legado_flutter/infrastructure/engine/frb_book_source_search_port.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_book_source_toc_port.dart';
 import 'package:legado_flutter/infrastructure/network/frb_public_text_fetch_port.dart';
-import 'package:legado_flutter/models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/models/book_source.dart';
-import 'package:legado_flutter/models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/services/book_source_service.dart';
 
 BookSourceService createTestBookSourceService({

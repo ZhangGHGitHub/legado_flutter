@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../domain/ports/webdav_repository.dart';
 import '../../domain/remote/webdav_entry.dart';
-import '../../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../../providers/book_provider.dart';
 import '../../services/app_log.dart';
 import '../../services/remote_archive_import_service.dart';

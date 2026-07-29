@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/book_reading_stats.dart';
 import '../domain/ports/bookplate_port.dart';
-import '../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import 'reading_record_service.dart';
 
 /// 阅读小票展示数据（Phase 4.4）

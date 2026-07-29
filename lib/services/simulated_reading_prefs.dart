@@ -1,6 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 
 /// 模拟追读配置（对齐 legado Book.ReadConfig + `dialog_simulated_reading`）
 class SimulatedReadingConfig {

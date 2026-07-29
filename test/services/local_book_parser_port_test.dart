@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/local_book_parser_port.dart';
 import 'package:legado_flutter/domain/repositories/book_repository.dart';
-import 'package:legado_flutter/models/book.dart';
-import 'package:legado_flutter/models/chapter.dart';
+import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/services/local_book_service.dart';
 
 void main() {

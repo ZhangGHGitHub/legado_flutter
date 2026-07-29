@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../models/book.dart';
+import '../application/book/book_read_status_policy.dart';
+import '../domain/book/book.dart';
 
 /// 阅读状态角标 — 「读完」/「N刷」优先，否则显示进度百分比
 class ReadBadge extends StatelessWidget {
@@ -17,11 +18,7 @@ class ReadBadge extends StatelessWidget {
     this.onTap,
   });
 
-  factory ReadBadge.fromBook(
-    Book book, {
-    Key? key,
-    VoidCallback? onTap,
-  }) {
+  factory ReadBadge.fromBook(Book book, {Key? key, VoidCallback? onTap}) {
     return ReadBadge(
       key: key,
       progress: book.progress,
@@ -34,7 +31,7 @@ class ReadBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final status = Book.labelForReadIteration(readIteration);
+    final status = BookReadStatusPolicy.labelForReadIteration(readIteration);
 
     String label;
     Color bg;

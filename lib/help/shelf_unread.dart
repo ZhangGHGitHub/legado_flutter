@@ -1,4 +1,4 @@
-import '../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../services/simulated_reading_prefs.dart';
 
 /// 书架未读章评估 — 对齐 Jingshiro `totalChapterNum - durChapterIndex - 1`

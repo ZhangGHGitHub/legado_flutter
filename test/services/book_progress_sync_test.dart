@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/config/app_config.dart';
 import 'package:legado_flutter/domain/remote/webdav_entry.dart';
-import 'package:legado_flutter/models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:legado_flutter/models/book_progress.dart';

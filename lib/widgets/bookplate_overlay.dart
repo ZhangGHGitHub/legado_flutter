@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain/book_reading_stats.dart';
-import '../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import '../services/bookplate_service.dart';
 
 /// 阅读书票 — 章首/章尾卡片（Phase 4.4）

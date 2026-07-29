@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/chapter_content_cache_port.dart';
-import 'package:legado_flutter/models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/features/book/toc_sheet.dart';
 
 class _BlockingCache implements ChapterContentCachePort {

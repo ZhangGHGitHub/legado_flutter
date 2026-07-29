@@ -88,7 +88,7 @@ test/integration/         设备与平台链路验收
 
 退出条件：数据模型契约测试通过；本工程 Rust 旧 schema 可读写；章节身份和阅读位置迁移无差异；Kotlin Room v99 数据库探针、字段映射、导入事务、备份/回滚和真实/合成 fixture 回归通过。
 
-当前判定：R1-12 的 Kotlin Room v99 数据库迁移门禁已通过。探针、核心字段映射、全部 23 个 Room 实体表的原始快照、archive-only 非核心表保存、事务式导入、导入前备份、失败回滚、指纹幂等、冲突统计、FRB/Dart application、备份页入口和 Android 两阶段设备验收均已完成。真实 `original_legado.db` 已确认 v99，但其实体表当前为空；非空等价 fixture 已覆盖字段映射和非核心数据归档。非核心表尚未建立产品业务 port，但不会在迁移中丢失，作为后续独立产品语义工作，不阻塞 R1-12 门禁。扩展边界复核后的默认适配器、组合根、阅读配置和叶子领域模型已收敛；Book/Chapter、BookSource/RssSource 与阅读进度模型归属仍在执行，R1 尚未最终退出。
+当前判定：R1-12 的 Kotlin Room v99 数据库迁移门禁已通过。探针、核心字段映射、全部 23 个 Room 实体表的原始快照、archive-only 非核心表保存、事务式导入、导入前备份、失败回滚、指纹幂等、冲突统计、FRB/Dart application、备份页入口和 Android 两阶段设备验收均已完成。真实 `original_legado.db` 已确认 v99，但其实体表当前为空；非空等价 fixture 已覆盖字段映射和非核心数据归档。非核心表尚未建立产品业务 port，但不会在迁移中丢失，作为后续独立产品语义工作，不阻塞 R1-12 门禁。扩展边界复核后的默认适配器、组合根、阅读配置、叶子领域模型和 Book/Chapter 核心契约已收敛；BookSource/RssSource 与阅读进度模型归属仍在执行，R1 尚未最终退出。
 
 ##### R1-12：Kotlin Room v99 数据迁移门禁（已通过）
 

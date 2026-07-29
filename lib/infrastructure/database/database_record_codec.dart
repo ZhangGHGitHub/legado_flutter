@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import '../../models/book.dart';
-import '../../models/chapter.dart';
+import '../../domain/book/book.dart';
+import '../../domain/book/chapter.dart';
 
 /// Flutter 领域对象与 Rust SQLite JSON 记录之间的唯一编解码边界。
 ///

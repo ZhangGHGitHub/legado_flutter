@@ -1,4 +1,4 @@
-import '../models/chapter.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 
 /// 阅读位置在目录刷新后的迁移结果。
 class ChapterProgress {
