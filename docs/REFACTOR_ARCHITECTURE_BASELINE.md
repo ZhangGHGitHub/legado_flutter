@@ -1,7 +1,7 @@
 # Legado Flutter 架构重构基线
 
-状态：R0-R4 已完成；R5 本地开发退出门禁已完成，发布前正式/主流 WebDAV 验收待执行；R6 已完成 UI 状态直连清理，并已迁移 main、bookshelf、reader、book、sources、rss、settings、my 功能域；sync 无独立 UI 页面，阶段退出门禁尚未完成
-日期：2026-07-27
+状态：R0-R4 已完成；R5 本地开发退出门禁和本地 Web API 归属迁移已完成，发布前正式/主流 WebDAV 验收待执行；R6 已完成 UI 状态直连清理，并已迁移 main、bookshelf、reader、book、sources、rss、settings、my 功能域；sync 无独立 UI 页面，阶段退出门禁尚未完成
+日期：2026-07-29
 依据：当前工作区代码、`docs/REFACTOR_PLAN.md`、根目录 `legado-main/`
 
 ## 1. 目的
@@ -857,6 +857,8 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - 断行约束：本步只迁移 Web API 生命周期的依赖方向，不修改正文原文、中文断行、分页输入、章节位置映射或阅读器 TTS 行为。
 
 边界结论：Web API 设置页已不再直接依赖 FRB 生成状态或引擎/数据库桥接；FRB 仅保留在 `infrastructure/web_api` 适配器。下一步继续按页面直接依赖清单迁移一个 UI/服务边界，先从可替换端口建立再迁移调用者。
+
+后续状态：本节记录的是 2026-07-26 当时边界。R5 checkpoint 已用 Dart IO adapter 和 application data port 替代 `FrbWebApiPort`，Rust 不再承载本地 HTTP Server 生命周期，详见第 119 节。
 
 ## 31. R6-2：阅读记录统计页面端口化
 
@@ -2493,3 +2495,22 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 架构扫描仍按设计报告既有 `146` 条 backlog：SharedPreferences `14`、Feature 业务 service `132`；无新增违规。`legado-main/` 保持只读。
 
 边界结论：R3 的正文处理契约、缓存生命周期、章节切换和第 3 条断行/分页退出条件均已满足。分页与中文断行继续属于 Flutter 展示层，远端 ZIP 解析属于 Rust；备份 ZIP、阅读样式 ZIP 和 WebDAV 发布验收仍按各自 R2/R5 边界处理，不在本批交叉迁移。
+
+## 119. 2026-07-29：R4 复核与 R5 本地 Web API 归属迁移
+
+- R3 最终退出后只读复核目录顺序、章节 `index/identity`、目录分页和可见行元数据，未发现回归，R4 不重开。
+- 新增纯 Dart `WebApiDataPort`，application 层的 Repository 实现组合 `BookRepository`、`BookSourceRepository` 和 `ReadingRecordPort`；Dart IO adapter 只负责 loopback 监听、路由、Token 认证、响应与运行状态。
+- 根组合层复用同一数据库 DAO/Repository/阅读记录端口。Rust 保留数据库和业务能力，不再负责 HTTP Server 生命周期。
+- 删除 Rust `web_server`、FRB `start/stop/status` API 与 DTO、`FrbWebApiPort` 和旧 Rust listener 集成测试；`axum` 仅作为正文测试 fixture 的 dev-dependency 保留。
+- 保持 `GET/HEAD /api/health`、books、chapters、sources、records，`POST /api/books` 和 `DELETE /api/books/:id` 的认证、状态码、Allow、空响应及 JSON 错误语义；未知路由不提前认证。
+- Rust HTTP 主机并发闸按主机和有效端口隔离，避免同主机不同本地服务及并行 fixture 互相占用并发额度；目录多分页并发断言未修改。
+
+验证结果：
+
+- Web API application/infrastructure/service 定向 `11/11`，Dart IO 协议与真实临时 Rust 数据库 HTTP 集成合并 `6/6`。
+- Rust workspace 核心 `184/184`，其余集成、`legado_webdav` 和文档测试无失败；目录并发与端口隔离定向测试通过。
+- `flutter test --no-pub --concurrency=1` 最终 `648` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断。
+- Android debug APK 和 Windows debug 应用构建通过。
+- 架构扫描按设计报告既有 `146` 条 backlog：SharedPreferences `14`、Feature 业务 service `132`；无新增类别。`legado-main/` 保持只读。
+
+边界结论：R5 本地 Web API 归属迁移完成，监听和协议属于 Dart IO，业务查询经 application port 进入 Repository/Rust 数据能力。正式或主流 WebDAV 发布验收仍需外部服务或凭证，继续按暂停条件登记，不宣称发布验收完成。

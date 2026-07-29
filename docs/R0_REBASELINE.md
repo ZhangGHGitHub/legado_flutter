@@ -23,7 +23,7 @@
 | R2 | 重新打开 | Rust 网络调用链、TLS、订阅和书单契约 |
 | R3 | 重新打开 | Rust 正文/替换/压缩包唯一事实来源及双跑门禁 |
 | R4 | 历史门禁有记录 | 仅在目录行为回归时重新开启 2A/2B |
-| R5 | 本地开发门禁通过，未架构/发布完成 | 同步策略、本地 Web 服务归属和外部 WebDAV 验收 |
+| R5 | 本地开发门禁及本地 Web 服务归属迁移完成，发布验收未完成 | 正式或主流 WebDAV 服务真实验收 |
 | R6 | 目录迁移完成，未退出 | 应用用例依赖、受控 UI 验收、平台与发布门禁 |
 
 ## 3. Flutter 残留业务清单
@@ -40,13 +40,13 @@
 | 书单网络与格式解析 | `lib/services/bookshelf_list_io.dart` | R2 | Flutter 仅保留文件选择和结果展示 |
 | 远端 ZIP 书籍解包 | `lib/services/remote_archive_import_service.dart` | R3 | Rust 处理 ZIP、安全路径和格式识别 |
 | 同步冲突与备份恢复策略 | `lib/services/sync_conflict_policy.dart`、`backup_service.dart` | R4 | 保持 ETag/412、ZIP 格式和失败不破坏本地数据 |
-| 本地 Web 服务监听与路由 | `rust/legado_engine/src/web_server.rs` | R5 | 迁至 Flutter/Dart IO；Rust 只保留业务 port |
 
 ### 允许的 Flutter UI/平台职责
 
 - `TextPainter` 断行、分页、动画、Widget、导航、页面状态和用户输入。
 - 文件选择、权限、平台路径、字体/背景资源落盘、剪贴板和 UI 资源缓存。
-- Dart IO 本地 Web 服务的监听、路由、认证、响应和状态；其业务查询必须经过 application port。
+- Dart IO 本地 Web 服务的监听、路由、认证、响应和状态；业务查询已通过 `WebApiDataPort`
+  进入 Repository/Rust 数据能力，Rust 不再承载 HTTP Server 生命周期。
 
 ### 暂停项
 

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../app.dart';
 import '../application/app_bootstrap.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
+import '../application/web_api/repository_web_api_data_port.dart';
 import '../bridge/legado_db_bridge.dart';
 import '../bridge/legado_engine_bridge.dart';
 import '../config/app_config.dart';
@@ -55,7 +56,7 @@ import '../infrastructure/platform/method_channel_source_login_web_cookie_port.d
 import '../infrastructure/preferences/shared_preferences_book_group_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
 import '../infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
-import '../infrastructure/web_api/frb_web_api_port.dart';
+import '../infrastructure/web_api/dart_io_web_api_port.dart';
 import '../infrastructure/webdav/frb_webdav_repository.dart';
 import '../providers/replace_provider.dart';
 import '../providers/rss_provider.dart';
@@ -101,9 +102,24 @@ abstract final class AppCompositionRoot {
     const publicTextPort = FrbPublicTextFetchPort();
     const binaryHttpPort = FrbApplicationBinaryHttpRequestPort();
     final bookRepository = BookDao();
+    final sourceRepository = SourceDao();
+    final readingRecordPort = FrbReadingRecordPort();
+    final webApiPort = DartIoWebApiPort(
+      dataPort: RepositoryWebApiDataPort(
+        bookRepository: bookRepository,
+        sourceRepository: sourceRepository,
+        readingRecordPort: readingRecordPort,
+        isDatabaseReady: () => LegadoDbBridge.isReady,
+      ),
+    );
     final progressStore = await SharedPreferencesBookProgressSyncStore.load();
 
-    await _configureStaticServices(networkEnginePort, sourceLoginCookiePort);
+    await _configureStaticServices(
+      networkEnginePort,
+      sourceLoginCookiePort,
+      readingRecordPort,
+    );
+    WebApiService.configureWebApiPort(webApiPort);
     TtsService.configureBinaryHttpPort(binaryHttpPort);
 
     final bookSourceService = BookSourceService(
@@ -219,7 +235,7 @@ abstract final class AppCompositionRoot {
           ),
           ChangeNotifierProvider(
             create: (context) => SourceProvider(
-              repository: SourceDao(),
+              repository: sourceRepository,
               validationPort: context.read<BookSourceValidationPort>(),
               sourceService: bookSourceService,
             ),
@@ -244,6 +260,7 @@ abstract final class AppCompositionRoot {
   static Future<void> _configureStaticServices(
     FrbNetworkEnginePort networkEnginePort,
     FrbSourceLoginCookiePort sourceLoginCookiePort,
+    FrbReadingRecordPort readingRecordPort,
   ) async {
     BookmarkService.configureBookmarkPort(FrbBookmarkPort());
     BookplateService.configureBookplatePort(FrbBookplatePort());
@@ -251,7 +268,7 @@ abstract final class AppCompositionRoot {
     EngineStatusService.configurePort(const FrbEngineStatusPort());
     NetworkPrefs.configureEnginePort(networkEnginePort);
     NoteService.configureNotePort(FrbNotePort());
-    ReadingRecordService.configureRecordPort(FrbReadingRecordPort());
+    ReadingRecordService.configureRecordPort(readingRecordPort);
     RssService.configureRssPort(FrbRssPort());
     RssSortUrls.configureJsPort(FrbRssSortUrlJsPort());
     SourceLoginService.configureJsPort(const FrbJsEvalPort());
@@ -259,7 +276,6 @@ abstract final class AppCompositionRoot {
     SourceLoginCookieService.configureWebCookiePort(
       const MethodChannelSourceLoginWebCookiePort(),
     );
-    WebApiService.configureWebApiPort(FrbWebApiPort());
     BookGroupStore.configurePrefsPort(
       await SharedPreferencesBookGroupPrefs.load(),
     );

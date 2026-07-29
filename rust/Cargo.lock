@@ -1347,8 +1347,6 @@ dependencies = [
  "serial_test",
  "thiserror",
  "tokio",
- "tower",
- "tower-http",
  "url",
  "zip",
 ]

@@ -134,7 +134,15 @@ pub async fn wait_if_needed(source_url: &str) -> Result<(), String> {
 fn host_key(url: &str) -> String {
     url::Url::parse(url)
         .ok()
-        .and_then(|u| u.host_str().map(|h| h.to_ascii_lowercase()))
+        .and_then(|u| {
+            u.host_str().map(|host| {
+                let host = host.to_ascii_lowercase();
+                match u.port_or_known_default() {
+                    Some(port) => format!("{host}:{port}"),
+                    None => host,
+                }
+            })
+        })
         .unwrap_or_else(|| "unknown".to_string())
 }
 
@@ -145,7 +153,7 @@ fn semaphore_for_host(host: &str) -> Arc<Semaphore> {
         .clone()
 }
 
-/// Acquire a per-host permit (max 2 in flight). Caller drops permit when done.
+/// Acquire a per-host-and-effective-port permit (max 2 in flight). Caller drops it when done.
 pub async fn acquire_host_permit(url: &str) -> Result<OwnedSemaphorePermit, String> {
     let host = host_key(url);
     let sem = semaphore_for_host(&host);
@@ -164,6 +172,16 @@ fn now_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn host_key_distinguishes_effective_ports() {
+        assert_eq!(host_key("http://example.com/a"), "example.com:80");
+        assert_eq!(host_key("http://example.com:80/b"), "example.com:80");
+        assert_ne!(
+            host_key("http://127.0.0.1:41001/a"),
+            host_key("http://127.0.0.1:41002/b")
+        );
+    }
 
     #[tokio::test]
     async fn host_permit_limits_concurrency() {

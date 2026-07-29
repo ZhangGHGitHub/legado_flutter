@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R5：完成本地 Web API 归属迁移。监听、路由、Token 认证、响应和运行状态迁至 Dart IO，业务数据通过 `WebApiDataPort`、Repository 和既有 Rust 数据库能力提供；删除 Rust `axum` Server、FRB 生命周期 API/DTO、旧适配器和旧 Rust HTTP 集成测试。保留 `/api/health`、books、chapters、sources、records 的认证、状态码和错误契约，并由 Dart 协议测试及真实临时 Rust 数据库 HTTP 集成覆盖。Rust HTTP 并发闸改按主机和有效端口隔离，消除并行 fixture 跨端口争抢。Rust workspace 核心 `184/184`、Flutter 串行全量 `648` 通过（`3` 项既有跳过）、analyze、Android/Windows debug 构建通过；架构 backlog 保持 `146`，无新增类别。正式或主流 WebDAV 发布验收仍按暂停条件待执行。
+
 - R3：完成阅读会话、正文处理、缓存和远端书籍 ZIP 的阶段退出门禁。阅读位置按当前页起始 UTF-16 章内位置保存；全局/书源替换、标题去重、重新分段和多行正则统一到 Rust，生产阅读、全文搜索、替换预览共用 `ContentProcessingPort`；正文下一页支持串行/并行规则顺序、循环终止、下一章边界和 100 页显式上限。文件/DB 缓存生命周期、桌面 59 项分页/断行/选区/像素门禁及 Android 4 项真实 ReaderPage/SVG 门禁通过。远端书籍 ZIP 由 Rust 负责格式识别、路径安全、50MB 输入/解压总量和损坏包错误，Flutter 仅写入 Rust 返回的安全文件；固定 FRB `2.11.1` 生成并移除陈旧重复正文出口。Rust workspace 核心 `185/185`、正文/ZIP 真实 Windows FRB `5/5`、Flutter 串行全量 `641` 通过（`3` 项既有跳过）、analyze、Android debug APK、`git diff --check` 均通过；架构 backlog 保持 `146`，无新增违规。
 
 - R2：完成 `java.startBrowserAwait` 可见 WebView 宿主并通过阶段退出门禁。QuickJS 在专用阻塞线程保持同一脚本上下文，Rust 通过长期 FRB Dart callback 服务串行请求 Flutter 导航；支持原版 2/3/4 参数、默认 `refetchAfterSuccess=true`、UTF-16 64 KiB URL 门禁、URL/HTML 两种加载、最终页面 Cookie 同步、DOM 返回、重新抓取和重定向最终 URL。组合根持有 `navigatorKey`，Feature 仅依赖纯 Dart port，取消或宿主错误保留原响应。固定 FRB `2.11.1` 生成与真实 callback 往返通过；Rust 核心 `166/166`、JS compatibility `18/18`、离线规则 fixture `4/4`、Flutter 全量 `629` 通过（`3` 项既有跳过）、analyze、Android debug APK 和三个 Rust ABI 构建通过。架构扫描保持既有 `146` 条 backlog，无新增违规；iOS/macOS 因 Windows 环境未执行 Xcode 构建。

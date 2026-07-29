@@ -81,7 +81,7 @@ class LegadoEngine
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -1569356682;
+  int get rustContentHash => -991036702;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -445,13 +445,6 @@ abstract class LegadoEngineApi extends BaseApi {
 
   void crateApiNetworkStartHttpRequestTrace();
 
-  Future<WebApiStatus> crateApiStartWebApi({
-    required int port,
-    required String token,
-  });
-
-  Future<void> crateApiStopWebApi();
-
   void crateApiUpsertBookmark({
     required PlatformInt64 time,
     required String bookId,
@@ -483,8 +476,6 @@ abstract class LegadoEngineApi extends BaseApi {
     required String sourceJson,
     required String keyword,
   });
-
-  WebApiStatus crateApiWebApiStatus();
 
   Future<void> crateApiWebdavWebdavCheck({
     required String url,
@@ -3221,67 +3212,6 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       const TaskConstMeta(debugName: "start_http_request_trace", argNames: []);
 
   @override
-  Future<WebApiStatus> crateApiStartWebApi({
-    required int port,
-    required String token,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_32(port, serializer);
-          sse_encode_String(token, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 88,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_web_api_status,
-          decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiStartWebApiConstMeta,
-        argValues: [port, token],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiStartWebApiConstMeta => const TaskConstMeta(
-    debugName: "start_web_api",
-    argNames: ["port", "token"],
-  );
-
-  @override
-  Future<void> crateApiStopWebApi() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 89,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiStopWebApiConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiStopWebApiConstMeta =>
-      const TaskConstMeta(debugName: "stop_web_api", argNames: []);
-
-  @override
   void crateApiUpsertBookmark({
     required PlatformInt64 time,
     required String bookId,
@@ -3306,7 +3236,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           sse_encode_String(chapterName, serializer);
           sse_encode_String(bookText, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 90)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 88)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -3365,7 +3295,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           sse_encode_String(noteContent, serializer);
           sse_encode_i_32(position, serializer);
           sse_encode_i_32(chapterPos, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 91)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 89)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -3413,7 +3343,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 92,
+            funcId: 90,
             port: port_,
           );
         },
@@ -3447,7 +3377,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 93,
+            funcId: 91,
             port: port_,
           );
         },
@@ -3469,28 +3399,6 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       );
 
   @override
-  WebApiStatus crateApiWebApiStatus() {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 94)!;
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_web_api_status,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateApiWebApiStatusConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiWebApiStatusConstMeta =>
-      const TaskConstMeta(debugName: "web_api_status", argNames: []);
-
-  @override
   Future<void> crateApiWebdavWebdavCheck({
     required String url,
     required String username,
@@ -3508,7 +3416,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 95,
+            funcId: 92,
             port: port_,
           );
         },
@@ -3546,7 +3454,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 96,
+            funcId: 93,
             port: port_,
           );
         },
@@ -3584,7 +3492,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 97,
+            funcId: 94,
             port: port_,
           );
         },
@@ -3623,7 +3531,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 98,
+            funcId: 95,
             port: port_,
           );
         },
@@ -3662,7 +3570,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 99,
+            funcId: 96,
             port: port_,
           );
         },
@@ -3702,7 +3610,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 100,
+            funcId: 97,
             port: port_,
           );
         },
@@ -3742,7 +3650,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 101,
+            funcId: 98,
             port: port_,
           );
         },
@@ -3784,7 +3692,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 102,
+            funcId: 99,
             port: port_,
           );
         },
@@ -4443,20 +4351,6 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
   BigInt dco_decode_usize(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dcoDecodeU64(raw);
-  }
-
-  @protected
-  WebApiStatus dco_decode_web_api_status(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return WebApiStatus(
-      running: dco_decode_bool(arr[0]),
-      port: dco_decode_i_32(arr[1]),
-      token: dco_decode_String(arr[2]),
-      baseUrl: dco_decode_String(arr[3]),
-    );
   }
 
   @protected
@@ -5237,21 +5131,6 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
   }
 
   @protected
-  WebApiStatus sse_decode_web_api_status(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_running = sse_decode_bool(deserializer);
-    var var_port = sse_decode_i_32(deserializer);
-    var var_token = sse_decode_String(deserializer);
-    var var_baseUrl = sse_decode_String(deserializer);
-    return WebApiStatus(
-      running: var_running,
-      port: var_port,
-      token: var_token,
-      baseUrl: var_baseUrl,
-    );
-  }
-
-  @protected
   WebDavEntry sse_decode_web_dav_entry(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_name = sse_decode_String(deserializer);
@@ -5917,15 +5796,6 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
   void sse_encode_usize(BigInt self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putBigUint64(self);
-  }
-
-  @protected
-  void sse_encode_web_api_status(WebApiStatus self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_bool(self.running, serializer);
-    sse_encode_i_32(self.port, serializer);
-    sse_encode_String(self.token, serializer);
-    sse_encode_String(self.baseUrl, serializer);
   }
 
   @protected

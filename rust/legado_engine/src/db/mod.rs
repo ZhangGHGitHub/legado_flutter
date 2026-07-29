@@ -1559,10 +1559,6 @@ pub fn init_global(path: &str) -> Result<(), DbError> {
     Ok(())
 }
 
-pub fn is_initialized() -> bool {
-    DB.get().is_some()
-}
-
 fn with_db<F, T>(f: F) -> Result<T, String>
 where
     F: FnOnce(&EngineDb) -> Result<T, DbError>,

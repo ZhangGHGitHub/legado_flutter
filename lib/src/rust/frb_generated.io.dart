@@ -228,9 +228,6 @@ abstract class LegadoEngineApiImplPlatform
   BigInt dco_decode_usize(dynamic raw);
 
   @protected
-  WebApiStatus dco_decode_web_api_status(dynamic raw);
-
-  @protected
   WebDavEntry dco_decode_web_dav_entry(dynamic raw);
 
   @protected
@@ -449,9 +446,6 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   BigInt sse_decode_usize(SseDeserializer deserializer);
-
-  @protected
-  WebApiStatus sse_decode_web_api_status(SseDeserializer deserializer);
 
   @protected
   WebDavEntry sse_decode_web_dav_entry(SseDeserializer deserializer);
@@ -738,9 +732,6 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_web_api_status(WebApiStatus self, SseSerializer serializer);
 
   @protected
   void sse_encode_web_dav_entry(WebDavEntry self, SseSerializer serializer);

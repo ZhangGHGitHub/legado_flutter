@@ -178,15 +178,6 @@ pub fn engine_version() -> String {
     "0.5.6".to_string()
 }
 
-/// Web API 运行状态
-#[derive(Debug, Clone)]
-pub struct WebApiStatus {
-    pub running: bool,
-    pub port: i32,
-    pub token: String,
-    pub base_url: String,
-}
-
 /// 规则调试步骤
 #[derive(Debug, Clone)]
 pub struct RuleDebugStep {
@@ -319,24 +310,6 @@ pub async fn debug_search(source_json: String, keyword: String) -> Result<DebugR
 #[frb]
 pub async fn debug_toc(source_json: String, book_url: String) -> Result<DebugResult, String> {
     debug::debug_toc(&source_json, &book_url).await
-}
-
-/// 启动 Web API 服务
-#[frb]
-pub async fn start_web_api(port: i32, token: String) -> Result<WebApiStatus, String> {
-    crate::web_server::start_web_api(port, token).await
-}
-
-/// 停止 Web API 服务
-#[frb]
-pub async fn stop_web_api() -> Result<(), String> {
-    crate::web_server::stop_web_api().await
-}
-
-/// Web API 运行状态
-#[frb(sync)]
-pub fn web_api_status() -> WebApiStatus {
-    crate::web_server::web_api_status()
 }
 
 /// TXT 分章

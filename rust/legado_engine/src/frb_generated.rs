@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1569356682;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -991036702;
 
 // Section: executor
 
@@ -2991,78 +2991,6 @@ fn wire__crate__api__network__start_http_request_trace_impl(
         },
     )
 }
-fn wire__crate__api__start_web_api_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "start_web_api",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_port = <i32>::sse_decode(&mut deserializer);
-            let api_token = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, String>(
-                    (move || async move {
-                        let output_ok = crate::api::start_web_api(api_port, api_token).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__stop_web_api_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "stop_web_api",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, String>(
-                    (move || async move {
-                        let output_ok = crate::api::stop_web_api().await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
 fn wire__crate__api__upsert_bookmark_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -3229,35 +3157,6 @@ fn wire__crate__api__validate__validate_source_impl(
                     .await,
                 )
             }
-        },
-    )
-}
-fn wire__crate__api__web_api_status_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "web_api_status",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(crate::api::web_api_status())?;
-                Ok(output_ok)
-            })())
         },
     )
 }
@@ -4434,22 +4333,6 @@ impl SseDecode for usize {
     }
 }
 
-impl SseDecode for crate::api::WebApiStatus {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_running = <bool>::sse_decode(deserializer);
-        let mut var_port = <i32>::sse_decode(deserializer);
-        let mut var_token = <String>::sse_decode(deserializer);
-        let mut var_baseUrl = <String>::sse_decode(deserializer);
-        return crate::api::WebApiStatus {
-            running: var_running,
-            port: var_port,
-            token: var_token,
-            base_url: var_baseUrl,
-        };
-    }
-}
-
 impl SseDecode for crate::api::webdav::WebDavEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4547,18 +4430,16 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         83 => wire__crate__api__serve_source_browser_host_impl(port, ptr, rust_vec_len, data_len),
-        88 => wire__crate__api__start_web_api_impl(port, ptr, rust_vec_len, data_len),
-        89 => wire__crate__api__stop_web_api_impl(port, ptr, rust_vec_len, data_len),
-        92 => wire__crate__api__validate_source_impl(port, ptr, rust_vec_len, data_len),
-        93 => wire__crate__api__validate__validate_source_impl(port, ptr, rust_vec_len, data_len),
-        95 => wire__crate__api__webdav__webdav_check_impl(port, ptr, rust_vec_len, data_len),
-        96 => wire__crate__api__webdav__webdav_delete_impl(port, ptr, rust_vec_len, data_len),
-        97 => wire__crate__api__webdav__webdav_download_impl(port, ptr, rust_vec_len, data_len),
-        98 => wire__crate__api__webdav__webdav_ensure_dir_impl(port, ptr, rust_vec_len, data_len),
-        99 => wire__crate__api__webdav__webdav_list_impl(port, ptr, rust_vec_len, data_len),
-        100 => wire__crate__api__webdav__webdav_move_impl(port, ptr, rust_vec_len, data_len),
-        101 => wire__crate__api__webdav__webdav_upload_impl(port, ptr, rust_vec_len, data_len),
-        102 => {
+        90 => wire__crate__api__validate_source_impl(port, ptr, rust_vec_len, data_len),
+        91 => wire__crate__api__validate__validate_source_impl(port, ptr, rust_vec_len, data_len),
+        92 => wire__crate__api__webdav__webdav_check_impl(port, ptr, rust_vec_len, data_len),
+        93 => wire__crate__api__webdav__webdav_delete_impl(port, ptr, rust_vec_len, data_len),
+        94 => wire__crate__api__webdav__webdav_download_impl(port, ptr, rust_vec_len, data_len),
+        95 => wire__crate__api__webdav__webdav_ensure_dir_impl(port, ptr, rust_vec_len, data_len),
+        96 => wire__crate__api__webdav__webdav_list_impl(port, ptr, rust_vec_len, data_len),
+        97 => wire__crate__api__webdav__webdav_move_impl(port, ptr, rust_vec_len, data_len),
+        98 => wire__crate__api__webdav__webdav_upload_impl(port, ptr, rust_vec_len, data_len),
+        99 => {
             wire__crate__api__webdav__webdav_upload_if_match_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -4630,9 +4511,8 @@ fn pde_ffi_dispatcher_sync_impl(
         85 => wire__crate__api__network__set_source_cookie_impl(ptr, rust_vec_len, data_len),
         86 => wire__crate__api__network__source_cookie_domain_impl(ptr, rust_vec_len, data_len),
         87 => wire__crate__api__network__start_http_request_trace_impl(ptr, rust_vec_len, data_len),
-        90 => wire__crate__api__upsert_bookmark_impl(ptr, rust_vec_len, data_len),
-        91 => wire__crate__api__upsert_note_impl(ptr, rust_vec_len, data_len),
-        94 => wire__crate__api__web_api_status_impl(ptr, rust_vec_len, data_len),
+        88 => wire__crate__api__upsert_bookmark_impl(ptr, rust_vec_len, data_len),
+        89 => wire__crate__api__upsert_note_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -5142,24 +5022,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::SourceValidation>
     for crate::api::SourceValidation
 {
     fn into_into_dart(self) -> crate::api::SourceValidation {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::WebApiStatus {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.running.into_into_dart().into_dart(),
-            self.port.into_into_dart().into_dart(),
-            self.token.into_into_dart().into_dart(),
-            self.base_url.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::WebApiStatus {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::WebApiStatus> for crate::api::WebApiStatus {
-    fn into_into_dart(self) -> crate::api::WebApiStatus {
         self
     }
 }
@@ -5733,16 +5595,6 @@ impl SseEncode for usize {
             .cursor
             .write_u64::<NativeEndian>(self as _)
             .unwrap();
-    }
-}
-
-impl SseEncode for crate::api::WebApiStatus {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.running, serializer);
-        <i32>::sse_encode(self.port, serializer);
-        <String>::sse_encode(self.token, serializer);
-        <String>::sse_encode(self.base_url, serializer);
     }
 }
 

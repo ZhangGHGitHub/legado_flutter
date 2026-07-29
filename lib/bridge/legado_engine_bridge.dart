@@ -309,28 +309,6 @@ class LegadoEngineBridge {
     }
   }
 
-  static Future<rust_api.WebApiStatus> startWebApi({
-    required int port,
-    required String token,
-  }) async {
-    if (!_available) throw StateError('Rust engine not available');
-    return rust_api.startWebApi(port: port, token: token);
-  }
-
-  static Future<void> stopWebApi() async {
-    if (!_available) return;
-    await rust_api.stopWebApi();
-  }
-
-  static rust_api.WebApiStatus? webApiStatus() {
-    if (!_available) return null;
-    try {
-      return rust_api.webApiStatus();
-    } catch (_) {
-      return null;
-    }
-  }
-
   static Future<rust_api.DebugResult> debugSearch(
     BookSource source,
     String keyword,

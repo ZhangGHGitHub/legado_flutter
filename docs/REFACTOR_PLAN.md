@@ -28,8 +28,8 @@
   审计资料，不得作为当前重构的执行顺序或 R6 退出依据。UI 对照只用于受控状态下的兼容验收，
   不能取代目录、正文断行、分页、章节身份和阅读位置契约。
 - R0 基线已经建立；2026-07-29 扩展静态检查后，R1 的默认适配器组装、R2 的网络/TLS、R3 的
-  正文/替换/压缩包、R5 的本地 Web 服务归属和 R6 应用用例依赖重新进入迁移队列。正式/主流
-  WebDAV 与目标平台/UI 发布验收仍未完成。
+  正文/替换/压缩包已完成复核和迁移，R5 的本地 Web 服务归属已迁至 Dart IO。正式/主流
+  WebDAV 与目标平台/UI 发布验收仍未完成，R6 应用用例依赖继续按队列处理。
 - 2026-07-27 用户确认“要数据库迁移”后，R1 增加 `R1-12 Kotlin Room v99 数据迁移门禁`；
   该门禁完成前不得把 R1 标记为最终退出，也不得以历史 R2-R6 记录替代当前阶段退出条件。
 
@@ -142,7 +142,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 将目录请求、分页合并、章节持久化、`reverseToc`、当前章定位、字数/书签元数据和列表渲染分离。目录首帧只依赖可见数据；网络、数据库和非首帧元数据不得阻塞 UI。原版目录顺序和 `index` 由 [LEGADO_COMPATIBILITY_DEVELOPMENT_PLAN.md](./LEGADO_COMPATIBILITY_DEVELOPMENT_PLAN.md) 的 2A/2B 门禁验收。
 
-当前进度：2A 已完成原版目录顺序、书籍 `readConfig.reverseToc` 持久化、目录切换反转已保存章节并连续重写 0-based `index`、远端目录 index 归一化和目录首帧不等待缓存字数/书签元数据。2B 已在雷电 `emulator-5556` 上完成 2000 章合成冷/热首帧与滚动帧基线、`Book.tocUrl` 持久化、重复详情请求消除、受控目录分页并发和同一本真实线上书的原版/重写版对比；5 轮真实 UI 冷/热请求计数、目录首帧、Release 帧和 PSS 证据已记录。
+当前进度：2A 已完成原版目录顺序、书籍 `readConfig.reverseToc` 持久化、目录切换反转已保存章节并连续重写 0-based `index`、远端目录 index 归一化和目录首帧不等待缓存字数/书签元数据。2B 已在雷电 `emulator-5556` 上完成 2000 章合成冷/热首帧与滚动帧基线、`Book.tocUrl` 持久化、重复详情请求消除、受控目录分页并发和同一本真实线上书的原版/重写版对比；5 轮真实 UI 冷/热请求计数、目录首帧、Release 帧和 PSS 证据已记录。R3 最终退出后再次只读复核目录顺序、章节 `index/identity`、目录分页和可见行元数据，未发现回归，R4 不重开。
 
 退出条件：2B 冷热缓存性能数据和结构性卡顿修复通过，且没有引入跨层依赖。当前已满足，后续按 R5 继续模块 4 收尾。
 
@@ -151,6 +151,8 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 统一阅读进度、书签、备份和 WebDAV 的 repository、冲突策略、任务门禁和错误传播；UI 不直接控制上传/下载细节。R5 采用两层验收：本地自建 WebDAV 用于开发退出门禁，正式或主流 WebDAV 服务用于发布前真实验收。
 
 开发退出条件：本地数据安全、ETag/冲突重试、备份格式、失败策略和本地自建 WebDAV 应用回归通过。发布前附加条件：必须使用正式或主流 WebDAV 服务至少完成一次真实验收，覆盖 TLS、认证/权限、服务端 ETag/412、MOVE、ZIP 上传下载恢复和失败策略；未完成时不得声明发布验收完成。
+
+当前进度：本地 Web API 的监听、路由、Token 认证、响应和运行状态已迁至 Dart IO；业务查询经 `WebApiDataPort` 和 Repository 进入既有数据库能力。Rust Web Server、FRB 生命周期 API/DTO 和旧 Rust HTTP 集成测试已删除，`/api/*` 兼容行为由 Dart 协议测试及真实 Rust 数据库集成测试覆盖。正式或主流 WebDAV 发布验收仍待执行。
 
 #### R6：Feature UI 与平台适配收敛
 
@@ -278,7 +280,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 | 笔记 CRUD + Markdown 导出 | ✅ |
 | 数据库备份/恢复 (JSON) | ✅ |
 | WebDAV 客户端 (list/up/down/del) | ✅ |
-| Web API 服务器 (axum + token auth + CORS) | ✅ |
+| Web API 服务器（Dart IO + token auth） | ✅ |
 | 网络代理/DNS 配置 | ✅ |
 | 本地 TXT/EPUB 解析 | ✅ |
 
@@ -333,7 +335,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 | 类型 | 文件数 |
 |------|:---:|
 | Rust 单元测试 | `src/tests.rs` |
-| Rust E2E 测试 | 3 个（builtin / phase3 / web_api） |
+| Rust 集成测试 | 11 个（Web API 已迁至 Dart 集成测试） |
 | Rust 性能基准 | `benches/rule_bench.rs` |
 | Dart Widget 测试 | 11 个 |
 | Dart Service 测试 | 10 个 |
@@ -463,7 +465,6 @@ BookplateService（数据层）已完成 ✅，缺失的是 UI 卡片。
 | 缺失端点 | 说明 |
 |----------|------|
 | `GET/POST /api/notes` | 想法 CRUD |
-| `GET /api/records` | 阅读记录查询 |
 | `GET /api/books/search` | 跨源搜索 API |
 | `POST /api/sources/validate` | 远程触发书源校验 |
 | `GET /api/export/notes` | 笔记导出下载 |
@@ -606,7 +607,7 @@ Week 12:
 | 大类 | 完成度 | 说明 |
 |------|:---:|------|
 | **Rust 书源引擎** | 95% | 核心全完成，缺图片解密/字体替换（低优） |
-| **Rust DB & 基础设施** | 95% | rusqlite + WebDAV + Web API + 备份 + 笔记 全部完成 |
+| **Rust DB & 远端基础设施** | 95% | rusqlite + WebDAV + 备份 + 笔记；本地 Web API 由 Dart IO 承载 |
 | **Flutter UI** | 85% | 核心页面全有，缺笔记交互/小票卡片/登录表单 |
 | **Jingshiro 差异化功能** | 60% | 笔记后端✅/AI 基础✅，缺交互+工具调用+小票UI |
 | **多平台** | 29% | 仅 Android/Windows 可用 |
