@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/source_validation_result.dart';
+import '../domain/source/source_validation_result.dart';
 
 Map<String, dynamic> resultToJson(SourceValidationResult r) => {
       'searchOk': r.searchOk,

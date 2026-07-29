@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:legado_flutter/application/source_login/login_row_ui.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
-import '../../models/login_row_ui.dart';
 import '../../services/source_login_prefs.dart';
 import '../../services/source_login_service.dart';
 import '../../widgets/legado_popup_menu.dart';

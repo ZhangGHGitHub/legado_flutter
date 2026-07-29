@@ -1,4 +1,4 @@
-import '../models/book_progress.dart';
+import '../domain/reader/book_progress.dart';
 
 /// The relationship between two replicas after comparing them with a common
 /// synchronization baseline.

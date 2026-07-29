@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R1：完成领域模型归属收尾。`BookProgress` 迁入纯 domain，带时钟的 `fromBook` 创建移入 application factory，WebDAV JSON 字段、UTF-16 章内位置和冲突比较不变；登录行 UI DTO 迁入 application，书源校验结果迁入 domain，默认校验词策略迁入 application，旧 `lib/models` 路径仅保留兼容导出。合并定向回归 `46/46`，Flutter 串行全量 `578` 通过（`3` 项按既有条件跳过），Rust `legado_engine` 全量通过，Android Room v99 两阶段 Driver smoke 再次通过；R1 最终退出，既有 `146` 条 Feature 偏好/服务依赖继续按 R2/R6 处理。
+
 - R1：`BookSource` 与 `RssSource` 迁入纯 domain，旧路径仅兼容导出；保留静态 JSON API，确保嵌套规则、`rawSourceJson`、未知字段、header/login/jsLib、RSS raw 与 engine JSON 往返不变。关键源模型/仓储/端口/RuleSub/RSS 回归 `30/30`，全仓 analyze 通过。
 
 - R1：`Book`、`BookReadConfig` 与 `Chapter` 迁入 `domain/book`，旧模型路径仅兼容导出；阅读轮次中文文案移入 application policy，数据库继续统一经过 `DatabaseRecordCodec`。UTF-16 FNV-1a、无 URL 章节 ID、目录合并、旧 `reverseToc`、模拟追读 clamp 和阅读位置联合回归 `29/29`，全仓 analyze 通过。

@@ -7,7 +7,7 @@ import '../domain/ports/book_progress_sync_store.dart';
 import '../domain/ports/webdav_repository.dart';
 import '../domain/remote/webdav_entry.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import '../models/book_progress.dart';
+import '../domain/reader/book_progress.dart';
 import 'webdav_prefs.dart';
 import 'sync_conflict_policy.dart';
 

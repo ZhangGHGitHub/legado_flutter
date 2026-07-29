@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/config/app_config.dart';
-import 'package:legado_flutter/models/book_progress.dart';
+import 'package:legado_flutter/domain/reader/book_progress.dart';
 import 'package:legado_flutter/services/book_progress_sync.dart';
 import 'package:legado_flutter/services/webdav_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';

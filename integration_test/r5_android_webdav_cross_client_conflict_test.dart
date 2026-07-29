@@ -6,7 +6,7 @@ import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
 import 'package:legado_flutter/domain/annotation/bookmark_snapshot.dart';
 import 'package:legado_flutter/domain/ports/webdav_repository.dart';
 import 'package:legado_flutter/infrastructure/webdav/frb_webdav_repository.dart';
-import 'package:legado_flutter/models/book_progress.dart';
+import 'package:legado_flutter/domain/reader/book_progress.dart';
 import 'package:legado_flutter/services/book_progress_sync.dart';
 import 'package:legado_flutter/services/bookmark_service.dart';
 import 'package:legado_flutter/services/sync_conflict_policy.dart';

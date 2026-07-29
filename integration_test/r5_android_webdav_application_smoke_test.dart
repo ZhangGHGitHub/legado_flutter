@@ -13,7 +13,7 @@ import 'package:legado_flutter/infrastructure/file_system/backup_local_file_adap
 import 'package:legado_flutter/infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
 import 'package:legado_flutter/infrastructure/webdav/frb_webdav_repository.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import 'package:legado_flutter/models/book_progress.dart';
+import 'package:legado_flutter/domain/reader/book_progress.dart';
 import 'package:legado_flutter/features/settings/backup_config_page.dart';
 import 'package:legado_flutter/services/backup_service.dart';
 import 'package:legado_flutter/services/book_progress_sync.dart';

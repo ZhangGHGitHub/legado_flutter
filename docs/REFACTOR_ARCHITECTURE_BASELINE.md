@@ -2128,3 +2128,32 @@ Flutter 对照结果：
 完整批次另含 JS 兼容 `2/2`，可选在线检查按既定逻辑因 HTTP 400 跳过；全仓 analyze 无诊断。
 
 边界结论：书源与 RSS 源模型归属完成；阅读进度模型是 R1 模型归属的最后一批。
+
+## 103. 2026-07-29：R1 阅读进度与模型归属最终退出
+
+迁移范围：
+
+- `BookProgress` 迁入 `lib/domain/reader`；WebDAV JSON 字段、进度前后比较和 `durChapterPos` 的
+  UTF-16 章内位置语义保持不变。
+- 原 `BookProgress.fromBook` 的系统时钟读取移入 application factory，并支持注入时钟；Reader 的
+  两个上传入口改用该工厂。
+- `LoginRowUi` 作为 UI/application DTO 迁入 `lib/application/source_login`；书源校验结果迁入
+  `lib/domain/source`，默认校验关键词迁入 application policy。
+- `lib/models` 已全面复核，现有文件均只保留兼容 export；`lib/model/read_book.dart` 是阅读会话对象，
+  不作为持久化领域实体迁移。
+
+验证结果：
+
+- 合并定向回归 `46/46`；`flutter analyze --no-pub` 无诊断；架构脚本 fixture 测试通过。
+- `flutter test --no-pub --concurrency=1`：`578` 通过、`3` 项按既有条件跳过。
+- `cargo test -p legado_engine`：命令退出 `0`，核心单测 `127/127`，其余集成与文档测试通过，
+  `1` 项既有测试 ignored。
+- Android `emulator-5556` 重新执行 Room v99 两阶段 Driver smoke：import 与强停后的 verify 均
+  `1/1` 通过，覆盖重启读取、重复导入幂等、本地备份、清空与恢复。
+- 真实架构扫描仍报告既有 `146` 条后续 backlog：Feature 直接 SharedPreferences `14` 条、Feature
+  直接业务 service `132` 条；domain/model 纯度与核心具体基础设施违规均为 `0`。
+- `git diff --check` 在提交前最终执行；未修改 `legado-main/`、正文、目录、分页、章节身份或断行规则。
+
+边界结论：R1 的领域模型、数据访问、Room v99 迁移、默认适配器和组合根退出条件均已满足，R1
+最终退出。后续按固定顺序进入 R2；`146` 条 Feature backlog 和全局启动可靠性 P0/P1 任务继续保留，
+不得描述为已完成或以白名单消除。

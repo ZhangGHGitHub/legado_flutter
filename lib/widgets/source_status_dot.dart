@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:legado_flutter/domain/source/book_source.dart';
-import '../models/source_validation_result.dart';
+import 'package:legado_flutter/domain/source/source_validation_result.dart';
 import '../theme/legado_tokens.dart';
 
 /// 书源校验状态点 — 绿=通过 / 红=失败 / 灰=未校验（对齐 Jingshiro）

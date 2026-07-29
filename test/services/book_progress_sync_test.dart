@@ -7,7 +7,7 @@ import 'package:legado_flutter/domain/remote/webdav_entry.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:legado_flutter/models/book_progress.dart';
+import 'package:legado_flutter/domain/reader/book_progress.dart';
 import 'package:legado_flutter/services/book_progress_sync.dart';
 import 'package:legado_flutter/services/webdav_prefs.dart';
 

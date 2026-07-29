@@ -12,6 +12,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../application/reader/reading_position_mapper.dart';
+import '../../application/reader/book_progress_factory.dart';
+import '../../domain/reader/book_progress.dart';
 import '../../model/read_book.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
@@ -27,7 +29,6 @@ import '../cache/download_choice_dialog.dart';
 import '../cache/download_helpers.dart';
 import 'ai_chat_page.dart';
 import '../../help/bookmark_hint.dart';
-import '../../models/book_progress.dart';
 import '../../services/book_progress_sync.dart';
 import '../../services/book_reader_prefs.dart';
 import '../../services/bookmark_service.dart';
@@ -2204,7 +2205,7 @@ class _ReaderPageState extends State<ReaderPage> {
         progress.isBehind(chapterIndex: localIdx, chapterPos: localPos)) {
       try {
         await progressSync.uploadBookProgress(
-          BookProgress.fromBook(
+          BookProgressFactory.fromBook(
             widget.book,
             durChapterIndex: localIdx,
             durChapterPos: localPos,
@@ -2265,7 +2266,7 @@ class _ReaderPageState extends State<ReaderPage> {
     final chapter = widget.allChapters[_currentIndex];
     try {
       await progressSync.uploadBookProgress(
-        BookProgress.fromBook(
+        BookProgressFactory.fromBook(
           widget.book,
           durChapterIndex: _currentIndex,
           durChapterPos: _currentChapterPosition(),
