@@ -2,11 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'color_presets.dart';
 import 'legado_tokens.dart';
 import 'theme_config_model.dart';
+import '../application/preferences/shared_preferences_runtime.dart';
 import '../services/reader_font_loader.dart';
 
 const _themeModeKey = 'legado_theme_mode';
@@ -35,7 +35,11 @@ class ThemeModeController extends ChangeNotifier {
   String get presetLabel => LegadoColorPresets.infoFor(_preset).label;
 
   Future<void> load() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    if (prefs == null) {
+      notifyListeners();
+      return;
+    }
     final rawMode = prefs.getString(_themeModeKey);
     _mode = LegadoThemeMode.values.firstWhere(
       (m) => m.name == rawMode,
@@ -43,17 +47,22 @@ class ThemeModeController extends ChangeNotifier {
     );
     _preset = LegadoColorPresets.parse(prefs.getString(_colorPresetKey));
     final colorsJson = prefs.getString(_customColorsKey);
-    if (colorsJson != null && colorsJson.isNotEmpty) {
-      final map = jsonDecode(colorsJson) as Map<String, dynamic>;
-      _customColors = ThemeColorRoles.colorsFromHex(map);
-    } else {
+    try {
+      if (colorsJson != null && colorsJson.isNotEmpty) {
+        final map = jsonDecode(colorsJson) as Map<String, dynamic>;
+        _customColors = ThemeColorRoles.colorsFromHex(map);
+      } else {
+        _customColors = {};
+      }
+    } catch (_) {
       _customColors = {};
     }
     notifyListeners();
   }
 
   Future<void> _persistCustomColors() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    if (prefs == null) return;
     if (_customColors.isEmpty) {
       await prefs.remove(_customColorsKey);
       return;
@@ -67,15 +76,15 @@ class ThemeModeController extends ChangeNotifier {
   Future<void> setMode(LegadoThemeMode mode) async {
     _mode = mode;
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_themeModeKey, mode.name);
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    await prefs?.setString(_themeModeKey, mode.name);
   }
 
   Future<void> setPreset(LegadoColorPreset preset) async {
     _preset = preset;
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_colorPresetKey, preset.name);
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    await prefs?.setString(_colorPresetKey, preset.name);
   }
 
   Future<void> setCustomColor(String role, Color? color) async {

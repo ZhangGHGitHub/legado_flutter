@@ -1,22 +1,24 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../domain/ports/book_group_prefs.dart';
+import '../../application/preferences/shared_preferences_runtime.dart';
 
 /// SharedPreferences adapter for the bookshelf group JSON document.
 final class SharedPreferencesBookGroupPrefs implements BookGroupPrefsPort {
   const SharedPreferencesBookGroupPrefs(this._prefs);
 
-  final SharedPreferences _prefs;
+  final SharedPreferences? _prefs;
 
   static Future<SharedPreferencesBookGroupPrefs> load() async {
     return SharedPreferencesBookGroupPrefs(
-      await SharedPreferences.getInstance(),
+      await SharedPreferencesRuntime.getOrNull(),
     );
   }
 
   @override
-  Future<String?> read(String key) async => _prefs.getString(key);
+  Future<String?> read(String key) async => _prefs?.getString(key);
 
   @override
-  Future<bool> write(String key, String value) => _prefs.setString(key, value);
+  Future<bool> write(String key, String value) =>
+      _prefs?.setString(key, value) ?? Future<bool>.value(false);
 }

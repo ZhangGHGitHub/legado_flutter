@@ -10,6 +10,7 @@ import 'package:legado_flutter/domain/ports/public_text_fetch_port.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/infrastructure/content/content_processor_adapter.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_book_source_validation_port.dart';
+import 'package:legado_flutter/application/preferences/shared_preferences_runtime.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -44,12 +45,14 @@ void main() {
   });
 
   setUp(() async {
+    SharedPreferencesRuntime.resetForTest();
     AppConfig.resetForTest();
     await AppConfig.instance.load();
   });
 
   tearDown(() {
     AppConfig.resetForTest();
+    SharedPreferencesRuntime.resetForTest();
   });
 
   testWidgets('MainShell shows four bottom tabs', (WidgetTester tester) async {
@@ -172,6 +175,7 @@ void main() {
     'MainShell shows crash recovery after privacy and consumes marker once',
     (WidgetTester tester) async {
       if (!rustReady) return;
+      SharedPreferencesRuntime.resetForTest();
       SharedPreferences.setMockInitialValues({
         'legado_privacy_accepted': false,
       });

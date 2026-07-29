@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../application/preferences/shared_preferences_runtime.dart';
 
 /// 应用运行日志 — 对齐 Jingshiro [AppLog]：内存环缓冲最多 100 条，最新在前。
 class AppLogEntry {
@@ -35,8 +36,8 @@ abstract final class AppLog {
     if (_loaded) return;
     _loaded = true;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getStringList(_prefsKey) ?? const [];
+      final prefs = await SharedPreferencesRuntime.getOrNull();
+      final raw = prefs?.getStringList(_prefsKey) ?? const [];
       for (final line in raw.take(_maxEntries)) {
         _entries.add(
           AppLogEntry(time: DateTime.now(), level: 'I', message: line),
@@ -47,8 +48,8 @@ abstract final class AppLog {
 
   static Future<void> _persist() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(
+      final prefs = await SharedPreferencesRuntime.getOrNull();
+      await prefs?.setStringList(
         _prefsKey,
         _entries.map((e) => e.line).toList(growable: false),
       );

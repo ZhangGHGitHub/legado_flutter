@@ -7,6 +7,7 @@ import 'package:legado_flutter/bridge/legado_db_bridge.dart';
 import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
 import 'package:legado_flutter/domain/ports/backup_port.dart';
 import 'package:legado_flutter/infrastructure/database/frb_backup_port.dart';
+import 'package:legado_flutter/application/preferences/shared_preferences_runtime.dart';
 import 'package:legado_flutter/services/backup_service.dart';
 import 'package:legado_flutter/services/webdav_prefs.dart';
 import 'package:path/path.dart' as p;
@@ -206,6 +207,7 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'webdav_url': 'https://dav.example.com/dav',
     });
+    SharedPreferencesRuntime.resetForTest();
 
     await expectLater(
       _service().backupToWebDav(),
@@ -225,6 +227,7 @@ void main() {
       'webdav_account': 'account',
       'webdav_password': 'password',
     });
+    SharedPreferencesRuntime.resetForTest();
 
     await expectLater(
       _service().renameWebDavBackup('/legado/device/backup.json', '../x'),

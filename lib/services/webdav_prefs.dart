@@ -1,4 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import '../application/preferences/shared_preferences_runtime.dart';
 
 /// WebDAV 配置（仅本地存储，F3 UI 先行）
 class WebDavConfig {
@@ -19,8 +19,7 @@ class WebDavConfig {
   bool get isConfigured => url.trim().isNotEmpty;
 
   /// 对齐 Jingshiro [AppWebDav.upConfig]：需账号+密码才真正可用。
-  bool get hasCredentials =>
-      account.trim().isNotEmpty && password.isNotEmpty;
+  bool get hasCredentials => account.trim().isNotEmpty && password.isNotEmpty;
 
   /// 远程书籍 / 同步就绪（URL + 凭证）。
   bool get isReady => isConfigured && hasCredentials;
@@ -57,7 +56,8 @@ abstract final class WebDavPrefs {
   static const webServiceKey = 'web_service_on';
 
   static Future<WebDavConfig> load() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    if (prefs == null) return const WebDavConfig();
     return WebDavConfig(
       url: prefs.getString(_urlKey) ?? '',
       account: prefs.getString(_accountKey) ?? '',
@@ -68,7 +68,8 @@ abstract final class WebDavPrefs {
   }
 
   static Future<void> save(WebDavConfig config) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    if (prefs == null) return;
     await prefs.setString(_urlKey, config.url);
     await prefs.setString(_accountKey, config.account);
     await prefs.setString(_passwordKey, config.password);
@@ -77,12 +78,12 @@ abstract final class WebDavPrefs {
   }
 
   static Future<bool> loadWebServiceOn() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(webServiceKey) ?? false;
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    return prefs?.getBool(webServiceKey) ?? false;
   }
 
   static Future<void> saveWebServiceOn(bool on) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(webServiceKey, on);
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    await prefs?.setBool(webServiceKey, on);
   }
 }

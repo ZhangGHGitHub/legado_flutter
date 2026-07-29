@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/crash/crash_report.dart';
 import 'package:legado_flutter/infrastructure/preferences/shared_preferences_crash_report_store.dart';
+import 'package:legado_flutter/application/preferences/shared_preferences_runtime.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -10,6 +11,7 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    SharedPreferencesRuntime.resetForTest();
   });
 
   test('round-trips the latest report and consumes only its marker', () async {
@@ -35,6 +37,7 @@ void main() {
         'legado_latest_crash_report': jsonEncode({'occurredAt': 'invalid'}),
         'legado_crash_report_pending': true,
       });
+      SharedPreferencesRuntime.resetForTest();
       const store = SharedPreferencesCrashReportStore();
 
       expect(await store.readPending(), isNull);

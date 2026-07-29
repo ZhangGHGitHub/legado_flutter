@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../domain/crash/crash_report.dart';
 import '../../config/app_config.dart';
@@ -19,6 +18,7 @@ import '../bookshelf/bookshelf_page.dart';
 import '../explore/explore_tab_page.dart';
 import '../../features/my/my_page.dart';
 import '../../features/rss/rss_tab_page.dart';
+import '../../application/preferences/shared_preferences_runtime.dart';
 import '../sources/rule_sub_page.dart';
 import 'crash_recovery_prompt.dart';
 
@@ -135,8 +135,8 @@ class _MainShellState extends State<MainShell> {
   }
 
   Future<void> _maybeShowPrivacy() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool(_privacyAcceptedKey) == true) return;
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    if (prefs?.getBool(_privacyAcceptedKey) == true) return;
     if (!mounted) return;
 
     await showDialog<void>(
@@ -161,7 +161,7 @@ class _MainShellState extends State<MainShell> {
           ),
           FilledButton(
             onPressed: () async {
-              await prefs.setBool(_privacyAcceptedKey, true);
+              await prefs?.setBool(_privacyAcceptedKey, true);
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: const Text('同意并继续'),

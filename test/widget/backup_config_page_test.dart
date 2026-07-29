@@ -5,6 +5,7 @@ import 'package:legado_flutter/domain/ports/legacy_room_import_use_case.dart';
 import 'package:legado_flutter/domain/remote/webdav_entry.dart';
 import 'package:legado_flutter/domain/remote/legacy_room_import_report.dart';
 import 'package:legado_flutter/features/settings/backup_config_page.dart';
+import 'package:legado_flutter/application/preferences/shared_preferences_runtime.dart';
 import 'package:legado_flutter/services/backup_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -98,6 +99,7 @@ Future<void> _pumpWebDavPage(WidgetTester tester, BackupService service) async {
     'webdav_account': 'reader',
     'webdav_password': 'password',
   });
+  SharedPreferencesRuntime.resetForTest();
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
@@ -139,6 +141,7 @@ void main() {
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
+    SharedPreferencesRuntime.resetForTest();
     final port = _FakeBackupLocalFilePort([
       const LocalBackupEntry(
         name: 'backup2026-07-26.zip',

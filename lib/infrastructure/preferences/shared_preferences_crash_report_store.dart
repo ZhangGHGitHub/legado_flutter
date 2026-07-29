@@ -1,9 +1,8 @@
 import 'dart:convert';
 
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../../domain/crash/crash_report.dart';
 import '../../domain/ports/crash_report_store.dart';
+import '../../application/preferences/shared_preferences_runtime.dart';
 
 class SharedPreferencesCrashReportStore implements CrashReportStore {
   const SharedPreferencesCrashReportStore();
@@ -13,23 +12,24 @@ class SharedPreferencesCrashReportStore implements CrashReportStore {
 
   @override
   Future<CrashReport?> readLatest() async {
-    final prefs = await SharedPreferences.getInstance();
-    return _decode(prefs.getString(_reportKey));
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    return _decode(prefs?.getString(_reportKey));
   }
 
   @override
   Future<CrashReport?> readPending() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool(_pendingKey) != true) return null;
-    final report = _decode(prefs.getString(_reportKey));
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    if (prefs?.getBool(_pendingKey) != true) return null;
+    final report = _decode(prefs?.getString(_reportKey));
     if (report != null) return report;
-    await prefs.setBool(_pendingKey, false);
+    await prefs?.setBool(_pendingKey, false);
     return null;
   }
 
   @override
   Future<void> writePending(CrashReport report) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    if (prefs == null) return;
     await _requireSuccess(
       prefs.setString(_reportKey, jsonEncode(report.toJson())),
       '写入崩溃报告失败',
@@ -39,13 +39,15 @@ class SharedPreferencesCrashReportStore implements CrashReportStore {
 
   @override
   Future<void> acknowledgePending() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    if (prefs == null) return;
     await _requireSuccess(prefs.setBool(_pendingKey, false), '清除崩溃标记失败');
   }
 
   @override
   Future<void> clear() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    if (prefs == null) return;
     await _requireSuccess(prefs.remove(_reportKey), '清除崩溃报告失败');
     await _requireSuccess(prefs.remove(_pendingKey), '清除崩溃标记失败');
   }

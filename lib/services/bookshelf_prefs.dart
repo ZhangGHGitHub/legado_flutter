@@ -1,6 +1,5 @@
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:legado_flutter/domain/book/book.dart';
+import '../application/preferences/shared_preferences_runtime.dart';
 
 /// 书架布局/排序偏好 — 对齐 Jingshiro PreferKey / AppConfig
 class BookshelfConfig {
@@ -52,6 +51,7 @@ abstract final class BookshelfPrefs {
   static const bookshelfLayoutKey = 'bookshelfLayout';
   static const bookshelfSortKey = 'bookshelfSort';
   static const shelfBookOrderKey = 'shelf_book_order';
+
   /// 旧键，读时回退
   static const shelfSortModeKey = 'shelf_sort_mode';
   static const showUnreadKey = 'showUnread';
@@ -68,7 +68,8 @@ abstract final class BookshelfPrefs {
   static BookshelfConfig get cached => _cached ?? const BookshelfConfig();
 
   static Future<void> migrateIfNeeded() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    if (prefs == null) return;
     if (!prefs.containsKey(bookshelfLayoutKey)) {
       // 旧版 bookGroupStyle=1 表示网格页 → 默认三列网格
       final style = prefs.getInt(bookGroupStyleKey) ?? 0;
@@ -76,23 +77,24 @@ abstract final class BookshelfPrefs {
     }
     if (!prefs.containsKey(bookshelfSortKey) &&
         prefs.containsKey(shelfSortModeKey)) {
-      await prefs.setInt(
-        bookshelfSortKey,
-        prefs.getInt(shelfSortModeKey) ?? 0,
-      );
+      await prefs.setInt(bookshelfSortKey, prefs.getInt(shelfSortModeKey) ?? 0);
     }
   }
 
   static Future<BookshelfConfig> load() async {
     await migrateIfNeeded();
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    if (prefs == null) {
+      const fallback = BookshelfConfig();
+      _cached = fallback;
+      return fallback;
+    }
     var groupStyle = prefs.getInt(bookGroupStyleKey) ?? 0;
     if (groupStyle < 0 || groupStyle > 1) groupStyle = 0;
     var layout = prefs.getInt(bookshelfLayoutKey) ?? 0;
     if (layout < 0 || layout > 6) layout = 0;
-    var sort = prefs.getInt(bookshelfSortKey) ??
-        prefs.getInt(shelfSortModeKey) ??
-        0;
+    var sort =
+        prefs.getInt(bookshelfSortKey) ?? prefs.getInt(shelfSortModeKey) ?? 0;
     if (sort < 0 || sort > 5) sort = 0;
     var showName = prefs.getInt(showBooknameKey) ?? 0;
     if (showName < 0 || showName > 2) showName = 0;
@@ -118,7 +120,11 @@ abstract final class BookshelfPrefs {
   }
 
   static Future<void> save(BookshelfConfig c) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    if (prefs == null) {
+      _cached = c;
+      return;
+    }
     await prefs.setInt(bookGroupStyleKey, c.bookGroupStyle.clamp(0, 1));
     await prefs.setInt(bookshelfLayoutKey, c.bookshelfLayout.clamp(0, 6));
     await prefs.setInt(bookshelfSortKey, c.bookshelfSort.clamp(0, 5));
@@ -162,13 +168,13 @@ abstract final class BookshelfPrefs {
   }
 
   static Future<List<String>> loadBookOrder() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(shelfBookOrderKey) ?? [];
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    return prefs?.getStringList(shelfBookOrderKey) ?? [];
   }
 
   static Future<void> saveBookOrder(List<String> ids) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(shelfBookOrderKey, ids);
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    await prefs?.setStringList(shelfBookOrderKey, ids);
   }
 
   static Future<int> loadSortMode() async {
@@ -177,7 +183,8 @@ abstract final class BookshelfPrefs {
   }
 
   static Future<void> saveSortMode(int mode) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    if (prefs == null) return;
     await prefs.setInt(bookshelfSortKey, mode.clamp(0, 5));
     await prefs.setInt(shelfSortModeKey, mode.clamp(0, 5));
   }

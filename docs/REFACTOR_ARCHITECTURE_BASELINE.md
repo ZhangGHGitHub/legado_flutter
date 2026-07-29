@@ -2533,3 +2533,20 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 架构扫描保持既有 `146` 条：SharedPreferences `14`、Feature 业务 service `132`；无新增类别，`legado-main/` 保持只读。
 
 边界结论：P0-1 已满足当前计划的捕获、持久化、启动阶段、一次性提示、日志查看和失败降级要求。下一固定任务为 P0-2 存储初始化安全；`MainShell` 隐私偏好迁移和 `AppLog` 统一分别留给 P0-2/P1-3，不混入本 checkpoint。
+
+## 121. 2026-07-30：R6/P0-2 存储初始化安全
+
+- 新增 `SharedPreferencesRuntime`，统一记录 `uninitialized`、`initializing`、`ready` 和 `failed` 状态；并发调用共享同一初始化 Future，失败返回 null、保留错误并允许后续显式重试。启动关键的书架分组、阅读进度同步、代码编辑器和崩溃报告 adapter 在存储不可用时返回空值、默认值或 `false` 写入结果。
+- `AppConfig`、主题、书架布局、WebDAV、隐私提示、AppLog 和数据路径均通过该运行时读取；初始化失败时保留内存默认值或当前内存状态，写入不抛出未捕获异常。MainShell 仍严格先执行隐私流程，再处理崩溃提示。
+- `LegadoDbBridge` 增加数据库初始化状态、并发初始化合并和失败记录。数据库初始化失败不再从组合根向首屏冒泡；数据库业务调用仍由 `requireReady` 返回带失败原因的 `StateError`，不伪造数据库可用状态。文件缓存 `hasCachedContent` 在路径创建/文件系统异常时返回 `false`。
+- 测试使用新增运行时 reset 隔离 `SharedPreferences.setMockInitialValues`，避免全量串行测试之间复用旧缓存；未放宽或删除业务断言。`legado-main/` 未修改，本批未改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- SharedPreferences 状态、并发竞态、失败重试和三个启动 adapter 定向 `4/4`；AppConfig、主题、书架、网络、文件缓存、MainShell、崩溃存储和备份回归 `43/43`。
+- `flutter analyze --no-pub`：`No issues found`。
+- `flutter test --no-pub --concurrency=1`：`663` 通过、`3` 项既有条件跳过。
+- `cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，其余集成、`legado_webdav` 和文档测试无失败。
+- 架构扫描为 `144` 条 backlog（本批从 `146` 降至 `144`，未新增或白名单化）；`legado-main/` 保持只读。
+
+边界结论：P0-2 已满足当前计划的存储初始化失败降级、并发初始化安全、数据库失败可识别和文件缓存安全探测要求。下一固定任务为 P0-3 启动任务隔离；偏好业务全面 port 化和统一诊断模型仍分别属于后续 backlog/P1-3，不在本批扩大范围。

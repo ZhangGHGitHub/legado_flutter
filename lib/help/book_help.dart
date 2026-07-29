@@ -106,8 +106,13 @@ class BookHelp {
 
   /// 是否已有文件缓存
   static Future<bool> hasCachedContent(String bookId, String chapterId) async {
-    final file = await _chapterFile(bookId, chapterId);
-    return file.exists();
+    try {
+      final file = await _chapterFile(bookId, chapterId);
+      return file.exists();
+    } catch (e) {
+      debugPrint('BookHelp 检查缓存失败: $e');
+      return false;
+    }
   }
 
   /// 列出某书已有正文文件缓存的章节 id（文件名已 sanitize）

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/config/app_config.dart';
+import 'package:legado_flutter/application/preferences/shared_preferences_runtime.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -7,11 +8,13 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    SharedPreferencesRuntime.resetForTest();
     AppConfig.resetForTest();
   });
 
   tearDown(() {
     AppConfig.resetForTest();
+    SharedPreferencesRuntime.resetForTest();
   });
 
   test('defaults visibility and book progress sync to true', () async {
@@ -36,4 +39,24 @@ void main() {
     expect(again.showRSS, isFalse);
     expect(again.syncBookProgress, isFalse);
   });
+
+  test(
+    'uses in-memory defaults when preference initialization fails',
+    () async {
+      SharedPreferencesRuntime.setLoaderForTest(() async {
+        throw StateError('platform unavailable');
+      });
+
+      final cfg = AppConfig.instance;
+      await cfg.load();
+      await cfg.setShowDiscovery(false);
+
+      expect(cfg.isLoaded, isTrue);
+      expect(cfg.showDiscovery, isFalse);
+      expect(
+        SharedPreferencesRuntime.state,
+        SharedPreferencesRuntimeState.failed,
+      );
+    },
+  );
 }

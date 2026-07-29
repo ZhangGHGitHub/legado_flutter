@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../app.dart';
 import '../application/app_bootstrap.dart';
 import '../application/crash/crash_log_service.dart';
+import '../application/preferences/shared_preferences_runtime.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
 import '../application/web_api/repository_web_api_data_port.dart';
 import '../bridge/legado_db_bridge.dart';
@@ -97,6 +98,8 @@ abstract final class AppCompositionRoot {
   }
 
   static Future<({Widget app})> _compose(CrashLogService crashLog) async {
+    crashLog.updateStartupStage('SharedPreferences 初始化');
+    await SharedPreferencesRuntime.getOrNull();
     crashLog.updateStartupStage('读取上次崩溃记录');
     final pendingCrashReport = await crashLog.pendingReport();
     crashLog.updateStartupStage('基础设施组装');

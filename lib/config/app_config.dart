@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../application/preferences/shared_preferences_runtime.dart';
 
 /// 应用级配置（底栏显隐等）— ChangeNotifier，变更后立即生效
 class AppConfig extends ChangeNotifier {
@@ -39,13 +40,15 @@ class AppConfig extends ChangeNotifier {
 
   Future<void> _loadInternal() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      _showDiscovery = prefs.getBool(_showDiscoveryKey) ?? true;
-      _showRSS = prefs.getBool(_showRssKey) ?? true;
-      _defaultHomePage = _normalizeHomePage(
-        prefs.getString(_defaultHomePageKey) ?? 'bookshelf',
-      );
-      _syncBookProgress = prefs.getBool(_syncBookProgressKey) ?? true;
+      final prefs = await SharedPreferencesRuntime.getOrNull();
+      if (prefs != null) {
+        _showDiscovery = prefs.getBool(_showDiscoveryKey) ?? true;
+        _showRSS = prefs.getBool(_showRssKey) ?? true;
+        _defaultHomePage = _normalizeHomePage(
+          prefs.getString(_defaultHomePageKey) ?? 'bookshelf',
+        );
+        _syncBookProgress = prefs.getBool(_syncBookProgressKey) ?? true;
+      }
       _loaded = true;
       notifyListeners();
     } finally {
@@ -57,16 +60,16 @@ class AppConfig extends ChangeNotifier {
     if (_showDiscovery == value) return;
     _showDiscovery = value;
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_showDiscoveryKey, value);
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    await prefs?.setBool(_showDiscoveryKey, value);
   }
 
   Future<void> setShowRSS(bool value) async {
     if (_showRSS == value) return;
     _showRSS = value;
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_showRssKey, value);
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    await prefs?.setBool(_showRssKey, value);
   }
 
   Future<void> setDefaultHomePage(String value) async {
@@ -74,16 +77,16 @@ class AppConfig extends ChangeNotifier {
     if (_defaultHomePage == normalized) return;
     _defaultHomePage = normalized;
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_defaultHomePageKey, normalized);
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    await prefs?.setString(_defaultHomePageKey, normalized);
   }
 
   Future<void> setSyncBookProgress(bool value) async {
     if (_syncBookProgress == value) return;
     _syncBookProgress = value;
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_syncBookProgressKey, value);
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    await prefs?.setBool(_syncBookProgressKey, value);
   }
 
   static String _normalizeHomePage(String v) {
