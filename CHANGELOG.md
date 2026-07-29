@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R2：字典查询移除 Dart Dio 和“简化测试/JS 未支持”占位，新增 `DictRuleQueryPort`、application 用例、FRB adapter 与 Rust `query_dict_rule`。统一 Rust HTTP 现支持字典 AnalyzeUrl 的 GET、POST、headers/body/charset、`data:` URL、HTML/JSON/JS showRule，并补齐 Rhino `org.jsoup` 别名及 Elements `text/html` 聚合。Rust 核心全量 `132/132`、FRB/Dart 联合 `14/14`、Flutter 串行全量 `587` 通过（`3` 项既有跳过），架构 backlog `146 → 145`；`JavaImporter/JsonPath` 等高级内置规则兼容仍待完成，R2 未退出。
+
 - R2：主题 URL 导入移除 Dio，改为显式使用统一 `PublicTextFetchPort`/Rust HTTP；保留 JSON 解析和主题应用语义，并新增 URL trim、空响应、网络错误和私有地址拒绝测试。主题服务与页面回归 `16/16`、全仓 analyze 和架构脚本 fixture 通过。
 
 - R2：RSS 订阅源 URL 导入移除 Dart `HttpClient` 实现，改由 application adapter 复用统一 `PublicTextFetchPort`/Rust HTTP；保留 URL trim、私有地址拒绝和可空失败契约。RSS 导入定向回归 `6/6`、全仓 analyze 和架构脚本 fixture 通过，真实架构扫描仍为既有 `146` 条后续 backlog。

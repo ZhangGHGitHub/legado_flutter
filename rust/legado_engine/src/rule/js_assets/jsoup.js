@@ -9,6 +9,7 @@ var Packages = {
     }
   }
 };
+var org = Packages.org;
 
 function _JsoupDocument(html) {
   this._root = _parseHtml(html);
@@ -48,6 +49,12 @@ function _JsoupElements(arr) {
 }
 _JsoupElements.prototype.size = function() { return this._arr.length; };
 _JsoupElements.prototype.get = function(i) { return this._arr[i] || null; };
+_JsoupElements.prototype.text = function() {
+  return this._arr.map(function(item) { return item.text(); }).join(' ').trim();
+};
+_JsoupElements.prototype.html = function() {
+  return this._arr.map(function(item) { return item.html(); }).join('');
+};
 
 function _parseAttrs(str) {
   var attrs = {};

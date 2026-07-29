@@ -3,6 +3,7 @@ pub mod book_info;
 pub mod content;
 pub mod db;
 pub mod debug;
+pub mod dict;
 pub mod explore;
 pub mod local_book;
 pub mod network;
@@ -12,6 +13,8 @@ pub mod search;
 pub mod toc;
 pub mod validate;
 pub mod webdav;
+
+pub use dict::query_dict_rule;
 
 use flutter_rust_bridge::frb;
 

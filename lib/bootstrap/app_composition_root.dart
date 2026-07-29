@@ -14,6 +14,7 @@ import '../database/dao/source_dao.dart';
 import '../domain/ports/backup_local_file_port.dart';
 import '../domain/ports/book_source_debug_port.dart';
 import '../domain/ports/book_source_validation_port.dart';
+import '../domain/ports/dict_rule_query_port.dart';
 import '../domain/ports/legacy_room_import_use_case.dart';
 import '../domain/ports/public_text_fetch_port.dart';
 import '../domain/ports/rss_source_import_port.dart';
@@ -30,6 +31,7 @@ import '../infrastructure/engine/frb_book_source_explore_port.dart';
 import '../infrastructure/engine/frb_book_source_search_port.dart';
 import '../infrastructure/engine/frb_book_source_toc_port.dart';
 import '../infrastructure/engine/frb_book_source_validation_port.dart';
+import '../infrastructure/engine/frb_dict_rule_query_port.dart';
 import '../infrastructure/engine/frb_bookmark_port.dart';
 import '../infrastructure/engine/frb_bookplate_port.dart';
 import '../infrastructure/engine/frb_engine_status_port.dart';
@@ -155,6 +157,9 @@ abstract final class AppCompositionRoot {
           ),
           Provider<BookSourceValidationPort>(
             create: (_) => FrbBookSourceValidationPort(),
+          ),
+          Provider<DictRuleQueryPort>(
+            create: (_) => const FrbDictRuleQueryPort(),
           ),
           Provider<WebDavRepository>.value(value: webdavRepository),
           Provider<BackupService>.value(value: backupService),

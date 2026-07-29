@@ -4,11 +4,13 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../application/dictionary/dict_rule_tester.dart';
+import '../domain/ports/dict_rule_query_port.dart';
 import '../domain/rules/dict_rule.dart';
 import '../services/dict_rule_prefs.dart';
-import '../services/dict_rule_tester.dart';
 
 typedef DictRulesLoader = Future<List<DictRule>> Function();
 typedef DictRuleQuery = Future<String> Function(DictRule rule, String word);
@@ -25,8 +27,8 @@ class DictLookupSheet extends StatefulWidget {
   const DictLookupSheet({
     super.key,
     required this.word,
+    required this.queryRule,
     this.loadRules = DictRulePrefs.load,
-    this.queryRule = DictRuleTester.test,
     this.onButtonClick,
   });
 
@@ -519,6 +521,9 @@ Future<void> showDictLookupSheet(BuildContext context, String word) async {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => DictLookupSheet(word: value),
+    builder: (_) {
+      final tester = DictRuleTester(context.read<DictRuleQueryPort>());
+      return DictLookupSheet(word: value, queryRule: tester.test);
+    },
   );
 }

@@ -1,7 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/dictionary/dict_rule_tester.dart';
+import 'package:legado_flutter/domain/ports/dict_rule_query_port.dart';
 import 'package:legado_flutter/domain/rules/dict_rule.dart';
 import 'package:legado_flutter/services/dict_rule_prefs.dart';
-import 'package:legado_flutter/services/dict_rule_tester.dart';
+
+final class _FakeDictRuleQueryPort implements DictRuleQueryPort {
+  String result = '';
+  DictRule? rule;
+  String? word;
+
+  @override
+  Future<String> query(DictRule rule, String word) async {
+    this.rule = rule;
+    this.word = word;
+    return result;
+  }
+}
 
 void main() {
   test('defaultRules include 海词 and 有道', () {
@@ -31,28 +45,35 @@ void main() {
     expect(again.sortNumber, 3);
   });
 
-  test('DictRuleTester rejects empty word and js urlRule', () async {
+  test('DictRuleTester rejects empty word and delegates JS rules', () async {
+    final port = _FakeDictRuleQueryPort()..result = '完整 JS 结果';
+    final tester = DictRuleTester(port);
     expect(
-      () => DictRuleTester.test(
+      () => tester.test(
         const DictRule(name: 'x', urlRule: 'https://example.com'),
         '  ',
       ),
       throwsA(isA<ArgumentError>()),
     );
-    final msg = await DictRuleTester.test(
+    final result = await tester.test(
       const DictRule(name: 'js', urlRule: '@js: return 1'),
-      '词',
+      ' 词 ',
     );
-    expect(msg, contains('JS'));
+    expect(result, '完整 JS 结果');
+    expect(port.rule?.name, 'js');
+    expect(port.word, '词');
   });
 
   test('DictRuleTester blocks SSRF hosts', () async {
+    final port = _FakeDictRuleQueryPort();
+    final tester = DictRuleTester(port);
     expect(
-      () => DictRuleTester.test(
+      () => tester.test(
         const DictRule(name: 'bad', urlRule: 'http://127.0.0.1/dict?q={{key}}'),
         'test',
       ),
       throwsA(isA<FormatException>()),
     );
+    expect(port.rule, isNull);
   });
 }

@@ -2185,3 +2185,27 @@ fixture 测试通过。真实扫描仍为既有 `146` 条：Feature SharedPrefer
 
 边界结论：主题公开文本已进入统一 Rust HTTP 边界；R2 下一批处理需要完整 AnalyzeUrl/JS 语义的
 字典请求，不复用只能表达简单 GET 文本的接口来削弱规则行为。
+
+## 106. 2026-07-29：R2 字典 AnalyzeUrl 与规则执行边界
+
+- 新增 `DictRuleQueryPort`、application `DictRuleTester` 和 `FrbDictRuleQueryPort`；管理页与阅读器查词
+  面板从根组合层取得端口，不再调用静态 Dio 测试器或返回“JS 尚未支持”占位。
+- Rust 新增 `query_dict_rule`，复用统一 HTTP client 和通用 AnalyzeUrl 解析；`RequestConfig` 保留
+  method/body/charset/headers，修正 `data:` URL 与 `,{jsonOptions}` 的分隔解析。
+- showRule 复用现有 HTML、JSON、SourceRule 和 QuickJS 能力；补齐 Rhino `org.jsoup` 别名和
+  Jsoup Elements 的 `text/html` 聚合方法。
+- FRB 绑定使用仓库固定 `2.11.1` 重新生成，release DLL 重建后通过 hash 与真实调用验证。
+
+验证结果：
+
+- Rust 字典 fixture `5/5`，覆盖中文 GET key、POST headers/body、`data:`、HTML/JS、`@js` URL、
+  Jsoup、空参数和私网拒绝。
+- `cargo test -p legado_engine`：核心单测 `132/132`，其余集成与文档测试通过，`1` 项既有 ignored。
+- FRB/Dart 字典、面板和组合回归 `14/14`；Flutter 串行全量 `587` 通过、`3` 项既有条件跳过；
+  `flutter analyze --no-pub` 无诊断。
+- 架构脚本 fixture 通过；真实 backlog `146 → 145`，Feature 业务 service `132 → 131`，
+  SharedPreferences 仍为 `14`。
+
+边界结论：字典网络与基础 AnalyzeUrl/showRule 已进入 Rust 端口，Dart Dio 和占位结果已移除；内置
+百度汉语等规则使用的 `JavaImporter/JsonPath` 高级 Rhino API 尚未完成兼容，必须继续以 fixture
+推进，不能据本批结果宣称所有内置字典规则已通过。R2 仍未退出。

@@ -8,28 +8,42 @@ pub fn resolve_search_request(
     keyword: &str,
     page: i32,
 ) -> Result<RequestConfig, String> {
-    let raw = source.rule_search_url.trim();
+    resolve_request(
+        &source.rule_search_url,
+        keyword,
+        page,
+        &source.js_lib,
+        &source.book_source_url,
+    )
+}
+
+/// 解析通用 AnalyzeUrl 请求，供搜索、字典等规则入口复用。
+pub fn resolve_request(
+    raw: &str,
+    keyword: &str,
+    page: i32,
+    js_lib: &str,
+    base_url: &str,
+) -> Result<RequestConfig, String> {
+    let raw = raw.trim();
     if raw.is_empty() {
         return Ok(empty_config());
     }
-
-    let js_lib = source.js_lib.as_str();
-    let base = source.book_source_url.as_str();
 
     let resolved_raw = if raw
         .get(..4)
         .is_some_and(|prefix| prefix.eq_ignore_ascii_case("@js:"))
     {
         let script = raw[4..].trim();
-        js_engine::run_search_js(script, keyword, js_lib, base, page)?
+        js_engine::run_search_js(script, keyword, js_lib, base_url, page)?
     } else if js_engine::contains_js_block(raw) {
         let template = raw
             .replace("{{key}}", keyword)
             .replace("{{page}}", &page.to_string());
-        js_engine::run_url_template_js(&template, keyword, js_lib, base, page)?
+        js_engine::run_url_template_js(&template, keyword, js_lib, base_url, page)?
     } else {
         // 普通 URL：先展开 `{{cookie.*}}` / `{{source.*}}` 等 JS 表达式
-        let expanded = expand_mustache_js(raw, keyword, page, base, js_lib)?;
+        let expanded = expand_mustache_js(raw, keyword, page, base_url, js_lib)?;
         return Ok(parse_url_config_with_page(&expanded, keyword, page));
     };
 
@@ -119,6 +133,7 @@ fn empty_config() -> RequestConfig {
         method: "GET".to_string(),
         body: None,
         charset: "UTF-8".to_string(),
+        headers: Default::default(),
     }
 }
 

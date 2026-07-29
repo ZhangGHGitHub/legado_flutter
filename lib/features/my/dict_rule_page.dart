@@ -2,10 +2,12 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
+import '../../application/dictionary/dict_rule_tester.dart';
+import '../../domain/ports/dict_rule_query_port.dart';
 import '../../domain/rules/dict_rule.dart';
 import '../../services/dict_rule_prefs.dart';
-import '../../services/dict_rule_tester.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/legado_popup_menu.dart';
 
@@ -494,7 +496,9 @@ class _DictRuleEditDialogState extends State<_DictRuleEditDialog> {
       _testResult = null;
     });
     try {
-      final result = await DictRuleTester.test(_draft(), _testWord.text);
+      final result = await DictRuleTester(
+        context.read<DictRuleQueryPort>(),
+      ).test(_draft(), _testWord.text);
       if (!mounted) return;
       setState(() {
         _testResult = result;

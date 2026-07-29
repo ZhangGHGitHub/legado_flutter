@@ -146,6 +146,7 @@ pub struct RequestConfig {
     pub method: String,
     pub body: Option<String>,
     pub charset: String,
+    pub headers: std::collections::HashMap<String, String>,
 }
 
 /// 解析 Legado ruleSearchUrl / exploreUrl 格式
@@ -159,13 +160,9 @@ pub fn parse_url_config_with_page(raw_url: &str, keyword: &str, page: i32) -> Re
     let mut json_part: Option<String> = None;
 
     if !raw.starts_with('{') {
-        if let Some(comma_idx) = raw.find(',') {
-            if raw[comma_idx + 1..].starts_with('{') {
-                url_part = raw[..comma_idx].to_string();
-                json_part = Some(raw[comma_idx + 1..].to_string());
-            } else {
-                url_part = raw.to_string();
-            }
+        if let Some(comma_idx) = raw.find(",{") {
+            url_part = raw[..comma_idx].to_string();
+            json_part = Some(raw[comma_idx + 1..].to_string());
         } else {
             url_part = raw.to_string();
         }
@@ -176,6 +173,7 @@ pub fn parse_url_config_with_page(raw_url: &str, keyword: &str, page: i32) -> Re
     let mut method = "GET".to_string();
     let mut charset = String::new();
     let mut body_str: Option<String> = None;
+    let mut extra_headers = std::collections::HashMap::new();
 
     if let Some(ref jp) = json_part {
         if let Ok(cfg) = serde_json::from_str::<serde_json::Value>(jp) {
@@ -187,6 +185,9 @@ pub fn parse_url_config_with_page(raw_url: &str, keyword: &str, page: i32) -> Re
             }
             if let Some(b) = cfg.get("body").and_then(|v| v.as_str()) {
                 body_str = Some(b.to_string());
+            }
+            if let Some(headers) = cfg.get("headers") {
+                extra_headers = parse_header_map_value(headers);
             }
         }
     }
@@ -200,6 +201,12 @@ pub fn parse_url_config_with_page(raw_url: &str, keyword: &str, page: i32) -> Re
 
     if let Some(ref mut body) = body_str {
         *body = body
+            .replace("{{key}}", keyword)
+            .replace("{{page}}", &page_str)
+            .replace("{{limit}}", "20");
+    }
+    for value in extra_headers.values_mut() {
+        *value = value
             .replace("{{key}}", keyword)
             .replace("{{page}}", &page_str)
             .replace("{{limit}}", "20");
@@ -222,6 +229,7 @@ pub fn parse_url_config_with_page(raw_url: &str, keyword: &str, page: i32) -> Re
         method,
         body: body_str,
         charset,
+        headers: extra_headers,
     }
 }
 
@@ -290,27 +298,6 @@ fn parse_header_map_value(v: &serde_json::Value) -> std::collections::HashMap<St
         _ => {}
     }
     out
-}
-
-/// 解析 AnalyzeUrl JSON 段中的 headers
-fn analyze_url_extra_headers(raw: &str) -> std::collections::HashMap<String, String> {
-    let raw = raw.trim();
-    let json_part = if raw.starts_with('{') {
-        Some(raw)
-    } else if let Some(idx) = raw.find(",{") {
-        Some(&raw[idx + 1..])
-    } else {
-        None
-    };
-    let Some(jp) = json_part else {
-        return std::collections::HashMap::new();
-    };
-    let Ok(cfg) = serde_json::from_str::<serde_json::Value>(jp) else {
-        return std::collections::HashMap::new();
-    };
-    cfg.get("headers")
-        .map(parse_header_map_value)
-        .unwrap_or_default()
 }
 
 fn login_header_map(login_header: &str) -> std::collections::HashMap<String, String> {
@@ -386,10 +373,10 @@ async fn ajax_fetch(
         }
     }
 
-    for (k, v) in analyze_url_extra_headers(raw) {
+    for (k, v) in &cfg.headers {
         if let (Ok(name), Ok(val)) = (
             HeaderName::from_bytes(k.as_bytes()),
-            HeaderValue::from_str(&v),
+            HeaderValue::from_str(v),
         ) {
             headers.insert(name, val);
         }
@@ -427,6 +414,46 @@ async fn ajax_fetch(
         text,
     )
     .await
+}
+
+/// 按已解析的 AnalyzeUrl 配置发送请求，复用统一 TLS、Cookie、限流与 SSRF 策略。
+pub async fn fetch_request_config(
+    config: &RequestConfig,
+    referer: Option<&str>,
+) -> Result<String, String> {
+    let mut headers = default_headers();
+    if let Some(referer) = referer {
+        if let Ok(value) = HeaderValue::from_str(referer) {
+            headers.insert("Referer", value);
+        }
+    }
+
+    let cookie = COOKIE_JAR.lock().unwrap().get_cookie(&config.url);
+    if !cookie.is_empty() {
+        if let Ok(value) = HeaderValue::from_str(&cookie) {
+            headers.insert("Cookie", value);
+        }
+    }
+    for (name, value) in &config.headers {
+        if let (Ok(name), Ok(value)) = (
+            HeaderName::from_bytes(name.as_bytes()),
+            HeaderValue::from_str(value),
+        ) {
+            headers.insert(name, value);
+        }
+    }
+
+    let response = send_request(
+        &config.url,
+        &config.method,
+        config.body.as_deref(),
+        &config.charset,
+        headers,
+    )
+    .await?;
+    save_cookies(&config.url, &response);
+    let bytes = read_response_bytes(response).await?;
+    charset::decode_bytes(&bytes, &config.charset)
 }
 
 /// 发送 HTTP 请求并返回解码文本

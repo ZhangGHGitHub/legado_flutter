@@ -9,6 +9,7 @@ import 'api/book_info.dart';
 import 'api/content.dart';
 import 'api/db.dart';
 import 'api/debug.dart';
+import 'api/dict.dart';
 import 'api/explore.dart';
 import 'api/local_book.dart';
 import 'api/network.dart';
