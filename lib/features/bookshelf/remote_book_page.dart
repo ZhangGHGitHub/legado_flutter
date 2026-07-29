@@ -26,10 +26,17 @@ enum _RemoteSort { name, time }
 ///
 /// 默认浏览根：`{WebDAV目录}/books/`。
 class RemoteBookPage extends StatefulWidget {
-  const RemoteBookPage({super.key, this.webdavRepository});
+  const RemoteBookPage({
+    super.key,
+    this.webdavRepository,
+    this.archiveImporter,
+  });
 
   @visibleForTesting
   final WebDavRepository? webdavRepository;
+
+  @visibleForTesting
+  final RemoteArchiveImportService? archiveImporter;
 
   @override
   State<RemoteBookPage> createState() => _RemoteBookPageState();
@@ -54,7 +61,8 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
   bool _searchOpen = false;
   bool _booksRootEnsured = false;
   final _searchCtl = TextEditingController();
-  final _archiveImporter = const RemoteArchiveImportService();
+  RemoteArchiveImportService get _archiveImporter =>
+      widget.archiveImporter ?? context.read<RemoteArchiveImportService>();
 
   /// Jingshiro `bookFileRegex` 可导入子集（本地引擎仅 txt/epub）。
   static final _importableExt = RegExp(r'\.(txt|epub)$', caseSensitive: false);

@@ -17,11 +17,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 class _DelayedSourceService extends TestBookSourceService {
   final Map<String, Completer<String>> _pending = {};
   final Map<String, int> calls = {};
+  final Map<String, String?> nextChapterUrls = {};
 
   @override
   Future<String> getChapterContent(String url, {required BookSource source}) {
     calls[url] = (calls[url] ?? 0) + 1;
     return (_pending[url] ??= Completer<String>()).future;
+  }
+
+  @override
+  Future<String> getChapterContentWithNextChapter(
+    String url, {
+    required BookSource source,
+    String? nextChapterUrl,
+  }) {
+    nextChapterUrls[url] = nextChapterUrl;
+    return getChapterContent(url, source: source);
   }
 
   void complete(String url, String content) {
@@ -104,6 +115,31 @@ void main() {
     service.complete(newChapter.url, '新书源正文');
 
     expect(await newLoad, '新书源正文');
+  });
+
+  test('passes the next chapter URL to the paginated content source', () async {
+    final book = Book(id: 'book-next', name: '测试书');
+    final source = _source('source');
+    final first = _chapter(book.id, 'first', 'chapter-1', 0);
+    final second = _chapter(book.id, 'second', 'chapter-2', 1);
+
+    ReadBook.instance.open(
+      currentBook: book,
+      source: source,
+      chapterList: [first, second],
+    );
+    final load = ReadBook.instance.loadChapterContent(
+      chapter: first,
+      source: source,
+      saveCache: false,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    expect(service.nextChapterUrls[first.url], second.url);
+    service.complete(first.url, '第一章正文');
+    service.complete(second.url, '第二章正文');
+    expect(await load, '第一章正文');
+    await Future<void>.delayed(const Duration(milliseconds: 10));
   });
 
   test(

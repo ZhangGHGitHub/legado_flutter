@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../domain/ports/chapter_content_cache_port.dart';
-import '../../help/content_processor.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../providers/replace_provider.dart';
 import '../../services/search_content_prefs.dart';
@@ -142,7 +141,7 @@ class _SearchContentPageState extends State<SearchContentPage> {
 
   String _prepareContent(String raw) {
     if (!_prefs.enableReplace) return raw;
-    return ContentProcessor.instance.getContent(raw);
+    return context.read<ReplaceProvider>().processContent(raw);
   }
 
   @override

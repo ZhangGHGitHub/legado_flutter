@@ -15,6 +15,21 @@ class _FakeBookSourceContentPort implements BookSourceContentPort {
   }
 }
 
+class _FakePaginatedContentPort extends _FakeBookSourceContentPort
+    implements PaginatedBookSourceContentPort {
+  String? nextChapterUrl;
+
+  @override
+  Future<String> getContentWithNextChapter(
+    BookSource source,
+    String chapterUrl, {
+    String? nextChapterUrl,
+  }) async {
+    this.nextChapterUrl = nextChapterUrl;
+    return getContent(source, chapterUrl);
+  }
+}
+
 void main() {
   test(
     'BookSourceService getChapterContent uses the injected content port',
@@ -36,4 +51,22 @@ void main() {
       expect(content, '第一行\r\n第二行\n第三行');
     },
   );
+
+  test('passes next chapter URL to the paginated content port', () async {
+    final port = _FakePaginatedContentPort();
+    final service = createTestBookSourceService(contentPort: port);
+    final source = BookSource(
+      bookSourceUrl: 'https://source.example',
+      bookSourceName: '测试书源',
+    );
+
+    await service.getChapterContentWithNextChapter(
+      'https://source.example/chapter/1',
+      source: source,
+      nextChapterUrl: 'https://source.example/chapter/2',
+    );
+
+    expect(port.chapterUrl, 'https://source.example/chapter/1');
+    expect(port.nextChapterUrl, 'https://source.example/chapter/2');
+  });
 }

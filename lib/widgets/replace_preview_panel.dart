@@ -3,15 +3,20 @@ import 'package:flutter/material.dart';
 import '../domain/content/replace_rule.dart';
 import '../services/replace_service.dart';
 
+typedef ApplyPreviewRules =
+    String Function(String text, List<ReplaceRule> rules);
+
 /// 替换规则实时预览面板
 class ReplacePreviewPanel extends StatefulWidget {
   const ReplacePreviewPanel({
     super.key,
     required this.rules,
+    required this.applyRules,
     this.initialSample,
   });
 
   final List<ReplaceRule> rules;
+  final ApplyPreviewRules applyRules;
   final String? initialSample;
 
   @override
@@ -50,10 +55,7 @@ class ReplacePreviewPanelState extends State<ReplacePreviewPanel> {
   void _refreshPreview() {
     try {
       setState(() {
-        _output = ReplaceService.applyWithRules(
-          _inputController.text,
-          widget.rules,
-        );
+        _output = widget.applyRules(_inputController.text, widget.rules);
         _error = null;
       });
     } catch (e) {

@@ -2473,3 +2473,23 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 边界结论：R2 的统一书源入口、网络/TLS、Cookie、规则 fixture、JS 兼容、错误恢复、FRB 适配和
 可见 WebView 宿主退出条件均已满足，R2 最终退出。后台 `java.webView*`、文件/压缩及其它第三方
 宿主 API 继续保留在兼容性 backlog，不宣称完整覆盖原版 `JsExtensions`。
+
+## 118. 2026-07-29：R3 阅读正文、缓存与远端 ZIP 最终退出
+
+- `ReaderPage` 保存当前页起始 UTF-16 章内位置，不再把页序号写入 `durChapterPos`；迁移与同步继续使用同一位置语义。
+- Rust 新增正文处理事实源，覆盖全局普通/正则替换、书源级替换、标题去重、trim、缩进、重新分段和多行正则；生产阅读、全文搜索、替换 Provider 与预览均通过同一 `ContentProcessingPort`。
+- 正文下一页规则支持多值：单 URL 串行跟随并终止循环，多 URL 并发抓取后按规则顺序合并；下一页等于下一章 URL 时停止，超过 100 个串行页面显式失败。
+- 文件缓存、坏缓存删除、空正文、预加载去重、孤儿目录清理和文件/DB 状态修复保持既有布局与失败语义。
+- Rust 接管远端书籍 ZIP 解码、TXT/EPUB 识别、安全相对路径、50MB 输入/解压总量、损坏包和空包错误；Flutter domain port/FRB adapter 只接收安全相对路径与字节，Service 负责平台文件落盘。
+- 固定 FRB `2.11.1` 重新生成；正文内部函数只保留 crate 内可见实现，根 API 是唯一 FRB 出口，并删除 codegen 不会自动清理的陈旧 `api/content.dart` 生成文件。
+
+验证结果：
+
+- Rust ZIP 定向 `9/9`；Rust workspace 核心 `185/185`，其余非 ignored 集成、`legado_webdav` 和文档测试无失败。
+- Flutter ZIP 端口/服务/页面 `6/6`，正文与 ZIP 真实 Windows release DLL/FRB `5/5`。
+- 桌面分页、中文/URL 断行、硬分页、媒体、UTF-16 选区、快照、PNG、字体行高门禁 `59/59`；Android 真实 ReaderPage 单章/双章、固定快照和 SVG 像素门禁 `4/4`。
+- `flutter test --no-pub --concurrency=1` 最终 `641` 通过、`3` 项既有条件跳过；首次全量的一项瞬时失败在随后两次完整全量中均未复现。
+- `flutter analyze --no-pub` 无诊断；`flutter build apk --debug --no-pub` 通过，包含 armv7、arm64、x86_64 Rust 引擎；`git diff --check` 通过。
+- 架构扫描仍按设计报告既有 `146` 条 backlog：SharedPreferences `14`、Feature 业务 service `132`；无新增违规。`legado-main/` 保持只读。
+
+边界结论：R3 的正文处理契约、缓存生命周期、章节切换和第 3 条断行/分页退出条件均已满足。分页与中文断行继续属于 Flutter 展示层，远端 ZIP 解析属于 Rust；备份 ZIP、阅读样式 ZIP 和 WebDAV 发布验收仍按各自 R2/R5 边界处理，不在本批交叉迁移。

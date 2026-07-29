@@ -6,6 +6,7 @@ import 'package:legado_flutter/domain/repositories/book_source_repository.dart';
 import 'package:legado_flutter/domain/repositories/replace_rule_repository.dart';
 import 'package:legado_flutter/domain/source_subscription/rule_sub.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_book_source_validation_port.dart';
+import 'package:legado_flutter/infrastructure/content/content_processor_adapter.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import 'package:legado_flutter/providers/replace_provider.dart';
@@ -120,6 +121,7 @@ void main() {
         rssProvider: rssProvider,
         replaceProvider: ReplaceProvider(
           repository: _FakeReplaceRuleRepository(),
+          contentProcessor: ContentProcessorAdapter(),
         ),
         fetchPort: const _UnexpectedPublicTextFetchPort(),
         fetchTextOverride: (_) async =>
@@ -163,6 +165,7 @@ void main() {
         rssProvider: rssProvider,
         replaceProvider: ReplaceProvider(
           repository: _FakeReplaceRuleRepository(),
+          contentProcessor: ContentProcessorAdapter(),
         ),
         fetchPort: const _UnexpectedPublicTextFetchPort(),
         fetchTextOverride: (_) async =>
@@ -199,6 +202,7 @@ void main() {
         rssProvider: rssProvider,
         replaceProvider: ReplaceProvider(
           repository: _FakeReplaceRuleRepository(),
+          contentProcessor: ContentProcessorAdapter(),
         ),
         fetchPort: const _UnexpectedPublicTextFetchPort(),
         fetchTextOverride: (_) async =>

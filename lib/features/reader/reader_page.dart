@@ -1927,12 +1927,12 @@ class _ReaderPageState extends State<ReaderPage> {
     if (bp == null) return;
     final progress = (_currentIndex + 1) / widget.allChapters.length;
     final currentChapter = widget.allChapters[_currentIndex].title;
-    final pageIdx = _isHorizontalPaged ? _pageIndex : 0;
+    final chapterPosition = _currentChapterPosition();
     bp.updateProgress(
       widget.book.id,
       progress,
       currentChapter,
-      pageIndex: pageIdx,
+      pageIndex: chapterPosition,
       durChapterIndex: _currentIndex,
     );
   }

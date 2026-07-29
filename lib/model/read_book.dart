@@ -137,6 +137,12 @@ class ReadBook extends ChangeNotifier {
     );
   }
 
+  /// 对非阅读展示调用同一正文替换事实源。
+  String processContent(String raw) {
+    final proc = _processor;
+    return proc == null ? raw : proc.getContent(raw);
+  }
+
   /// 加载章节正文（文件缓存 → DB → 网络 → 净化 → 写缓存）
   Future<String> loadChapterContent({
     required Chapter chapter,
@@ -218,7 +224,14 @@ class ReadBook extends ChangeNotifier {
 
       // 3. 网络拉取（失败转为可展示文案，绝不写缓存；预加载也不会变 unhandled）
       try {
-        final raw = await svc.getChapterContent(chapter.url, source: source);
+        final raw = svc is PaginatedReaderContentSourcePort
+            ? await (svc as PaginatedReaderContentSourcePort)
+                  .getChapterContentWithNextChapter(
+                    chapter.url,
+                    source: source,
+                    nextChapterUrl: _nextChapterUrl(chapter),
+                  )
+            : await svc.getChapterContent(chapter.url, source: source);
         if (shouldSkipCache(raw)) {
           return _processContent(raw, chapterTitle: chapter.title);
         }
@@ -272,6 +285,17 @@ class ReadBook extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  String? _nextChapterUrl(Chapter chapter) {
+    if (chapters.isEmpty) return null;
+    var index = chapters.indexWhere((item) => item.id == chapter.id);
+    if (index < 0) {
+      index = chapters.indexWhere((item) => item.index == chapter.index);
+    }
+    if (index < 0) return null;
+    final nextIndex = index + 1 < chapters.length ? index + 1 : 0;
+    return chapters[nextIndex].url;
   }
 
   /// 切换到指定章节索引

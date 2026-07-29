@@ -7,6 +7,8 @@ import '../content/replace_rule.dart';
 abstract interface class ContentProcessingPort {
   void loadRules(List<ReplaceRule> rules);
 
+  String applyWithRules(String raw, List<ReplaceRule> rules);
+
   String getContent(String raw);
 
   String process(String raw, {ContentProcessingSourceRules? sourceRules});

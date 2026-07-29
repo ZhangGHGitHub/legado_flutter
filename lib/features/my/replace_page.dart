@@ -77,7 +77,10 @@ class _ReplacePageState extends State<ReplacePage>
                 rules: rules,
                 onEdit: (rule) => _showRuleEditor(context, rule),
               ),
-              ReplacePreviewPanel(rules: rules),
+              ReplacePreviewPanel(
+                rules: rules,
+                applyRules: provider.previewContent,
+              ),
             ],
           );
         },

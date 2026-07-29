@@ -8,6 +8,7 @@ import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/domain/content/replace_rule.dart';
 import 'package:legado_flutter/features/book/toc_sheet.dart';
 import 'package:legado_flutter/features/reader/search_content_page.dart';
+import 'package:legado_flutter/infrastructure/content/content_processor_adapter.dart';
 import 'package:legado_flutter/providers/replace_provider.dart';
 import 'package:legado_flutter/services/search_content_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -73,7 +74,10 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ChangeNotifierProvider(
-            create: (_) => ReplaceProvider(repository: _EmptyRuleRepository()),
+            create: (_) => ReplaceProvider(
+              repository: _EmptyRuleRepository(),
+              contentProcessor: ContentProcessorAdapter(),
+            ),
             child: SearchContentPage(
               bookId: 'book',
               bookName: '测试书',
@@ -111,7 +115,10 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ChangeNotifierProvider(
-          create: (_) => ReplaceProvider(repository: _EmptyRuleRepository()),
+          create: (_) => ReplaceProvider(
+            repository: _EmptyRuleRepository(),
+            contentProcessor: ContentProcessorAdapter(),
+          ),
           child: SearchContentPage(
             bookId: 'book',
             bookName: '测试书',

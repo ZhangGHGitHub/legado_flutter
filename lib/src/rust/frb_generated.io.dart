@@ -6,7 +6,6 @@
 import 'api.dart';
 import 'api/backup.dart';
 import 'api/book_info.dart';
-import 'api/content.dart';
 import 'api/db.dart';
 import 'api/debug.dart';
 import 'api/dict.dart';
@@ -73,12 +72,23 @@ abstract class LegadoEngineApiImplPlatform
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  ContentProcessingSourceRulesDto
+  dco_decode_box_autoadd_content_processing_source_rules_dto(dynamic raw);
+
+  @protected
   SourceBrowserRequestDto dco_decode_box_autoadd_source_browser_request_dto(
     dynamic raw,
   );
 
   @protected
   ChapterItem dco_decode_chapter_item(dynamic raw);
+
+  @protected
+  ContentProcessingSourceRulesDto
+  dco_decode_content_processing_source_rules_dto(dynamic raw);
+
+  @protected
+  ContentReplaceRuleDto dco_decode_content_replace_rule_dto(dynamic raw);
 
   @protected
   DailyReadingStat dco_decode_daily_reading_stat(dynamic raw);
@@ -111,6 +121,11 @@ abstract class LegadoEngineApiImplPlatform
   List<ChapterItem> dco_decode_list_chapter_item(dynamic raw);
 
   @protected
+  List<ContentReplaceRuleDto> dco_decode_list_content_replace_rule_dto(
+    dynamic raw,
+  );
+
+  @protected
   List<DailyReadingStat> dco_decode_list_daily_reading_stat(dynamic raw);
 
   @protected
@@ -130,6 +145,11 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
+
+  @protected
+  List<RemoteArchiveBookFile> dco_decode_list_remote_archive_book_file(
+    dynamic raw,
+  );
 
   @protected
   List<RssArticleDto> dco_decode_list_rss_article_dto(dynamic raw);
@@ -159,6 +179,10 @@ abstract class LegadoEngineApiImplPlatform
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  ContentProcessingSourceRulesDto?
+  dco_decode_opt_box_autoadd_content_processing_source_rules_dto(dynamic raw);
+
+  @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
 
   @protected
@@ -166,6 +190,9 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
+
+  @protected
+  RemoteArchiveBookFile dco_decode_remote_archive_book_file(dynamic raw);
 
   @protected
   RssArticleDto dco_decode_rss_article_dto(dynamic raw);
@@ -242,12 +269,27 @@ abstract class LegadoEngineApiImplPlatform
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  ContentProcessingSourceRulesDto
+  sse_decode_box_autoadd_content_processing_source_rules_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   SourceBrowserRequestDto sse_decode_box_autoadd_source_browser_request_dto(
     SseDeserializer deserializer,
   );
 
   @protected
   ChapterItem sse_decode_chapter_item(SseDeserializer deserializer);
+
+  @protected
+  ContentProcessingSourceRulesDto
+  sse_decode_content_processing_source_rules_dto(SseDeserializer deserializer);
+
+  @protected
+  ContentReplaceRuleDto sse_decode_content_replace_rule_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   DailyReadingStat sse_decode_daily_reading_stat(SseDeserializer deserializer);
@@ -280,6 +322,11 @@ abstract class LegadoEngineApiImplPlatform
   List<ChapterItem> sse_decode_list_chapter_item(SseDeserializer deserializer);
 
   @protected
+  List<ContentReplaceRuleDto> sse_decode_list_content_replace_rule_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<DailyReadingStat> sse_decode_list_daily_reading_stat(
     SseDeserializer deserializer,
   );
@@ -303,6 +350,11 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   List<(String, String)> sse_decode_list_record_string_string(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<RemoteArchiveBookFile> sse_decode_list_remote_archive_book_file(
     SseDeserializer deserializer,
   );
 
@@ -338,6 +390,12 @@ abstract class LegadoEngineApiImplPlatform
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  ContentProcessingSourceRulesDto?
+  sse_decode_opt_box_autoadd_content_processing_source_rules_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
@@ -345,6 +403,11 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   (String, String) sse_decode_record_string_string(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RemoteArchiveBookFile sse_decode_remote_archive_book_file(
     SseDeserializer deserializer,
   );
 
@@ -446,6 +509,12 @@ abstract class LegadoEngineApiImplPlatform
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_content_processing_source_rules_dto(
+    ContentProcessingSourceRulesDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_source_browser_request_dto(
     SourceBrowserRequestDto self,
     SseSerializer serializer,
@@ -453,6 +522,18 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   void sse_encode_chapter_item(ChapterItem self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_content_processing_source_rules_dto(
+    ContentProcessingSourceRulesDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_content_replace_rule_dto(
+    ContentReplaceRuleDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_daily_reading_stat(
@@ -494,6 +575,12 @@ abstract class LegadoEngineApiImplPlatform
   );
 
   @protected
+  void sse_encode_list_content_replace_rule_dto(
+    List<ContentReplaceRuleDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_daily_reading_stat(
     List<DailyReadingStat> self,
     SseSerializer serializer,
@@ -526,6 +613,12 @@ abstract class LegadoEngineApiImplPlatform
   @protected
   void sse_encode_list_record_string_string(
     List<(String, String)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_remote_archive_book_file(
+    List<RemoteArchiveBookFile> self,
     SseSerializer serializer,
   );
 
@@ -575,6 +668,12 @@ abstract class LegadoEngineApiImplPlatform
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_content_processing_source_rules_dto(
+    ContentProcessingSourceRulesDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_list_prim_u_8_strict(
     Uint8List? self,
     SseSerializer serializer,
@@ -586,6 +685,12 @@ abstract class LegadoEngineApiImplPlatform
   @protected
   void sse_encode_record_string_string(
     (String, String) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_remote_archive_book_file(
+    RemoteArchiveBookFile self,
     SseSerializer serializer,
   );
 

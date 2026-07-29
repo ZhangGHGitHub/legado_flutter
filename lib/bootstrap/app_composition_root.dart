@@ -22,7 +22,7 @@ import '../domain/ports/public_text_fetch_port.dart';
 import '../domain/ports/rss_source_import_port.dart';
 import '../domain/ports/webdav_repository.dart';
 import '../infrastructure/cache/file_chapter_content_cache.dart';
-import '../infrastructure/content/content_processor_adapter.dart';
+import '../infrastructure/content/frb_content_processing_port.dart';
 import '../infrastructure/database/frb_backup_port.dart';
 import '../infrastructure/database/frb_database_status_port.dart';
 import '../infrastructure/database/frb_legacy_room_import_port.dart';
@@ -39,6 +39,7 @@ import '../infrastructure/engine/frb_bookplate_port.dart';
 import '../infrastructure/engine/frb_engine_status_port.dart';
 import '../infrastructure/engine/frb_js_eval_port.dart';
 import '../infrastructure/engine/frb_local_book_parser_port.dart';
+import '../infrastructure/engine/frb_remote_archive_parser_port.dart';
 import '../infrastructure/engine/frb_network_engine_port.dart';
 import '../infrastructure/engine/frb_note_port.dart';
 import '../infrastructure/engine/frb_reading_record_port.dart';
@@ -76,6 +77,7 @@ import '../services/local_book_service.dart';
 import '../services/network_prefs.dart';
 import '../services/note_service.dart';
 import '../services/reading_record_service.dart';
+import '../services/remote_archive_import_service.dart';
 import '../services/rss_service.dart';
 import '../services/rss_sort_urls.dart';
 import '../services/source_login_service.dart';
@@ -126,6 +128,10 @@ abstract final class AppCompositionRoot {
       enginePort: networkEnginePort,
     );
 
+    final contentProcessor = FrbContentProcessingPort();
+    final remoteArchiveImportService = RemoteArchiveImportService(
+      parser: const FrbRemoteArchiveParserPort(),
+    );
     final bootstrap = await AppBootstrap(
       initializePlatform: () async {
         await EngineConfig.load();
@@ -142,7 +148,7 @@ abstract final class AppCompositionRoot {
       loadWebDavConfig: WebDavPrefs.load,
       bookRepository: bookRepository,
       contentCache: contentCache,
-      contentProcessor: ContentProcessorAdapter(),
+      contentProcessor: contentProcessor,
       bookSourceService: bookSourceService,
       localBookService: LocalBookService(
         repository: bookRepository,
@@ -199,6 +205,9 @@ abstract final class AppCompositionRoot {
           Provider<BookProgressSync>.value(value: bookProgressSync),
           Provider<BookmarkSyncService>.value(value: bookmarkSyncService),
           Provider<CacheService>.value(value: cacheService),
+          Provider<RemoteArchiveImportService>.value(
+            value: remoteArchiveImportService,
+          ),
           Provider<BackupLocalFilePort>(
             create: (_) => FileSystemBackupLocalFileAdapter(backupService),
           ),
@@ -216,8 +225,10 @@ abstract final class AppCompositionRoot {
             ),
           ),
           ChangeNotifierProvider(
-            create: (_) =>
-                ReplaceProvider(repository: ReplaceRuleDao())..loadRules(),
+            create: (_) => ReplaceProvider(
+              repository: ReplaceRuleDao(),
+              contentProcessor: contentProcessor,
+            )..loadRules(),
           ),
           ChangeNotifierProvider(
             create: (context) => RssProvider(

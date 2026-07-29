@@ -8,7 +8,6 @@ import '../domain/ports/local_book_parser_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
-import '../help/content_processor.dart';
 import '../help/shelf_unread.dart';
 import '../model/read_book.dart';
 import '../services/book_source_service.dart';
@@ -72,7 +71,6 @@ class BookProvider extends ChangeNotifier {
     ReadBook.instance.configure(
       sourceService: _sourceService,
       repository: _repository,
-      processor: ContentProcessor.instance,
       contentCache: _contentCache,
     );
   }
@@ -1711,7 +1709,7 @@ class BookProvider extends ChangeNotifier {
     }
     final raw = await _sourceService.getChapterContent(url, source: source);
     if (ReadBook.instance.enableReplace) {
-      return ContentProcessor.instance.getContent(raw);
+      return ReadBook.instance.processContent(raw);
     }
     return raw;
   }

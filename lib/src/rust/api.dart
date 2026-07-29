@@ -6,7 +6,8 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `to_content_rules`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 初始化 Rust 书源引擎
 void initEngine() => LegadoEngine.instance.api.crateApiInitEngine();
@@ -73,6 +74,17 @@ Future<String> getContent({
   chapterUrl: chapterUrl,
 );
 
+/// 获取章节正文，并在正文下一页指向下一章时停止。
+Future<String> getContentWithNextChapter({
+  required String sourceJson,
+  required String chapterUrl,
+  String? nextChapterUrl,
+}) => LegadoEngine.instance.api.crateApiGetContentWithNextChapter(
+  sourceJson: sourceJson,
+  chapterUrl: chapterUrl,
+  nextChapterUrl: nextChapterUrl,
+);
+
 /// 书源校验（搜索 / 发现 / 目录 / 正文）
 Future<SourceValidation> validateSource({
   required String sourceJson,
@@ -117,6 +129,54 @@ List<LocalChapterItem> parseTxtChapters({required String content}) =>
 /// EPUB 解析
 LocalBookInfo parseEpub({required List<int> data}) =>
     LegadoEngine.instance.api.crateApiParseEpub(data: data);
+
+/// 安全解析远程 ZIP，并按压缩包顺序返回其中的 TXT/EPUB 文件。
+List<RemoteArchiveBookFile> parseRemoteArchiveBookFiles({
+  required List<int> data,
+}) => LegadoEngine.instance.api.crateApiParseRemoteArchiveBookFiles(data: data);
+
+/// 应用正文替换规则。
+String applyContentReplaceRules({
+  required String text,
+  required List<ContentReplaceRuleDto> rules,
+}) => LegadoEngine.instance.api.crateApiApplyContentReplaceRules(
+  text: text,
+  rules: rules,
+);
+
+/// 应用全局及书源级正文替换规则。
+String processContent({
+  required String text,
+  required List<ContentReplaceRuleDto> rules,
+  ContentProcessingSourceRulesDto? sourceRules,
+}) => LegadoEngine.instance.api.crateApiProcessContent(
+  text: text,
+  rules: rules,
+  sourceRules: sourceRules,
+);
+
+/// 阅读前正文净化处理；不负责分页、断行或章节边界。
+String processContentForReading({
+  required String raw,
+  required String chapterTitle,
+  required String bookName,
+  required bool includeTitle,
+  required bool useReplace,
+  required String paragraphIndent,
+  required bool reSegment,
+  required List<ContentReplaceRuleDto> rules,
+  ContentProcessingSourceRulesDto? sourceRules,
+}) => LegadoEngine.instance.api.crateApiProcessContentForReading(
+  raw: raw,
+  chapterTitle: chapterTitle,
+  bookName: bookName,
+  includeTitle: includeTitle,
+  useReplace: useReplace,
+  paragraphIndent: paragraphIndent,
+  reSegment: reSegment,
+  rules: rules,
+  sourceRules: sourceRules,
+);
 
 /// 记录阅读（按书 + 日期累加）
 void recordReading({
@@ -461,6 +521,68 @@ class ChapterItem {
           baseUrl == other.baseUrl;
 }
 
+/// 书源级正文替换规则 DTO。
+class ContentProcessingSourceRulesDto {
+  final String contentReplace;
+  final String contentReplaceTo;
+
+  const ContentProcessingSourceRulesDto({
+    required this.contentReplace,
+    required this.contentReplaceTo,
+  });
+
+  @override
+  int get hashCode => contentReplace.hashCode ^ contentReplaceTo.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ContentProcessingSourceRulesDto &&
+          runtimeType == other.runtimeType &&
+          contentReplace == other.contentReplace &&
+          contentReplaceTo == other.contentReplaceTo;
+}
+
+/// 正文替换规则 DTO。
+class ContentReplaceRuleDto {
+  final String id;
+  final String name;
+  final String pattern;
+  final String replacement;
+  final bool isEnabled;
+  final bool isRegex;
+
+  const ContentReplaceRuleDto({
+    required this.id,
+    required this.name,
+    required this.pattern,
+    required this.replacement,
+    required this.isEnabled,
+    required this.isRegex,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      pattern.hashCode ^
+      replacement.hashCode ^
+      isEnabled.hashCode ^
+      isRegex.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ContentReplaceRuleDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          pattern == other.pattern &&
+          replacement == other.replacement &&
+          isEnabled == other.isEnabled &&
+          isRegex == other.isRegex;
+}
+
 /// 单日阅读统计
 class DailyReadingStat {
   final String date;
@@ -706,6 +828,28 @@ class ReadingStats {
           todayDurationSeconds == other.todayDurationSeconds &&
           weekChars == other.weekChars &&
           daily == other.daily;
+}
+
+/// 远程 ZIP 中可导入的本地书籍文件。
+class RemoteArchiveBookFile {
+  final String relativePath;
+  final Uint8List bytes;
+
+  const RemoteArchiveBookFile({
+    required this.relativePath,
+    required this.bytes,
+  });
+
+  @override
+  int get hashCode => relativePath.hashCode ^ bytes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RemoteArchiveBookFile &&
+          runtimeType == other.runtimeType &&
+          relativePath == other.relativePath &&
+          bytes == other.bytes;
 }
 
 /// RSS 文章 DTO

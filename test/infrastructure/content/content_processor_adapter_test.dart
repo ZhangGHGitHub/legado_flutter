@@ -69,6 +69,9 @@ class _FakeContentProcessingPort implements ContentProcessingPort {
   String? lastRaw;
 
   @override
+  String applyWithRules(String raw, List<ReplaceRule> rules) => raw;
+
+  @override
   void loadRules(List<ReplaceRule> rules) {}
 
   @override

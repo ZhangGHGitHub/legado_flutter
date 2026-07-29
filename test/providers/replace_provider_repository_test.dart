@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/repositories/replace_rule_repository.dart';
 import 'package:legado_flutter/domain/content/replace_rule.dart';
+import 'package:legado_flutter/infrastructure/content/content_processor_adapter.dart';
 import 'package:legado_flutter/providers/replace_provider.dart';
 
 class _FakeReplaceRuleRepository implements ReplaceRuleRepository {
@@ -52,7 +53,10 @@ class _FakeReplaceRuleRepository implements ReplaceRuleRepository {
 void main() {
   test('ReplaceProvider persists CRUD through the repository port', () async {
     final repository = _FakeReplaceRuleRepository();
-    final provider = ReplaceProvider(repository: repository);
+    final provider = ReplaceProvider(
+      repository: repository,
+      contentProcessor: ContentProcessorAdapter(),
+    );
 
     await provider.loadRules();
     expect(provider.replaceRules, isNotEmpty);
@@ -65,6 +69,7 @@ void main() {
     );
     await provider.addRule(rule);
     expect(provider.replaceRules.any((item) => item.id == rule.id), isTrue);
+    expect(provider.processContent('旧内容'), '');
 
     await provider.toggleRule(rule.id, false);
     expect(
@@ -86,7 +91,6 @@ void main() {
           .replacement,
       '新内容',
     );
-
     await provider.deleteRule(rule.id);
     expect(provider.replaceRules.any((item) => item.id == rule.id), isFalse);
   });

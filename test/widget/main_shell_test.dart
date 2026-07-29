@@ -7,6 +7,7 @@ import 'package:legado_flutter/database/dao/replace_rule_dao.dart';
 import 'package:legado_flutter/database/dao/source_dao.dart';
 import 'package:legado_flutter/domain/ports/public_text_fetch_port.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
+import 'package:legado_flutter/infrastructure/content/content_processor_adapter.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_book_source_validation_port.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
@@ -86,7 +87,10 @@ void main() {
           ),
           ChangeNotifierProvider(create: (_) => RssProvider()),
           ChangeNotifierProvider(
-            create: (_) => ReplaceProvider(repository: ReplaceRuleDao()),
+            create: (_) => ReplaceProvider(
+              repository: ReplaceRuleDao(),
+              contentProcessor: ContentProcessorAdapter(),
+            ),
           ),
         ],
         child: const MaterialApp(home: MainShell()),
@@ -143,7 +147,10 @@ void main() {
           ),
           ChangeNotifierProvider(create: (_) => RssProvider()),
           ChangeNotifierProvider(
-            create: (_) => ReplaceProvider(repository: ReplaceRuleDao()),
+            create: (_) => ReplaceProvider(
+              repository: ReplaceRuleDao(),
+              contentProcessor: ContentProcessorAdapter(),
+            ),
           ),
         ],
         child: const MaterialApp(home: MainShell()),

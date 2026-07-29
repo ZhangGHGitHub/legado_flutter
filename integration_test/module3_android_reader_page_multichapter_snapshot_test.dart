@@ -21,6 +21,7 @@ import 'package:legado_flutter/features/reader/reader_settings.dart';
 import 'package:legado_flutter/features/reader/turn/page_direction.dart';
 import 'package:legado_flutter/features/reader/turn/page_snapshot.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
+import 'package:legado_flutter/infrastructure/content/frb_content_processing_port.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_book_source_validation_port.dart';
 import 'package:legado_flutter/features/reader/turn/reader_turn_view.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
@@ -106,10 +107,18 @@ void main() {
       sourceService: sourceService,
     );
     await sourceProvider.addSource(bookSource);
-    final bookProvider = BookProvider(
-      repository: BookDao(),
+    final bookRepository = BookDao();
+    const contentCache = FileChapterContentCache();
+    ReadBook.instance.configureDependencies(
       sourceService: sourceService,
-      contentCache: const FileChapterContentCache(),
+      repository: bookRepository,
+      contentProcessor: FrbContentProcessingPort(),
+      contentCache: contentCache,
+    );
+    final bookProvider = BookProvider(
+      repository: bookRepository,
+      sourceService: sourceService,
+      contentCache: contentCache,
     );
     final prefs = await SharedPreferences.getInstance();
     final oldConfig = prefs.getString('read_book_config_v1');

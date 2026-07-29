@@ -4,3 +4,11 @@ import 'package:legado_flutter/domain/source/book_source.dart';
 abstract interface class ReaderContentSourcePort {
   Future<String> getChapterContent(String url, {required BookSource source});
 }
+
+abstract interface class PaginatedReaderContentSourcePort {
+  Future<String> getChapterContentWithNextChapter(
+    String url, {
+    required BookSource source,
+    String? nextChapterUrl,
+  });
+}

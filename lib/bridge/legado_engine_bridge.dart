@@ -216,12 +216,17 @@ class LegadoEngineBridge {
     }
   }
 
-  static Future<String> getContent(BookSource source, String chapterUrl) async {
+  static Future<String> getContent(
+    BookSource source,
+    String chapterUrl, {
+    String? nextChapterUrl,
+  }) async {
     if (!_available) throw StateError('Rust engine not available');
     try {
-      final body = await rust_api.getContent(
+      final body = await rust_api.getContentWithNextChapter(
         sourceJson: await _sourceJson(source),
         chapterUrl: chapterUrl,
+        nextChapterUrl: nextChapterUrl,
       );
       await _syncLoginHeaders();
       return body;

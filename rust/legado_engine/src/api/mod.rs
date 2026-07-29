@@ -90,6 +90,31 @@ pub struct LocalBookInfo {
     pub chapters: Vec<LocalChapterItem>,
 }
 
+/// 远程 ZIP 中可导入的本地书籍文件。
+#[derive(Debug, Clone)]
+pub struct RemoteArchiveBookFile {
+    pub relative_path: String,
+    pub bytes: Vec<u8>,
+}
+
+/// 正文替换规则 DTO。
+#[derive(Debug, Clone)]
+pub struct ContentReplaceRuleDto {
+    pub id: String,
+    pub name: String,
+    pub pattern: String,
+    pub replacement: String,
+    pub is_enabled: bool,
+    pub is_regex: bool,
+}
+
+/// 书源级正文替换规则 DTO。
+#[derive(Debug, Clone)]
+pub struct ContentProcessingSourceRulesDto {
+    pub content_replace: String,
+    pub content_replace_to: String,
+}
+
 /// 单日阅读统计
 #[derive(Debug, Clone)]
 pub struct DailyReadingStat {
@@ -264,6 +289,17 @@ pub async fn get_content(source_json: String, chapter_url: String) -> Result<Str
     content::get_content(&source_json, &chapter_url).await
 }
 
+/// 获取章节正文，并在正文下一页指向下一章时停止。
+#[frb]
+pub async fn get_content_with_next_chapter(
+    source_json: String,
+    chapter_url: String,
+    next_chapter_url: Option<String>,
+) -> Result<String, String> {
+    content::get_content_with_next_chapter(&source_json, &chapter_url, next_chapter_url.as_deref())
+        .await
+}
+
 /// 书源校验（搜索 / 发现 / 目录 / 正文）
 #[frb]
 pub async fn validate_source(
@@ -313,6 +349,83 @@ pub fn parse_txt_chapters(content: String) -> Vec<LocalChapterItem> {
 #[frb(sync)]
 pub fn parse_epub(data: Vec<u8>) -> Result<LocalBookInfo, String> {
     local_book::parse_epub(&data)
+}
+
+/// 安全解析远程 ZIP，并按压缩包顺序返回其中的 TXT/EPUB 文件。
+#[frb(sync)]
+pub fn parse_remote_archive_book_files(
+    data: Vec<u8>,
+) -> Result<Vec<RemoteArchiveBookFile>, String> {
+    local_book::parse_remote_archive_book_files(&data)
+}
+
+/// 应用正文替换规则。
+#[frb(sync)]
+pub fn apply_content_replace_rules(text: String, rules: Vec<ContentReplaceRuleDto>) -> String {
+    crate::content_processing::apply_replace_rules(&text, &to_content_rules(rules))
+}
+
+/// 应用全局及书源级正文替换规则。
+#[frb(sync)]
+pub fn process_content(
+    text: String,
+    rules: Vec<ContentReplaceRuleDto>,
+    source_rules: Option<ContentProcessingSourceRulesDto>,
+) -> String {
+    crate::content_processing::process(
+        &text,
+        &to_content_rules(rules),
+        source_rules
+            .as_ref()
+            .map(|rules| crate::content_processing::SourceRulesInput {
+                content_replace: rules.content_replace.clone(),
+                content_replace_to: rules.content_replace_to.clone(),
+            })
+            .as_ref(),
+    )
+}
+
+/// 阅读前正文净化处理；不负责分页、断行或章节边界。
+#[frb(sync)]
+pub fn process_content_for_reading(
+    raw: String,
+    chapter_title: String,
+    book_name: String,
+    include_title: bool,
+    use_replace: bool,
+    paragraph_indent: String,
+    re_segment: bool,
+    rules: Vec<ContentReplaceRuleDto>,
+    source_rules: Option<ContentProcessingSourceRulesDto>,
+) -> Result<String, String> {
+    crate::content_processing::process_for_reading(crate::content_processing::ReadingProcessInput {
+        raw,
+        chapter_title,
+        book_name,
+        include_title,
+        use_replace,
+        paragraph_indent,
+        re_segment,
+        rules: to_content_rules(rules),
+        source_rules: source_rules.map(|r| crate::content_processing::SourceRulesInput {
+            content_replace: r.content_replace,
+            content_replace_to: r.content_replace_to,
+        }),
+    })
+}
+
+fn to_content_rules(
+    rules: Vec<ContentReplaceRuleDto>,
+) -> Vec<crate::content_processing::ReplaceRuleInput> {
+    rules
+        .into_iter()
+        .map(|rule| crate::content_processing::ReplaceRuleInput {
+            pattern: rule.pattern,
+            replacement: rule.replacement,
+            is_enabled: rule.is_enabled,
+            is_regex: rule.is_regex,
+        })
+        .collect()
 }
 
 /// 记录阅读（按书 + 日期累加）

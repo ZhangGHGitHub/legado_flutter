@@ -40,8 +40,28 @@ pub fn parse_json_content(data: &Value, source: &BookSource) -> Result<String, S
 }
 
 pub fn extract_json_next_url(data: &Value, next_rule: &str) -> String {
-    if next_rule.is_empty() {
-        return String::new();
+    extract_json_next_urls(data, next_rule)
+        .into_iter()
+        .next()
+        .unwrap_or_default()
+}
+
+pub fn extract_json_next_urls(data: &Value, next_rule: &str) -> Vec<String> {
+    crate::rule::json_util::resolve_strings(data, next_rule)
+}
+
+#[cfg(test)]
+mod next_content_url_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn extracts_all_json_next_content_urls_in_rule_order() {
+        let data = json!({"next": ["/chapter/2", "/chapter/3"]});
+
+        assert_eq!(
+            extract_json_next_urls(&data, "$.next[*]"),
+            vec!["/chapter/2", "/chapter/3"]
+        );
     }
-    crate::rule::json_util::resolve_string(data, next_rule)
 }

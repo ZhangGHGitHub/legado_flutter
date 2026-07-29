@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:legado_flutter/domain/content/replace_rule.dart';
+import 'package:legado_flutter/services/replace_service.dart';
 import 'package:legado_flutter/widgets/replace_preview_panel.dart';
 
 void main() {
@@ -15,6 +16,7 @@ void main() {
         home: Scaffold(
           body: ReplacePreviewPanel(
             rules: rules,
+            applyRules: ReplaceService.applyWithRules,
             initialSample: '笔趣阁 www.test.com 为你提供最快更新\n正文',
           ),
         ),
@@ -53,6 +55,7 @@ void main() {
                 Expanded(
                   child: ReplacePreviewPanel(
                     rules: rules,
+                    applyRules: ReplaceService.applyWithRules,
                     initialSample: '本章未完，请点击下一页\n正文',
                   ),
                 ),

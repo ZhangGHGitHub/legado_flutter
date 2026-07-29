@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R3：完成阅读会话、正文处理、缓存和远端书籍 ZIP 的阶段退出门禁。阅读位置按当前页起始 UTF-16 章内位置保存；全局/书源替换、标题去重、重新分段和多行正则统一到 Rust，生产阅读、全文搜索、替换预览共用 `ContentProcessingPort`；正文下一页支持串行/并行规则顺序、循环终止、下一章边界和 100 页显式上限。文件/DB 缓存生命周期、桌面 59 项分页/断行/选区/像素门禁及 Android 4 项真实 ReaderPage/SVG 门禁通过。远端书籍 ZIP 由 Rust 负责格式识别、路径安全、50MB 输入/解压总量和损坏包错误，Flutter 仅写入 Rust 返回的安全文件；固定 FRB `2.11.1` 生成并移除陈旧重复正文出口。Rust workspace 核心 `185/185`、正文/ZIP 真实 Windows FRB `5/5`、Flutter 串行全量 `641` 通过（`3` 项既有跳过）、analyze、Android debug APK、`git diff --check` 均通过；架构 backlog 保持 `146`，无新增违规。
+
 - R2：完成 `java.startBrowserAwait` 可见 WebView 宿主并通过阶段退出门禁。QuickJS 在专用阻塞线程保持同一脚本上下文，Rust 通过长期 FRB Dart callback 服务串行请求 Flutter 导航；支持原版 2/3/4 参数、默认 `refetchAfterSuccess=true`、UTF-16 64 KiB URL 门禁、URL/HTML 两种加载、最终页面 Cookie 同步、DOM 返回、重新抓取和重定向最终 URL。组合根持有 `navigatorKey`，Feature 仅依赖纯 Dart port，取消或宿主错误保留原响应。固定 FRB `2.11.1` 生成与真实 callback 往返通过；Rust 核心 `166/166`、JS compatibility `18/18`、离线规则 fixture `4/4`、Flutter 全量 `629` 通过（`3` 项既有跳过）、analyze、Android debug APK 和三个 Rust ABI 构建通过。架构扫描保持既有 `146` 条 backlog，无新增违规；iOS/macOS 因 Windows 环境未执行 Xcode 构建。
 
 - R2：补齐书源 Cookie 的平台 WebView 定域清除。新增独立平台端口和 `legado_flutter/source_login_cookies` MethodChannel，Rust 通过固定 FRB `2.11.1` 返回 Public Suffix eTLD+1；Android 对 source host/eTLD+1 的 Cookie 逐个写过期值并 flush，iOS/macOS 通过 WK CookieStore 只删除精确目标域，均不调用全局清空。持久/Rust 清除不因平台尽力删除失败而回滚。Rust 核心 `163/163`、Flutter 定向 `5/5`、真实 FRB domain/set/clear 往返、analyze、Flutter 串行全量 `625`（`3` 项既有跳过）和 Android debug APK 构建通过；iOS/macOS 因本机无 Xcode 仅完成静态 API 校验。

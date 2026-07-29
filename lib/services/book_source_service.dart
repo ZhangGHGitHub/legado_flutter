@@ -16,7 +16,8 @@ import 'package:legado_flutter/domain/book/chapter.dart';
 import '../utils/site_busy_guard.dart';
 
 /// 书源服务门面 — 全部书源操作走 Rust 引擎（Phase E-B：无 Dart 回退）
-class BookSourceService implements ReaderContentSourcePort {
+class BookSourceService
+    implements ReaderContentSourcePort, PaginatedReaderContentSourcePort {
   BookSourceService({
     required BookSourceSearchPort searchPort,
     required BookSourceBookInfoPort bookInfoPort,
@@ -83,6 +84,31 @@ class BookSourceService implements ReaderContentSourcePort {
   }) async {
     try {
       final content = await _contentPort.getContent(source, url);
+      debugPrint('  ✓ Rust 正文: ${content.length} 字符');
+      return content;
+    } catch (e) {
+      debugPrint('  ✗ Rust 正文失败: $e');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<String> getChapterContentWithNextChapter(
+    String url, {
+    required BookSource source,
+    String? nextChapterUrl,
+  }) async {
+    final contentPort = _contentPort;
+    if (contentPort is! PaginatedBookSourceContentPort) {
+      return getChapterContent(url, source: source);
+    }
+    try {
+      final content = await (contentPort as PaginatedBookSourceContentPort)
+          .getContentWithNextChapter(
+            source,
+            url,
+            nextChapterUrl: nextChapterUrl,
+          );
       debugPrint('  ✓ Rust 正文: ${content.length} 字符');
       return content;
     } catch (e) {
