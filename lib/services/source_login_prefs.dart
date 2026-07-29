@@ -21,6 +21,9 @@ class SourceLoginPrefs {
   static String _headerKey(String sourceUrl) =>
       'source_login_header_${Uri.encodeComponent(sourceUrl)}';
 
+  static String _cookieKey(String sourceUrl) =>
+      'source_login_cookie_${Uri.encodeComponent(sourceUrl)}';
+
   static Future<Map<String, String>> load(String sourceUrl) async {
     final p = await _prefsOrNull();
     if (p == null) return {};
@@ -63,6 +66,24 @@ class SourceLoginPrefs {
     final p = await _prefsOrNull();
     if (p == null) return;
     await p.remove(_headerKey(sourceUrl));
+  }
+
+  static Future<String?> loadCookie(String sourceUrl) async {
+    final p = await _prefsOrNull();
+    if (p == null) return null;
+    return p.getString(_cookieKey(sourceUrl));
+  }
+
+  static Future<void> saveCookie(String sourceUrl, String cookie) async {
+    final p = await _prefsOrNull();
+    if (p == null) return;
+    await p.setString(_cookieKey(sourceUrl), cookie);
+  }
+
+  static Future<void> clearCookie(String sourceUrl) async {
+    final p = await _prefsOrNull();
+    if (p == null) return;
+    await p.remove(_cookieKey(sourceUrl));
   }
 
   /// 解析登录头：JSON 头 map，或非 JSON 时当作 Cookie 串（对齐 Rust `login_header_map`）

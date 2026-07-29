@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+typedef AppWebViewCookieCallback =
+    Future<void> Function(String pageUrl, String cookie);
+
 /// 通用内嵌 WebView — 对齐 Jingshiro WebViewActivity 轻量路径。
 ///
 /// Windows / Linux 官方 `webview_flutter` 不可用时回退为外链 + 说明页。
@@ -15,21 +18,32 @@ class AppWebViewPage extends StatefulWidget {
     this.initialUrl,
     this.htmlContent,
     this.baseUrl,
+    this.headers = const {},
+    this.onCookiesChanged,
   });
 
   final String title;
   final String? initialUrl;
   final String? htmlContent;
   final String? baseUrl;
+  final Map<String, String> headers;
+  final AppWebViewCookieCallback? onCookiesChanged;
 
   static Future<void> openUrl(
     BuildContext context, {
     required String title,
     required String url,
+    Map<String, String> headers = const {},
+    AppWebViewCookieCallback? onCookiesChanged,
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => AppWebViewPage(title: title, initialUrl: url),
+        builder: (_) => AppWebViewPage(
+          title: title,
+          initialUrl: url,
+          headers: headers,
+          onCookiesChanged: onCookiesChanged,
+        ),
       ),
     );
   }
@@ -39,6 +53,7 @@ class AppWebViewPage extends StatefulWidget {
     required String title,
     required String html,
     String? baseUrl,
+    AppWebViewCookieCallback? onCookiesChanged,
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute(
@@ -46,9 +61,19 @@ class AppWebViewPage extends StatefulWidget {
           title: title,
           htmlContent: html,
           baseUrl: baseUrl,
+          onCookiesChanged: onCookiesChanged,
         ),
       ),
     );
+  }
+
+  static String cookieHeaderFor(Iterable<WebViewCookie> cookies) {
+    final values = <String, String>{};
+    for (final cookie in cookies) {
+      final name = cookie.name.trim();
+      if (name.isNotEmpty) values[name] = cookie.value;
+    }
+    return values.entries.map((e) => '${e.key}=${e.value}').join('; ');
   }
 
   static bool get isWebViewSupported {
@@ -65,6 +90,8 @@ class AppWebViewPage extends StatefulWidget {
 }
 
 class _AppWebViewPageState extends State<AppWebViewPage> {
+  WebViewCookieManager? _cookieManager;
+  Future<void> _cookieSync = Future<void>.value();
   WebViewController? _controller;
   var _loading = true;
   String? _error;
@@ -84,15 +111,18 @@ class _AppWebViewPageState extends State<AppWebViewPage> {
       return;
     }
     try {
+      _cookieManager = WebViewCookieManager();
       final c = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setNavigationDelegate(
           NavigationDelegate(
-            onPageStarted: (_) {
+            onPageStarted: (url) {
               if (mounted) setState(() => _loading = true);
+              _scheduleCookieSync(url);
             },
-            onPageFinished: (_) {
+            onPageFinished: (url) {
               if (mounted) setState(() => _loading = false);
+              _scheduleCookieSync(url);
             },
             onWebResourceError: (e) {
               if (mounted) {
@@ -105,12 +135,12 @@ class _AppWebViewPageState extends State<AppWebViewPage> {
           ),
         );
       if (widget.htmlContent != null && widget.htmlContent!.isNotEmpty) {
-        await c.loadHtmlString(
-          widget.htmlContent!,
-          baseUrl: widget.baseUrl,
-        );
+        await c.loadHtmlString(widget.htmlContent!, baseUrl: widget.baseUrl);
       } else if (widget.initialUrl != null && widget.initialUrl!.isNotEmpty) {
-        await c.loadRequest(Uri.parse(widget.initialUrl!));
+        await c.loadRequest(
+          Uri.parse(widget.initialUrl!),
+          headers: widget.headers,
+        );
       }
       if (!mounted) return;
       setState(() {
@@ -123,6 +153,25 @@ class _AppWebViewPageState extends State<AppWebViewPage> {
         _loading = false;
         _error = e.toString();
       });
+    }
+  }
+
+  void _scheduleCookieSync(String pageUrl) {
+    if (widget.onCookiesChanged == null) return;
+    _cookieSync = _cookieSync.then((_) => _syncCookies(pageUrl));
+  }
+
+  Future<void> _syncCookies(String pageUrl) async {
+    final uri = Uri.tryParse(pageUrl);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) return;
+    try {
+      final cookies = await _cookieManager!.platform.getCookies(uri);
+      await widget.onCookiesChanged!(
+        pageUrl,
+        AppWebViewPage.cookieHeaderFor(cookies),
+      );
+    } catch (e) {
+      debugPrint('[WebView] Cookie 同步失败: $e');
     }
   }
 
@@ -170,10 +219,7 @@ class _AppWebViewPageState extends State<AppWebViewPage> {
           color: Theme.of(context).colorScheme.primary,
         ),
         const SizedBox(height: 16),
-        Text(
-          _error ?? '无法加载页面',
-          textAlign: TextAlign.center,
-        ),
+        Text(_error ?? '无法加载页面', textAlign: TextAlign.center),
         if (widget.htmlContent != null &&
             widget.htmlContent!.trim().isNotEmpty) ...[
           const SizedBox(height: 16),
@@ -198,7 +244,10 @@ class _AppWebViewPageState extends State<AppWebViewPage> {
 
   static String _stripHtml(String html) {
     return html
-        .replaceAll(RegExp(r'<script[\s\S]*?</script>', caseSensitive: false), '')
+        .replaceAll(
+          RegExp(r'<script[\s\S]*?</script>', caseSensitive: false),
+          '',
+        )
         .replaceAll(RegExp(r'<style[\s\S]*?</style>', caseSensitive: false), '')
         .replaceAll(RegExp(r'<[^>]+>'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')

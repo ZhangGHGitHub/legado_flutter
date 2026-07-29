@@ -44,6 +44,7 @@ import '../infrastructure/engine/frb_note_port.dart';
 import '../infrastructure/engine/frb_reading_record_port.dart';
 import '../infrastructure/engine/frb_rss_port.dart';
 import '../infrastructure/engine/frb_rss_sort_url_js_port.dart';
+import '../infrastructure/engine/frb_source_login_cookie_port.dart';
 import '../infrastructure/file_system/backup_local_file_adapter.dart';
 import '../infrastructure/network/frb_public_text_fetch_port.dart';
 import '../infrastructure/network/frb_application_binary_http_request_port.dart';
@@ -75,6 +76,7 @@ import '../services/reading_record_service.dart';
 import '../services/rss_service.dart';
 import '../services/rss_sort_urls.dart';
 import '../services/source_login_service.dart';
+import '../services/source_login_cookie_service.dart';
 import '../services/tts_service.dart';
 import '../services/web_api_service.dart';
 import '../services/webdav_prefs.dart';
@@ -88,13 +90,14 @@ abstract final class AppCompositionRoot {
   static Future<({Widget app})> _compose() async {
     const contentCache = FileChapterContentCache();
     const networkEnginePort = FrbNetworkEnginePort();
+    const sourceLoginCookiePort = FrbSourceLoginCookiePort();
     const webdavRepository = FrbWebDavRepository();
     const publicTextPort = FrbPublicTextFetchPort();
     const binaryHttpPort = FrbApplicationBinaryHttpRequestPort();
     final bookRepository = BookDao();
     final progressStore = await SharedPreferencesBookProgressSyncStore.load();
 
-    await _configureStaticServices(networkEnginePort);
+    await _configureStaticServices(networkEnginePort, sourceLoginCookiePort);
     TtsService.configureBinaryHttpPort(binaryHttpPort);
 
     final bookSourceService = BookSourceService(
@@ -212,6 +215,7 @@ abstract final class AppCompositionRoot {
 
   static Future<void> _configureStaticServices(
     FrbNetworkEnginePort networkEnginePort,
+    FrbSourceLoginCookiePort sourceLoginCookiePort,
   ) async {
     BookmarkService.configureBookmarkPort(FrbBookmarkPort());
     BookplateService.configureBookplatePort(FrbBookplatePort());
@@ -223,6 +227,7 @@ abstract final class AppCompositionRoot {
     RssService.configureRssPort(FrbRssPort());
     RssSortUrls.configureJsPort(FrbRssSortUrlJsPort());
     SourceLoginService.configureJsPort(const FrbJsEvalPort());
+    SourceLoginCookieService.configurePort(sourceLoginCookiePort);
     WebApiService.configureWebApiPort(FrbWebApiPort());
     BookGroupStore.configurePrefsPort(
       await SharedPreferencesBookGroupPrefs.load(),

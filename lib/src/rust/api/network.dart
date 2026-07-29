@@ -31,6 +31,17 @@ void setNetworkConfig({
 void clearEngineCache() =>
     LegadoEngine.instance.api.crateApiNetworkClearEngineCache();
 
+/// 用扁平 Cookie 整串替换书源 eTLD+1 Cookie 桶；空串等价于清除。
+void setSourceCookie({required String sourceUrl, required String cookie}) =>
+    LegadoEngine.instance.api.crateApiNetworkSetSourceCookie(
+      sourceUrl: sourceUrl,
+      cookie: cookie,
+    );
+
+/// 清除且仅清除目标书源 eTLD+1 Cookie 桶。
+void clearSourceCookie({required String sourceUrl}) => LegadoEngine.instance.api
+    .crateApiNetworkClearSourceCookie(sourceUrl: sourceUrl);
+
 /// 开启一次 debug HTTP 请求轨迹采集。
 void startHttpRequestTrace() =>
     LegadoEngine.instance.api.crateApiNetworkStartHttpRequestTrace();

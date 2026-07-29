@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:legado_flutter/application/source_login/login_row_ui.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../services/source_login_prefs.dart';
+import '../../services/source_login_cookie_service.dart';
 import '../../services/source_login_service.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../common/app_webview_page.dart';
@@ -194,16 +195,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
       r.commands,
       onShowBrowser: (url, html) async {
         if (!mounted) return;
-        if (html.isNotEmpty) {
-          await AppWebViewPage.openHtml(
-            context,
-            title: '登录',
-            html: html,
-            baseUrl: url.isNotEmpty ? url : source.bookSourceUrl,
-          );
-        } else if (url.isNotEmpty) {
-          await AppWebViewPage.openUrl(context, title: '登录', url: url);
-        }
+        await _openLoginWebView(url: url, html: html);
       },
       onUpLogin: (data) {
         if (data == null) return;
@@ -219,8 +211,53 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
         _init();
       },
       onPutHeader: (h) => SourceLoginPrefs.saveHeader(source.bookSourceUrl, h),
-      onDelHeader: () => SourceLoginPrefs.clearHeader(source.bookSourceUrl),
+      onDelHeader: _deleteLoginHeaderAndCookie,
     );
+  }
+
+  Future<Map<String, String>> _webViewHeaders() async {
+    final headers = Map<String, String>.of(source.customHeaders);
+    final loginHeader =
+        await SourceLoginPrefs.loadHeader(source.bookSourceUrl) ?? '';
+    headers.addAll(SourceLoginPrefs.parseLoginHeader(loginHeader));
+    return headers;
+  }
+
+  Future<void> _openLoginWebView({
+    required String url,
+    String html = '',
+  }) async {
+    Future<void> onCookiesChanged(String pageUrl, String cookie) {
+      return SourceLoginCookieService.capture(
+        sourceUrl: source.bookSourceUrl,
+        cookie: cookie,
+      );
+    }
+
+    if (html.isNotEmpty) {
+      await AppWebViewPage.openHtml(
+        context,
+        title: '登录 · ${source.bookSourceName}',
+        html: html,
+        baseUrl: url.isNotEmpty ? url : source.bookSourceUrl,
+        onCookiesChanged: onCookiesChanged,
+      );
+    } else if (url.isNotEmpty) {
+      final headers = await _webViewHeaders();
+      if (!mounted) return;
+      await AppWebViewPage.openUrl(
+        context,
+        title: '登录 · ${source.bookSourceName}',
+        url: url,
+        headers: headers,
+        onCookiesChanged: onCookiesChanged,
+      );
+    }
+  }
+
+  Future<void> _deleteLoginHeaderAndCookie() async {
+    await SourceLoginPrefs.clearHeader(source.bookSourceUrl);
+    await SourceLoginCookieService.clear(source.bookSourceUrl);
   }
 
   Future<void> _showLoginHeader() async {
@@ -250,7 +287,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
   }
 
   Future<void> _clearLoginHeader() async {
-    await SourceLoginPrefs.clearHeader(source.bookSourceUrl);
+    await _deleteLoginHeaderAndCookie();
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -277,11 +314,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
 
       if (SourceLoginService.isHttpUrl(url)) {
         if (!mounted) return;
-        await AppWebViewPage.openUrl(
-          context,
-          title: '登录 · ${source.bookSourceName}',
-          url: url,
-        );
+        await _openLoginWebView(url: url);
         if (mounted) {
           setState(() => _status = '已打开登录页，完成后可返回');
         }

@@ -2370,3 +2370,29 @@ WebView Cookie 边界并执行阶段退出门禁，当前不提前宣称退出�
 
 边界结论：Dart/Flutter Dio 依赖已完整移除。R2 下一批处理书源登录 WebView Cookie 到 Rust 网络会话的
 同步闭环；普通 RSS WebView 不共享书源 Cookie，`java.startBrowserAwait` 真实宿主另列后续独立批次。
+
+## 114. 2026-07-29：R2 书源登录 WebView Cookie 基础闭环
+
+- 对照只读原版 `WebViewLoginFragment`、`CookieStore`、`AnalyzeUrl` 和 `HttpHelper`：登录 WebView
+  初始请求只携带 source header 与覆盖其上的 login header，不额外注入 Rust 持久 Cookie；页面开始和
+  完成时按当前 URL 读取 WebView Cookie，但写入 `bookSourceUrl` 对应的书源 Cookie 桶。
+- 新增 `SourceLoginCookiePort`、`SourceLoginCookieService` 与 FRB adapter。Flutter 持久化扁平 Cookie
+  串并立即整串写入 Rust；每次书源引擎调用前恢复该 source key Cookie，空串表示清除。
+- Rust 新增 `set_source_cookie`/`clear_source_cookie`，使用 Public Suffix 将 source key 归一化为
+  eTLD+1，IP 保持独立；跨子域共享、跨实际请求域按 source key 读取，整串设置删除旧键，登录 header
+  的非 JSON Cookie 继续按原版合并。持久 Cookie 先合并、HTTP 会话 Cookie 后合并，同名时会话值覆盖。
+- 删除登录 header 时同时删除持久/Rust Cookie；源编辑页“清除 Cookie”改为只清目标 source key，
+  不再调用全局 Cookie/JS cache 清理。普通 RSS/通用 WebView 未接入该回调，不共享书源 Cookie。
+- unsupported Windows/Linux WebView 回退改为确认平台支持后再创建 Cookie manager，避免桌面占位页断言。
+
+验证结果：
+
+- Rust source Cookie `7/7`、network API `5/5`；`cargo test -p legado_engine` 核心 `160/160`，
+  其余集成与文档测试无失败。
+- 固定 `flutter_rust_bridge_codegen 2.11.1` 重新生成绑定并重建 release DLL；set/clear 真实 FRB 往返通过。
+- Flutter Cookie/登录/WebView 定向 `20/20`；`flutter analyze --no-pub` 无诊断；
+  `flutter test --no-pub --concurrency=1`：`625` 通过、`3` 项既有条件跳过。
+
+边界结论：手动 WebView 登录后的 Cookie 已能持久进入 Rust，并由搜索、详情、目录和正文复用。原版
+定域清除还会尝试让平台 WebView Cookie 过期，当前插件缺少等价定域删除入口；此外
+`enabledCookieJar` 的二次覆盖优先级和 `java.startBrowserAwait` 真实宿主仍需独立完成，R2 不退出。

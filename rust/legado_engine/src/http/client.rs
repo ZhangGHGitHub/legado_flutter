@@ -936,7 +936,9 @@ fn build_source_headers(url: &str, source_json: &str) -> HeaderMap {
         serde_json::from_str(source_json).unwrap_or(serde_json::json!({}));
     let source_url = source
         .get("bookSourceUrl")
+        .or_else(|| source.get("sourceUrl"))
         .and_then(|v| v.as_str())
+        .filter(|value| !value.trim().is_empty())
         .unwrap_or(url);
 
     let mut headers = default_headers();
@@ -969,7 +971,7 @@ fn build_source_headers(url: &str, source_json: &str) -> HeaderMap {
         }
     }
 
-    let cookie_str = COOKIE_JAR.lock().unwrap().get_cookie(url);
+    let cookie_str = COOKIE_JAR.lock().unwrap().get_cookie_for_source(source_url);
     if !cookie_str.is_empty() {
         if let Ok(v) = HeaderValue::from_str(&cookie_str) {
             headers.insert("Cookie", v);
@@ -1027,21 +1029,82 @@ pub fn fetch_blocking_with_header_map(
 
 /// 从 Cookie 字符串刷新 jar（对齐 BaseSource.putLoginHeader）
 pub fn replace_cookie_for_source(source_url: &str, cookie: &str) {
-    let cookie = cookie.trim();
-    if cookie.is_empty() || source_url.trim().is_empty() {
-        return;
-    }
-    let set_cookies: Vec<String> = cookie
-        .split(';')
-        .map(|p| p.trim())
-        .filter(|p| !p.is_empty() && p.contains('='))
-        .map(|p| format!("{p}; Path=/"))
-        .collect();
-    if set_cookies.is_empty() {
-        return;
-    }
     if let Ok(mut jar) = COOKIE_JAR.lock() {
-        jar.save_from_headers(source_url, &set_cookies);
+        let _ = jar.merge_cookie_for_source(source_url, cookie);
+    }
+}
+
+/// 用扁平 Cookie 整串替换书源 eTLD+1 桶。
+pub fn set_source_cookie(source_url: &str, cookie: &str) -> Result<(), String> {
+    COOKIE_JAR
+        .lock()
+        .map_err(|_| "Cookie 锁失败".to_string())?
+        .set_cookie_for_source(source_url, cookie)
+}
+
+/// 清除且仅清除目标书源 eTLD+1 Cookie 桶。
+pub fn clear_source_cookie(source_url: &str) -> Result<(), String> {
+    COOKIE_JAR
+        .lock()
+        .map_err(|_| "Cookie 锁失败".to_string())?
+        .clear_cookie_for_source(source_url)
+}
+
+#[cfg(test)]
+mod source_cookie_tests {
+    use super::*;
+    use serial_test::serial;
+
+    fn cookie_header(headers: &HeaderMap) -> &str {
+        headers
+            .get("Cookie")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    #[serial]
+    fn source_headers_reuse_login_cookie_across_request_domain() {
+        clear_http_cookies().unwrap();
+        set_source_cookie(
+            "https://login.reader.example.co.uk/account",
+            "session=source-key",
+        )
+        .unwrap();
+        set_source_cookie(
+            "https://content.unrelated.example.net",
+            "session=request-domain",
+        )
+        .unwrap();
+        let source_json = serde_json::json!({
+            "bookSourceUrl": "https://www.example.co.uk/source"
+        })
+        .to_string();
+
+        let headers = build_source_headers(
+            "https://content.unrelated.example.net/chapter/1",
+            &source_json,
+        );
+
+        assert_eq!(cookie_header(&headers), "session=source-key");
+        clear_http_cookies().unwrap();
+    }
+
+    #[test]
+    #[serial]
+    fn replace_cookie_for_source_merges_into_registrable_domain_bucket() {
+        clear_http_cookies().unwrap();
+        set_source_cookie("https://a.example.com", "keep=old; shared=old").unwrap();
+        replace_cookie_for_source("https://b.example.com", "added=new; shared=new");
+        let source_json = serde_json::json!({
+            "sourceUrl": "https://reader.example.com/source"
+        })
+        .to_string();
+
+        let headers = build_source_headers("https://api.other.net/content", &source_json);
+
+        assert_eq!(cookie_header(&headers), "added=new; keep=old; shared=new");
+        clear_http_cookies().unwrap();
     }
 }
 

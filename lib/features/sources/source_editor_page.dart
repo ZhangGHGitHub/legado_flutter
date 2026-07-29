@@ -10,8 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../providers/source_provider.dart';
-import '../../services/cache_service.dart';
 import '../../services/qr_code_service.dart';
+import '../../services/source_login_cookie_service.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../code_edit/code_edit_page.dart';
@@ -904,12 +904,14 @@ class _SourceEditorPageState extends State<SourceEditorPage>
 
   Future<void> _clearCookie() async {
     try {
-      await context.read<CacheService>().clearEngineCache();
+      final sourceUrl = _toBookSource().bookSourceUrl.trim();
+      if (sourceUrl.isEmpty) throw StateError('源 URL 不能为空');
+      await SourceLoginCookieService.clear(sourceUrl);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('已清除 Cookie / JS 缓存')));
-      await CodeEditPrefs.appendLog('清除 Cookie/JS 缓存');
+      ).showSnackBar(const SnackBar(content: Text('已清除 Cookie')));
+      await CodeEditPrefs.appendLog('清除书源 Cookie');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(

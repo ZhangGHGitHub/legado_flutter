@@ -59,6 +59,18 @@ pub fn clear_engine_cache() -> Result<(), String> {
     Ok(())
 }
 
+/// 用扁平 Cookie 整串替换书源 eTLD+1 Cookie 桶；空串等价于清除。
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_source_cookie(source_url: String, cookie: String) -> Result<(), String> {
+    client::set_source_cookie(&source_url, &cookie)
+}
+
+/// 清除且仅清除目标书源 eTLD+1 Cookie 桶。
+#[flutter_rust_bridge::frb(sync)]
+pub fn clear_source_cookie(source_url: String) -> Result<(), String> {
+    client::clear_source_cookie(&source_url)
+}
+
 /// 开启一次 debug HTTP 请求轨迹采集。
 #[flutter_rust_bridge::frb(sync)]
 pub fn start_http_request_trace() -> Result<(), String> {

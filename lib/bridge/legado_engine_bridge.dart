@@ -8,6 +8,7 @@ import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../services/source_login_prefs.dart';
+import '../services/source_login_cookie_service.dart';
 import '../src/rust/api.dart' as rust_api;
 import '../src/rust/api/network.dart' as network_api;
 import '../src/rust/frb_generated.dart';
@@ -43,6 +44,7 @@ class LegadoEngineBridge {
 
   /// 书源 JSON + 登录头合并进 `header`（EN-08，对齐 Jingshiro AnalyzeUrl）
   static Future<String> _sourceJson(BookSource source) async {
+    await SourceLoginCookieService.restore(source.bookSourceUrl);
     final loginHeader =
         await SourceLoginPrefs.loadHeader(source.bookSourceUrl) ?? '';
     // 预热 Rust 登录头缓存，供 loginCheckJs / ajax 使用
