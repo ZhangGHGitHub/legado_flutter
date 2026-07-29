@@ -2396,3 +2396,23 @@ WebView Cookie 边界并执行阶段退出门禁，当前不提前宣称退出�
 边界结论：手动 WebView 登录后的 Cookie 已能持久进入 Rust，并由搜索、详情、目录和正文复用。原版
 定域清除还会尝试让平台 WebView Cookie 过期，当前插件缺少等价定域删除入口；此外
 `enabledCookieJar` 的二次覆盖优先级和 `java.startBrowserAwait` 真实宿主仍需独立完成，R2 不退出。
+
+## 115. 2026-07-29：R2 enabledCookieJar 与 Cookie 优先级
+
+- 请求 Cookie 按原版两阶段组装：先以 source key/eTLD+1 持久 Cookie 为低优先级，随后由 source
+  header、login header 和 AnalyzeUrl URL option 依次覆盖；URL option 的 method/body/charset/headers
+  现在均进入搜索请求，不再丢失 headers。
+- `enabledCookieJar=true` 时，发送前按实际请求 URL/eTLD+1 再合并一次 CookieJar，同名键覆盖临时
+  Cookie，未冲突的 source/URL option Cookie 保留；为 `false` 时不执行第二次覆盖。
+- 仅在 `enabledCookieJar=true` 时接收并保存书源响应的 `Set-Cookie`；普通非书源 HTTP 路径保持原有
+  Cookie 行为。loginCheckJs、java.ajax 和 GE-UA 重试复用同一策略。
+
+验证结果：
+
+- Cookie 优先级、开关两态、跨实际请求域与响应保存定向 `4/4` 通过。
+- `cargo test -p legado_engine` 核心 `162/162`，其余集成与文档测试无失败；release DLL 重建通过。
+- `flutter analyze --no-pub` 无诊断；`flutter test --no-pub --concurrency=1`：`625` 通过、
+  `3` 项既有条件跳过。
+
+边界结论：`enabledCookieJar` 与实际代码优先级已对齐，搜索 URL option headers 已恢复。R2 剩余
+Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.startBrowserAwait` 真实 WebView。

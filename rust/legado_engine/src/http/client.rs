@@ -777,8 +777,17 @@ async fn ajax_fetch(
         }
     }
 
-    let mut headers = if let Some(sj) = source_json {
-        build_source_headers(&url, sj)
+    let mut request_headers = std::collections::HashMap::new();
+    if let Some(r) = referer {
+        request_headers.insert("Referer".to_string(), r.to_string());
+    }
+    if let Some(lh) = login_header {
+        request_headers.extend(login_header_map(lh));
+    }
+    request_headers.extend(cfg.headers.clone());
+
+    let headers = if let Some(sj) = source_json {
+        prepare_source_headers(&url, sj, Some(&request_headers))
     } else {
         let mut h = default_headers();
         let cookie_str = COOKIE_JAR.lock().unwrap().get_cookie(&url);
@@ -787,34 +796,9 @@ async fn ajax_fetch(
                 h.insert("Cookie", v);
             }
         }
+        insert_header_map(&mut h, &request_headers);
         h
     };
-
-    if let Some(r) = referer {
-        if let Ok(v) = HeaderValue::from_str(r) {
-            headers.insert("Referer", v);
-        }
-    }
-
-    for (k, v) in &cfg.headers {
-        if let (Ok(name), Ok(val)) = (
-            HeaderName::from_bytes(k.as_bytes()),
-            HeaderValue::from_str(v),
-        ) {
-            headers.insert(name, val);
-        }
-    }
-
-    if let Some(lh) = login_header {
-        for (k, v) in login_header_map(lh) {
-            if let (Ok(name), Ok(val)) = (
-                HeaderName::from_bytes(k.as_bytes()),
-                HeaderValue::from_str(&v),
-            ) {
-                headers.insert(name, val);
-            }
-        }
-    }
 
     let response = send_request(
         &url,
@@ -824,7 +808,12 @@ async fn ajax_fetch(
         headers,
     )
     .await?;
-    save_cookies(&url, &response);
+    if source_json
+        .map(source_cookie_jar_enabled_json)
+        .unwrap_or(true)
+    {
+        save_cookies(&url, &response);
+    }
     let bytes = read_response_bytes(response).await?;
     let text = charset::decode_bytes(&bytes, &cfg.charset)?;
     // 对齐 fetch_text：命中 WAF 时尝试 GE-UA 后重试
@@ -931,7 +920,11 @@ fn book_source_url_from_json(source_json: &str) -> String {
         .unwrap_or_default()
 }
 
-fn build_source_headers(url: &str, source_json: &str) -> HeaderMap {
+fn prepare_source_headers(
+    url: &str,
+    source_json: &str,
+    extra_headers: Option<&std::collections::HashMap<String, String>>,
+) -> HeaderMap {
     let source: serde_json::Value =
         serde_json::from_str(source_json).unwrap_or(serde_json::json!({}));
     let source_url = source
@@ -971,13 +964,84 @@ fn build_source_headers(url: &str, source_json: &str) -> HeaderMap {
         }
     }
 
-    let cookie_str = COOKIE_JAR.lock().unwrap().get_cookie_for_source(source_url);
-    if !cookie_str.is_empty() {
-        if let Ok(v) = HeaderValue::from_str(&cookie_str) {
-            headers.insert("Cookie", v);
-        }
+    if let Some(extra_headers) = extra_headers {
+        insert_header_map(&mut headers, extra_headers);
+    }
+
+    let source_cookie = COOKIE_JAR.lock().unwrap().get_cookie_for_source(source_url);
+    merge_cookie_header(&mut headers, &source_cookie, false);
+
+    if source_cookie_jar_enabled(&source) {
+        let request_cookie = COOKIE_JAR.lock().unwrap().get_cookie_for_source(url);
+        merge_cookie_header(&mut headers, &request_cookie, true);
     }
     headers
+}
+
+fn insert_header_map(headers: &mut HeaderMap, values: &std::collections::HashMap<String, String>) {
+    for (name, value) in values {
+        if let (Ok(name), Ok(value)) = (
+            HeaderName::from_bytes(name.as_bytes()),
+            HeaderValue::from_str(value),
+        ) {
+            headers.insert(name, value);
+        }
+    }
+}
+
+fn merge_cookie_header(headers: &mut HeaderMap, cookie: &str, cookie_overrides: bool) {
+    if cookie.trim().is_empty() {
+        return;
+    }
+    let existing = headers
+        .get("Cookie")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+    let mut merged = parse_cookie_header(if cookie_overrides { existing } else { cookie });
+    merged.extend(parse_cookie_header(if cookie_overrides {
+        cookie
+    } else {
+        existing
+    }));
+    let value = format_cookie_header(&merged);
+    if let Ok(value) = HeaderValue::from_str(&value) {
+        headers.insert("Cookie", value);
+    }
+}
+
+fn parse_cookie_header(cookie: &str) -> std::collections::HashMap<String, String> {
+    cookie
+        .split(';')
+        .filter_map(|part| {
+            let (name, value) = part.trim().split_once('=')?;
+            let name = name.trim();
+            (!name.is_empty()).then(|| (name.to_string(), value.trim().to_string()))
+        })
+        .collect()
+}
+
+fn format_cookie_header(cookies: &std::collections::HashMap<String, String>) -> String {
+    let mut values: Vec<String> = cookies
+        .iter()
+        .map(|(name, value)| format!("{name}={value}"))
+        .collect();
+    values.sort();
+    values.join("; ")
+}
+
+fn source_cookie_jar_enabled(source: &serde_json::Value) -> bool {
+    source
+        .get("enabledCookieJar")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(true)
+}
+
+fn source_cookie_jar_enabled_json(source_json: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(source_json)
+        .ok()
+        .as_ref()
+        .map(source_cookie_jar_enabled)
+        .unwrap_or(true)
 }
 
 /// 用显式 header map 同步请求（loginCheckJs `java.getStrResponse`）
@@ -1054,6 +1118,9 @@ pub fn clear_source_cookie(source_url: &str) -> Result<(), String> {
 mod source_cookie_tests {
     use super::*;
     use serial_test::serial;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
 
     fn cookie_header(headers: &HeaderMap) -> &str {
         headers
@@ -1077,13 +1144,15 @@ mod source_cookie_tests {
         )
         .unwrap();
         let source_json = serde_json::json!({
-            "bookSourceUrl": "https://www.example.co.uk/source"
+            "bookSourceUrl": "https://www.example.co.uk/source",
+            "enabledCookieJar": false
         })
         .to_string();
 
-        let headers = build_source_headers(
+        let headers = prepare_source_headers(
             "https://content.unrelated.example.net/chapter/1",
             &source_json,
+            None,
         );
 
         assert_eq!(cookie_header(&headers), "session=source-key");
@@ -1101,9 +1170,121 @@ mod source_cookie_tests {
         })
         .to_string();
 
-        let headers = build_source_headers("https://api.other.net/content", &source_json);
+        let headers =
+            prepare_source_headers("https://api.other.net/content", &source_json, None);
 
         assert_eq!(cookie_header(&headers), "added=new; keep=old; shared=new");
+        clear_http_cookies().unwrap();
+    }
+
+    #[test]
+    #[serial]
+    fn source_cookie_priority_matches_url_option_and_cookie_jar_policy() {
+        clear_http_cookies().unwrap();
+        super::super::login_header_store::clear();
+        let source_url = "https://reader.source.example";
+        set_source_cookie(source_url, "persist=1; shared=persist").unwrap();
+        set_source_cookie("https://api.request.example.net", "actual=1; shared=actual").unwrap();
+        super::super::login_header_store::seed(source_url, r#"{"Cookie":"login=1; shared=login"}"#);
+        let extra = std::collections::HashMap::from([
+            ("Cookie".to_string(), "url=1; shared=url".to_string()),
+            ("X-Url-Option".to_string(), "present".to_string()),
+        ]);
+
+        let disabled = serde_json::json!({
+            "bookSourceUrl": source_url,
+            "enabledCookieJar": false,
+            "header": {"Cookie": "source=1; shared=source"}
+        })
+        .to_string();
+        let disabled_headers = prepare_source_headers(
+            "https://api.request.example.net/content",
+            &disabled,
+            Some(&extra),
+        );
+        assert_eq!(
+            cookie_header(&disabled_headers),
+            "persist=1; shared=url; url=1"
+        );
+        assert_eq!(disabled_headers["X-Url-Option"], "present");
+
+        let enabled = serde_json::json!({
+            "bookSourceUrl": source_url,
+            "enabledCookieJar": true,
+            "header": {"Cookie": "source=1; shared=source"}
+        })
+        .to_string();
+        let enabled_headers = prepare_source_headers(
+            "https://api.request.example.net/content",
+            &enabled,
+            Some(&extra),
+        );
+        assert_eq!(
+            cookie_header(&enabled_headers),
+            "actual=1; persist=1; shared=actual; url=1"
+        );
+
+        super::super::login_header_store::clear();
+        clear_http_cookies().unwrap();
+    }
+
+    fn set_cookie_fixture() -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0_u8; 2048];
+            let _ = stream.read(&mut request);
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nSet-Cookie: response=stored; Max-Age=3600; Path=/\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok",
+                )
+                .unwrap();
+        });
+        format!("http://{address}/cookie")
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn enabled_cookie_jar_controls_response_cookie_storage() {
+        clear_http_cookies().unwrap();
+        let disabled_url = set_cookie_fixture();
+        let disabled_source = serde_json::json!({
+            "bookSourceUrl": "https://disabled.example",
+            "enabledCookieJar": false
+        })
+        .to_string();
+        assert_eq!(
+            fetch_with_source(&disabled_url, "GET", None, "UTF-8", &disabled_source)
+                .await
+                .unwrap(),
+            "ok"
+        );
+        assert!(COOKIE_JAR
+            .lock()
+            .unwrap()
+            .get_cookie_for_source(&disabled_url)
+            .is_empty());
+
+        let enabled_url = set_cookie_fixture();
+        let enabled_source = serde_json::json!({
+            "bookSourceUrl": "https://enabled.example",
+            "enabledCookieJar": true
+        })
+        .to_string();
+        assert_eq!(
+            fetch_with_source(&enabled_url, "GET", None, "UTF-8", &enabled_source)
+                .await
+                .unwrap(),
+            "ok"
+        );
+        assert_eq!(
+            COOKIE_JAR
+                .lock()
+                .unwrap()
+                .get_cookie_for_source(&enabled_url),
+            "response=stored"
+        );
         clear_http_cookies().unwrap();
     }
 }
@@ -1134,28 +1315,60 @@ pub async fn fetch_with_source_meta(
     charset: &str,
     source_json: &str,
 ) -> Result<FetchResponse, String> {
-    let resp = match fetch_with_source_meta_inner(url, method, body, charset, source_json).await {
-        Ok(r) => r,
-        Err(e) => {
-            let lc = crate::rule::js_engine::apply_login_check_js(
-                source_json,
-                &format!("Error Response\n{e}"),
-                url,
-                method,
-                body,
-                charset,
-            );
-            if !lc.body.is_empty() && !lc.body.starts_with("Error Response") {
-                return Ok(FetchResponse {
-                    status_code: 200,
-                    byte_len: lc.body.len(),
-                    body: lc.body,
-                    login_header: lc.login_header,
-                });
+    fetch_with_source_meta_and_headers(url, method, body, charset, source_json, None).await
+}
+
+/// 按 AnalyzeUrl 配置发送书源请求，URL option headers 在登录头之后覆盖。
+pub async fn fetch_request_config_with_source(
+    config: &RequestConfig,
+    resolved_url: &str,
+    source_json: &str,
+) -> Result<String, String> {
+    Ok(fetch_with_source_meta_and_headers(
+        resolved_url,
+        &config.method,
+        config.body.as_deref(),
+        &config.charset,
+        source_json,
+        Some(&config.headers),
+    )
+    .await?
+    .body)
+}
+
+async fn fetch_with_source_meta_and_headers(
+    url: &str,
+    method: &str,
+    body: Option<&str>,
+    charset: &str,
+    source_json: &str,
+    extra_headers: Option<&std::collections::HashMap<String, String>>,
+) -> Result<FetchResponse, String> {
+    let resp =
+        match fetch_with_source_meta_inner(url, method, body, charset, source_json, extra_headers)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                let lc = crate::rule::js_engine::apply_login_check_js(
+                    source_json,
+                    &format!("Error Response\n{e}"),
+                    url,
+                    method,
+                    body,
+                    charset,
+                );
+                if !lc.body.is_empty() && !lc.body.starts_with("Error Response") {
+                    return Ok(FetchResponse {
+                        status_code: 200,
+                        byte_len: lc.body.len(),
+                        body: lc.body,
+                        login_header: lc.login_header,
+                    });
+                }
+                return Err(e);
             }
-            return Err(e);
-        }
-    };
+        };
     let lc = crate::rule::js_engine::apply_login_check_js(
         source_json,
         &resp.body,
@@ -1183,14 +1396,17 @@ async fn fetch_with_source_meta_inner(
     body: Option<&str>,
     charset: &str,
     source_json: &str,
+    extra_headers: Option<&std::collections::HashMap<String, String>>,
 ) -> Result<FetchResponse, String> {
-    let resp = fetch_with_source_meta_once(url, method, body, charset, source_json).await?;
+    let resp =
+        fetch_with_source_meta_once(url, method, body, charset, source_json, extra_headers).await?;
     if !super::ge_ua::is_challenge(&resp.body) {
         return Ok(resp);
     }
 
     pass_ge_ua_challenge(url, &resp.body).await?;
-    let retry = fetch_with_source_meta_once(url, method, body, charset, source_json).await?;
+    let retry =
+        fetch_with_source_meta_once(url, method, body, charset, source_json, extra_headers).await?;
     if super::ge_ua::is_challenge(&retry.body) {
         return Err("命中 WAF 验证页（人人书云MAX GE-UA），自动验证后仍被拦截".to_string());
     }
@@ -1203,11 +1419,14 @@ async fn fetch_with_source_meta_once(
     body: Option<&str>,
     charset: &str,
     source_json: &str,
+    extra_headers: Option<&std::collections::HashMap<String, String>>,
 ) -> Result<FetchResponse, String> {
-    let headers = build_source_headers(url, source_json);
+    let headers = prepare_source_headers(url, source_json, extra_headers);
     let response = send_request(url, method, body, charset, headers).await?;
     let status_code = response.status().as_u16();
-    save_cookies(url, &response);
+    if source_cookie_jar_enabled_json(source_json) {
+        save_cookies(url, &response);
+    }
     let bytes = read_response_bytes(response).await?;
     let byte_len = bytes.len();
     let body = charset::decode_bytes(&bytes, charset)?;
@@ -1232,7 +1451,7 @@ async fn maybe_pass_ge_ua_and_retry(
     }
     pass_ge_ua_challenge(url, &text).await?;
     let retry = if let Some(sj) = source_json {
-        fetch_with_source_meta_once(url, method, body, charset, sj)
+        fetch_with_source_meta_once(url, method, body, charset, sj, None)
             .await?
             .body
     } else {

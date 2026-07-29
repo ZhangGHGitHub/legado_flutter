@@ -21,14 +21,9 @@ pub async fn search(source_json: &str, keyword: &str) -> Result<Vec<SearchItem>,
         resolved_url = http::client::resolve_url(&resolved_url, &source.book_source_url);
     }
 
-    let body = http::client::fetch_with_source(
-        &resolved_url,
-        &cfg.method,
-        cfg.body.as_deref(),
-        &cfg.charset,
-        &source.raw_json,
-    )
-    .await?;
+    let body =
+        http::client::fetch_request_config_with_source(&cfg, &resolved_url, &source.raw_json)
+            .await?;
 
     // JSON API 书源
     if let Ok(data) = serde_json::from_str::<serde_json::Value>(&body) {

@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R2：对齐书源 `enabledCookieJar` 与 Cookie 优先级。普通请求按“持久 source-key Cookie < source header < login header < URL option”合并；开关启用时，发送前再由实际请求域 CookieJar 按键覆盖，并仅在启用时保存响应 `Set-Cookie`。搜索请求恢复传递 AnalyzeUrl method/body/charset 之外的 URL option headers，loginCheckJs 与 GE-UA 重试继续走同一请求链。Cookie 策略/响应保存定向 `4/4`、Rust 核心 `162/162`、Flutter 串行全量 `625` 通过（`3` 项既有跳过），analyze 无诊断。
+
 - R2：建立书源登录 WebView Cookie 到 Rust 网络会话的闭环。登录页按原版在 source/login header 合并后加载，不预注入 Rust Cookie；页面开始/完成时读取当前 WebView Cookie，按 `bookSourceUrl` 持久化并通过新领域端口整串写入 Rust。Rust 使用 Public Suffix 将 source key 归一化为 eTLD+1，跨子域共享、跨请求域按 source key 复用，支持整串替换、合并、空串/定域清除，HTTP 会话 Cookie 保持覆盖持久值；删除登录 header 同时清理持久/Rust Cookie，源编辑页“清除 Cookie”不再误清全局 JS 缓存。固定 FRB `2.11.1` 生成绑定，Rust 核心 `160/160`、Cookie/网络定向 `12/12`、Flutter Cookie/登录定向 `20/20`、release DLL 往返、全仓 analyze 与 Flutter 串行全量 `625` 通过（`3` 项既有跳过）。WebView 平台 Cookie 的定域过期、`enabledCookieJar` 优先级和 `java.startBrowserAwait` 真实宿主仍待后续批次。
 
 - R2：移除已无调用者的 Dio 直接依赖及传递的 `dio_web_adapter` lockfile 条目；生产/测试 import、pubspec 声明和 lockfile 条目均为 `0`，其余依赖版本未升级。`flutter pub get`、全仓 analyze 与 Flutter 串行全量 `618` 通过（`3` 项既有跳过）；R2 继续处理书源登录 WebView Cookie 闭环。
