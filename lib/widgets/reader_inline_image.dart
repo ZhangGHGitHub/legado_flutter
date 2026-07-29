@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../services/reader_image_cache.dart';
+import 'remote_binary_image.dart';
 
 /// Inline reader image with stable layout bounds and a non-network fallback.
 class ReaderInlineImage extends StatefulWidget {
@@ -127,12 +128,9 @@ class _ReaderInlineImageState extends State<ReaderInlineImage> {
                       : 'reader-inline-image-error',
                 )
               : _loadedImage(_bytes!))
-        : !_isHttpSource && widget.imageProvider == null
-        ? _fallback(key: 'reader-inline-image-error')
-        : Image(
-            image:
-                widget.imageProvider ??
-                NetworkImage(widget.source, headers: widget.headers),
+        : widget.imageProvider != null
+        ? Image(
+            image: widget.imageProvider!,
             fit: BoxFit.contain,
             width: widget.width,
             height: widget.height,
@@ -141,6 +139,19 @@ class _ReaderInlineImageState extends State<ReaderInlineImage> {
               return _fallback(key: 'reader-inline-image-loading');
             },
             errorBuilder: (context, error, stackTrace) =>
+                _fallback(key: 'reader-inline-image-error'),
+          )
+        : !_isHttpSource
+        ? _fallback(key: 'reader-inline-image-error')
+        : RemoteBinaryImage(
+            url: widget.source,
+            headers: widget.headers,
+            fit: BoxFit.contain,
+            width: widget.width,
+            height: widget.height,
+            placeholderBuilder: (_) =>
+                _fallback(key: 'reader-inline-image-loading'),
+            errorBuilder: (_, _, _) =>
                 _fallback(key: 'reader-inline-image-error'),
           );
     final child = SizedBox(

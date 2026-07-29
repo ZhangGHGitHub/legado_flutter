@@ -243,8 +243,7 @@ class _ReaderPageState extends State<ReaderPage> {
       setState(() => _readerImageCache = cache);
       unawaited(_loadReaderImageSizes());
     } catch (_) {
-      // The reader keeps its existing Image.network fallback when cache setup
-      // is unavailable on a platform without application storage.
+      // Stable inline-image bounds remain available when cache setup fails.
     }
   }
 

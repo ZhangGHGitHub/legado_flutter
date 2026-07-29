@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../domain/ports/application_http_request_port.dart';
 import '../../domain/rss/rss_article.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../services/rss_service.dart';
 import '../../services/rss_sort_urls.dart';
 import '../../services/rss_star_prefs.dart';
 import '../../services/source_login_service.dart';
+import '../../widgets/remote_binary_image.dart';
 import '../../features/sources/source_login_page.dart';
 import 'rss_read_page.dart';
 import 'rss_source_edit_page.dart';
@@ -367,8 +369,9 @@ class _RssArticlesListState extends State<_RssArticlesList>
               leading: a.image != null && a.image!.isNotEmpty
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(4),
-                      child: Image.network(
-                        a.image!,
+                      child: RemoteBinaryImage(
+                        url: a.image!,
+                        policy: ApplicationHttpPolicy.localNetwork,
                         width: 56,
                         height: 56,
                         fit: BoxFit.cover,

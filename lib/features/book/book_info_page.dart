@@ -14,6 +14,7 @@ import '../../services/book_source_service.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/legado_popup_menu.dart';
+import '../../widgets/remote_binary_image.dart';
 import '../../features/reader/reader_page.dart';
 import '../reader/manga_reader_page.dart';
 import 'change_cover_page.dart';
@@ -822,10 +823,12 @@ class _BookInfoPageState extends State<BookInfoPage> {
                 fit: StackFit.expand,
                 children: [
                   if (cover.isNotEmpty)
-                    Image.network(
-                      cover,
+                    RemoteBinaryImage(
+                      url: cover,
                       fit: BoxFit.cover,
                       errorBuilder: (_, _, _) =>
+                          Container(color: const Color(0xFF5A5A5A)),
+                      placeholderBuilder: (_) =>
                           Container(color: const Color(0xFF5A5A5A)),
                     )
                   else

@@ -1,11 +1,44 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as image_lib;
+import 'package:legado_flutter/domain/ports/application_binary_http_request_port.dart';
+import 'package:legado_flutter/domain/ports/application_http_request_port.dart';
 import 'package:legado_flutter/domain/rules/dict_rule.dart';
 import 'package:legado_flutter/widgets/dict_lookup_sheet.dart';
+import 'package:legado_flutter/widgets/remote_binary_image.dart';
+import 'package:provider/provider.dart';
+
+class _FakeBinaryHttpPort implements ApplicationBinaryHttpRequestPort {
+  final body = Uint8List.fromList(
+    image_lib.encodePng(image_lib.Image(width: 2, height: 3)),
+  );
+  final policies = <ApplicationHttpPolicy>[];
+
+  @override
+  Future<ApplicationBinaryHttpResponse> send({
+    required String url,
+    required String method,
+    Map<String, String> headers = const {},
+    Uint8List? body,
+    int timeoutSeconds = 30,
+    int maxResponseBytes = 0,
+    required ApplicationHttpPolicy policy,
+  }) async {
+    policies.add(policy);
+    return ApplicationBinaryHttpResponse(
+      statusCode: 200,
+      contentType: 'image/png',
+      body: this.body,
+    );
+  }
+}
 
 void main() {
+  setUp(RemoteBinaryImage.clearMemoryCache);
+
   final rules = [
     const DictRule(name: '禁用', enabled: false, sortNumber: 0),
     const DictRule(name: '第二', enabled: true, sortNumber: 2),
@@ -106,47 +139,95 @@ void main() {
     tester,
   ) async {
     final calls = <String>[];
+    final port = _FakeBinaryHttpPort();
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: DictResultContent(
-            rule: rules[1],
-            content:
-                '<h3>释义</h3><p><strong>重点</strong><br>说明</p>'
-                '<img src="https://example.com/word.png">'
-                '<button name="播放" data-click="play">按钮</button>',
-            onButtonClick: (rule, name, click) async {
-              calls.add('$name:$click');
-            },
+      Provider<ApplicationBinaryHttpRequestPort>.value(
+        value: port,
+        child: MaterialApp(
+          home: Scaffold(
+            body: DictResultContent(
+              rule: rules[1],
+              content:
+                  '<h3>释义</h3><p><strong>重点</strong><br>说明</p>'
+                  '<img src="https://example.com/word.png">'
+                  '<button name="播放" data-click="play">按钮</button>',
+              onButtonClick: (rule, name, click) async {
+                calls.add('$name:$click');
+              },
+            ),
           ),
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('释义'), findsOneWidget);
     expect(_findSelectableTextContaining('重点'), findsOneWidget);
+    final remoteImage = tester.widget<RemoteBinaryImage>(
+      find.byType(RemoteBinaryImage),
+    );
+    expect(remoteImage.policy, ApplicationHttpPolicy.publicOnly);
     expect(find.byType(Image), findsOneWidget);
+    expect(port.policies, [ApplicationHttpPolicy.publicOnly]);
     await tester.tap(find.text('按钮'));
     expect(calls, ['播放:play']);
   });
 
   testWidgets('renders the original md result marker', (tester) async {
+    final port = _FakeBinaryHttpPort();
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: DictResultContent(
-            rule: rules[1],
-            content:
-                '<md># 标题\n\n**重点**\n\n![插图](https://example.com/a.png)</md>',
+      Provider<ApplicationBinaryHttpRequestPort>.value(
+        value: port,
+        child: MaterialApp(
+          home: Scaffold(
+            body: DictResultContent(
+              rule: rules[1],
+              content:
+                  '<md># 标题\n\n**重点**\n\n![插图](https://example.com/a.png)</md>',
+            ),
           ),
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(_findRichTextContaining('标题'), findsOneWidget);
     expect(_findRichTextContaining('重点'), findsOneWidget);
+    final remoteImage = tester.widget<RemoteBinaryImage>(
+      find.byType(RemoteBinaryImage),
+    );
+    expect(remoteImage.height, 120);
+    expect(remoteImage.fit, BoxFit.contain);
+    expect(remoteImage.policy, ApplicationHttpPolicy.publicOnly);
+    expect(port.policies, [ApplicationHttpPolicy.publicOnly]);
+  });
+
+  testWidgets('renders inline HTML images through the public-only port', (
+    tester,
+  ) async {
+    final port = _FakeBinaryHttpPort();
+    await tester.pumpWidget(
+      Provider<ApplicationBinaryHttpRequestPort>.value(
+        value: port,
+        child: MaterialApp(
+          home: Scaffold(
+            body: DictResultContent(
+              rule: rules[1],
+              content: '<p>前缀<img src="https://example.com/inline.png">后缀</p>',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final remoteImage = tester.widget<RemoteBinaryImage>(
+      find.byType(RemoteBinaryImage),
+    );
+    expect(remoteImage.height, 120);
+    expect(remoteImage.fit, BoxFit.contain);
+    expect(remoteImage.policy, ApplicationHttpPolicy.publicOnly);
+    expect(port.policies, [ApplicationHttpPolicy.publicOnly]);
   });
 }
 

@@ -2335,3 +2335,24 @@ R2 下一批先迁移正文图片缓存、阅读样式 ZIP 与 HTTP TTS，前一
 
 边界结论：三个业务二进制 Dio 入口已收敛到 Rust/FRB port；页面中的 `Image.network/NetworkImage`
 仍绕过该边界。R2 下一批按前一批全绿原则迁移书源/漫画/封面，再迁移 RSS/字典远程图片。
+
+## 112. 2026-07-29：R2 页面远程图片统一二进制端口
+
+- 新增 `RemoteBinaryImage`，通过根组合层提供的 `ApplicationBinaryHttpRequestPort` 下载原始图片字节；
+  单响应限制 32 MiB，内存 LRU 限制 64 MiB/128 项，相同 URL、headers 和网络策略的并发请求合并。
+- 书源、漫画、封面、RSS 和正文图片使用 `localNetwork`，保留 localhost/LAN；漫画图片继续使用
+  `SourceProvider.imageHeadersForBook` 提供的书源 headers，并通过同一组件预取。
+- 字典 Markdown/HTML 图片固定使用 `publicOnly`；端口缺失、请求失败或解码失败时只渲染调用者既有
+  占位，不再回退 `Image.network/NetworkImage` 绕过统一网络策略。
+- 本批未修改 `legado-main/`、正文、目录、分页、章节身份、阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- 远程图片、RSS、字典、封面、正文图片边界定向回归 `18/18` 通过。
+- `flutter analyze --no-pub` 无诊断；`flutter test --no-pub --concurrency=1`：`618` 通过、
+  `3` 项既有条件跳过。
+- 源码扫描确认生产 `Image.network/NetworkImage` 为 `0`，生产与测试 `package:dio` import 为 `0`；
+  `pubspec.yaml` 和 lockfile 中的 Dio 依赖声明留到下一批独立移除。
+
+边界结论：页面图片展示已进入统一 Rust/FRB 二进制网络边界。R2 尚需移除 Dio 依赖声明、核查
+WebView Cookie 边界并执行阶段退出门禁，当前不提前宣称退出。

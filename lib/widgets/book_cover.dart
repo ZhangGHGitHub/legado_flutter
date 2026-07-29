@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/legado_tokens.dart';
+import 'remote_binary_image.dart';
 
 /// 书籍封面（列表 / 网格 / 详情共用）
 class BookCover extends StatelessWidget {
@@ -37,7 +38,8 @@ class BookCover extends StatelessWidget {
                       constraints.maxHeight < double.infinity
                   ? constraints.maxHeight
                   : w * 1.33);
-        final iconSize = (w.isFinite ? w : LegadoTokens.bookCoverWidthList) * 0.35;
+        final iconSize =
+            (w.isFinite ? w : LegadoTokens.bookCoverWidthList) * 0.35;
 
         return ClipRRect(
           borderRadius: BorderRadius.circular(radius),
@@ -45,17 +47,13 @@ class BookCover extends StatelessWidget {
             width: w.isFinite ? w : null,
             height: h.isFinite ? h : null,
             child: coverUrl.isNotEmpty
-                ? Image.network(
-                    coverUrl,
+                ? RemoteBinaryImage(
+                    url: coverUrl,
                     fit: BoxFit.cover,
                     width: w.isFinite ? w : null,
                     height: h.isFinite ? h : null,
-                    errorBuilder: (_, _, _) =>
-                        _placeholder(theme, iconSize),
-                    loadingBuilder: (_, child, progress) {
-                      if (progress == null) return child;
-                      return _placeholder(theme, iconSize);
-                    },
+                    placeholderBuilder: (_) => _placeholder(theme, iconSize),
+                    errorBuilder: (_, _, _) => _placeholder(theme, iconSize),
                   )
                 : _placeholder(theme, iconSize),
           ),

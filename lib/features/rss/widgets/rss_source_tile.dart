@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import 'package:legado_flutter/domain/rss/rss_source.dart';
+import '../../../domain/ports/application_http_request_port.dart';
 import '../../../services/reader_font_loader.dart';
 import '../../../theme/legado_tokens.dart';
+import '../../../widgets/remote_binary_image.dart';
 
 /// 订阅源网格卡片 — 对齐 Jingshiro `item_rss.xml`（12dp 卡片 / 50dp 图标 / 13sp 双行名）
 class RssSourceTile extends StatelessWidget {
@@ -81,8 +83,9 @@ class RssSourceTile extends StatelessWidget {
     if (url != null && url.startsWith('http')) {
       return ClipRRect(
         borderRadius: LegadoTokens.cardRadius,
-        child: Image.network(
-          url,
+        child: RemoteBinaryImage(
+          url: url,
+          policy: ApplicationHttpPolicy.localNetwork,
           width: 50,
           height: 50,
           fit: BoxFit.cover,

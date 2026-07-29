@@ -8,9 +8,11 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../application/dictionary/dict_rule_tester.dart';
+import '../domain/ports/application_http_request_port.dart';
 import '../domain/ports/dict_rule_query_port.dart';
 import '../domain/rules/dict_rule.dart';
 import '../services/dict_rule_prefs.dart';
+import 'remote_binary_image.dart';
 
 typedef DictRulesLoader = Future<List<DictRule>> Function();
 typedef DictRuleQuery = Future<String> Function(DictRule rule, String word);
@@ -270,7 +272,7 @@ class _DictResultContentState extends State<DictResultContent> {
 
   List<InlineSpan> _inlineMarkdownSpans(String text, ThemeData theme) {
     final spans = <InlineSpan>[];
-    final pattern = RegExp(r'(!?)\[([^]]*)\]\(([^)]+)\)|\*\*([^*]+)\*\*');
+    final pattern = RegExp(r'(!?)\[([^\]]*)\]\(([^)]+)\)|\*\*([^*]+)\*\*');
     var offset = 0;
     for (final match in pattern.allMatches(text)) {
       if (match.start > offset) {
@@ -286,8 +288,9 @@ class _DictResultContentState extends State<DictResultContent> {
             alignment: PlaceholderAlignment.middle,
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Image.network(
-                target,
+              child: RemoteBinaryImage(
+                url: target,
+                policy: ApplicationHttpPolicy.publicOnly,
                 height: 120,
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) =>
@@ -338,8 +341,9 @@ class _DictResultContentState extends State<DictResultContent> {
           output.add(
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Image.network(
-                src,
+              child: RemoteBinaryImage(
+                url: src,
+                policy: ApplicationHttpPolicy.publicOnly,
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) =>
                     SelectableText(src),
@@ -409,8 +413,9 @@ class _DictResultContentState extends State<DictResultContent> {
           spans.add(
             WidgetSpan(
               alignment: PlaceholderAlignment.middle,
-              child: Image.network(
-                src,
+              child: RemoteBinaryImage(
+                url: src,
+                policy: ApplicationHttpPolicy.publicOnly,
                 height: 120,
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) => Text(src),

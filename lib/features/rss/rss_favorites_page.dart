@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../domain/ports/application_http_request_port.dart';
 import '../../domain/rss/rss_article.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../providers/rss_provider.dart';
 import '../../services/rss_star_prefs.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/remote_binary_image.dart';
 import 'rss_read_page.dart';
 
 /// RSS 收藏列表 — 对齐 Jingshiro RssFavorites / RssStar
@@ -87,8 +89,9 @@ class _RssFavoritesPageState extends State<RssFavoritesPage> {
                     leading: a.image != null && a.image!.isNotEmpty
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(4),
-                            child: Image.network(
-                              a.image!,
+                            child: RemoteBinaryImage(
+                              url: a.image!,
+                              policy: ApplicationHttpPolicy.localNetwork,
                               width: 48,
                               height: 48,
                               fit: BoxFit.cover,

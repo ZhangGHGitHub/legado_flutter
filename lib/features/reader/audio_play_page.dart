@@ -11,6 +11,7 @@ import '../../providers/source_provider.dart';
 import '../../services/tts_service.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/legado_popup_menu.dart';
+import '../../widgets/remote_binary_image.dart';
 
 /// 有声 / TTS 播放器 — 对齐 Jingshiro [AudioPlayActivity] + `activity_audio_play.xml`
 class AudioPlayPage extends StatefulWidget {
@@ -505,10 +506,11 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
             if (widget.book.coverUrl.isNotEmpty)
               ImageFiltered(
                 imageFilter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-                child: Image.network(
-                  widget.book.coverUrl,
+                child: RemoteBinaryImage(
+                  url: widget.book.coverUrl,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => const ColoredBox(color: _chromeBg),
+                  placeholderBuilder: (_) => const ColoredBox(color: _chromeBg),
                 ),
               )
             else

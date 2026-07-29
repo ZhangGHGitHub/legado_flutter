@@ -13,6 +13,7 @@ import '../../providers/source_provider.dart';
 import '../../services/manga_prefs.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_popup_menu.dart';
+import '../../widgets/remote_binary_image.dart';
 import '../book/change_source_page.dart';
 import '../book/toc_sheet.dart';
 
@@ -59,6 +60,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     with SingleTickerProviderStateMixin {
   late int _chapterIndex;
   List<String> _imageUrls = const [];
+  Map<String, String> _imageHeaders = const {};
   int _pageIndex = 0;
   bool _loading = true;
   String? _error;
@@ -143,6 +145,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       _loading = true;
       _error = null;
     });
+    final sourceProvider = context.read<SourceProvider>();
     try {
       String content;
       if (seed != null && seed.isNotEmpty) {
@@ -150,9 +153,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       } else {
         final chapter = widget.chapters[_chapterIndex];
         final bookProvider = context.read<BookProvider>();
-        final source = context.read<SourceProvider>().findSourceForBook(
-          widget.book,
-        );
+        final source = sourceProvider.findSourceForBook(widget.book);
         if (source == null) {
           throw StateError('未找到书源，无法加载漫画页');
         }
@@ -165,6 +166,9 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       }
       final base = _chapter?.url;
       final urls = MangaImageExtractor.extract(content, baseUrl: base);
+      final imageHeaders = await sourceProvider.imageHeadersForBook(
+        widget.book,
+      );
       if (!mounted) return;
       if (urls.isEmpty) {
         setState(() {
@@ -185,6 +189,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       }
       setState(() {
         _imageUrls = urls;
+        _imageHeaders = imageHeaders;
         _pageIndex = resetPage ? 0 : _pageIndex.clamp(0, urls.length - 1);
         _loading = false;
         _error = null;
@@ -207,7 +212,19 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     final start = _pageIndex;
     final end = math.min(_imageUrls.length, start + math.max(1, n));
     for (var i = start; i < end; i++) {
-      precacheImage(NetworkImage(_imageUrls[i]), context);
+      unawaited(_prefetchImage(_imageUrls[i]));
+    }
+  }
+
+  Future<void> _prefetchImage(String url) async {
+    try {
+      await RemoteBinaryImage.prefetch(
+        context,
+        url: url,
+        headers: _imageHeaders,
+      );
+    } catch (_) {
+      // Display path keeps the existing broken-image fallback.
     }
   }
 
@@ -415,26 +432,17 @@ class _MangaReaderPageState extends State<MangaReaderPage>
 
   Widget _buildImage(String url, {required bool fillWidth}) {
     final accent = Theme.of(context).colorScheme.primary;
-    final img = Image.network(
-      url,
+    final img = RemoteBinaryImage(
+      url: url,
+      headers: _imageHeaders,
       fit: fillWidth ? BoxFit.fitWidth : BoxFit.contain,
       width: fillWidth ? double.infinity : null,
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return SizedBox(
-          height: 220,
-          child: Center(
-            child: CircularProgressIndicator(
-              color: accent,
-              strokeWidth: 3,
-              value: progress.expectedTotalBytes != null
-                  ? progress.cumulativeBytesLoaded /
-                        progress.expectedTotalBytes!
-                  : null,
-            ),
-          ),
-        );
-      },
+      placeholderBuilder: (context) => SizedBox(
+        height: 220,
+        child: Center(
+          child: CircularProgressIndicator(color: accent, strokeWidth: 3),
+        ),
+      ),
       errorBuilder: (context, error, stackTrace) => Container(
         height: 180,
         alignment: Alignment.center,
