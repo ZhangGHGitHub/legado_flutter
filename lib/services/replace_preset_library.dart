@@ -1,4 +1,4 @@
-import '../models/replace_rule.dart';
+import '../domain/content/replace_rule.dart';
 
 /// 可导入的替换规则预设
 class ReplacePreset {
@@ -19,13 +19,13 @@ class ReplacePreset {
   });
 
   ReplaceRule toRule({bool enabled = true}) => ReplaceRule(
-        id: 'preset_$id',
-        name: name,
-        pattern: pattern,
-        replacement: replacement,
-        isRegex: isRegex,
-        isEnabled: enabled,
-      );
+    id: 'preset_$id',
+    name: name,
+    pattern: pattern,
+    replacement: replacement,
+    isRegex: isRegex,
+    isEnabled: enabled,
+  );
 }
 
 /// 预设规则库 — 常见广告/格式净化（Phase 2.2）

@@ -2,7 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/txt_toc_rule.dart';
+import '../application/rules/txt_toc_rule_creation_policy.dart';
+import '../domain/rules/txt_toc_rule.dart';
 
 /// TXT 目录规则持久化 — SharedPreferences JSON，对齐 Jingshiro `txtTocRules` 表
 class TxtTocRulePrefs {
@@ -24,7 +25,11 @@ class TxtTocRulePrefs {
     }
     try {
       final list = (jsonDecode(raw) as List)
-          .map((e) => TxtTocRule.fromJson(Map<String, dynamic>.from(e as Map)))
+          .map(
+            (e) => TxtTocRuleCreationPolicy.decode(
+              Map<String, dynamic>.from(e as Map),
+            ),
+          )
           .toList();
       list.sort((a, b) => a.serialNumber.compareTo(b.serialNumber));
       _cache = list;
@@ -48,9 +53,7 @@ class TxtTocRulePrefs {
 
   static List<TxtTocRule> get enabledRules {
     final all = cached;
-    return all
-        .where((r) => r.enable && r.rule.trim().isNotEmpty)
-        .toList()
+    return all.where((r) => r.enable && r.rule.trim().isNotEmpty).toList()
       ..sort((a, b) => a.serialNumber.compareTo(b.serialNumber));
   }
 

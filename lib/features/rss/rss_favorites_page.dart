@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/rss_article.dart';
+import '../../domain/rss/rss_article.dart';
 import '../../models/rss_source.dart';
 import '../../providers/rss_provider.dart';
 import '../../services/rss_star_prefs.dart';

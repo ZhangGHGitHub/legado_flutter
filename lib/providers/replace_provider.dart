@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
+import '../domain/content/replace_rule.dart';
 import '../domain/repositories/replace_rule_repository.dart';
-import '../models/replace_rule.dart';
 import '../help/content_processor.dart';
 import '../services/replace_service.dart';
 

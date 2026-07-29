@@ -6,7 +6,7 @@ import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:url_launcher/url_launcher.dart';
 
-import '../models/dict_rule.dart';
+import '../domain/rules/dict_rule.dart';
 import '../services/dict_rule_prefs.dart';
 import '../services/dict_rule_tester.dart';
 

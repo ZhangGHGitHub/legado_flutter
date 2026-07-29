@@ -1,4 +1,4 @@
-import '../../models/replace_rule.dart';
+import '../content/replace_rule.dart';
 
 /// 替换规则领域存储端口。
 ///

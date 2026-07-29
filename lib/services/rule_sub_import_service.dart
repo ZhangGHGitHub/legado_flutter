@@ -2,11 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../domain/content/replace_rule.dart';
 import '../domain/ports/public_text_fetch_port.dart';
+import '../domain/source_subscription/rule_sub.dart';
 import '../models/book_source.dart';
-import '../models/replace_rule.dart';
 import '../models/rss_source.dart';
-import '../models/rule_sub.dart';
 import '../providers/replace_provider.dart';
 import '../providers/rss_provider.dart';
 import '../providers/source_provider.dart';

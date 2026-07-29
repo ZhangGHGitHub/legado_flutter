@@ -1,7 +1,8 @@
 import 'dart:convert';
 
+import '../application/book/book_group_policy.dart';
+import '../domain/book/book_group.dart';
 import '../domain/ports/book_group_prefs.dart';
-import '../models/book_group.dart';
 
 /// 书架分组持久化 — 对齐 Jingshiro `book_groups` 表（SharedPreferences JSON）
 abstract final class BookGroupStore {
@@ -23,14 +24,14 @@ abstract final class BookGroupStore {
   static List<BookGroup> get cached {
     final c = _cache;
     if (c != null) return List.unmodifiable(c);
-    return BookGroup.defaultSystemGroups();
+    return BookGroupPolicy.defaultSystemGroups();
   }
 
   static Future<List<BookGroup>> load() async {
     final prefs = _resolvePrefs();
     final raw = await prefs.read(_prefsKey);
     if (raw == null || raw.isEmpty) {
-      final defaults = BookGroup.defaultSystemGroups();
+      final defaults = BookGroupPolicy.defaultSystemGroups();
       _cache = defaults;
       await _persist(defaults, prefs: prefs);
       return List.from(defaults);
@@ -44,7 +45,7 @@ abstract final class BookGroupStore {
       _cache = list;
       return List.from(list);
     } catch (_) {
-      final defaults = BookGroup.defaultSystemGroups();
+      final defaults = BookGroupPolicy.defaultSystemGroups();
       _cache = defaults;
       return List.from(defaults);
     }
@@ -52,7 +53,7 @@ abstract final class BookGroupStore {
 
   static void _ensureSystemGroups(List<BookGroup> list) {
     final ids = list.map((g) => g.groupId).toSet();
-    for (final sys in BookGroup.defaultSystemGroups()) {
+    for (final sys in BookGroupPolicy.defaultSystemGroups()) {
       if (!ids.contains(sys.groupId)) list.add(sys);
     }
   }

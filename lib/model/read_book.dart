@@ -3,10 +3,10 @@ import 'package:flutter/foundation.dart';
 import '../domain/repositories/book_repository.dart';
 import '../domain/ports/chapter_content_cache_port.dart';
 import '../domain/ports/content_processing_port.dart';
+import '../domain/ports/reader_content_source_port.dart';
 import '../models/book.dart';
 import '../models/book_source.dart';
 import '../models/chapter.dart';
-import '../services/book_source_service.dart';
 
 /// 阅读会话 — 对齐 Legado `ReadBook.kt`
 ///
@@ -16,7 +16,7 @@ class ReadBook extends ChangeNotifier {
 
   static final ReadBook instance = ReadBook._();
 
-  BookSourceService? _sourceService;
+  ReaderContentSourcePort? _sourceService;
   BookRepository? _repository;
   ContentProcessingPort? _processor;
   ChapterContentCachePort? _contentCache;
@@ -53,7 +53,7 @@ class ReadBook extends ChangeNotifier {
 
   /// 根组合层入口：生产启动和直接测试必须显式提供全部领域端口。
   void configureDependencies({
-    required BookSourceService sourceService,
+    required ReaderContentSourcePort sourceService,
     required BookRepository repository,
     required ContentProcessingPort contentProcessor,
     required ChapterContentCachePort contentCache,
@@ -66,7 +66,7 @@ class ReadBook extends ChangeNotifier {
 
   /// 兼容 [BookProvider] 的会话依赖刷新；不创建或推断任何具体适配器。
   void configure({
-    required BookSourceService sourceService,
+    required ReaderContentSourcePort sourceService,
     BookRepository? repository,
     ContentProcessingPort? contentProcessor,
     ChapterContentCachePort? contentCache,

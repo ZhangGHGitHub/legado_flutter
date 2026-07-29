@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/models/rule_sub.dart';
+import 'package:legado_flutter/application/source_subscription/rule_sub_policy.dart';
+import 'package:legado_flutter/domain/source_subscription/rule_sub.dart';
 
 void main() {
   group('RuleSub model contract', () {
@@ -41,6 +42,22 @@ void main() {
       expect(rule.js, isNull);
       expect(rule.showRule, isNull);
       expect(rule.sourceUrl, isNull);
+    });
+
+    test('application policy supplies the legacy timestamp id default', () {
+      final rule = RuleSubPolicy.decode(const {
+        'name': '无 ID 订阅',
+      }, now: () => DateTime.fromMillisecondsSinceEpoch(123456));
+
+      expect(rule.id, 123456);
+      expect(rule.name, '无 ID 订阅');
+    });
+
+    test('application policy keeps type labels outside the entity', () {
+      const rule = RuleSub(id: 11, type: 1);
+
+      expect(rule.typeLabel, '订阅源');
+      expect(RuleSubPolicy.typeLabel(99), '书源');
     });
 
     test('toJson and fromJson round-trip all fields', () {

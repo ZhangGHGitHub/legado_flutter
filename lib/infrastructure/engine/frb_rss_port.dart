@@ -1,6 +1,6 @@
 import '../../bridge/legado_engine_bridge.dart';
 import '../../domain/ports/rss_port.dart';
-import '../../models/rss_article.dart';
+import '../../domain/rss/rss_article.dart';
 import '../../models/rss_source.dart';
 import '../../src/rust/api.dart' as rust_api;
 

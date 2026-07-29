@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/click_action_prefs.dart';
+import 'click_zone_labels.dart';
 import 'reader_settings.dart';
 
 /// 点击区域配置（对齐 dialog_click_action_config：九宫格）

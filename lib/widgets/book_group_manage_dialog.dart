@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../models/book_group.dart';
+import '../application/book/book_group_policy.dart';
+import '../domain/book/book_group.dart';
 import '../services/book_group_store.dart';
 import 'book_group_edit_dialog.dart';
 import 'legado_dialog_title_bar.dart';
@@ -46,9 +47,9 @@ class _BookGroupManageDialogState extends State<_BookGroupManageDialog> {
   Future<void> _add() async {
     if (!await BookGroupStore.canAddGroup()) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('分组已达上限(64个)')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('分组已达上限(64个)')));
       return;
     }
     if (!mounted) return;
@@ -93,11 +94,7 @@ class _BookGroupManageDialogState extends State<_BookGroupManageDialog> {
                 actions: [
                   IconButton(
                     tooltip: '添加',
-                    icon: Icon(
-                      Icons.add,
-                      color: scheme.onPrimary,
-                      size: 26,
-                    ),
+                    icon: Icon(Icons.add, color: scheme.onPrimary, size: 26),
                     onPressed: _add,
                   ),
                 ],
@@ -126,8 +123,9 @@ class _BookGroupManageDialogState extends State<_BookGroupManageDialog> {
                                           g.manageName,
                                           style: TextStyle(
                                             fontSize: 14,
-                                            color: scheme.onSurface
-                                                .withValues(alpha: 0.75),
+                                            color: scheme.onSurface.withValues(
+                                              alpha: 0.75,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -138,14 +136,15 @@ class _BookGroupManageDialogState extends State<_BookGroupManageDialog> {
                                             horizontal: 8,
                                           ),
                                           minimumSize: Size.zero,
-                                          tapTargetSize: MaterialTapTargetSize
-                                              .shrinkWrap,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
                                         ),
                                         child: Text(
                                           '编辑',
                                           style: TextStyle(
-                                            color: scheme.onSurface
-                                                .withValues(alpha: 0.65),
+                                            color: scheme.onSurface.withValues(
+                                              alpha: 0.65,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -161,8 +160,7 @@ class _BookGroupManageDialogState extends State<_BookGroupManageDialog> {
                                 Divider(
                                   height: 1,
                                   thickness: 0.5,
-                                  color:
-                                      scheme.outline.withValues(alpha: 0.25),
+                                  color: scheme.outline.withValues(alpha: 0.25),
                                 ),
                               ],
                             ),

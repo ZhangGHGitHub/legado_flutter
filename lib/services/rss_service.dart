@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../domain/ports/rss_port.dart';
-import '../models/rss_article.dart';
+import '../domain/rss/rss_article.dart';
 import '../models/rss_source.dart';
 
 /// RSS 服务 — 对齐 Jingshiro [Rss.kt] 调用链。

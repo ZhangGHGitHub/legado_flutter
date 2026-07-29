@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/domain/repositories/replace_rule_repository.dart';
 import 'package:legado_flutter/models/chapter.dart';
-import 'package:legado_flutter/models/replace_rule.dart';
+import 'package:legado_flutter/domain/content/replace_rule.dart';
 import 'package:legado_flutter/features/book/toc_sheet.dart';
 import 'package:legado_flutter/features/reader/search_content_page.dart';
 import 'package:legado_flutter/providers/replace_provider.dart';

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../models/txt_toc_rule.dart';
+import '../../application/rules/txt_toc_rule_creation_policy.dart';
+import '../../domain/rules/txt_toc_rule.dart';
 import '../../services/txt_toc_rule_prefs.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/legado_popup_menu.dart';
@@ -105,9 +106,7 @@ class _TxtTocRulePageState extends State<TxtTocRulePage> {
   Future<void> _setSelectedEnable(bool enable) async {
     setState(() {
       _rules = _rules
-          .map(
-            (r) => _selected.contains(r.id) ? r.copyWith(enable: enable) : r,
-          )
+          .map((r) => _selected.contains(r.id) ? r.copyWith(enable: enable) : r)
           .toList();
     });
     await _persist();
@@ -169,9 +168,9 @@ class _TxtTocRulePageState extends State<TxtTocRulePage> {
         .toList();
     if (toAdd.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('内置规则已全部存在')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('内置规则已全部存在')));
       return;
     }
     setState(() {
@@ -180,9 +179,9 @@ class _TxtTocRulePageState extends State<TxtTocRulePage> {
     });
     await _persist();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已导入 ${toAdd.length} 条内置规则')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已导入 ${toAdd.length} 条内置规则')));
   }
 
   @override
@@ -221,166 +220,162 @@ class _TxtTocRulePageState extends State<TxtTocRulePage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _rules.isEmpty
-              ? EmptyState(
-                  icon: Icons.article_outlined,
-                  title: '暂无目录规则',
-                  subtitle: '添加正则以识别 TXT 章节标题',
-                  actionLabel: '导入内置规则',
-                  onAction: _importDefaults,
-                )
-              : Column(
-                  children: [
-                    Expanded(
-                      child: ListView.separated(
-                        itemCount: _rules.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final rule = _rules[index];
-                          final selected = _selected.contains(rule.id);
-                          return InkWell(
-                            onTap: () {
-                              if (_selectionMode) {
-                                _toggleSelect(rule.id);
-                              } else {
-                                _showEditDialog(rule);
-                              }
-                            },
-                            onLongPress: () => _toggleSelect(rule.id),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+          ? EmptyState(
+              icon: Icons.article_outlined,
+              title: '暂无目录规则',
+              subtitle: '添加正则以识别 TXT 章节标题',
+              actionLabel: '导入内置规则',
+              onAction: _importDefaults,
+            )
+          : Column(
+              children: [
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: _rules.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final rule = _rules[index];
+                      final selected = _selected.contains(rule.id);
+                      return InkWell(
+                        onTap: () {
+                          if (_selectionMode) {
+                            _toggleSelect(rule.id);
+                          } else {
+                            _showEditDialog(rule);
+                          }
+                        },
+                        onLongPress: () => _toggleSelect(rule.id),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 children: [
-                                  Row(
-                                    children: [
-                                      Checkbox(
-                                        value: selected,
-                                        onChanged: (_) =>
-                                            _toggleSelect(rule.id),
-                                      ),
-                                      Expanded(
-                                        child: Text(
-                                          rule.name,
-                                          style: theme.textTheme.titleSmall,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      Switch(
-                                        value: rule.enable,
-                                        onChanged: (v) =>
-                                            _toggleEnable(rule, v),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.edit_outlined),
-                                        tooltip: '编辑',
-                                        onPressed: () =>
-                                            _showEditDialog(rule),
-                                      ),
-                                      PopupMenuButton<String>(
-                                        onSelected: (v) async {
-                                          switch (v) {
-                                            case 'top':
-                                              setState(() {
-                                                _rules.remove(rule);
-                                                _rules.insert(0, rule);
-                                                for (var i = 0;
-                                                    i < _rules.length;
-                                                    i++) {
-                                                  _rules[i] = _rules[i]
-                                                      .copyWith(
-                                                    serialNumber: i,
-                                                  );
-                                                }
-                                              });
-                                              await _persist();
-                                            case 'bottom':
-                                              setState(() {
-                                                _rules.remove(rule);
-                                                _rules.add(rule);
-                                                for (var i = 0;
-                                                    i < _rules.length;
-                                                    i++) {
-                                                  _rules[i] = _rules[i]
-                                                      .copyWith(
-                                                    serialNumber: i,
-                                                  );
-                                                }
-                                              });
-                                              await _persist();
-                                            case 'copy':
-                                              await Clipboard.setData(
-                                                ClipboardData(
-                                                  text: rule.rule,
-                                                ),
+                                  Checkbox(
+                                    value: selected,
+                                    onChanged: (_) => _toggleSelect(rule.id),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      rule.name,
+                                      style: theme.textTheme.titleSmall,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: rule.enable,
+                                    onChanged: (v) => _toggleEnable(rule, v),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined),
+                                    tooltip: '编辑',
+                                    onPressed: () => _showEditDialog(rule),
+                                  ),
+                                  PopupMenuButton<String>(
+                                    onSelected: (v) async {
+                                      switch (v) {
+                                        case 'top':
+                                          setState(() {
+                                            _rules.remove(rule);
+                                            _rules.insert(0, rule);
+                                            for (
+                                              var i = 0;
+                                              i < _rules.length;
+                                              i++
+                                            ) {
+                                              _rules[i] = _rules[i].copyWith(
+                                                serialNumber: i,
                                               );
-                                              if (context.mounted) {
-                                                ScaffoldMessenger.of(context)
-                                                    .showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text('已复制正则'),
-                                                  ),
-                                                );
-                                              }
-                                            case 'delete':
-                                              await _confirmDelete(rule);
+                                            }
+                                          });
+                                          await _persist();
+                                        case 'bottom':
+                                          setState(() {
+                                            _rules.remove(rule);
+                                            _rules.add(rule);
+                                            for (
+                                              var i = 0;
+                                              i < _rules.length;
+                                              i++
+                                            ) {
+                                              _rules[i] = _rules[i].copyWith(
+                                                serialNumber: i,
+                                              );
+                                            }
+                                          });
+                                          await _persist();
+                                        case 'copy':
+                                          await Clipboard.setData(
+                                            ClipboardData(text: rule.rule),
+                                          );
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('已复制正则'),
+                                              ),
+                                            );
                                           }
-                                        },
-                                        itemBuilder: (_) => const [
-                                          PopupMenuItem(
-                                            value: 'top',
-                                            child: Text('置顶'),
-                                          ),
-                                          PopupMenuItem(
-                                            value: 'bottom',
-                                            child: Text('置底'),
-                                          ),
-                                          PopupMenuItem(
-                                            value: 'copy',
-                                            child: Text('复制正则'),
-                                          ),
-                                          PopupMenuItem(
-                                            value: 'delete',
-                                            child: Text('删除'),
-                                          ),
-                                        ],
+                                        case 'delete':
+                                          await _confirmDelete(rule);
+                                      }
+                                    },
+                                    itemBuilder: (_) => const [
+                                      PopupMenuItem(
+                                        value: 'top',
+                                        child: Text('置顶'),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'bottom',
+                                        child: Text('置底'),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'copy',
+                                        child: Text('复制正则'),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'delete',
+                                        child: Text('删除'),
                                       ),
                                     ],
                                   ),
-                                  if (rule.example != null &&
-                                      rule.example!.trim().isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                        left: 48,
-                                        right: 8,
-                                        top: 2,
-                                      ),
-                                      child: Text(
-                                        rule.example!,
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                          color: theme.colorScheme.outline,
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
                                 ],
                               ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    if (_selectionMode) _buildSelectBar(theme),
-                  ],
+                              if (rule.example != null &&
+                                  rule.example!.trim().isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: 48,
+                                    right: 8,
+                                    top: 2,
+                                  ),
+                                  child: Text(
+                                    rule.example!,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.outline,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
+                if (_selectionMode) _buildSelectBar(theme),
+              ],
+            ),
     );
   }
 
   Widget _buildSelectBar(ThemeData theme) {
-    final allSelected =
-        _rules.isNotEmpty && _selected.length == _rules.length;
+    final allSelected = _rules.isNotEmpty && _selected.length == _rules.length;
     return Material(
       elevation: 8,
       color: theme.colorScheme.surfaceContainerHigh,
@@ -478,14 +473,12 @@ class _TxtTocRuleEditDialogState extends State<_TxtTocRuleEditDialog> {
     final existing = widget.rule;
     Navigator.pop(
       context,
-      TxtTocRule(
-        id: existing?.id ?? DateTime.now().millisecondsSinceEpoch,
+      TxtTocRuleCreationPolicy.fromEditor(
+        existing: existing,
         name: name,
         rule: pattern,
         replacement: _replacement.text,
         example: _example.text.isEmpty ? null : _example.text,
-        serialNumber: existing?.serialNumber ?? -1,
-        enable: existing?.enable ?? true,
       ),
     );
   }

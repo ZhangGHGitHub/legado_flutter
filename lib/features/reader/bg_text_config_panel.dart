@@ -120,7 +120,7 @@ class _BgTextConfigSheetState extends State<_BgTextConfigSheet> {
       const Color(0xFFF44336),
     ];
     final hexCtrl = TextEditingController(
-      text: ReadStyleConfig.toHex(current).substring(1),
+      text: ReadStyleColorMapper.toHex(current).substring(1),
     );
     final picked = await showDialog<Color>(
       context: context,
@@ -188,7 +188,7 @@ class _BgTextConfigSheetState extends State<_BgTextConfigSheet> {
           ),
           FilledButton(
             onPressed: () {
-              final c = ReadStyleConfig.parseColor('#${hexCtrl.text}');
+              final c = ReadStyleColorMapper.parse('#${hexCtrl.text}');
               if (c != null) Navigator.pop(ctx, c);
             },
             child: const Text('确定'),
@@ -349,16 +349,16 @@ class _BgTextConfigSheetState extends State<_BgTextConfigSheet> {
         name: _name,
         bgStr: _bgImagePath != null && !isNight
             ? _bgImagePath!
-            : ReadStyleConfig.toHex(_bg),
+            : ReadStyleColorMapper.toHex(_bg),
         bgStrNight: _bgImagePath != null && isNight
             ? _bgImagePath!
-            : ReadStyleConfig.toHex(_bg),
+            : ReadStyleColorMapper.toHex(_bg),
         bgType: _bgImagePath != null && !isNight ? 2 : 0,
         bgTypeNight: _bgImagePath != null && isNight ? 2 : 0,
-        textColor: ReadStyleConfig.toHex(_text),
-        textColorNight: ReadStyleConfig.toHex(_text),
-        textAccentColor: ReadStyleConfig.toHex(_accent),
-        textAccentColorNight: ReadStyleConfig.toHex(_accent),
+        textColor: ReadStyleColorMapper.toHex(_text),
+        textColorNight: ReadStyleColorMapper.toHex(_text),
+        textAccentColor: ReadStyleColorMapper.toHex(_accent),
+        textAccentColorNight: ReadStyleColorMapper.toHex(_accent),
         textFont: widget.settings.fontFamily,
         textBold: widget.settings.fontWeight.code,
         textSize: widget.settings.fontSize.round(),

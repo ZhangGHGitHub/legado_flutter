@@ -2054,3 +2054,53 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - `git diff --check`：通过，仅有工作树 LF/CRLF 提示。
 
 边界结论：R1 默认适配器和组合根边界已收敛；领域模型归属仍按独立批次迁移，R1 尚未最终退出。
+
+## 99. 2026-07-29：全局能力与启动可靠性审计
+
+审计范围：对照原版 legado-main/app/src/main/java/io/legado/app/App.kt 及其全局帮助类，检查当前 Flutter lib/main.dart、lib/bootstrap/app_composition_root.dart、lib/application/app_bootstrap.dart、lib/services/app_log.dart 和平台工程入口。
+
+原版已注册或启动的全局能力：
+
+- CrashHandler：注册 Thread.UncaughtExceptionHandler，保存崩溃日志和 appCrash 标记，下次启动由 MainActivity 提示打开日志。
+- AppLog、LifecycleHelp、AppFreezeMonitor、DispatchersMonitor：分别提供运行诊断、Activity/Service 生命周期、应用冻结和调度器超时观测。
+- DefaultData.upVersion：按版本门禁导入默认 HTTP TTS、TXT 目录规则、RSS 书源和字典规则。
+- App.onCreate 后台维护：过期章节缓存、搜索书籍、无效规则/书籍缓存、备份缓存清理，书源排序修复，简繁转换预热，阅读进度同步。
+- 平台/网络初始化：通知通道、Cronet 预下载、低版本 Android GMS TLS provider、Rhino 初始化和 WebView 绘制配置。
+
+Flutter 对照结果：
+
+| 能力 | 当前状态 | 证据/缺口 |
+|---|---|---|
+| 全局崩溃捕获与上次崩溃提示 | 未迁移 | main.dart 无 runZonedGuarded、FlutterError.onError、PlatformDispatcher.instance.onError 或启动崩溃标记 |
+| 运行日志 | 部分覆盖 | AppLog 有 100 条 SharedPreferences 环形日志，但不是全局异常入口，也未统一设备/版本/启动阶段诊断字段 |
+| 存储未初始化安全 | 部分覆盖 | AppConfig 有内存默认值；多个服务/端口未配置时仍抛 StateError，没有统一的初始化状态协议 |
+| 启动编排 | 部分覆盖 | AppBootstrap 已隔离 WebDAV/同步失败；默认数据升级、缓存/搜索清理和启动维护任务未统一编排 |
+| 生命周期协调 | 局部覆盖 | MyPage 自己实现 WidgetsBindingObserver；没有 application 级生命周期协调器 |
+| 卡顿/调度监控 | 未发现等价实现 | 未发现全局 FrameTiming、isolate/任务超时或应用冻结监控 |
+| 默认数据版本升级 | 部分覆盖 | 字典/TXT 规则等有偏好/内置数据服务，但未发现等价的集中版本门禁和启动升级任务 |
+| 启动缓存/搜索清理 | 部分覆盖 | 有 clearInvalid 和手动缓存清理；未发现等价的启动过期清理全局任务 |
+| 书源排序修复 | 未发现启动等价实现 | 页面内有局部排序，但未发现原版 SourceHelp.adjustSortNumber 的启动修复边界 |
+| 简繁转换 | 功能覆盖，启动预热缺失 | Reader 内按配置转换正文；未发现原版启动阶段的转换引擎预热 |
+| 通知通道/后台任务 | 未发现等价实现 | 当前 Flutter 依赖和平台入口未发现原版下载、朗读、Web 服务通知通道或统一后台任务注册 |
+| Cronet/GMS TLS/WebView 设置 | 部分或平台差异 | Rust HTTP 已承担主要网络链路；未发现 Cronet 预下载、GMS provider 和全局 WebView 绘制配置的 Flutter 等价项，需按目标平台登记差异 |
+
+处理结论：这些能力不属于普通页面功能，应作为 docs/REFACTOR_PLAN.md 的“横切基础设施：全局能力与启动可靠性”执行。P0 优先补齐崩溃防护、存储初始化安全和启动任务隔离；P1 再补生命周期、卡顿/调度监控、诊断模型和平台启动能力盘点。未完成前不得将 R6 发布验收描述为全局启动行为兼容。
+
+## 100. 2026-07-29：R1 阅读配置与叶子领域模型归属
+
+迁移范围：
+
+- 架构脚本新增 `domain/model/models` 纯度规则和独立 fixture 测试，`bootstrap` 仅按目录授权为组合根。
+- `ReadBook` 改依赖最小 `ReaderContentSourcePort`，不再导入 `BookSourceService`。
+- 阅读样式、主题排版、字重和点击区迁入 `domain/reader_config`；Flutter `Color` 映射、中文标签和
+  `ReaderSettings` 映射保留在 application/Feature。
+- 书架分组、字典、替换、规则订阅、TXT 目录规则和 RSS 文章迁入纯 domain；旧 `lib/models` 只保留
+  export。中文展示和时间戳 ID 创建移入 application policy，JSON 字段、默认值和相等性保持不变。
+
+验证结果：
+
+- 架构脚本 fixture 测试通过；真实检查的 domain/models 纯度违规从 `2` 降为 `0`。
+- 阅读配置、分页、ReadBook、模型、持久化、RSS、替换正文和页面联合回归 `90/90`。
+- `flutter analyze --no-pub`：无诊断；`git diff --check`：通过，仅有 LF/CRLF 提示。
+
+边界结论：阅读配置和低耦合模型归属已收敛；Book/Chapter、BookSource/RssSource 和阅读进度仍按 R1 顺序迁移。

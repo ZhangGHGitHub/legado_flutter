@@ -1,5 +1,5 @@
+import '../../domain/content/replace_rule.dart';
 import '../../domain/repositories/replace_rule_repository.dart';
-import '../../models/replace_rule.dart';
 import '../database_helper.dart';
 
 /// 替换规则 DAO — 只负责把领域端口转发到现有数据库适配器。

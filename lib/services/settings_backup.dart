@@ -161,9 +161,9 @@ abstract final class SettingsBackup {
       final accent = override?.accent ?? base.progress;
       return ReadStyleConfig(
         name: themeName,
-        bgStr: ReadStyleConfig.toHex(background),
-        textColor: ReadStyleConfig.toHex(text),
-        textAccentColor: ReadStyleConfig.toHex(accent),
+        bgStr: ReadStyleColorMapper.toHex(background),
+        textColor: ReadStyleColorMapper.toHex(text),
+        textAccentColor: ReadStyleColorMapper.toHex(accent),
         textFont: type.fontFamily,
         textBold: type.fontWeight.code,
         textSize: type.fontSize.round(),
@@ -177,7 +177,7 @@ abstract final class SettingsBackup {
       );
     }
 
-    final shared = ThemeTypography.fromReaderSettings(current);
+    final shared = current.toThemeTypography();
     final configs = [
       for (final (id, _) in ReaderTheme.themeSlots)
         configFor(id, shareLayout ? shared : (typography[id] ?? shared)),

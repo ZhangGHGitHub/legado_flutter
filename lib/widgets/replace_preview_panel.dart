@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/replace_rule.dart';
+import '../domain/content/replace_rule.dart';
 import '../services/replace_service.dart';
 
 /// 替换规则实时预览面板

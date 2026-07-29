@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/content_processing_port.dart';
 import 'package:legado_flutter/infrastructure/content/content_processor_adapter.dart';
-import 'package:legado_flutter/models/replace_rule.dart';
+import 'package:legado_flutter/domain/content/replace_rule.dart';
 
 void main() {
   test('content processing port remains replaceable', () {

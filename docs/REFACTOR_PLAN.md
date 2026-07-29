@@ -88,7 +88,7 @@ test/integration/         设备与平台链路验收
 
 退出条件：数据模型契约测试通过；本工程 Rust 旧 schema 可读写；章节身份和阅读位置迁移无差异；Kotlin Room v99 数据库探针、字段映射、导入事务、备份/回滚和真实/合成 fixture 回归通过。
 
-当前判定：R1-12 的 Kotlin Room v99 数据库迁移门禁已通过。探针、核心字段映射、全部 23 个 Room 实体表的原始快照、archive-only 非核心表保存、事务式导入、导入前备份、失败回滚、指纹幂等、冲突统计、FRB/Dart application、备份页入口和 Android 两阶段设备验收均已完成。真实 `original_legado.db` 已确认 v99，但其实体表当前为空；非空等价 fixture 已覆盖字段映射和非核心数据归档。非核心表尚未建立产品业务 port，但不会在迁移中丢失，作为后续独立产品语义工作，不阻塞 R1-12 门禁。
+当前判定：R1-12 的 Kotlin Room v99 数据库迁移门禁已通过。探针、核心字段映射、全部 23 个 Room 实体表的原始快照、archive-only 非核心表保存、事务式导入、导入前备份、失败回滚、指纹幂等、冲突统计、FRB/Dart application、备份页入口和 Android 两阶段设备验收均已完成。真实 `original_legado.db` 已确认 v99，但其实体表当前为空；非空等价 fixture 已覆盖字段映射和非核心数据归档。非核心表尚未建立产品业务 port，但不会在迁移中丢失，作为后续独立产品语义工作，不阻塞 R1-12 门禁。扩展边界复核后的默认适配器、组合根、阅读配置和叶子领域模型已收敛；Book/Chapter、BookSource/RssSource 与阅读进度模型归属仍在执行，R1 尚未最终退出。
 
 ##### R1-12：Kotlin Room v99 数据迁移门禁（已通过）
 
@@ -155,6 +155,22 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 退出条件：核心用户流程在目标平台构建并通过，UI 与原版对照测试通过，平台差异有明确适配记录。
 
 当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；其中 Dict/TXT 目录规则、替换净化、捐赠页归入 `my`，二维码归入 `sources`，漫画阅读归入 `reader`，启动页归入 `main`。相关定向回归、Flutter 全量 `540` 项（3 个既有条件测试跳过）、全仓 analyze 和架构边界检查均通过；Rust workspace 核心 `127` 项通过。旧 `lib/pages` 下仅保留 `home/home_page.dart` 这一兼容导出入口，主实现已在 `features/bookshelf`；同步能力无独立 UI 页面，继续由现有 application/domain/service 边界承载。R6 剩余工作是 UI 与原版对照、目标平台构建及发布前正式/主流 WebDAV 验收；真实 Android TTS、后台音频服务、Web/WASM/PWA 和外部 AI 服务继续按暂停/范围外条件处理。
+
+#### 横切基础设施：全局能力与启动可靠性（跨 R1-R6，新增）
+
+原版 Application.onCreate 不只负责业务启动，还注册了全局崩溃处理、应用日志、生命周期管理、卡顿/调度监控、默认数据升级、缓存清理、通知通道和网络/TLS 初始化。当前 Flutter 端已有 AppBootstrap、AppLog、局部生命周期监听、Rust HTTP/TLS、缓存端口和若干偏好迁移，但没有统一的跨平台全局能力边界；这些局部实现不得被当作原版全局能力已完成。
+
+按以下顺序补齐，任务完成前不得在 R6 发布验收中宣称“全局能力与启动行为兼容”：
+
+- P0-1 崩溃防护与启动恢复：新增 CrashLogService 或等价 application/infrastructure 边界；在 main 最早阶段安装同步错误、Flutter 框架错误、平台 dispatcher 错误和未处理异步错误捕获；持久化最近一次崩溃摘要、堆栈、平台/版本/引擎信息和启动阶段；下次启动安全读取并显示一次崩溃提示，支持进入日志、清除标记和失败降级。崩溃写入路径自身不得依赖尚未初始化的数据库、WebDAV 或完整 UI。
+- P0-2 存储初始化安全：盘点 SharedPreferences、Rust DB、文件缓存和所有静态服务的同步 getter/配置入口；统一“未初始化、初始化失败、已就绪”状态。未就绪时只返回明确默认值/空集合/不可用状态，业务操作返回可识别错误，不因 StateError、数据库未就绪或异步初始化竞态导致首屏崩溃。此项不引入 Hive，除非后续明确需要；当前工程的实际存储是 SharedPreferences、Rust SQLite 和文件系统。
+- P0-3 启动任务隔离：将默认数据升级、过期缓存/搜索清理、书源排序修复、阅读进度同步、WebDAV 初始化和其它非首屏任务纳入可观测的启动任务清单；每项独立超时、捕获错误、记录结果，不阻塞首屏，不重复执行，支持重启后重试。保留原版键名、版本门禁、排序和清理语义。
+- P1-1 全局生命周期边界：建立 application 级生命周期协调器，统一承接前后台、暂停/恢复、应用退出和资源释放；页面只订阅状态，不各自注册同一类全局回调。对照原版 LifecycleHelp，明确 Flutter 多窗口、Android Activity、桌面窗口和 Web 平台的差异。
+- P1-2 卡顿与调度监控：增加可开关的帧耗时、主 isolate/后台任务超时和应用冻结观测，接入 AppLog/CrashLogService，默认关闭高成本监控；对照原版 AppFreezeMonitor、DispatchersMonitor，不把普通业务异常误记为崩溃。
+- P1-3 全局日志与诊断信息：统一 AppLog 的错误、异常、启动阶段、设备/平台、应用版本和 Rust 引擎版本格式；限制敏感信息、条数和文件大小；让崩溃日志、运行日志和手动导出日志复用同一诊断模型，但保留清理和脱敏边界。
+- P1-4 平台启动能力盘点：逐项确认原版通知通道（下载、朗读、Web 服务）、后台任务/服务、WebView 绘制设置、GMS TLS provider、Cronet 预下载和简繁转换预热在 Flutter 各目标平台是否需要等价实现。已由 Rust HTTP 覆盖的网络能力只记录为已覆盖，不重复引入 Cronet；没有产品需求或目标平台支持的能力明确登记为范围差异。
+
+横切任务验收：每个任务必须有纯 Dart 单元测试；涉及启动顺序、平台错误或通知/后台能力时补充 Android 和 Windows smoke；至少验证“正常冷启动、初始化失败冷启动、同步任务失败、模拟未处理异常、重启后读取崩溃记录、清理后不重复提示”六条路径。实现应位于 lib/application、lib/infrastructure 和 lib/services，禁止页面直接安装全局 handler。
 
 ### 0.4 重构工作规则
 

@@ -1,4 +1,4 @@
-import '../models/replace_rule.dart';
+import '../domain/content/replace_rule.dart';
 import '../services/replace_service.dart';
 import 'content_help.dart';
 

@@ -1,6 +1,6 @@
+import '../../domain/content/replace_rule.dart';
 import '../../domain/ports/content_processing_port.dart';
 import '../../help/content_processor.dart';
-import '../../models/replace_rule.dart';
 
 /// 现有 [ContentProcessor] 的正文处理端口适配器。
 class ContentProcessorAdapter implements ContentProcessingPort {

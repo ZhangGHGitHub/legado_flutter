@@ -1,4 +1,4 @@
-import '../../models/replace_rule.dart';
+import '../content/replace_rule.dart';
 
 /// 正文处理用例的领域端口。
 ///

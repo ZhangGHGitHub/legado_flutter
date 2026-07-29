@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../models/dict_rule.dart';
+import '../../domain/rules/dict_rule.dart';
 import '../../services/dict_rule_prefs.dart';
 import '../../services/dict_rule_tester.dart';
 import '../../widgets/empty_state.dart';
@@ -109,8 +109,7 @@ class _DictRulePageState extends State<DictRulePage> {
     setState(() {
       _rules = _rules
           .map(
-            (r) =>
-                _selected.contains(r.name) ? r.copyWith(enabled: enable) : r,
+            (r) => _selected.contains(r.name) ? r.copyWith(enabled: enable) : r,
           )
           .toList();
     });
@@ -190,9 +189,9 @@ class _DictRulePageState extends State<DictRulePage> {
         .toList();
     if (toAdd.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('内置规则已全部存在')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('内置规则已全部存在')));
       return;
     }
     setState(() {
@@ -201,9 +200,9 @@ class _DictRulePageState extends State<DictRulePage> {
     });
     await _persist();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已导入 ${toAdd.length} 条内置规则')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已导入 ${toAdd.length} 条内置规则')));
   }
 
   @override
@@ -242,137 +241,141 @@ class _DictRulePageState extends State<DictRulePage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _rules.isEmpty
-              ? EmptyState(
-                  icon: Icons.menu_book_outlined,
-                  title: '暂无字典规则',
-                  subtitle: '添加查词 URL / 显示规则',
-                  actionLabel: '导入内置规则',
-                  onAction: _importDefaults,
-                )
-              : Column(
-                  children: [
-                    Expanded(
-                      child: ListView.separated(
-                        itemCount: _rules.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final rule = _rules[index];
-                          final selected = _selected.contains(rule.name);
-                          return InkWell(
-                            onTap: () {
-                              if (_selectionMode) {
-                                _toggleSelect(rule.name);
-                              } else {
-                                _showEditDialog(rule);
-                              }
-                            },
-                            onLongPress: () => _toggleSelect(rule.name),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
-                              child: Row(
-                                children: [
-                                  Checkbox(
-                                    value: selected,
-                                    onChanged: (_) =>
-                                        _toggleSelect(rule.name),
-                                  ),
-                                  Expanded(
-                                    child: Text(
-                                      rule.name,
-                                      style: theme.textTheme.titleSmall,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  Switch(
-                                    value: rule.enabled,
-                                    onChanged: (v) =>
-                                        _toggleEnable(rule, v),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_outlined),
-                                    tooltip: '编辑',
-                                    onPressed: () => _showEditDialog(rule),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline),
-                                    tooltip: '删除',
-                                    onPressed: () => _confirmDelete(rule),
-                                  ),
-                                  PopupMenuButton<String>(
-                                    onSelected: (v) async {
-                                      switch (v) {
-                                        case 'top':
-                                          setState(() {
-                                            _rules.remove(rule);
-                                            _rules.insert(0, rule);
-                                            for (var i = 0;
-                                                i < _rules.length;
-                                                i++) {
-                                              _rules[i] = _rules[i]
-                                                  .copyWith(sortNumber: i);
-                                            }
-                                          });
-                                          await _persist();
-                                        case 'bottom':
-                                          setState(() {
-                                            _rules.remove(rule);
-                                            _rules.add(rule);
-                                            for (var i = 0;
-                                                i < _rules.length;
-                                                i++) {
-                                              _rules[i] = _rules[i]
-                                                  .copyWith(sortNumber: i);
-                                            }
-                                          });
-                                          await _persist();
-                                        case 'copy':
-                                          await Clipboard.setData(
-                                            ClipboardData(
-                                              text: jsonEncode(rule.toJson()),
-                                            ),
+          ? EmptyState(
+              icon: Icons.menu_book_outlined,
+              title: '暂无字典规则',
+              subtitle: '添加查词 URL / 显示规则',
+              actionLabel: '导入内置规则',
+              onAction: _importDefaults,
+            )
+          : Column(
+              children: [
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: _rules.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final rule = _rules[index];
+                      final selected = _selected.contains(rule.name);
+                      return InkWell(
+                        onTap: () {
+                          if (_selectionMode) {
+                            _toggleSelect(rule.name);
+                          } else {
+                            _showEditDialog(rule);
+                          }
+                        },
+                        onLongPress: () => _toggleSelect(rule.name),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+                          child: Row(
+                            children: [
+                              Checkbox(
+                                value: selected,
+                                onChanged: (_) => _toggleSelect(rule.name),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  rule.name,
+                                  style: theme.textTheme.titleSmall,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Switch(
+                                value: rule.enabled,
+                                onChanged: (v) => _toggleEnable(rule, v),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined),
+                                tooltip: '编辑',
+                                onPressed: () => _showEditDialog(rule),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline),
+                                tooltip: '删除',
+                                onPressed: () => _confirmDelete(rule),
+                              ),
+                              PopupMenuButton<String>(
+                                onSelected: (v) async {
+                                  switch (v) {
+                                    case 'top':
+                                      setState(() {
+                                        _rules.remove(rule);
+                                        _rules.insert(0, rule);
+                                        for (
+                                          var i = 0;
+                                          i < _rules.length;
+                                          i++
+                                        ) {
+                                          _rules[i] = _rules[i].copyWith(
+                                            sortNumber: i,
                                           );
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              const SnackBar(
-                                                content: Text('已复制规则摘要'),
-                                              ),
-                                            );
-                                          }
+                                        }
+                                      });
+                                      await _persist();
+                                    case 'bottom':
+                                      setState(() {
+                                        _rules.remove(rule);
+                                        _rules.add(rule);
+                                        for (
+                                          var i = 0;
+                                          i < _rules.length;
+                                          i++
+                                        ) {
+                                          _rules[i] = _rules[i].copyWith(
+                                            sortNumber: i,
+                                          );
+                                        }
+                                      });
+                                      await _persist();
+                                    case 'copy':
+                                      await Clipboard.setData(
+                                        ClipboardData(
+                                          text: jsonEncode(rule.toJson()),
+                                        ),
+                                      );
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('已复制规则摘要'),
+                                          ),
+                                        );
                                       }
-                                    },
-                                    itemBuilder: (_) => const [
-                                      PopupMenuItem(
-                                        value: 'top',
-                                        child: Text('置顶'),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'bottom',
-                                        child: Text('置底'),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'copy',
-                                        child: Text('复制'),
-                                      ),
-                                    ],
+                                  }
+                                },
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(
+                                    value: 'top',
+                                    child: Text('置顶'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'bottom',
+                                    child: Text('置底'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'copy',
+                                    child: Text('复制'),
                                   ),
                                 ],
                               ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    if (_selectionMode) _buildSelectBar(theme),
-                  ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
+                if (_selectionMode) _buildSelectBar(theme),
+              ],
+            ),
     );
   }
 
   Widget _buildSelectBar(ThemeData theme) {
-    final allSelected =
-        _rules.isNotEmpty && _selected.length == _rules.length;
+    final allSelected = _rules.isNotEmpty && _selected.length == _rules.length;
     return Material(
       elevation: 8,
       color: theme.colorScheme.surfaceContainerHigh,
@@ -480,10 +483,7 @@ class _DictRuleEditDialogState extends State<_DictRuleEditDialog> {
     }
     Navigator.pop(
       context,
-      _DictRuleEditResult(
-        rule: _draft(),
-        oldName: widget.rule?.name,
-      ),
+      _DictRuleEditResult(rule: _draft(), oldName: widget.rule?.name),
     );
   }
 
@@ -548,10 +548,7 @@ class _DictRuleEditDialogState extends State<_DictRuleEditDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                '规则测试',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
+              Text('规则测试', style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -585,9 +582,9 @@ class _DictRuleEditDialogState extends State<_DictRuleEditDialog> {
                   constraints: const BoxConstraints(maxHeight: 200),
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: SingleChildScrollView(

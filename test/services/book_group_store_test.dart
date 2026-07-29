@@ -1,8 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/book/book_group_policy.dart';
+import 'package:legado_flutter/domain/book/book_group.dart';
 import 'package:legado_flutter/domain/ports/book_group_prefs.dart';
-import 'package:legado_flutter/models/book_group.dart';
 import 'package:legado_flutter/services/book_group_store.dart';
 
 void main() {
@@ -34,6 +35,13 @@ void main() {
       expect(encoded.first, containsPair('groupName', '全部'));
     },
   );
+
+  test('presentation policy preserves sort and system manage labels', () {
+    final group = BookGroupPolicy.defaultSystemGroups().first;
+
+    expect(BookGroupPolicy.sortLabels.first, '默认');
+    expect(group.manageName, '全部(全部)');
+  });
 
   test(
     'loads JSON, restores missing system groups, and sorts by order',

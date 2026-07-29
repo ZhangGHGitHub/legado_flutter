@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/help/book_help.dart';
 import 'package:legado_flutter/help/content_processor.dart';
 import 'package:legado_flutter/domain/ports/network_engine_port.dart';
-import 'package:legado_flutter/models/replace_rule.dart';
+import 'package:legado_flutter/domain/content/replace_rule.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/services/app_paths.dart';
 import 'package:legado_flutter/services/cache_service.dart';

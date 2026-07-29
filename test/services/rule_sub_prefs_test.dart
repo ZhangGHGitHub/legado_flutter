@@ -1,11 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/source_subscription/rule_sub_policy.dart';
+import 'package:legado_flutter/domain/content/replace_rule.dart';
 import 'package:legado_flutter/domain/ports/public_text_fetch_port.dart';
 import 'package:legado_flutter/domain/repositories/book_source_repository.dart';
 import 'package:legado_flutter/domain/repositories/replace_rule_repository.dart';
+import 'package:legado_flutter/domain/source_subscription/rule_sub.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_book_source_validation_port.dart';
 import 'package:legado_flutter/models/book_source.dart';
-import 'package:legado_flutter/models/rule_sub.dart';
-import 'package:legado_flutter/models/replace_rule.dart';
 import 'package:legado_flutter/models/rss_source.dart';
 import 'package:legado_flutter/providers/replace_provider.dart';
 import 'package:legado_flutter/providers/rss_provider.dart';

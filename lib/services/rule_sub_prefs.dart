@@ -2,7 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/rule_sub.dart';
+import '../application/source_subscription/rule_sub_policy.dart';
+import '../domain/source_subscription/rule_sub.dart';
 
 /// 规则订阅持久化 — SharedPreferences JSON，对齐 Jingshiro `ruleSubs` 表
 class RuleSubPrefs {
@@ -20,10 +21,14 @@ class RuleSubPrefs {
       return [];
     }
     try {
-      final list = (jsonDecode(raw) as List)
-          .map((e) => RuleSub.fromJson(Map<String, dynamic>.from(e as Map)))
-          .toList()
-        ..sort((a, b) => a.customOrder.compareTo(b.customOrder));
+      final list =
+          (jsonDecode(raw) as List)
+              .map(
+                (e) =>
+                    RuleSubPolicy.decode(Map<String, dynamic>.from(e as Map)),
+              )
+              .toList()
+            ..sort((a, b) => a.customOrder.compareTo(b.customOrder));
       _cache = list;
       return List<RuleSub>.from(list);
     } catch (_) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/click_zone.dart';
+import 'click_zone_labels.dart';
 
 /// 首次进入阅读页的点击区域提示（九宫格标签，轻触关闭）
 class ClickRegionTipOverlay extends StatelessWidget {

@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/rule_sub.dart';
+import '../../application/source_subscription/rule_sub_policy.dart';
 import '../../domain/ports/public_text_fetch_port.dart';
+import '../../domain/source_subscription/rule_sub.dart';
 import '../../providers/replace_provider.dart';
 import '../../providers/rss_provider.dart';
 import '../../providers/source_provider.dart';
@@ -95,13 +96,7 @@ class _RuleSubPageState extends State<RuleSubPage> {
   Future<void> _add() async {
     final order = await RuleSubPrefs.maxOrder() + 1;
     if (!mounted) return;
-    await _editSubscription(
-      RuleSub(
-        id: DateTime.now().millisecondsSinceEpoch,
-        customOrder: order,
-        update: DateTime.now().millisecondsSinceEpoch,
-      ),
-    );
+    await _editSubscription(RuleSubPolicy.create(customOrder: order));
   }
 
   Future<void> _editSubscription(RuleSub ruleSub) async {
@@ -356,7 +351,7 @@ class _RuleSubEditDialogState extends State<_RuleSubEditDialog> {
   void initState() {
     super.initState();
     final r = widget.ruleSub;
-    _type = r.type.clamp(0, RuleSub.typeLabels.length - 1);
+    _type = r.type.clamp(0, RuleSubPolicy.typeLabels.length - 1);
     _nameCtrl = TextEditingController(text: r.name);
     _urlCtrl = TextEditingController(text: r.url);
     _autoUpdate = r.autoUpdate;
@@ -424,10 +419,10 @@ class _RuleSubEditDialogState extends State<_RuleSubEditDialog> {
                 DropdownButton<int>(
                   value: _type,
                   items: [
-                    for (var i = 0; i < RuleSub.typeLabels.length; i++)
+                    for (var i = 0; i < RuleSubPolicy.typeLabels.length; i++)
                       DropdownMenuItem(
                         value: i,
-                        child: Text(RuleSub.typeLabels[i]),
+                        child: Text(RuleSubPolicy.typeLabels[i]),
                       ),
                   ],
                   onChanged: (v) {

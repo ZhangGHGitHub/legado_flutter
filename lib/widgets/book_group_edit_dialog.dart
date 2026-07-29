@@ -3,7 +3,8 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import '../models/book_group.dart';
+import '../application/book/book_group_policy.dart';
+import '../domain/book/book_group.dart';
 import '../services/book_group_store.dart';
 import 'book_cover.dart';
 import 'legado_dialog_title_bar.dart';
@@ -46,7 +47,8 @@ class _BookGroupEditDialogState extends State<_BookGroupEditDialog> {
     _nameCtrl = TextEditingController(text: g?.groupName ?? '');
     _nameFocus = FocusNode()..addListener(() => setState(() {}));
     _bookSort = g?.bookSort ?? -1;
-    if (_bookSort + 1 < 0 || _bookSort + 1 >= BookGroup.sortLabels.length) {
+    if (_bookSort + 1 < 0 ||
+        _bookSort + 1 >= BookGroupPolicy.sortLabels.length) {
       _bookSort = -1;
     }
     _enableRefresh = g?.enableRefresh ?? true;
@@ -95,17 +97,17 @@ class _BookGroupEditDialogState extends State<_BookGroupEditDialog> {
   Future<void> _onOk() async {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('分组名称不能为空')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('分组名称不能为空')));
       return;
     }
     if (_isAdd) {
       if (!await BookGroupStore.canAddGroup()) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('分组已达上限(64个)')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('分组已达上限(64个)')));
         return;
       }
       final id = await BookGroupStore.unusedId();
@@ -166,16 +168,15 @@ class _BookGroupEditDialogState extends State<_BookGroupEditDialog> {
 
   String get _sortLabel {
     final i = _bookSort + 1;
-    if (i < 0 || i >= BookGroup.sortLabels.length) {
-      return BookGroup.sortLabels.first;
+    if (i < 0 || i >= BookGroupPolicy.sortLabels.length) {
+      return BookGroupPolicy.sortLabels.first;
     }
-    return BookGroup.sortLabels[i];
+    return BookGroupPolicy.sortLabels[i];
   }
 
   Widget _buildCover(ColorScheme scheme) {
-    final hasFile = _cover != null &&
-        _cover!.isNotEmpty &&
-        File(_cover!).existsSync();
+    final hasFile =
+        _cover != null && _cover!.isNotEmpty && File(_cover!).existsSync();
     return GestureDetector(
       onTap: _pickCover,
       child: SizedBox(
@@ -186,12 +187,7 @@ class _BookGroupEditDialogState extends State<_BookGroupEditDialog> {
                 borderRadius: BorderRadius.circular(2),
                 child: Image.file(File(_cover!), fit: BoxFit.cover),
               )
-            : BookCover(
-                coverUrl: '',
-                width: 90,
-                height: 126,
-                radius: 2,
-              ),
+            : BookCover(coverUrl: '', width: 90, height: 126, radius: 2),
       ),
     );
   }
@@ -203,11 +199,7 @@ class _BookGroupEditDialogState extends State<_BookGroupEditDialog> {
       focusNode: _nameFocus,
       maxLines: 1,
       textAlignVertical: TextAlignVertical.bottom,
-      style: TextStyle(
-        fontSize: 16,
-        color: scheme.onSurface,
-        height: 1.25,
-      ),
+      style: TextStyle(fontSize: 16, color: scheme.onSurface, height: 1.25),
       cursorColor: accent,
       decoration: InputDecoration(
         labelText: '分组名称',
@@ -248,10 +240,10 @@ class _BookGroupEditDialogState extends State<_BookGroupEditDialog> {
       offset: const Offset(0, 28),
       onSelected: (v) => setState(() => _bookSort = v),
       itemBuilder: (_) => [
-        for (var i = 0; i < BookGroup.sortLabels.length; i++)
+        for (var i = 0; i < BookGroupPolicy.sortLabels.length; i++)
           PopupMenuItem(
             value: i - 1,
-            child: Text(BookGroup.sortLabels[i]),
+            child: Text(BookGroupPolicy.sortLabels[i]),
           ),
       ],
       child: Padding(
@@ -325,9 +317,7 @@ class _BookGroupEditDialogState extends State<_BookGroupEditDialog> {
               ),
             ),
             const SizedBox(width: 4),
-            Expanded(
-              child: Text(label, style: const TextStyle(fontSize: 14)),
-            ),
+            Expanded(child: Text(label, style: const TextStyle(fontSize: 14))),
           ],
         ),
       ),
@@ -352,9 +342,7 @@ class _BookGroupEditDialogState extends State<_BookGroupEditDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            LegadoDialogTitleBar(
-              title: _isAdd ? '添加分组' : '编辑分组',
-            ),
+            LegadoDialogTitleBar(title: _isAdd ? '添加分组' : '编辑分组'),
             // 拉高内容区，对齐 Jingshiro WRAP_CONTENT 视觉比例（封面 90×126 + 边距）
             ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 168),

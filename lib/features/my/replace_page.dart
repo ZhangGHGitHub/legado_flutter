@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/replace_rule.dart';
+import '../../domain/content/replace_rule.dart';
 import '../../providers/replace_provider.dart';
 import '../../services/replace_preset_library.dart';
 import '../../widgets/replace_preview_panel.dart';
@@ -120,7 +120,8 @@ class _ReplacePageState extends State<ReplacePage>
                       TextButton(
                         onPressed: () {
                           setSheet(() {
-                            if (selected.length == ReplacePresetLibrary.all.length) {
+                            if (selected.length ==
+                                ReplacePresetLibrary.all.length) {
                               selected.clear();
                             } else {
                               selected.addAll(
@@ -188,8 +189,9 @@ class _ReplacePageState extends State<ReplacePage>
                     onPressed: selected.isEmpty
                         ? null
                         : () async {
-                            final presets = ReplacePresetLibrary.all
-                                .where((p) => selected.contains(p.id));
+                            final presets = ReplacePresetLibrary.all.where(
+                              (p) => selected.contains(p.id),
+                            );
                             final rules = ReplacePresetLibrary.toRules(presets);
                             final added = await context
                                 .read<ReplaceProvider>()
@@ -197,9 +199,7 @@ class _ReplacePageState extends State<ReplacePage>
                             if (ctx.mounted) Navigator.pop(ctx);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('已导入 $added 条预设规则'),
-                                ),
+                                SnackBar(content: Text('已导入 $added 条预设规则')),
                               );
                             }
                           },
@@ -306,10 +306,7 @@ class _ReplacePageState extends State<ReplacePage>
 }
 
 class _RulesListTab extends StatelessWidget {
-  const _RulesListTab({
-    required this.rules,
-    required this.onEdit,
-  });
+  const _RulesListTab({required this.rules, required this.onEdit});
 
   final List<ReplaceRule> rules;
   final void Function(ReplaceRule rule) onEdit;

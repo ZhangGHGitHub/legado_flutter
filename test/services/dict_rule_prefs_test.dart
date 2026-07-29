@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/models/dict_rule.dart';
+import 'package:legado_flutter/domain/rules/dict_rule.dart';
 import 'package:legado_flutter/services/dict_rule_prefs.dart';
 import 'package:legado_flutter/services/dict_rule_tester.dart';
 
@@ -49,10 +49,7 @@ void main() {
   test('DictRuleTester blocks SSRF hosts', () async {
     expect(
       () => DictRuleTester.test(
-        const DictRule(
-          name: 'bad',
-          urlRule: 'http://127.0.0.1/dict?q={{key}}',
-        ),
+        const DictRule(name: 'bad', urlRule: 'http://127.0.0.1/dict?q={{key}}'),
         'test',
       ),
       throwsA(isA<FormatException>()),

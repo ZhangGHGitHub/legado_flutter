@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/book_group.dart';
+import '../domain/book/book_group.dart';
 import '../services/book_group_store.dart';
 import 'book_group_edit_dialog.dart';
 import 'legado_dialog_title_bar.dart';
@@ -66,9 +66,9 @@ class _BookGroupSelectDialogState extends State<_BookGroupSelectDialog> {
   Future<void> _add() async {
     if (!await BookGroupStore.canAddGroup()) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('分组已达上限(64个)')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('分组已达上限(64个)')));
       return;
     }
     if (!mounted) return;
@@ -117,11 +117,7 @@ class _BookGroupSelectDialogState extends State<_BookGroupSelectDialog> {
                 actions: [
                   IconButton(
                     tooltip: '添加',
-                    icon: Icon(
-                      Icons.add,
-                      color: scheme.onPrimary,
-                      size: 26,
-                    ),
+                    icon: Icon(Icons.add, color: scheme.onPrimary, size: 26),
                     onPressed: _add,
                   ),
                 ],
@@ -130,63 +126,64 @@ class _BookGroupSelectDialogState extends State<_BookGroupSelectDialog> {
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())
                     : _groups.isEmpty
-                        ? Center(
-                            child: Text(
-                              '暂无自定义分组，点右上角 + 添加',
-                              style: TextStyle(color: scheme.onSurfaceVariant),
+                    ? Center(
+                        child: Text(
+                          '暂无自定义分组，点右上角 + 添加',
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: _groups.length,
+                        separatorBuilder: (_, _) => Divider(
+                          height: 1,
+                          thickness: 0.5,
+                          color: scheme.outline.withValues(alpha: 0.25),
+                        ),
+                        itemBuilder: (context, index) {
+                          final g = _groups[index];
+                          final checked = _checked.contains(g.groupId);
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
                             ),
-                          )
-                        : ListView.separated(
-                            itemCount: _groups.length,
-                            separatorBuilder: (_, _) => Divider(
-                              height: 1,
-                              thickness: 0.5,
-                              color: scheme.outline.withValues(alpha: 0.25),
-                            ),
-                            itemBuilder: (context, index) {
-                              final g = _groups[index];
-                              final checked = _checked.contains(g.groupId);
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: CheckboxListTile(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    title: Text(g.groupName),
+                                    value: checked,
+                                    onChanged: (v) {
+                                      setState(() {
+                                        if (v == true) {
+                                          _checked.add(g.groupId);
+                                        } else {
+                                          _checked.remove(g.groupId);
+                                        }
+                                      });
+                                    },
+                                  ),
                                 ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: CheckboxListTile(
-                                        dense: true,
-                                        contentPadding: EdgeInsets.zero,
-                                        controlAffinity:
-                                            ListTileControlAffinity.leading,
-                                        title: Text(g.groupName),
-                                        value: checked,
-                                        onChanged: (v) {
-                                          setState(() {
-                                            if (v == true) {
-                                              _checked.add(g.groupId);
-                                            } else {
-                                              _checked.remove(g.groupId);
-                                            }
-                                          });
-                                        },
+                                TextButton(
+                                  onPressed: () => _edit(g),
+                                  child: Text(
+                                    '编辑',
+                                    style: TextStyle(
+                                      color: scheme.onSurface.withValues(
+                                        alpha: 0.65,
                                       ),
                                     ),
-                                    TextButton(
-                                      onPressed: () => _edit(g),
-                                      child: Text(
-                                        '编辑',
-                                        style: TextStyle(
-                                          color: scheme.onSurface
-                                              .withValues(alpha: 0.65),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
-                              );
-                            },
-                          ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),

@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/rss_article.dart';
+import '../domain/rss/rss_article.dart';
 
 /// RSS 收藏 — 对齐 Jingshiro [RssStar]（本地 SharedPreferences）
 class RssStarPrefs {
@@ -27,10 +27,7 @@ class RssStarPrefs {
 
   static Future<void> _saveAll(List<RssArticle> list) async {
     final p = await SharedPreferences.getInstance();
-    await p.setString(
-      _key,
-      jsonEncode(list.map(_toMap).toList()),
-    );
+    await p.setString(_key, jsonEncode(list.map(_toMap).toList()));
   }
 
   static Future<bool> isStarred(String origin, String link) async {
@@ -48,10 +45,7 @@ class RssStarPrefs {
       await _saveAll(all);
       return false;
     }
-    all.insert(
-      0,
-      article.copyWith(read: article.read),
-    );
+    all.insert(0, article.copyWith(read: article.read));
     await _saveAll(all);
     return true;
   }
@@ -63,31 +57,31 @@ class RssStarPrefs {
   }
 
   static Map<String, dynamic> _toMap(RssArticle a) => {
-        'origin': a.origin,
-        'sort': a.sort,
-        'title': a.title,
-        'link': a.link,
-        'pubDate': a.pubDate,
-        'description': a.description,
-        'content': a.content,
-        'image': a.image,
-        'group': a.group,
-        'type': a.type,
-        'durPos': a.durPos,
-        'starTime': DateTime.now().millisecondsSinceEpoch,
-      };
+    'origin': a.origin,
+    'sort': a.sort,
+    'title': a.title,
+    'link': a.link,
+    'pubDate': a.pubDate,
+    'description': a.description,
+    'content': a.content,
+    'image': a.image,
+    'group': a.group,
+    'type': a.type,
+    'durPos': a.durPos,
+    'starTime': DateTime.now().millisecondsSinceEpoch,
+  };
 
   static RssArticle _fromMap(Map<String, dynamic> m) => RssArticle(
-        origin: m['origin']?.toString() ?? '',
-        sort: m['sort']?.toString() ?? '',
-        title: m['title']?.toString() ?? '',
-        link: m['link']?.toString() ?? '',
-        pubDate: m['pubDate']?.toString(),
-        description: m['description']?.toString(),
-        content: m['content']?.toString(),
-        image: m['image']?.toString(),
-        group: m['group']?.toString() ?? '默认分组',
-        type: int.tryParse(m['type']?.toString() ?? '') ?? 0,
-        durPos: int.tryParse(m['durPos']?.toString() ?? '') ?? 0,
-      );
+    origin: m['origin']?.toString() ?? '',
+    sort: m['sort']?.toString() ?? '',
+    title: m['title']?.toString() ?? '',
+    link: m['link']?.toString() ?? '',
+    pubDate: m['pubDate']?.toString(),
+    description: m['description']?.toString(),
+    content: m['content']?.toString(),
+    image: m['image']?.toString(),
+    group: m['group']?.toString() ?? '默认分组',
+    type: int.tryParse(m['type']?.toString() ?? '') ?? 0,
+    durPos: int.tryParse(m['durPos']?.toString() ?? '') ?? 0,
+  );
 }

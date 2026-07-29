@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../models/rss_article.dart';
+import '../../domain/rss/rss_article.dart';
 import '../../models/rss_source.dart';
 import '../../services/rss_service.dart';
 import '../../services/rss_sort_urls.dart';

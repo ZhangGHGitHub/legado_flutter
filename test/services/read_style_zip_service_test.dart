@@ -13,7 +13,7 @@ void main() {
   group('ReadStyleConfig', () {
     test('hex roundtrip', () {
       const c = Color(0xFF3E3D3B);
-      expect(ReadStyleConfig.parseColor(ReadStyleConfig.toHex(c)), c);
+      expect(ReadStyleColorMapper.parse(ReadStyleColorMapper.toHex(c)), c);
     });
 
     test('fromJson / toJson preserves colors', () {
@@ -89,10 +89,7 @@ void main() {
         ..addFile(ArchiveFile('readme.txt', 4, utf8.encode('hi')));
       final bytes = Uint8List.fromList(ZipEncoder().encode(archive));
       final service = ReadStyleZipService();
-      expect(
-        () => service.importBytes(bytes),
-        throwsA(isA<FormatException>()),
-      );
+      expect(() => service.importBytes(bytes), throwsA(isA<FormatException>()));
     });
   });
 }

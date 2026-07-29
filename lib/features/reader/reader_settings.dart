@@ -2,14 +2,18 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../domain/reader_config/reader_font_weight.dart';
 import '../../models/click_zone.dart';
 import '../../models/read_style_config.dart';
 import '../../models/theme_typography.dart';
 import '../../services/read_style_prefs.dart';
 import '../../services/reader_font_loader.dart';
 import 'bg_text_config_panel.dart';
+import 'click_zone_labels.dart';
 
 export '../../models/click_zone.dart' show ClickZoneAction, ClickZoneLayout;
+export '../../domain/reader_config/reader_font_weight.dart'
+    show ReaderFontWeight;
 
 /// 阅读器屏幕方向（UI-2 更多设置）
 enum ScreenOrientationMode {
@@ -21,28 +25,18 @@ enum ScreenOrientationMode {
   final String label;
 }
 
-/// 字重（对齐 legado textBold：0 正常 / 1 粗体 / 2 细体 · 「中/粗/细」）
-enum ReaderFontWeight {
-  normal(0, '正常'),
-  bold(1, '粗体'),
-  light(2, '细体');
-
-  const ReaderFontWeight(this.code, this.label);
-  final int code;
-  final String label;
+extension ReaderFontWeightPresentation on ReaderFontWeight {
+  String get label => switch (this) {
+    ReaderFontWeight.normal => '正常',
+    ReaderFontWeight.bold => '粗体',
+    ReaderFontWeight.light => '细体',
+  };
 
   FontWeight get flutterWeight => switch (this) {
     ReaderFontWeight.normal => FontWeight.w400,
     ReaderFontWeight.bold => FontWeight.w700,
     ReaderFontWeight.light => FontWeight.w300,
   };
-
-  static ReaderFontWeight fromCode(int code) {
-    for (final v in values) {
-      if (v.code == code) return v;
-    }
-    return ReaderFontWeight.normal;
-  }
 }
 
 /// 简繁（对齐 chineseConverterType：0 关 / 1 繁→简 / 2 简→繁）
@@ -426,6 +420,38 @@ class ReaderTheme {
   ];
 }
 
+extension ReaderSettingsTypographyMapping on ReaderSettings {
+  ThemeTypography toThemeTypography() {
+    return ThemeTypography(
+      fontSize: fontSize,
+      lineHeight: lineHeight,
+      fontFamily: fontFamily,
+      fontWeight: fontWeight,
+      paddingHorizontal: paddingHorizontal,
+      paddingVertical: paddingVertical,
+      letterSpacing: letterSpacing,
+      paragraphSpacing: paragraphSpacing,
+      paragraphIndent: paragraphIndent,
+    );
+  }
+}
+
+extension ThemeTypographyReaderSettingsMapping on ThemeTypography {
+  ReaderSettings applyToReaderSettings(ReaderSettings base) {
+    return base.copyWith(
+      fontSize: fontSize,
+      lineHeight: lineHeight,
+      fontFamily: fontFamily,
+      fontWeight: fontWeight,
+      paddingHorizontal: paddingHorizontal,
+      paddingVertical: paddingVertical,
+      letterSpacing: letterSpacing,
+      paragraphSpacing: paragraphSpacing,
+      paragraphIndent: paragraphIndent,
+    );
+  }
+}
+
 /// ═══════════════════════════════════════════════════
 class ReaderSettingsPanel extends StatefulWidget {
   final ReaderSettings settings;
@@ -471,10 +497,7 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
     widget.onChanged(s);
     if (!s.shareLayout) {
       unawaited(
-        ReadStylePrefs.saveTypography(
-          s.themeName,
-          ThemeTypography.fromReaderSettings(s),
-        ),
+        ReadStylePrefs.saveTypography(s.themeName, s.toThemeTypography()),
       );
     }
   }

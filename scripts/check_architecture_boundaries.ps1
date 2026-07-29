@@ -22,6 +22,15 @@ $coreLayerPatterns = @(
     $presentationPatterns[4]
 )
 
+$domainModelPatterns = @(
+    @{ Name = 'outer layer or infrastructure import'; Regex = '(?im)^\s*import\s+[''\"](?:(?:\.\./)+(?:features|widgets|providers|services|infrastructure|bridge|database|src/rust)/|package:[^/''\"]+/(?:features|widgets|providers|services|infrastructure|bridge|database|src/rust)/)' },
+    @{ Name = 'Dio import or use'; Regex = '(?im)^\s*import\s+[''\"]package:dio/|\b(?:Dio|IOHttpClientAdapter)\b' },
+    @{ Name = 'HttpClient use'; Regex = '\bHttpClient\b' },
+    @{ Name = 'SharedPreferences import or use'; Regex = '(?im)^\s*import\s+[''\"]package:shared_preferences/|\bSharedPreferences\b' },
+    @{ Name = 'file_picker import or use'; Regex = '(?im)^\s*import\s+[''\"]package:file_picker/|\bFilePicker\b' },
+    @{ Name = 'path_provider import or use'; Regex = '(?im)^\s*import\s+[''\"]package:path_provider/|\b(?:getApplicationCacheDirectory|getApplicationDocumentsDirectory|getApplicationSupportDirectory|getDownloadsDirectory|getExternalCacheDirectories|getExternalStorageDirectories|getExternalStorageDirectory|getLibraryDirectory|getTemporaryDirectory)\b' }
+)
+
 $ruleGroups = @(
     @{
         Name = 'presentation direct infrastructure access'
@@ -30,8 +39,13 @@ $ruleGroups = @(
     },
     @{
         Name = 'core layer direct infrastructure access'
-        Scopes = @('lib/model', 'lib/services', 'lib/application')
+        Scopes = @('lib/services', 'lib/application')
         Patterns = $coreLayerPatterns
+    },
+    @{
+        Name = 'domain and model purity'
+        Scopes = @('lib/domain', 'lib/model', 'lib/models')
+        Patterns = $domainModelPatterns
     },
     @{
         Name = 'feature direct SharedPreferences access'

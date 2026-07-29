@@ -488,7 +488,7 @@ class _ReaderPageState extends State<ReaderPage> {
     );
     if (!share) {
       final typo = await ReadStylePrefs.loadTypography(themeName);
-      if (typo != null) next = typo.applyTo(next);
+      if (typo != null) next = typo.applyToReaderSettings(next);
     }
     if (!mounted) return;
     setState(() => _settings = next);

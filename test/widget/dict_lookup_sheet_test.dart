@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/models/dict_rule.dart';
+import 'package:legado_flutter/domain/rules/dict_rule.dart';
 import 'package:legado_flutter/widgets/dict_lookup_sheet.dart';
 
 void main() {

@@ -1,5 +1,5 @@
-import '../../models/rss_article.dart';
 import '../../models/rss_source.dart';
+import '../rss/rss_article.dart';
 
 class RssArticlesResult {
   const RssArticlesResult({required this.articles, this.nextUrl});

@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/dict_rule.dart';
+import '../domain/rules/dict_rule.dart';
 
 /// 字典规则持久化 — SharedPreferences JSON，对齐 Jingshiro `dictRules` 表
 class DictRulePrefs {
@@ -10,8 +10,7 @@ class DictRulePrefs {
 
   static List<DictRule>? _cache;
 
-  static List<DictRule> get cached =>
-      List.unmodifiable(_cache ?? defaultRules);
+  static List<DictRule> get cached => List.unmodifiable(_cache ?? defaultRules);
 
   static Future<List<DictRule>> load() async {
     final p = await SharedPreferences.getInstance();

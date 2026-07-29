@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
-import '../models/dict_rule.dart';
+import '../domain/rules/dict_rule.dart';
 import '../utils/ssrf_guard.dart';
 
 /// 轻量字典规则测试 — 对齐 Jingshiro [DictRule.search] 的简化路径：
@@ -41,10 +41,7 @@ class DictRuleTester {
         followRedirects: true,
         maxRedirects: SsrfGuard.maxRedirects,
         validateStatus: (s) => s != null && s < 500,
-        headers: {
-          'User-Agent': _kUa,
-          ...parsed.headers,
-        },
+        headers: {'User-Agent': _kUa, ...parsed.headers},
       ),
     );
 
@@ -122,7 +119,8 @@ class DictRuleTester {
       method: (opts['method'] as String?) ?? 'GET',
       body: opts['body']?.toString(),
       headers: headers,
-      contentType: headers['Content-Type'] ??
+      contentType:
+          headers['Content-Type'] ??
           headers['content-type'] ??
           'application/x-www-form-urlencoded',
     );
@@ -140,8 +138,14 @@ class DictRuleTester {
 
   static String _stripHtmlRough(String html) {
     var s = html
-        .replaceAll(RegExp(r'<script[\s\S]*?</script>', caseSensitive: false), '')
-        .replaceAll(RegExp(r'<style[\s\S]*?</style>', caseSensitive: false), '');
+        .replaceAll(
+          RegExp(r'<script[\s\S]*?</script>', caseSensitive: false),
+          '',
+        )
+        .replaceAll(
+          RegExp(r'<style[\s\S]*?</style>', caseSensitive: false),
+          '',
+        );
     s = s.replaceAll(RegExp(r'<[^>]+>'), ' ');
     s = s
         .replaceAll('&nbsp;', ' ')
