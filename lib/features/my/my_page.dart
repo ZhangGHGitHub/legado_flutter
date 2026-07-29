@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../application/lifecycle/app_lifecycle_coordinator.dart';
 import '../../services/backup_service.dart';
 import '../../services/database_status_service.dart';
 import '../../services/engine_status_service.dart';
@@ -36,29 +37,42 @@ class MyPage extends StatefulWidget {
   State<MyPage> createState() => _MyPageState();
 }
 
-class _MyPageState extends State<MyPage> with WidgetsBindingObserver {
+class _MyPageState extends State<MyPage> {
   bool _webServiceOn = false;
   String _webServiceUrl = '';
   bool _localBackupBusy = false;
+  AppLifecycleCoordinator? _lifecycle;
+  int _lastResumeCount = 0;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _loadWebService();
   }
 
   @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = context.read<AppLifecycleCoordinator>();
+    if (identical(_lifecycle, next)) return;
+    _lifecycle?.removeListener(_handleLifecycleChanged);
+    _lifecycle = next;
+    _lastResumeCount = next.resumeCount;
+    next.addListener(_handleLifecycleChanged);
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _loadWebService();
-    }
+  void dispose() {
+    _lifecycle?.removeListener(_handleLifecycleChanged);
+    super.dispose();
+  }
+
+  void _handleLifecycleChanged() {
+    final lifecycle = _lifecycle;
+    if (lifecycle == null || !lifecycle.isResumed) return;
+    if (_lastResumeCount == lifecycle.resumeCount) return;
+    _lastResumeCount = lifecycle.resumeCount;
+    _loadWebService();
   }
 
   Future<void> _loadWebService() async {

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../app.dart';
 import '../application/app_bootstrap.dart';
 import '../application/crash/crash_log_service.dart';
+import '../application/lifecycle/app_lifecycle_coordinator.dart';
 import '../application/preferences/shared_preferences_runtime.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
 import '../application/startup/startup_task_runner.dart';
@@ -55,6 +56,7 @@ import '../infrastructure/file_system/backup_local_file_adapter.dart';
 import '../infrastructure/network/frb_public_text_fetch_port.dart';
 import '../infrastructure/network/frb_application_binary_http_request_port.dart';
 import '../infrastructure/network/frb_application_http_request_port.dart';
+import '../infrastructure/platform/flutter_lifecycle_observer.dart';
 import '../infrastructure/platform/method_channel_source_login_web_cookie_port.dart';
 import '../infrastructure/preferences/shared_preferences_book_group_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
@@ -105,6 +107,7 @@ abstract final class AppCompositionRoot {
     final pendingCrashReport = await crashLog.pendingReport();
     crashLog.updateStartupStage('基础设施组装');
     final navigatorKey = GlobalKey<NavigatorState>();
+    final lifecycleCoordinator = AppLifecycleCoordinator();
     const contentCache = FileChapterContentCache();
     const networkEnginePort = FrbNetworkEnginePort();
     const sourceLoginCookiePort = FrbSourceLoginCookiePort();
@@ -217,6 +220,7 @@ abstract final class AppCompositionRoot {
       app: MultiProvider(
         providers: [
           ChangeNotifierProvider.value(value: bootstrap.themeController),
+          ChangeNotifierProvider.value(value: lifecycleCoordinator),
           ChangeNotifierProvider.value(value: AppConfig.instance),
           ChangeNotifierProvider.value(value: bootstrap.bookProvider),
           Provider<BookSourceService>.value(value: bookSourceService),
@@ -242,6 +246,12 @@ abstract final class AppCompositionRoot {
           Provider<BookmarkSyncService>.value(value: bookmarkSyncService),
           Provider<CacheService>.value(value: cacheService),
           Provider<StartupTaskRunner>.value(value: bootstrap.startupTasks),
+          Provider<FlutterLifecycleObserver>(
+            lazy: false,
+            create: (_) =>
+                FlutterLifecycleObserver(lifecycleCoordinator)..start(),
+            dispose: (_, observer) => observer.stop(),
+          ),
           Provider<RemoteArchiveImportService>.value(
             value: remoteArchiveImportService,
           ),

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/database/dao/replace_rule_dao.dart';
 import 'package:legado_flutter/database/dao/source_dao.dart';
+import 'package:legado_flutter/application/lifecycle/app_lifecycle_coordinator.dart';
 import 'package:legado_flutter/application/startup/startup_task_runner.dart';
 import 'package:legado_flutter/domain/crash/crash_report.dart';
 import 'package:legado_flutter/domain/ports/public_text_fetch_port.dart';
@@ -72,6 +73,7 @@ void main() {
             value: const _EmptyPublicTextFetchPort(),
           ),
           Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
+          ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
           Provider<BookSourceService>(
             create: (_) => createTestBookSourceService(),
           ),
@@ -133,6 +135,7 @@ void main() {
             value: const _EmptyPublicTextFetchPort(),
           ),
           Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
+          ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
           Provider<BookSourceService>(
             create: (_) => createTestBookSourceService(),
           ),
@@ -193,6 +196,7 @@ void main() {
               value: const _EmptyPublicTextFetchPort(),
             ),
             Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
+            ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
             Provider<BookSourceService>(
               create: (_) => createTestBookSourceService(),
             ),

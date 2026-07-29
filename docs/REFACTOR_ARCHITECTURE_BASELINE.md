@@ -2568,3 +2568,20 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，其余集成、`legado_webdav` 和文档测试无失败。
 
 边界结论：P0-3 已满足启动任务独立超时、失败隔离、结果可观测、不阻塞首屏、不重复执行和失败可重试要求。下一固定任务为 P1-1 全局生命周期边界；默认数据版本门禁与更细粒度业务 port 化仍按后续独立任务推进，不在本批扩大范围。
+
+## 123. 2026-07-30：R6/P1-1 全局生命周期边界
+
+- 新增 application 级 `AppLifecycleCoordinator`，记录 `resumed/inactive/hidden/paused/detached` phase、恢复次数和当前是否前台，作为页面订阅的唯一生命周期状态入口。
+- 新增 infrastructure 级 `FlutterLifecycleObserver`，将 Flutter `AppLifecycleState` 映射到 application phase；组合根统一创建并启动 observer，Provider dispose 时注销，页面不再直接注册同类全局回调。
+- `MyPage` 移除 `WidgetsBindingObserver` mixin 和 `WidgetsBinding.instance.addObserver/removeObserver`，仅在 coordinator 的 `resumeCount` 增加且状态为 resumed 时刷新 Web 服务开关/地址，保留原版“回到前台刷新状态”的行为。
+- `MainShell` 和 MyPage 测试宿主补齐生命周期 coordinator 注入，避免页面依赖隐藏全局状态；本批未修改正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。`legado-main/` 保持只读。
+
+验证结果：
+
+- 生命周期 coordinator、MyPage 和 MainShell 定向回归 `5/5`。
+- `flutter analyze --no-pub`：`No issues found`。
+- 架构扫描保持 `144` 条既有 backlog：Feature 直接 SharedPreferences `12`、Feature 业务 service `132`，无新增类别。
+- `flutter test --no-pub --concurrency=1`：`668` 通过、`3` 项既有条件跳过。
+- `cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，其余集成、`legado_webdav` 和文档测试无失败。
+
+边界结论：P1-1 已满足当前计划的 application 生命周期协调、平台 observer 收口、页面订阅状态和前台恢复刷新要求。下一固定任务为 P1-2 卡顿与调度监控；更完整的通知/后台服务/TLS/WebView 启动能力继续按 P1-4 独立盘点，不在本批扩大范围。
