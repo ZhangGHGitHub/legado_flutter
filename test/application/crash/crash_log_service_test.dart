@@ -50,6 +50,36 @@ void main() {
     expect(store.latest?.error, 'x' * 4095);
   });
 
+  test('redacts sensitive crash fields before storing', () async {
+    final store = _MemoryCrashReportStore();
+    final service = CrashLogService(
+      store: store,
+      metadataLoader: () async => const CrashRuntimeMetadata(
+        platform: 'windows',
+        platformVersion: 'token=platform-secret',
+        appVersion: '1.0.0+1',
+        engineVersion: '0.5.6',
+      ),
+      clock: () => DateTime(2026, 7, 30, 12),
+    );
+    service.updateStartupStage('stage password=stage-secret');
+
+    await service.record(
+      error: 'failure token=error-secret',
+      stackTrace: StackTrace.fromString(
+        'Authorization: Bearer stack-secret password=stack-secret',
+      ),
+      origin: CrashOrigin.platformDispatcher,
+    );
+
+    final report = store.latest!;
+    expect(report.error, contains('token=<redacted>'));
+    expect(report.stackTrace, contains('Authorization: Bearer <redacted>'));
+    expect(report.startupStage, contains('password=<redacted>'));
+    expect(report.metadata.platformVersion, contains('token=<redacted>'));
+    expect(report.displayText, isNot(contains('secret')));
+  });
+
   test('metadata and storage failures degrade without throwing', () async {
     final metadataFallbackStore = _MemoryCrashReportStore();
     final metadataFallback = CrashLogService(

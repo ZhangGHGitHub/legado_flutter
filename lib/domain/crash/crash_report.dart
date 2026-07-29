@@ -1,3 +1,5 @@
+import '../diagnostics/diagnostic_record.dart';
+
 enum CrashOrigin {
   flutterFramework('flutter_framework'),
   platformDispatcher('platform_dispatcher'),
@@ -52,19 +54,21 @@ class CrashReport {
   final String stackTrace;
   final CrashRuntimeMetadata metadata;
 
-  String get displayText => [
-    'time=${occurredAt.toIso8601String()}',
-    'origin=${origin.storageValue}',
-    'startupStage=$startupStage',
-    'platform=${metadata.platform}',
-    'platformVersion=${metadata.platformVersion}',
-    'appVersion=${metadata.appVersion}',
-    'engineVersion=${metadata.engineVersion}',
-    '',
-    error,
-    '',
-    stackTrace,
-  ].join('\n');
+  String get displayText => DiagnosticRecord(
+    time: occurredAt,
+    severity: DiagnosticSeverity.error,
+    category: 'crash',
+    source: origin.storageValue,
+    message: error,
+    stackTrace: stackTrace,
+    metadata: {'startupStage': startupStage},
+    runtime: DiagnosticRuntimeInfo(
+      platform: metadata.platform,
+      platformVersion: metadata.platformVersion,
+      appVersion: metadata.appVersion,
+      engineVersion: metadata.engineVersion,
+    ),
+  ).displayText;
 
   Map<String, dynamic> toJson() => {
     'occurredAt': occurredAt.toUtc().toIso8601String(),

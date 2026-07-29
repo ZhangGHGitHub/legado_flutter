@@ -1,4 +1,5 @@
 import '../../domain/crash/crash_report.dart';
+import '../../domain/diagnostics/diagnostic_record.dart';
 import '../../domain/ports/crash_report_store.dart';
 
 typedef CrashMetadataLoader = Future<CrashRuntimeMetadata> Function();
@@ -12,8 +13,6 @@ class CrashLogService {
        _metadataLoader = metadataLoader,
        _clock = clock ?? DateTime.now;
 
-  static const _maxErrorLength = 4096;
-  static const _maxStackLength = 32 * 1024;
   static const _maxMetadataLength = 2048;
 
   final CrashReportStore _store;
@@ -39,17 +38,35 @@ class CrashLogService {
       final report = CrashReport(
         occurredAt: _clock(),
         origin: origin,
-        startupStage: _truncate(_startupStage, _maxMetadataLength),
-        error: _truncate(error.toString(), _maxErrorLength),
-        stackTrace: _truncate(stackTrace.toString(), _maxStackLength),
+        startupStage: DiagnosticRecord.sanitize(
+          _startupStage,
+          maxLength: _maxMetadataLength,
+        ),
+        error: DiagnosticRecord.sanitize(
+          error.toString(),
+          maxLength: DiagnosticRecord.maxErrorLength,
+        ),
+        stackTrace: DiagnosticRecord.sanitize(
+          stackTrace.toString(),
+          maxLength: DiagnosticRecord.maxStackLength,
+        ),
         metadata: CrashRuntimeMetadata(
-          platform: _truncate(metadata.platform, _maxMetadataLength),
-          platformVersion: _truncate(
-            metadata.platformVersion,
-            _maxMetadataLength,
+          platform: DiagnosticRecord.sanitize(
+            metadata.platform,
+            maxLength: _maxMetadataLength,
           ),
-          appVersion: _truncate(metadata.appVersion, _maxMetadataLength),
-          engineVersion: _truncate(metadata.engineVersion, _maxMetadataLength),
+          platformVersion: DiagnosticRecord.sanitize(
+            metadata.platformVersion,
+            maxLength: _maxMetadataLength,
+          ),
+          appVersion: DiagnosticRecord.sanitize(
+            metadata.appVersion,
+            maxLength: _maxMetadataLength,
+          ),
+          engineVersion: DiagnosticRecord.sanitize(
+            metadata.engineVersion,
+            maxLength: _maxMetadataLength,
+          ),
         ),
       );
       await _store.writePending(report);
@@ -100,21 +117,4 @@ class CrashLogService {
       return const CrashRuntimeMetadata.unavailable();
     }
   }
-
-  static String _truncate(String value, int maxLength) {
-    if (value.length <= maxLength) return value;
-    var end = maxLength;
-    final previous = value.codeUnitAt(end - 1);
-    final next = value.codeUnitAt(end);
-    if (_isHighSurrogate(previous) && _isLowSurrogate(next)) {
-      end -= 1;
-    }
-    return value.substring(0, end);
-  }
-
-  static bool _isHighSurrogate(int codeUnit) =>
-      codeUnit >= 0xD800 && codeUnit <= 0xDBFF;
-
-  static bool _isLowSurrogate(int codeUnit) =>
-      codeUnit >= 0xDC00 && codeUnit <= 0xDFFF;
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../domain/diagnostics/diagnostic_record.dart';
 import '../startup/startup_task_runner.dart';
 
 enum AppDiagnosticEventKind {
@@ -58,17 +59,24 @@ class AppDiagnosticEvent {
   final StackTrace? stackTrace;
 
   bool get isCrash => false;
-  String get level => 'W';
+  String get level => DiagnosticSeverity.warning.level;
 
   String toLogLine() {
-    final parts = <String>['[Diagnostics][${kind.name}][$source]', message];
+    final meta = <String, String>{'kind': kind.name};
     final elapsed = duration;
-    if (elapsed != null) parts.add('duration=${elapsed.inMilliseconds}ms');
+    if (elapsed != null) meta['durationMs'] = '${elapsed.inMilliseconds}';
     final limit = threshold;
-    if (limit != null) parts.add('threshold=${limit.inMilliseconds}ms');
-    final e = error;
-    if (e != null) parts.add('error=$e');
-    return parts.join(' ');
+    if (limit != null) meta['thresholdMs'] = '${limit.inMilliseconds}';
+    return DiagnosticRecord(
+      time: occurredAt,
+      severity: DiagnosticSeverity.warning,
+      category: 'diagnostics',
+      source: source,
+      message: message,
+      metadata: meta,
+      error: error?.toString(),
+      stackTrace: stackTrace?.toString(),
+    ).line;
   }
 }
 
