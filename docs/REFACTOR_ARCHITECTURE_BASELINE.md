@@ -2623,3 +2623,21 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，其余集成、`legado_webdav` 和文档测试无失败。
 
 边界结论：P1-3 已满足当前计划的全局日志格式、敏感信息限制、运行/崩溃/手动导出复用诊断模型和清理边界要求。下一固定任务为 P1-4 平台启动能力盘点。
+
+## 126. 2026-07-30：R6/P1-4 平台启动能力盘点
+
+- 对照只读原版 `App.kt`、`AppFreezeMonitor`、`DispatchersMonitor` 和通知创建逻辑，登记原版 Application 启动期间的通知通道、WebView 绘制设置、Cronet 预下载、GMS TLS provider、简繁转换预热、缓存清理和阅读记录同步行为。
+- 通知通道：原版创建下载、朗读、Web 服务三类 Android notification channel；当前 Flutter/Android 没有对应 channel 或通知插件/前台服务。真实 Android TTS、后台音频和通知服务按暂停/范围外条件登记，不宣称等价完成。
+- 后台任务/服务：当前 Flutter 已有启动任务 runner 和阅读进度同步，但没有原版 Android 前台服务/后台音频生命周期；后台能力继续单独受目标平台和产品需求约束。
+- WebView 绘制：当前使用 `webview_flutter` 作为页面宿主，没有原版 `WebView.enableSlowWholeDocumentDraw()` 全局调用；未发现当前产品流程需要该分享卡片截图差异，登记为 Android 平台差异，待明确需求后补平台 adapter 和 smoke。
+- 网络/TLS：原版 Android Q 以下可选插入 GMS Conscrypt，且预下载 Cronet；当前主网络请求已由 Rust HTTP 统一承接 TLS、重定向、SSRF、限流和超时，不重复引入 Cronet 或 GMS provider。GMS/Cronet 属于实现差异，不影响当前 Rust 网络契约。
+- 简繁转换：当前阅读器保留局部 `ChineseConvert`/阅读配置转换；没有原版全局词典预热等价入口，登记为功能边界差异，不在本轮启动阶段改变正文转换行为。
+- 启动清理/同步：P0-3 已将书架缓存维护和阅读进度同步纳入可观测后台任务；原版其他数据升级/清理行为继续按各自数据与服务边界追踪，不在本平台盘点中扩大迁移。
+- 本批为只读能力审计，没有修改业务代码或 `legado-main/`，未修改正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- 复用 P1-3 最终门禁：Flutter 串行全量 `678` 通过、`3` 项既有条件跳过；Rust workspace `184/184`；`flutter analyze --no-pub` 无诊断；架构扫描保持 `144` 条既有 backlog。
+- `git diff --check` 在本批文档修改后通过。
+
+边界结论：P1-4 平台启动能力盘点完成。Rust 网络能力已覆盖，不重复引入 Cronet/GMS TLS；通知、后台音频、WebView 全量绘制和全局简繁预热明确登记为平台差异/暂停项。下一阶段进入应用用例依赖、受控 UI/目标平台和发布门禁。
