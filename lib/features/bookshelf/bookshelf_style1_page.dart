@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
+import '../../application/preferences/bookshelf_display_prefs_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/bookshelf_prefs.dart';
@@ -56,11 +56,11 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
   }
 
   Future<void> _loadPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
+    final displayPrefs = await context.read<BookshelfDisplayPrefsPort>().load();
     if (!mounted) return;
     setState(() {
-      _showGrouped = prefs.getBool('shelf_show_grouped') ?? false;
-      _pinnedIds = (prefs.getStringList('shelf_pinned_ids') ?? []).toSet();
+      _showGrouped = displayPrefs.showGrouped;
+      _pinnedIds = displayPrefs.pinnedIds;
     });
     final order = await BookshelfPrefs.loadBookOrder();
     if (!mounted) return;
@@ -68,14 +68,11 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
   }
 
   Future<void> _saveGrouped(bool v) async {
-    (await SharedPreferences.getInstance()).setBool('shelf_show_grouped', v);
+    await context.read<BookshelfDisplayPrefsPort>().saveGrouped(v);
   }
 
   Future<void> _savePinned() async {
-    (await SharedPreferences.getInstance()).setStringList(
-      'shelf_pinned_ids',
-      _pinnedIds.toList(),
-    );
+    await context.read<BookshelfDisplayPrefsPort>().savePinned(_pinnedIds);
   }
 
   List<Book> _processBooks(List<Book> books) {

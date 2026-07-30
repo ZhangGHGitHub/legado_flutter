@@ -2675,3 +2675,19 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `git diff --check`：通过。
 
 边界结论：AppLog 写入已从书架 Feature、书签服务和笔记服务收口到 application port 与组合根；剩余 Feature 偏好/业务服务依赖继续按单边界、单用例迁移。
+
+## 129. 2026-07-30：R6 三线并行收口 Feature 偏好边界
+
+- 书架线新增 `BookshelfDisplayPrefsPort` 与 `SharedPreferencesBookshelfDisplayPrefs`，迁移 `shelf_show_grouped`、`shelf_pinned_ids`；排序、置顶集合和书架 UI 行为保持不变。
+- 下载线新增 `DownloadChoicePrefsPort` 与 `SharedPreferencesDownloadChoicePrefs`，迁移 `download_choice_concurrency`、`download_choice_next_n`；保留默认值、`1..8`/`1..9999` clamp、加载状态和确认保存语义。
+- RSS 线新增 `RssReadStatePort` 与 `SharedPreferencesRssReadStateAdapter`，迁移 `rss_read_<Uri.encodeComponent(sourceUrl)>`；保留已读链接集合、重复链接去重、异步生命周期和文章列表行为。
+- 三类 adapter 均通过 `SharedPreferencesRuntime` 获取存储，组合根统一注册 application port；三个 Feature 不再直接 import 或调用 `SharedPreferences`。本批由主 agent 与两个子 agent 使用不重叠写入范围并行完成，未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- 三条线定向回归 `8/8`；`flutter analyze --no-pub`：`No issues found`。
+- Flutter 串行全量 `686` 通过、`3` 项既有条件跳过；`cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，workspace 全量通过。
+- 架构扫描为 `128` 条 backlog：Feature 直接 SharedPreferences `2`、Feature 业务 service `126`；无新增类别。
+- `git diff --check`：通过。
+
+边界结论：本批完成三类独立 Feature 偏好端口化，架构 backlog 从 `138` 降至 `128`；剩余两条 SharedPreferences 违规集中在 `SourceEditorPage`，后续继续单独迁移。

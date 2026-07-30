@@ -10,7 +10,10 @@ import '../application/diagnostics/app_diagnostics_monitor.dart';
 import '../application/diagnostics/app_log_port.dart';
 import '../application/lifecycle/app_lifecycle_coordinator.dart';
 import '../application/preferences/shared_preferences_runtime.dart';
+import '../application/preferences/bookshelf_display_prefs_port.dart';
+import '../application/preferences/download_choice_prefs_port.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
+import '../application/rss/rss_read_state_port.dart';
 import '../application/startup/startup_task_runner.dart';
 import '../application/web_api/repository_web_api_data_port.dart';
 import '../bridge/legado_db_bridge.dart';
@@ -67,8 +70,11 @@ import '../infrastructure/platform/flutter_lifecycle_observer.dart';
 import '../infrastructure/platform/method_channel_source_login_web_cookie_port.dart';
 import '../infrastructure/platform/platform_crash_metadata_loader.dart';
 import '../infrastructure/preferences/shared_preferences_book_group_prefs.dart';
+import '../infrastructure/preferences/shared_preferences_bookshelf_display_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
 import '../infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
+import '../infrastructure/preferences/shared_preferences_download_choice_prefs.dart';
+import '../infrastructure/preferences/shared_preferences_rss_read_state_adapter.dart';
 import '../infrastructure/web_api/dart_io_web_api_port.dart';
 import '../infrastructure/webdav/frb_webdav_repository.dart';
 import '../providers/replace_provider.dart';
@@ -148,6 +154,11 @@ abstract final class AppCompositionRoot {
       ),
     );
     final progressStore = await SharedPreferencesBookProgressSyncStore.load();
+    final bookshelfDisplayPrefs =
+        await SharedPreferencesBookshelfDisplayPrefs.create();
+    final rssReadStatePort = await SharedPreferencesRssReadStateAdapter.load();
+    final downloadChoicePrefs =
+        await SharedPreferencesDownloadChoicePrefs.loadFromRuntime();
 
     await _configureStaticServices(
       networkEnginePort,
@@ -256,6 +267,11 @@ abstract final class AppCompositionRoot {
           ChangeNotifierProvider.value(value: bootstrap.bookProvider),
           Provider<AppDiagnosticsMonitor>.value(value: diagnosticsMonitor),
           Provider<AppLogPort>(create: (_) => const AppLogPortAdapter()),
+          Provider<BookshelfDisplayPrefsPort>.value(
+            value: bookshelfDisplayPrefs,
+          ),
+          Provider<RssReadStatePort>.value(value: rssReadStatePort),
+          Provider<DownloadChoicePrefsPort>.value(value: downloadChoicePrefs),
           Provider<BookSourceService>.value(value: bookSourceService),
           Provider<PublicTextFetchPort>.value(value: publicTextPort),
           Provider<ApplicationHttpRequestPort>(

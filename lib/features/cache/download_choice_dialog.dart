@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+
+import '../../application/preferences/download_choice_prefs_port.dart';
 
 /// 下载选项结果（对齐 `dialog_download_choice.xml`）
 enum DownloadRangeKind {
@@ -62,9 +64,6 @@ class DownloadChoiceDialog extends StatefulWidget {
 }
 
 class _DownloadChoiceDialogState extends State<DownloadChoiceDialog> {
-  static const _kConcurrency = 'download_choice_concurrency';
-  static const _kNextN = 'download_choice_next_n';
-
   DownloadRangeKind _range = DownloadRangeKind.notCached;
   late final TextEditingController _nextNCtrl;
   int _concurrency = 1;
@@ -84,27 +83,28 @@ class _DownloadChoiceDialogState extends State<DownloadChoiceDialog> {
   }
 
   Future<void> _loadPrefs() async {
-    final p = await SharedPreferences.getInstance();
+    final prefs = await context.read<DownloadChoicePrefsPort>().load();
     if (!mounted) return;
     setState(() {
-      _concurrency = (p.getInt(_kConcurrency) ?? 1).clamp(1, 8);
-      final n = (p.getInt(_kNextN) ?? 50).clamp(1, 9999);
-      _nextNCtrl.text = '$n';
+      _concurrency = prefs.concurrency;
+      _nextNCtrl.text = '${prefs.nextN}';
       _loading = false;
     });
   }
 
   Future<void> _confirm() async {
     final nextN = int.tryParse(_nextNCtrl.text.trim()) ?? 50;
-    final p = await SharedPreferences.getInstance();
-    await p.setInt(_kConcurrency, _concurrency);
-    await p.setInt(_kNextN, nextN.clamp(1, 9999));
+    final savedNextN = nextN.clamp(1, 9999);
+    await context.read<DownloadChoicePrefsPort>().save(
+      concurrency: _concurrency,
+      nextN: savedNextN,
+    );
     if (!mounted) return;
     Navigator.pop(
       context,
       DownloadChoiceResult(
         range: _range,
-        nextCount: nextN.clamp(1, 9999),
+        nextCount: savedNextN,
         concurrency: _concurrency,
       ),
     );

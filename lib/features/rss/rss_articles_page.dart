@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 
 import '../../domain/ports/application_http_request_port.dart';
 import '../../domain/rss/rss_article.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
+import '../../application/rss/rss_read_state_port.dart';
 import '../../services/rss_service.dart';
 import '../../services/rss_sort_urls.dart';
 import '../../services/rss_star_prefs.dart';
@@ -205,9 +206,8 @@ class _RssArticlesListState extends State<_RssArticlesList>
   }
 
   Future<void> _loadMeta() async {
-    final p = await SharedPreferences.getInstance();
-    final key = 'rss_read_${Uri.encodeComponent(source.sourceUrl)}';
-    final list = p.getStringList(key) ?? const [];
+    final readState = context.read<RssReadStatePort>();
+    final list = await readState.read(source.sourceUrl);
     final stars = await RssStarPrefs.loadAll();
     if (!mounted) return;
     setState(() {
@@ -224,9 +224,7 @@ class _RssArticlesListState extends State<_RssArticlesList>
 
   Future<void> _markRead(RssArticle a) async {
     _readLinks.add(a.link);
-    final p = await SharedPreferences.getInstance();
-    final key = 'rss_read_${Uri.encodeComponent(source.sourceUrl)}';
-    await p.setStringList(key, _readLinks.toList());
+    await context.read<RssReadStatePort>().write(source.sourceUrl, _readLinks);
     if (mounted) setState(() {});
   }
 

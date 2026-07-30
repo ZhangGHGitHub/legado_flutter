@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R6/应用用例依赖：三线并行收口书架显示、下载选项和 RSS 已读状态偏好。新增 application port 与 SharedPreferences infrastructure adapter，`BookshelfStyle1Page`、`DownloadChoiceDialog`、`RssArticlesPage` 不再直接访问 SharedPreferences；组合根统一注入三类端口，保留既有键名、默认值、clamp、已读集合、保存时机和 UI 行为。主 agent 与两个子 agent 均未修改 Rust/正文/目录/分页/章节身份/UTF-16 阅读位置/第 3 条断行规则。定向 `8/8`、Flutter 串行全量 `686` 通过（`3` 项既有跳过）、Rust `184/184`、analyze 无诊断；架构 backlog 从 `138` 降至 `128`（SharedPreferences `2`、Feature 业务 service `126`），`git diff --check` 通过。
 - R6/应用用例依赖：继续收口 AppLog 写入边界。`AddBookUrlDialog`、书架导出/导入、`RemoteBookPage` 改用 `AppLogPort`；`BookmarkService` 与 `NoteService` 由组合根注入同一日志端口，移除对 `services/app_log.dart` 的直接依赖，保留日志文本、业务 API、失败返回和异常降级语义。远程页面测试宿主补齐端口注入。定向 `5/5`、书签/笔记服务回归 `7/7`、Flutter 串行全量 `678` 通过（`3` 项既有跳过）、Rust `184/184`、analyze 无诊断；架构 backlog 从 `142` 降至 `138`，`git diff --check` 通过。未修改 `legado-main/`、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 - R6/应用用例依赖：完成 AppLog 页面边界收口。新增 `AppLogPort` 与基础设施 adapter，`AppLogPage`、`AppLogDialog` 不再直接依赖 `services/app_log.dart`，仍保留日志加载、最新在前、复制导出、清空和颜色显示行为。定向 `4/4`、Flutter 串行全量 `678` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断；架构 backlog 从 `144` 降至 `142`，无新增违规。
 - R6/P1-4：完成平台启动能力盘点。确认原版下载/朗读/Web 服务通知通道、后台服务、WebView 慢速全量绘制、GMS Conscrypt、Cronet 预下载和简繁转换预热在 Flutter/Android 的覆盖边界：Rust HTTP 已覆盖主网络 TLS/重定向/SSRF，不重复引入 Cronet 或 GMS provider；通知、后台音频、WebView 全量绘制和全局简繁预热登记为当前平台差异/暂停项，不伪装成等价实现。只读审计未修改业务、正文、目录、分页、章节身份或第 3 条断行规则。
