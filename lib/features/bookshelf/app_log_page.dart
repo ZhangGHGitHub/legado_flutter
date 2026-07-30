@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/diagnostics/app_log_port.dart';
+import '../../application/reader/reader_font_port.dart';
 import '../../services/clipboard_port.dart';
-import '../../services/reader_font_loader.dart';
 
 /// 应用日志页 — 对齐 Jingshiro [AppLogDialog]
 class AppLogPage extends StatefulWidget {
-  const AppLogPage({super.key, this.clipboard, this.log});
+  const AppLogPage({super.key, this.clipboard, this.log, this.font});
 
   final ClipboardPort? clipboard;
   final AppLogPort? log;
+  final ReaderFontPort? font;
 
   @override
   State<AppLogPage> createState() => _AppLogPageState();
@@ -46,9 +47,10 @@ class _AppLogPageState extends State<AppLogPage> {
 
   @override
   Widget build(BuildContext context) {
+    final font = widget.font ?? context.read<ReaderFontPort>();
     final style = TextStyle(
-      fontFamily: ReaderFontLoader.platformSansFamily(),
-      fontFamilyFallback: ReaderFontLoader.cjkFallbackFamilies(),
+      fontFamily: font.platformSansFamily(),
+      fontFamilyFallback: font.cjkFallbackFamilies(),
       fontSize: 12,
       height: 1.35,
     );

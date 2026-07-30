@@ -12,6 +12,9 @@ import '../application/lifecycle/app_lifecycle_coordinator.dart';
 import '../application/preferences/shared_preferences_runtime.dart';
 import '../application/preferences/bookshelf_display_prefs_port.dart';
 import '../application/preferences/download_choice_prefs_port.dart';
+import '../application/preferences/source_variable_port.dart';
+import '../application/reader/reader_font_port.dart';
+import '../application/search/search_history_port.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
 import '../application/rss/rss_read_state_port.dart';
 import '../application/startup/startup_task_runner.dart';
@@ -74,6 +77,9 @@ import '../infrastructure/preferences/shared_preferences_bookshelf_display_prefs
 import '../infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
 import '../infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
 import '../infrastructure/preferences/shared_preferences_download_choice_prefs.dart';
+import '../infrastructure/preferences/shared_preferences_source_variable_adapter.dart';
+import '../infrastructure/reader/reader_font_port_adapter.dart';
+import '../infrastructure/preferences/shared_preferences_search_history_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_rss_read_state_adapter.dart';
 import '../infrastructure/web_api/dart_io_web_api_port.dart';
 import '../infrastructure/webdav/frb_webdav_repository.dart';
@@ -159,6 +165,8 @@ abstract final class AppCompositionRoot {
     final rssReadStatePort = await SharedPreferencesRssReadStateAdapter.load();
     final downloadChoicePrefs =
         await SharedPreferencesDownloadChoicePrefs.loadFromRuntime();
+    final sourceVariablePort =
+        await SharedPreferencesSourceVariableAdapter.create();
 
     await _configureStaticServices(
       networkEnginePort,
@@ -272,6 +280,11 @@ abstract final class AppCompositionRoot {
           ),
           Provider<RssReadStatePort>.value(value: rssReadStatePort),
           Provider<DownloadChoicePrefsPort>.value(value: downloadChoicePrefs),
+          Provider<SourceVariablePort>.value(value: sourceVariablePort),
+          Provider<ReaderFontPort>.value(value: const ReaderFontPortAdapter()),
+          Provider<SearchHistoryPort>.value(
+            value: const SharedPreferencesSearchHistoryAdapter(),
+          ),
           Provider<BookSourceService>.value(value: bookSourceService),
           Provider<PublicTextFetchPort>.value(value: publicTextPort),
           Provider<ApplicationHttpRequestPort>(

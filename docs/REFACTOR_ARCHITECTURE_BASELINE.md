@@ -2691,3 +2691,19 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `git diff --check`：通过。
 
 边界结论：本批完成三类独立 Feature 偏好端口化，架构 backlog 从 `138` 降至 `128`；剩余两条 SharedPreferences 违规集中在 `SourceEditorPage`，后续继续单独迁移。
+
+## 130. 2026-07-30：R6 第二轮 Feature 端口边界
+
+- `SourceEditorPage` 新增 `SourceVariablePort` 与 `SharedPreferencesSourceVariableAdapter`，迁移 `source_variable:<bookSourceUrl>` 读写；保留保存前书源提交、变量注释、对话框和成功提示语义，存储不可用时安全返回空值/失败结果。
+- `SearchPage` 新增 `SearchHistoryPort`，通过 `SharedPreferencesSearchHistoryAdapter` 复用既有搜索历史持久化规则；Feature 不再直接 import `services/search_history.dart`，保留 trim、去重、最多 20 条、删除和清空行为。
+- `AppLogPage` 与 `AppLogDialog` 新增 `ReaderFontPort`，通过 `ReaderFontPortAdapter` 复用既有系统字体和 CJK fallback 顺序；日志读取、复制、清空和展示行为不变，测试宿主显式注入展示端口。
+- 组合根统一注册三类 port；本轮原计划由主 agent 加两个子 agent 三线推进，两个子 agent 部分请求受服务端 `429` 限流影响，主 agent 接管未完成线。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- 源变量 adapter、搜索历史 port 和 AppLog 页面定向 `7/7`；`flutter analyze --no-pub`：`No issues found`。
+- Flutter 串行全量 `690` 通过、`3` 项既有条件跳过；`cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，workspace 全量通过。
+- 架构扫描为 `123` 条 backlog：Feature 直接 SharedPreferences `0`、Feature 业务 service `123`；无新增类别。
+- `git diff --check`：通过。
+
+边界结论：Feature 直接 SharedPreferences 访问已归零，搜索历史、源变量和 ReaderFont 展示能力均完成第一层 application/infrastructure 边界收口；剩余工作集中在 Feature 业务 service 依赖。

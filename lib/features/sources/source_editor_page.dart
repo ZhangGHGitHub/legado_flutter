@@ -6,8 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../application/preferences/source_variable_port.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../providers/source_provider.dart';
 import '../../services/qr_code_service.dart';
@@ -57,8 +57,6 @@ class _SourceEditorPageState extends State<SourceEditorPage>
     with SingleTickerProviderStateMixin {
   static const _bookTypes = ['文本', '音频', '图片', '文件', '视频'];
   static const _tabs = ['基本', '搜索', '发现', '详情', '目录', '正文'];
-  static const _varPrefsPrefix = 'source_variable:';
-
   late TabController _tabController;
   late String _originalJson;
 
@@ -824,12 +822,11 @@ class _SourceEditorPageState extends State<SourceEditorPage>
   }
 
   Future<void> _setSourceVariable() async {
+    final variablePort = context.read<SourceVariablePort>();
     final saved = await _save();
     if (!mounted || saved == null) return;
-    final prefs = await SharedPreferences.getInstance();
+    final current = await variablePort.read(saved.bookSourceUrl);
     if (!mounted) return;
-    final key = '$_varPrefsPrefix${saved.bookSourceUrl}';
-    final current = prefs.getString(key) ?? '';
     final comment = _baseFields
         .firstWhere(
           (f) => f.key == 'variableComment',
@@ -875,7 +872,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
       ),
     );
     if (ok == true) {
-      await prefs.setString(key, ctrl.text);
+      await variablePort.write(saved.bookSourceUrl, ctrl.text);
       if (mounted) {
         ScaffoldMessenger.of(
           context,

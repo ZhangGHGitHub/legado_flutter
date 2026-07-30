@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
+import '../../application/search/search_history_port.dart';
 import '../../providers/source_provider.dart';
-import '../../services/search_history.dart';
 import '../../widgets/book_list_tile.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../../features/book/book_info_page.dart';
@@ -43,7 +43,7 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Future<void> _loadHistory() async {
-    final list = await SearchHistory.load();
+    final list = await context.read<SearchHistoryPort>().load();
     if (mounted) setState(() => _history = list);
   }
 
@@ -92,7 +92,7 @@ class _SearchPageState extends State<SearchPage> {
   void _search(String keyword, {String? author, bool preciseName = false}) {
     final q = keyword.trim();
     if (q.isEmpty) return;
-    SearchHistory.add(q);
+    context.read<SearchHistoryPort>().add(q);
     _loadHistory();
     final provider = context.read<SourceProvider>();
     provider.searchAll(
@@ -127,7 +127,7 @@ class _SearchPageState extends State<SearchPage> {
               const Spacer(),
               TextButton(
                 onPressed: () async {
-                  await SearchHistory.clear();
+                  await context.read<SearchHistoryPort>().clear();
                   _loadHistory();
                 },
                 child: const Text('清空', style: TextStyle(fontSize: 12)),
@@ -149,7 +149,7 @@ class _SearchPageState extends State<SearchPage> {
                     _search(item);
                   },
                   onDeleted: () async {
-                    await SearchHistory.remove(item);
+                    await context.read<SearchHistoryPort>().remove(item);
                     _loadHistory();
                   },
                 );

@@ -3,13 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/diagnostics/app_log_port.dart';
-import '../../services/reader_font_loader.dart';
+import '../../application/reader/reader_font_port.dart';
 
 /// 应用日志 Dialog — 对齐 Jingshiro [AppLogDialog]（清空；最新在前）。
 class AppLogDialog extends StatefulWidget {
-  const AppLogDialog({super.key, this.log});
+  const AppLogDialog({super.key, this.log, this.font});
 
   final AppLogPort? log;
+  final ReaderFontPort? font;
 
   static Future<void> show(BuildContext context) {
     return showDialog<void>(
@@ -52,9 +53,10 @@ class _AppLogDialogState extends State<AppLogDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final font = widget.font ?? context.read<ReaderFontPort>();
     final style = TextStyle(
-      fontFamily: ReaderFontLoader.platformSansFamily(),
-      fontFamilyFallback: ReaderFontLoader.cjkFallbackFamilies(),
+      fontFamily: font.platformSansFamily(),
+      fontFamilyFallback: font.cjkFallbackFamilies(),
       fontSize: 12,
       height: 1.35,
     );
