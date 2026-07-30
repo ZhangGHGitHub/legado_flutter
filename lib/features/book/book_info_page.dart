@@ -8,9 +8,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
+import '../../domain/ports/book_source_search_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/book_source_service.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/legado_popup_menu.dart';
@@ -105,8 +105,8 @@ class _BookInfoPageState extends State<BookInfoPage> {
 
   Future<void> _fetchCoverFromSource(BookSource source) async {
     try {
-      final service = context.read<BookSourceService>();
-      final results = await service.search(source, _book.name);
+      final searchPort = context.read<BookSourceSearchPort>();
+      final results = await searchPort.search(source, _book.name);
       String? foundCover;
       for (final r in results) {
         final name = r['name'] ?? '';

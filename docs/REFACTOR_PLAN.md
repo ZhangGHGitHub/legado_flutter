@@ -160,7 +160,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 退出条件：核心用户流程在目标平台构建并通过，UI 与原版对照测试通过，平台差异有明确适配记录。
 
-当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 至 P1-4 横切基础设施任务均已完成，应用用例依赖继续按 Feature 边界收口；本批 Flutter 全量 `715` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描降至 `97` 条 Feature→service backlog。R6 后续继续处理剩余 Feature 依赖、受控 UI/目标平台和发布门禁；真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
+当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 至 P1-4 横切基础设施任务均已完成，应用用例依赖继续按 Feature 边界收口；本批 Flutter 全量 `715` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描降至 `96` 条 Feature→service backlog。R6 后续继续处理剩余 Feature 依赖、受控 UI/目标平台和发布门禁；真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
 
 #### 横切基础设施：全局能力与启动可靠性（跨 R1-R6，新增）
 
@@ -215,6 +215,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 本批继续收口 Web API 配置偏好边界：`WebApiSettingsCard` 与 `MyPage` 通过 `WebApiPrefsPort` 读写 enabled、port、token 配置，SharedPreferences adapter 保留既有键名、默认端口和 WebApiConfig 兼容导出；`WebApiService` 的启动、停止、状态、Token 生成和协议行为保持不变。定向 `7/7`；首轮全量暴露 3 个 MainShell 测试宿主缺少新端口注入，补齐 fake 后最终 Flutter 串行全量 `715` 通过、`3` 项既有条件跳过，Rust 核心 `184/184`，涉及文件 analyze 无诊断，架构扫描由 `100` 降至 `98` 条 Feature→service backlog，`git diff --check` 通过。
 
 本批继续收口目录笔记读取边界：`TocSheet` 通过可选 application `NotePort` 查询书签，组合根注入 `FrbNotePort`；端口未配置时保留空列表降级，目录顺序和书签筛选语义不变。目录顺序、缓存端口页面和目录性能定向 `8/8`，Flutter 串行全量 `715` 通过、`3` 项既有条件跳过，Rust workspace `184/184`，涉及文件 analyze 无诊断，架构扫描由 `98` 降至 `97` 条 Feature→service backlog，`git diff --check` 通过。
+
+本批继续收口书籍详情页书源搜索边界：`BookInfoPage` 的封面补全通过已有 `BookSourceSearchPort` 查询，组合根暴露与 `BookSourceService` 共用的 `FrbBookSourceSearchPort` 实例；保留精确书名/包含书名匹配、书架封面回写和异常降级语义。书源搜索、BookProvider 自动选源和目录顺序定向 `8/8`，Flutter 串行全量 `715` 通过、`3` 项既有条件跳过，涉及文件 analyze 无诊断，架构扫描由 `97` 降至 `96` 条 Feature→service backlog，`git diff --check` 通过。
 
 ### 0.4 重构工作规则
 

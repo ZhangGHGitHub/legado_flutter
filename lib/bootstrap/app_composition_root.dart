@@ -44,6 +44,7 @@ import '../domain/ports/backup_local_file_port.dart';
 import '../domain/ports/application_binary_http_request_port.dart';
 import '../domain/ports/application_http_request_port.dart';
 import '../domain/ports/book_source_debug_port.dart';
+import '../domain/ports/book_source_search_port.dart';
 import '../domain/ports/book_source_validation_port.dart';
 import '../domain/ports/dict_rule_query_port.dart';
 import '../domain/ports/legacy_room_import_use_case.dart';
@@ -207,8 +208,9 @@ abstract final class AppCompositionRoot {
     WebApiService.configureWebApiPort(webApiPort);
     TtsService.configureBinaryHttpPort(binaryHttpPort);
 
+    final bookSourceSearchPort = FrbBookSourceSearchPort();
     final bookSourceService = BookSourceService(
-      searchPort: FrbBookSourceSearchPort(),
+      searchPort: bookSourceSearchPort,
       bookInfoPort: FrbBookSourceBookInfoPort(),
       contentPort: FrbBookSourceContentPort(),
       explorePort: FrbBookSourceExplorePort(),
@@ -345,6 +347,7 @@ abstract final class AppCompositionRoot {
             value: const SourceDebugFormatterAdapter(),
           ),
           Provider<NotePort>.value(value: FrbNotePort()),
+          Provider<BookSourceSearchPort>.value(value: bookSourceSearchPort),
           Provider<SearchHistoryPort>.value(
             value: const SharedPreferencesSearchHistoryAdapter(),
           ),

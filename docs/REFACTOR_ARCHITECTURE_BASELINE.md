@@ -2872,3 +2872,11 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - Flutter 串行全量 `715` 通过、`3` 项既有条件跳过；`cargo test --manifest-path rust/Cargo.toml` workspace 通过，核心 `184/184`；架构扫描由 `98` 降至 `97` 条既有 Feature→service backlog；`git diff --check` 通过。
 
 边界结论：本批完成 TocSheet 笔记读取的 application/infrastructure 调用者迁移，保留旧 service 作为底层实现入口，不改变目录顺序、分页、章节身份、阅读位置或正文断行行为。
+
+## 143. 2026-07-30：R6 BookInfoPage 书源搜索端口边界
+
+- `BookInfoPage` 移除对 `services/book_source_service.dart` 的直接依赖，封面补全改由已有 `BookSourceSearchPort` 查询；组合根向页面 Provider 暴露与 `BookSourceService` 共用的 `FrbBookSourceSearchPort` 实例。
+- 保留精确书名优先、包含书名回退、书架封面回写和搜索异常静默降级语义；未修改正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+- 书源搜索、BookProvider 自动选源和目录顺序定向 `8/8`；涉及文件格式与 `flutter analyze --no-pub` 通过；Flutter 串行全量 `715` 通过、`3` 项既有条件跳过；架构扫描由 `97` 降至 `96` 条 Feature→service backlog；`git diff --check` 通过。
+
+边界结论：本批完成 BookInfoPage 书源搜索的 application/infrastructure 调用者迁移，保留 `BookSourceService` 供其他尚未迁移调用者使用，不改变封面补全行为。
