@@ -283,7 +283,7 @@ Day 2  PR/Issue 模板
 
 这样后续每个 Task 都有章可循，避免「直接写代码、计划文档越来越滞后」。
 
-2026-07-30 当前 R6 记录：AppLog 页面及书架/书签/笔记写入边界、四轮 Feature 偏好/展示/业务能力端口边界，以及本轮 AppPaths/Clipboard/SourceDebug、RSS ReaderFont、主题 Clipboard、Sources ReaderFont、Backup AppPaths、ReadRecord Clipboard、Web API Clipboard、SourceEditor Clipboard、DictRule Clipboard、TxtToc Clipboard 和 ContentEdit Clipboard 边界均按“先定向测试、再全量门禁、最后记录”流程完成；本批继续由主 agent 与两个子 agent 并行完成规则偏好、点击区域、正文搜索、模拟阅读、阅读样式、阅读图片缓存和 Web API 配置偏好端口，架构扫描由 `110` 降至 `98` 条既有 Feature→service backlog，未将剩余 Feature 依赖白名单化。Flutter 全量 `715` 通过、`3` 项既有条件跳过，Rust 核心 `184/184`，analyze 和 `git diff --check` 通过。相关实际命令和结果以 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 与 `docs/REFACTOR_ARCHITECTURE_BASELINE.md` 为准。
+2026-07-30 当前 R6 记录：AppLog 页面及书架/书签/笔记写入边界、四轮 Feature 偏好/展示/业务能力端口边界，以及本轮 AppPaths/Clipboard/SourceDebug、RSS ReaderFont、主题 Clipboard、Sources ReaderFont、Backup AppPaths、ReadRecord Clipboard、Web API Clipboard、SourceEditor Clipboard、DictRule Clipboard、TxtToc Clipboard 和 ContentEdit Clipboard 边界均按“先定向测试、再全量门禁、最后记录”流程完成；本批继续由主 agent 与两个子 agent 并行完成规则偏好、点击区域、正文搜索、模拟阅读、阅读样式、阅读图片缓存、Web API 配置偏好和 TocSheet 笔记读取端口，架构扫描由 `110` 降至 `97` 条既有 Feature→service backlog，未将剩余 Feature 依赖白名单化。TocSheet 相关定向 `8/8`；Flutter 全量 `715` 通过、`3` 项既有条件跳过，Rust 核心 `184/184`，analyze 和 `git diff --check` 通过。相关实际命令和结果以 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 与 `docs/REFACTOR_ARCHITECTURE_BASELINE.md` 为准。
 
 ---
 

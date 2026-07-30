@@ -2864,3 +2864,11 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 架构扫描由 `100` 降至 `98` 条既有 Feature→service backlog；`git diff --check`：通过。剩余 service 依赖未加入白名单，继续按单用例推进。
 
 边界结论：本批完成 Web API 配置持久化调用者的 application/infrastructure 迁移，保留旧 service 作为兼容实现入口，不改变 Web API 运行行为。
+
+## 142. 2026-07-30：R6 TocSheet 笔记读取端口边界
+
+- `TocSheet` 移除对 `services/note_service.dart` 的直接依赖，改由可选 application `NotePort` 查询书签；组合根注入 `FrbNotePort`。端口未配置或不可用时返回空列表，保留“书签”笔记前缀筛选和目录首帧行为。
+- 目录顺序、缓存端口页面和目录性能定向测试 `8/8`；`dart format --output=none --set-exit-if-changed` 与涉及文件 `flutter analyze --no-pub` 通过。
+- Flutter 串行全量 `715` 通过、`3` 项既有条件跳过；`cargo test --manifest-path rust/Cargo.toml` workspace 通过，核心 `184/184`；架构扫描由 `98` 降至 `97` 条既有 Feature→service backlog；`git diff --check` 通过。
+
+边界结论：本批完成 TocSheet 笔记读取的 application/infrastructure 调用者迁移，保留旧 service 作为底层实现入口，不改变目录顺序、分页、章节身份、阅读位置或正文断行行为。

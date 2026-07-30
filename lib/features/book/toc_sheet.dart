@@ -5,12 +5,12 @@ import 'package:provider/provider.dart';
 
 import '../../domain/annotation/note_snapshot.dart';
 import '../../domain/ports/chapter_content_cache_port.dart';
+import '../../domain/ports/note_port.dart';
 import '../../domain/repositories/book_repository.dart';
 import '../../help/bookmark_hint.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../providers/book_provider.dart';
-import '../../services/note_service.dart';
 import '../../widgets/legado_popup_menu.dart';
 
 /// 选中章节；[pageIndex]/[chapterPos] 为书签回跳参数。
@@ -227,13 +227,15 @@ class _TocSheetState extends State<TocSheet>
     if (_bookmarksLoaded) return;
     _bookmarksLoaded = true;
     final bookId = widget.bookId;
-    if (bookId == null || bookId.isEmpty || !NoteService.isReady) {
+    final notePort = context.read<NotePort?>();
+    if (bookId == null || bookId.isEmpty || !(notePort?.isAvailable ?? false)) {
       _bookmarks = [];
       return;
     }
-    _bookmarks = NoteService.list(
-      bookId: bookId,
-    ).where((n) => n.noteContent.startsWith('书签')).toList();
+    _bookmarks = notePort!
+        .list(bookId: bookId)
+        .where((n) => n.noteContent.startsWith('书签'))
+        .toList();
   }
 
   Future<void> _loadCacheMeta() async {

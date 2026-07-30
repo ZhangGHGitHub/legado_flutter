@@ -49,6 +49,7 @@ import '../domain/ports/dict_rule_query_port.dart';
 import '../domain/ports/legacy_room_import_use_case.dart';
 import '../domain/ports/public_text_fetch_port.dart';
 import '../domain/ports/rss_source_import_port.dart';
+import '../domain/ports/note_port.dart';
 import '../domain/ports/webdav_repository.dart';
 import '../infrastructure/cache/file_chapter_content_cache.dart';
 import '../infrastructure/content/frb_content_processing_port.dart';
@@ -343,6 +344,7 @@ abstract final class AppCompositionRoot {
           Provider<SourceDebugFormatterPort>.value(
             value: const SourceDebugFormatterAdapter(),
           ),
+          Provider<NotePort>.value(value: FrbNotePort()),
           Provider<SearchHistoryPort>.value(
             value: const SharedPreferencesSearchHistoryAdapter(),
           ),
