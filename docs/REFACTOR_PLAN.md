@@ -202,6 +202,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 本批继续收口源管理与备份配置边界：`SourcesPage` 通过 `ReaderFontPort` 获取字体族和 CJK fallback，`BackupConfigPage` 通过 `AppPathsPort.backupsDir()` 获取本地备份目录；端口 adapter 仅转发既有路径能力，源列表字体、备份列表、导入导出和失败提示行为保持不变。定向 `11/11`，Flutter 串行全量 `699` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断，架构扫描降至 `111` 条 Feature→service backlog，`git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 
+本批继续收口阅读记录和 Web API 设置的剪贴板边界：`ReadRecordPage` 与 `WebApiSettingsCard` 通过 application `ClipboardPort` 复制文本，移除 Flutter Clipboard 直接访问；测试宿主显式注入 fake 端口，阅读记录导出内容、API URL、提示文案和设置行为保持不变。定向 `2/2`，Flutter 串行全量 `700` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断，架构扫描保持 `111` 条既有 Feature→service backlog，`git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
 ### 0.4 重构工作规则
 
 1. 一次只迁移一个边界、一个用例或一条数据链路；完成定向测试并汇报后再进入下一项。

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../application/platform/clipboard_port.dart';
 import '../../domain/reading_stats.dart';
 import '../../services/reading_record_service.dart';
 import '../../widgets/empty_state.dart';
@@ -61,7 +62,7 @@ class _ReadRecordPageState extends State<ReadRecordPage> {
       }
       return;
     }
-    await Clipboard.setData(ClipboardData(text: text));
+    await context.read<ClipboardPort>().copyText(text);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('已复制 ${format.toUpperCase()} 到剪贴板')),

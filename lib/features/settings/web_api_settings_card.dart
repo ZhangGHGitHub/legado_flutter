@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
+import '../../application/platform/clipboard_port.dart';
 import '../../domain/web_api_status.dart';
 import '../../services/web_api_prefs.dart';
 import '../../services/web_api_service.dart';
@@ -143,9 +144,9 @@ class _WebApiSettingsCardState extends State<WebApiSettingsCard> {
                 ),
                 if (running && baseUrl.isNotEmpty)
                   OutlinedButton.icon(
-                    onPressed: () {
+                    onPressed: () async {
                       final url = '$baseUrl/api/books';
-                      Clipboard.setData(ClipboardData(text: url));
+                      await context.read<ClipboardPort>().copyText(url);
                       _showSnack('API 地址已复制，Token 请通过 Authorization 请求头传递');
                     },
                     icon: const Icon(Icons.copy, size: 16),

@@ -2782,3 +2782,17 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `flutter analyze --no-pub`：`No issues found`；架构扫描由 `113` 降至 `111` 条 Feature→service backlog；`git diff --check`：通过。
 
 边界结论：本批完成源管理字体能力与备份路径能力的 application/infrastructure 调用者迁移，剩余 Feature→service backlog 继续按独立用例推进。
+
+## 136. 2026-07-30：R6 阅读记录与 Web API 剪贴板边界
+
+- `ReadRecordPage` 移除 Flutter Clipboard 直接访问，改由 Provider 注入 application `ClipboardPort`；阅读统计导出文本、格式选择、复制提示和 Rust 不可用回退行为保持不变。
+- `WebApiSettingsCard` 移除 Flutter Clipboard 直接访问，改由 Provider 注入 application `ClipboardPort`；复制的 `/api/books` URL、Token 提示和 Web API 设置行为保持不变。
+- 测试宿主补齐 fake `ClipboardPort`，未放宽已有断言；未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- 阅读记录和 Web API 设置定向 `2/2`；`dart format --output=none --set-exit-if-changed`：通过；涉及文件 analyze：`No issues found`。
+- `flutter test --no-pub --concurrency=1 --reporter compact`：`700` 通过、`3` 项既有条件跳过；`cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，workspace 全量通过。
+- `flutter analyze --no-pub`：`No issues found`；架构扫描保持 `111` 条 Feature→service backlog（本批消除的是直接 Flutter Clipboard 访问，不计入该 service-import 数字）；`git diff --check`：通过。
+
+边界结论：本批完成两个 UI 剪贴板调用者的 application port 迁移，剩余 Feature→service backlog 继续按独立用例推进。
