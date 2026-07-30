@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../services/donate_clipboard_port.dart';
+import '../../application/donate/donate_clipboard_port.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_card.dart';
 
@@ -117,7 +118,7 @@ class DonatePage extends StatelessWidget {
   }
 
   Future<void> _copy(BuildContext context, String text, String toast) async {
-    await (clipboard ?? const PlatformDonateClipboard()).copyText(text);
+    await (clipboard ?? context.read<DonateClipboardPort>()).copyText(text);
     if (context.mounted) {
       ScaffoldMessenger.of(
         context,
@@ -126,7 +127,7 @@ class DonatePage extends StatelessWidget {
   }
 
   Future<void> _copyAlipayCode(BuildContext context) async {
-    await (clipboard ?? const PlatformDonateClipboard()).copyText(
+    await (clipboard ?? context.read<DonateClipboardPort>()).copyText(
       alipayRedEnvelopeCode,
     );
     if (!context.mounted) return;

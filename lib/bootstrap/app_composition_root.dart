@@ -8,6 +8,8 @@ import '../application/app_bootstrap.dart';
 import '../application/crash/crash_log_service.dart';
 import '../application/diagnostics/app_diagnostics_monitor.dart';
 import '../application/diagnostics/app_log_port.dart';
+import '../application/donate/donate_clipboard_port.dart';
+import '../application/preferences/code_edit_prefs_port.dart';
 import '../application/lifecycle/app_lifecycle_coordinator.dart';
 import '../application/preferences/shared_preferences_runtime.dart';
 import '../application/preferences/bookshelf_display_prefs_port.dart';
@@ -72,6 +74,8 @@ import '../infrastructure/platform/flutter_frame_diagnostics_observer.dart';
 import '../infrastructure/platform/flutter_lifecycle_observer.dart';
 import '../infrastructure/platform/method_channel_source_login_web_cookie_port.dart';
 import '../infrastructure/platform/platform_crash_metadata_loader.dart';
+import '../infrastructure/platform/platform_donate_clipboard.dart';
+import '../infrastructure/preferences/shared_preferences_code_edit_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_book_group_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_bookshelf_display_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
@@ -167,6 +171,8 @@ abstract final class AppCompositionRoot {
         await SharedPreferencesDownloadChoicePrefs.loadFromRuntime();
     final sourceVariablePort =
         await SharedPreferencesSourceVariableAdapter.create();
+    final codeEditPrefs =
+        await SharedPreferencesCodeEditPrefs.loadFromRuntime();
 
     await _configureStaticServices(
       networkEnginePort,
@@ -275,6 +281,10 @@ abstract final class AppCompositionRoot {
           ChangeNotifierProvider.value(value: bootstrap.bookProvider),
           Provider<AppDiagnosticsMonitor>.value(value: diagnosticsMonitor),
           Provider<AppLogPort>(create: (_) => const AppLogPortAdapter()),
+          Provider<DonateClipboardPort>.value(
+            value: const PlatformDonateClipboard(),
+          ),
+          Provider<CodeEditPrefsPort>.value(value: codeEditPrefs),
           Provider<BookshelfDisplayPrefsPort>.value(
             value: bookshelfDisplayPrefs,
           ),

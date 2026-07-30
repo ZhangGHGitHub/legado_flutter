@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../widgets/legado_popup_menu.dart';
+import '../../application/preferences/code_edit_prefs_port.dart';
 import 'code_edit_formatter.dart';
 import 'code_edit_highlighter.dart';
-import '../../services/code_edit_prefs.dart';
 import 'code_edit_theme.dart';
 import 'keyboard_tool_bar.dart';
 
@@ -62,6 +63,7 @@ class CodeEditPage extends StatefulWidget {
 
 class _CodeEditPageState extends State<CodeEditPage> {
   late HighlightEditingController _controller;
+  late final CodeEditPrefsPort _prefs;
   late final FocusNode _editorFocus;
   final _findCtrl = TextEditingController();
   final _replaceCtrl = TextEditingController();
@@ -89,6 +91,7 @@ class _CodeEditPageState extends State<CodeEditPage> {
   @override
   void initState() {
     super.initState();
+    _prefs = context.read<CodeEditPrefsPort>();
     _initialText = widget.initialText;
     _controller = HighlightEditingController(
       text: _initialText,
@@ -100,7 +103,7 @@ class _CodeEditPageState extends State<CodeEditPage> {
   }
 
   Future<void> _loadPrefs() async {
-    final s = await CodeEditPrefs.load();
+    final s = await _prefs.load();
     if (!mounted) return;
     final systemDark = Theme.of(context).brightness == Brightness.dark;
     final idx = s.resolveThemeIndex(systemDark: systemDark);
@@ -148,7 +151,7 @@ class _CodeEditPageState extends State<CodeEditPage> {
   CodeEditPalette get _palette => CodeEditPalette.byIndex(_themeIndex);
 
   Future<void> _log(String line) async {
-    await CodeEditPrefs.appendLog(line);
+    await _prefs.appendLog(line);
   }
 
   Future<void> _save({required bool checkUnsaved}) async {
@@ -413,9 +416,9 @@ class _CodeEditPageState extends State<CodeEditPage> {
               ),
               TextButton(
                 onPressed: () async {
-                  await CodeEditPrefs.saveThemeAuto(auto);
-                  await CodeEditPrefs.saveTheme(light, dark: false);
-                  await CodeEditPrefs.saveTheme(dark, dark: true);
+                  await _prefs.saveThemeAuto(auto);
+                  await _prefs.saveTheme(light, dark: false);
+                  await _prefs.saveTheme(dark, dark: true);
                   if (!mounted) return;
                   final sysDark =
                       Theme.of(context).brightness == Brightness.dark;
@@ -485,9 +488,9 @@ class _CodeEditPageState extends State<CodeEditPage> {
             ),
             TextButton(
               onPressed: () async {
-                await CodeEditPrefs.saveFontScale(font.round());
-                await CodeEditPrefs.saveAutoWrap(wrap);
-                await CodeEditPrefs.saveAutoComplete(complete);
+                await _prefs.saveFontScale(font.round());
+                await _prefs.saveAutoWrap(wrap);
+                await _prefs.saveAutoComplete(complete);
                 if (!mounted) return;
                 setState(() {
                   _fontSize = font;
@@ -508,12 +511,12 @@ class _CodeEditPageState extends State<CodeEditPage> {
   Future<void> _toggleAutoWrap() async {
     final next = !_autoWrap;
     setState(() => _autoWrap = next);
-    await CodeEditPrefs.saveAutoWrap(next);
+    await _prefs.saveAutoWrap(next);
     await _log('自动换行 → $next');
   }
 
   Future<void> _showLog() async {
-    final logs = await CodeEditPrefs.loadLog();
+    final logs = await _prefs.loadLog();
     if (!mounted) return;
     await showDialog<void>(
       context: context,
@@ -538,7 +541,7 @@ class _CodeEditPageState extends State<CodeEditPage> {
         actions: [
           TextButton(
             onPressed: () async {
-              await CodeEditPrefs.clearLog();
+              await _prefs.clearLog();
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: const Text('清空'),

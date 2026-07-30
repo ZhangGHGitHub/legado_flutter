@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/code_edit_prefs_store.dart';
+import 'package:legado_flutter/infrastructure/preferences/shared_preferences_code_edit_prefs.dart';
 import 'package:legado_flutter/infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
 import 'package:legado_flutter/services/code_edit_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -111,6 +112,35 @@ void main() {
 
     expect(prefs.getBool(CodeEditPrefs.editAutoWrap), isFalse);
     expect(prefs.getStringList(CodeEditPrefs.editSessionLog), isNull);
+  });
+
+  test('application adapter forwards editor preferences and logs', () async {
+    final store = _MemoryCodeEditPrefsStore();
+    final port = SharedPreferencesCodeEditPrefs(store);
+
+    final initial = await port.load();
+    expect(initial.themeIndex, CodeEditPrefs.defaultTheme);
+    expect(initial.autoWrap, isTrue);
+
+    await port.saveTheme(6, dark: false);
+    await port.saveTheme(7, dark: true);
+    await port.saveThemeAuto(false);
+    await port.saveFontScale(22);
+    await port.saveAutoWrap(false);
+    await port.saveAutoComplete(false);
+    await port.appendLog('saved');
+
+    final settings = await port.load();
+    expect(settings.themeIndex, 6);
+    expect(settings.themeDarkIndex, 7);
+    expect(settings.themeAuto, isFalse);
+    expect(settings.fontScale, 22);
+    expect(settings.autoWrap, isFalse);
+    expect(settings.autoComplete, isFalse);
+    expect(await port.loadLog(), hasLength(1));
+
+    await port.clearLog();
+    expect(await port.loadLog(), isEmpty);
   });
 }
 

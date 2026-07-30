@@ -2722,3 +2722,18 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `git diff --check`：通过。
 
 边界结论：ReaderFont 展示能力已从当前命中的书架/RSS Feature 调用点收口到 application port；剩余 backlog 全部是 Feature 业务 service 依赖，继续按独立用例迁移。
+
+## 132. 2026-07-30：R6 第四轮 Donate/CodeEdit 业务能力边界
+
+- `DonatePage` 新增 application `DonateClipboardPort` 和 infrastructure `PlatformDonateClipboard`；旧 `services/donate_clipboard_port.dart` 保留兼容导出，构造注入和 Provider 注入均可用，复制提示与外链行为不变。
+- `CodeEditPage` 新增 application `CodeEditPrefsPort` 和 infrastructure `SharedPreferencesCodeEditPrefs`，覆盖偏好加载、主题/字号/换行/补全设置、会话日志追加/读取/清空；复用既有 store 和键名，页面不再直接 import `services/code_edit_prefs.dart`。
+- 组合根统一注册两类端口；未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- Donate/CodeEdit 定向 `13/13`；`flutter analyze --no-pub`：`No issues found`。
+- Flutter 串行全量 `698` 通过、`3` 项既有条件跳过；`cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，workspace 全量通过。
+- 架构扫描为 `118` 条 backlog：Feature 业务 service `118`，无 SharedPreferences 直接访问类别残留。
+- `git diff --check`：通过。
+
+边界结论：剪贴板和代码编辑器偏好已完成第一层 application/infrastructure 收口，剩余工作继续处理更复杂的 Feature 业务 service 依赖。

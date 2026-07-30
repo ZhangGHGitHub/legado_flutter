@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:legado_flutter/application/donate/donate_clipboard_port.dart';
 import 'package:legado_flutter/features/my/donate_page.dart';
-import 'package:legado_flutter/services/donate_clipboard_port.dart';
 
 class _FakeDonateClipboard implements DonateClipboardPort {
   final copiedTexts = <String>[];
@@ -44,4 +45,23 @@ void main() {
     expect(clipboard.copiedTexts, ['开源阅读']);
     expect(find.text('已复制：开源阅读'), findsOneWidget);
   });
+
+  testWidgets(
+    'uses the injected clipboard provider when no constructor override exists',
+    (WidgetTester tester) async {
+      final clipboard = _FakeDonateClipboard();
+      await tester.pumpWidget(
+        Provider<DonateClipboardPort>.value(
+          value: clipboard,
+          child: const MaterialApp(home: DonatePage()),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('关注公众号'));
+      await tester.pumpAndSettle();
+
+      expect(clipboard.copiedTexts, ['开源阅读']);
+    },
+  );
 }
