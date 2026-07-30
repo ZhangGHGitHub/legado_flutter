@@ -14,6 +14,7 @@ class AppLogEntry {
     this.category = 'app',
     this.source,
     this.metadata = const {},
+    this.runtime = const DiagnosticRuntimeInfo.unavailable(),
   });
 
   final DateTime time;
@@ -22,6 +23,7 @@ class AppLogEntry {
   final String category;
   final String? source;
   final Map<String, String> metadata;
+  final DiagnosticRuntimeInfo runtime;
 
   String get line {
     return DiagnosticRecord(
@@ -31,6 +33,7 @@ class AppLogEntry {
       category: category,
       source: source,
       metadata: metadata,
+      runtime: runtime,
     ).line;
   }
 }
@@ -41,6 +44,8 @@ abstract final class AppLog {
   static const _maxPersistedBytes = DiagnosticRecord.maxPersistedBytes;
   static final List<AppLogEntry> _entries = [];
   static bool _loaded = false;
+  static DiagnosticRuntimeInfo _runtime =
+      const DiagnosticRuntimeInfo.unavailable();
 
   /// 最新在前
   static List<AppLogEntry> get entries => List.unmodifiable(_entries);
@@ -53,7 +58,12 @@ abstract final class AppLog {
       final raw = prefs?.getStringList(_prefsKey) ?? const [];
       for (final line in raw.take(_maxEntries)) {
         _entries.add(
-          AppLogEntry(time: DateTime.now(), level: 'I', message: line),
+          AppLogEntry(
+            time: DateTime.now(),
+            level: 'I',
+            message: line,
+            runtime: _runtime,
+          ),
         );
       }
     } catch (_) {}
@@ -92,6 +102,7 @@ abstract final class AppLog {
       category: category,
       source: source,
       metadata: metadata,
+      runtime: _runtime,
     );
     _entries.insert(0, entry);
     while (_entries.length > _maxEntries) {
@@ -101,18 +112,56 @@ abstract final class AppLog {
     await _persist();
   }
 
-  static Future<void> i(String message) => put(message, level: 'I');
-  static Future<void> w(String message) => put(message, level: 'W');
-  static Future<void> e(String message) => put(message, level: 'E');
+  static Future<void> i(
+    String message, {
+    String category = 'app',
+    String? source,
+    Map<String, String> metadata = const {},
+  }) => put(
+    message,
+    level: 'I',
+    category: category,
+    source: source,
+    metadata: metadata,
+  );
+  static Future<void> w(
+    String message, {
+    String category = 'app',
+    String? source,
+    Map<String, String> metadata = const {},
+  }) => put(
+    message,
+    level: 'W',
+    category: category,
+    source: source,
+    metadata: metadata,
+  );
+  static Future<void> e(
+    String message, {
+    String category = 'app',
+    String? source,
+    Map<String, String> metadata = const {},
+  }) => put(
+    message,
+    level: 'E',
+    category: category,
+    source: source,
+    metadata: metadata,
+  );
 
   static Future<void> clear() async {
     _entries.clear();
     await _persist();
   }
 
+  static void configureRuntime(DiagnosticRuntimeInfo runtime) {
+    _runtime = runtime;
+  }
+
   @visibleForTesting
   static void resetForTest() {
     _entries.clear();
     _loaded = false;
+    _runtime = const DiagnosticRuntimeInfo.unavailable();
   }
 }

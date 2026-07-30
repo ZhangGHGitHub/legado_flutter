@@ -19,6 +19,7 @@ import '../config/engine_config.dart';
 import '../database/dao/book_dao.dart';
 import '../database/dao/replace_rule_dao.dart';
 import '../database/dao/source_dao.dart';
+import '../domain/diagnostics/diagnostic_record.dart';
 import '../domain/ports/backup_local_file_port.dart';
 import '../domain/ports/application_binary_http_request_port.dart';
 import '../domain/ports/application_http_request_port.dart';
@@ -62,6 +63,7 @@ import '../infrastructure/network/frb_application_http_request_port.dart';
 import '../infrastructure/platform/flutter_frame_diagnostics_observer.dart';
 import '../infrastructure/platform/flutter_lifecycle_observer.dart';
 import '../infrastructure/platform/method_channel_source_login_web_cookie_port.dart';
+import '../infrastructure/platform/platform_crash_metadata_loader.dart';
 import '../infrastructure/preferences/shared_preferences_book_group_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
 import '../infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
@@ -104,14 +106,20 @@ abstract final class AppCompositionRoot {
     crashLog.updateStartupStage('首屏挂载');
     runApp(composition.app);
     crashLog.updateStartupStage('首屏运行');
+    unawaited(AppLog.i('首屏运行', category: 'startup'));
   }
 
   static Future<({Widget app})> _compose(CrashLogService crashLog) async {
-    crashLog.updateStartupStage('SharedPreferences 初始化');
+    void reportStartupStage(String stage) {
+      crashLog.updateStartupStage(stage);
+      unawaited(AppLog.i(stage, category: 'startup'));
+    }
+
+    reportStartupStage('SharedPreferences 初始化');
     await SharedPreferencesRuntime.getOrNull();
-    crashLog.updateStartupStage('读取上次崩溃记录');
+    reportStartupStage('读取上次崩溃记录');
     final pendingCrashReport = await crashLog.pendingReport();
-    crashLog.updateStartupStage('基础设施组装');
+    reportStartupStage('基础设施组装');
     final navigatorKey = GlobalKey<NavigatorState>();
     final lifecycleCoordinator = AppLifecycleCoordinator();
     final diagnosticsMonitor = AppDiagnosticsMonitor(
@@ -175,13 +183,13 @@ abstract final class AppCompositionRoot {
     );
     final bootstrap = await AppBootstrap(
       initializePlatform: () async {
-        crashLog.updateStartupStage('应用配置加载');
+        reportStartupStage('应用配置加载');
         await EngineConfig.load();
         await AppConfig.instance.load();
-        crashLog.updateStartupStage('Rust 引擎初始化');
+        reportStartupStage('Rust 引擎初始化');
         await LegadoEngineBridge.tryInit();
         if (LegadoEngineBridge.isAvailable) {
-          crashLog.updateStartupStage('Rust 数据库初始化');
+          reportStartupStage('Rust 数据库初始化');
           await LegadoDbBridge.init();
         }
       },
@@ -206,15 +214,23 @@ abstract final class AppCompositionRoot {
       bookmarkSyncService: bookmarkSyncService,
       cacheService: cacheService,
       webdavRepository: webdavRepository,
-      reportStartupStage: crashLog.updateStartupStage,
+      reportStartupStage: reportStartupStage,
       reportStartupTask: (report) {
         final suffix = report.error == null ? '' : ': ${report.error}';
-        crashLog.updateStartupStage(
-          '启动任务 ${report.id} ${report.status.name}$suffix',
-        );
+        reportStartupStage('启动任务 ${report.id} ${report.status.name}$suffix');
         unawaited(diagnosticsMonitor.recordStartupTask(report));
       },
     ).initialize();
+
+    final runtime = await const PlatformCrashMetadataLoader().call();
+    AppLog.configureRuntime(
+      DiagnosticRuntimeInfo(
+        platform: runtime.platform,
+        platformVersion: runtime.platformVersion,
+        appVersion: runtime.appVersion,
+        engineVersion: runtime.engineVersion,
+      ),
+    );
 
     if (LegadoEngineBridge.isAvailable) {
       FrbSourceVerificationBrowserHost(

@@ -42,4 +42,23 @@ void main() {
     expect(lines.length, lessThanOrEqualTo(DiagnosticRecord.maxEntries));
     expect(bytes, lessThanOrEqualTo(DiagnosticRecord.maxPersistedBytes));
   });
+
+  test('includes configured runtime metadata in exported log lines', () async {
+    AppLog.configureRuntime(
+      const DiagnosticRuntimeInfo(
+        platform: 'windows',
+        platformVersion: 'test-platform',
+        appVersion: '1.0.0+1',
+        engineVersion: '0.5.6',
+      ),
+    );
+
+    await AppLog.put('启动阶段', category: 'startup');
+
+    final line = AppLog.entries.single.line;
+    expect(line, contains('category=startup'));
+    expect(line, contains('platform=windows'));
+    expect(line, contains('appVersion=1.0.0+1'));
+    expect(line, contains('engineVersion=0.5.6'));
+  });
 }

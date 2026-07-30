@@ -2604,3 +2604,22 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，其余集成、`legado_webdav` 和文档测试无失败。
 
 边界结论：P1-2 已满足当前计划的可开关帧耗时、主 isolate 冻结采样、后台任务超时诊断、AppLog 接入和非崩溃边界要求。下一固定任务为 P1-3 全局日志与诊断信息；通知/后台服务/TLS/WebView 启动能力继续留给 P1-4 逐项盘点。
+
+## 125. 2026-07-30：R6/P1-3 全局日志与诊断信息
+
+- 新增纯 domain `DiagnosticRecord`、`DiagnosticSeverity` 和 `DiagnosticRuntimeInfo`，统一运行日志、诊断日志和崩溃展示格式；行文本包含时间、级别、分类、来源、平台、应用版本、Rust 引擎版本和可控元数据。
+- 统一敏感信息脱敏和 UTF-16 安全截断，覆盖 `token/access_token/password/passwd/secret/cookie` 与 `Authorization: Bearer ...`；错误、堆栈、元数据、单行长度、内存条数和持久化总字节均有上限。
+- `AppLog` 保留最新在前、清理和复制导出语义，底层改为 `DiagnosticRecord` 格式；组合根加载真实平台/应用/Rust 引擎版本后配置运行日志元数据，并把启动阶段同步写入 AppLog。
+- `CrashLogService` 写入前复用同一脱敏/截断策略；`CrashReport.displayText` 复用统一诊断模型，但 SharedPreferences 崩溃报告 store 的“最新报告”和“一次性待提示标记”边界保持不变。
+- P1-2 诊断事件继续 `isCrash=false`，写入 AppLog 但不写入 CrashLogService；普通慢帧、冻结采样和后台任务失败不会被误记为崩溃。
+- 本批未修改正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。`legado-main/` 保持只读。
+
+验证结果：
+
+- 诊断 record、AppLog、CrashLogService、AppDiagnosticsMonitor、AppLogPage 和 CrashRecoveryPrompt 定向 `16/16`。
+- `flutter analyze --no-pub`：`No issues found`。
+- 架构扫描保持 `144` 条既有 backlog：Feature 直接 SharedPreferences `12`、Feature 业务 service `132`，无新增类别。
+- `flutter test --no-pub --concurrency=1 --reporter compact`：`678` 通过、`3` 项既有条件跳过。
+- `cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，其余集成、`legado_webdav` 和文档测试无失败。
+
+边界结论：P1-3 已满足当前计划的全局日志格式、敏感信息限制、运行/崩溃/手动导出复用诊断模型和清理边界要求。下一固定任务为 P1-4 平台启动能力盘点。

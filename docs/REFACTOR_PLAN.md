@@ -160,7 +160,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 退出条件：核心用户流程在目标平台构建并通过，UI 与原版对照测试通过，平台差异有明确适配记录。
 
-当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 崩溃防护与启动恢复、P0-2 存储初始化安全、P0-3 启动任务隔离、P1-1 全局生命周期边界、P1-2 卡顿与调度监控均已完成，Flutter 全量 `672` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描保持 `144` 条既有 backlog。R6 下一固定任务是 P1-3 全局日志与诊断信息；其后仍有应用用例依赖、受控 UI/目标平台和发布门禁。真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
+当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 崩溃防护与启动恢复、P0-2 存储初始化安全、P0-3 启动任务隔离、P1-1 全局生命周期边界、P1-2 卡顿与调度监控、P1-3 全局日志与诊断信息均已完成，Flutter 全量 `678` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描保持 `144` 条既有 backlog。R6 下一固定任务是 P1-4 平台启动能力盘点；其后仍有应用用例依赖、受控 UI/目标平台和发布门禁。真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
 
 #### 横切基础设施：全局能力与启动可靠性（跨 R1-R6，新增）
 
@@ -173,7 +173,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 - P0-3 启动任务隔离（已完成）：新增 `StartupTaskRunner`，将网络/Web API 恢复、WebDAV 初始化、书架加载后的缓存维护/章节元数据、阅读进度同步、RSS 源加载、替换规则加载、内置书源补齐、书源加载和规则订阅自动更新纳入可观测任务；每项独立超时、捕获错误、记录结果，不阻塞首屏。成功任务同进程不重复，失败任务可重试，条件不满足任务显式跳过。AppConfig 与书架布局偏好仍作为首屏布局输入同步读取，保留默认首页和底栏显隐语义。
 - P1-1 全局生命周期边界（已完成）：建立 application 级生命周期协调器，统一承接前后台、暂停/恢复、应用退出和资源释放；Flutter 平台 observer 只在 infrastructure 层注册并由组合根管理；页面只订阅状态，不各自注册同一类全局回调。对照原版 LifecycleHelp，明确 Flutter 多窗口、Android Activity、桌面窗口和 Web 平台的差异。
 - P1-2 卡顿与调度监控（已完成）：增加可开关的帧耗时、主 isolate/后台任务超时和应用冻结观测，接入 AppLog/CrashLogService，默认关闭高成本监控；对照原版 AppFreezeMonitor、DispatchersMonitor，不把普通业务异常误记为崩溃。
-- P1-3 全局日志与诊断信息：统一 AppLog 的错误、异常、启动阶段、设备/平台、应用版本和 Rust 引擎版本格式；限制敏感信息、条数和文件大小；让崩溃日志、运行日志和手动导出日志复用同一诊断模型，但保留清理和脱敏边界。
+- P1-3 全局日志与诊断信息（已完成）：统一 AppLog 的错误、异常、启动阶段、设备/平台、应用版本和 Rust 引擎版本格式；限制敏感信息、条数和文件大小；让崩溃日志、运行日志和手动导出日志复用同一诊断模型，但保留清理和脱敏边界。
 - P1-4 平台启动能力盘点：逐项确认原版通知通道（下载、朗读、Web 服务）、后台任务/服务、WebView 绘制设置、GMS TLS provider、Cronet 预下载和简繁转换预热在 Flutter 各目标平台是否需要等价实现。已由 Rust HTTP 覆盖的网络能力只记录为已覆盖，不重复引入 Cronet；没有产品需求或目标平台支持的能力明确登记为范围差异。
 
 P0-1 当前证据：纯 Dart 报告/存储 port、`FlutterError`/`PlatformDispatcher`/Zone 捕获、启动阶段记录、真实应用/平台/引擎版本和原版顺序的一次性提示均已接入；错误与堆栈有 UTF-16 安全长度上限，存储/元数据失败不阻塞启动。崩溃链定向 `13/13`、启动相关回归 `15/15`、Flutter/Rust 全量与双平台构建通过。
@@ -185,6 +185,8 @@ P0-3 当前证据：启动任务 runner、启动 WebDAV、阅读进度同步、�
 P1-1 当前证据：新增 application 级 `AppLifecycleCoordinator`，统一记录生命周期 phase、恢复次数和 resumed 状态；新增 infrastructure 级 `FlutterLifecycleObserver`，只在组合根注册 Flutter `WidgetsBindingObserver` 并在 Provider dispose 时注销；`MyPage` 不再直接注册全局 observer，仅订阅 coordinator 的恢复计数刷新 Web 服务状态。生命周期 coordinator、MyPage 和 MainShell 定向 `5/5`；`flutter analyze --no-pub` 无诊断；架构扫描保持 `144` 条既有 backlog，无新增类别；Flutter 串行全量 `668` 通过、`3` 项既有条件跳过；Rust workspace 核心 `184/184`，其余集成、WebDAV 和文档测试无失败。下一项严格进入 P1-2。
 
 P1-2 当前证据：新增 `AppDiagnosticsMonitor`、`FlutterFrameDiagnosticsObserver` 和 `DiagnosticsPrefs`；默认关闭时不注册帧回调或冻结计时器，开启后记录慢帧、主 isolate 冻结采样、调度超时和启动后台任务超时/失败，并通过组合根写入 AppLog。诊断事件 `isCrash=false`，不写入 CrashLogService 崩溃记录；CrashLogService 仍仅记录未处理异常/平台错误，启动任务结果继续更新启动阶段。诊断 monitor、偏好和启动任务定向 `8/8`；`flutter analyze --no-pub` 无诊断；架构扫描保持 `144` 条既有 backlog，无新增类别；Flutter 串行全量 `672` 通过、`3` 项既有条件跳过；Rust workspace 核心 `184/184`，其余集成、WebDAV 和文档测试无失败。下一项严格进入 P1-3。
+
+P1-3 当前证据：新增纯 domain `DiagnosticRecord` 与 `DiagnosticRuntimeInfo`，统一 AppLog 行文本、卡顿诊断日志和 CrashReport 展示；AppLog 保持最新在前和 100 条环缓冲，并限制持久化总字节数，输出包含平台、应用版本和 Rust 引擎版本。CrashLogService 写入前统一执行敏感字段脱敏和 UTF-16 安全截断，CrashReport 展示复用同一诊断模型但保留 SharedPreferencesCrashReportStore 的待提示/清理语义。组合根把启动阶段同步写入 AppLog，诊断事件继续 `isCrash=false`，不误记为崩溃。诊断 record、AppLog、CrashLogService、AppDiagnosticsMonitor、AppLogPage 和 CrashRecoveryPrompt 定向 `16/16`；`flutter analyze --no-pub` 无诊断；架构扫描保持 `144` 条既有 backlog，无新增类别；Flutter 串行全量 `678` 通过、`3` 项既有条件跳过；Rust workspace 核心 `184/184`，其余集成、WebDAV 和文档测试无失败。下一项严格进入 P1-4。
 
 横切任务验收：每个任务必须有纯 Dart 单元测试；涉及启动顺序、平台错误或通知/后台能力时补充 Android 和 Windows smoke；至少验证“正常冷启动、初始化失败冷启动、同步任务失败、模拟未处理异常、重启后读取崩溃记录、清理后不重复提示”六条路径。实现应位于 lib/application、lib/infrastructure 和 lib/services，禁止页面直接安装全局 handler。
 

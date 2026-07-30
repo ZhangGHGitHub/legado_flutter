@@ -83,6 +83,12 @@ class DiagnosticRecord {
     if (category != 'app') extra.add('category=$category');
     final s = source;
     if (s != null && s.isNotEmpty) extra.add('source=${sanitize(s)}');
+    if (runtime.platform != 'unknown') {
+      extra.add('platform=${sanitize(runtime.platform)}');
+      extra.add('platformVersion=${sanitize(runtime.platformVersion)}');
+      extra.add('appVersion=${sanitize(runtime.appVersion)}');
+      extra.add('engineVersion=${sanitize(runtime.engineVersion)}');
+    }
     for (final entry in metadata.entries) {
       extra.add('${sanitize(entry.key)}=${sanitize(entry.value)}');
     }
