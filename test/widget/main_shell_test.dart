@@ -8,6 +8,7 @@ import 'package:legado_flutter/database/dao/source_dao.dart';
 import 'package:legado_flutter/application/lifecycle/app_lifecycle_coordinator.dart';
 import 'package:legado_flutter/application/preferences/bookshelf_display_prefs_port.dart';
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
+import 'package:legado_flutter/application/web_api/web_api_prefs_port.dart';
 import 'package:legado_flutter/application/startup/startup_task_runner.dart';
 import 'package:legado_flutter/domain/crash/crash_report.dart';
 import 'package:legado_flutter/domain/ports/public_text_fetch_port.dart';
@@ -78,6 +79,7 @@ void main() {
             value: _FakeBookshelfDisplayPrefsPort(),
           ),
           Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
+          Provider<WebApiPrefsPort>.value(value: const _FakeWebApiPrefsPort()),
           Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
           ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
           Provider<BookSourceService>(
@@ -144,6 +146,7 @@ void main() {
             value: _FakeBookshelfDisplayPrefsPort(),
           ),
           Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
+          Provider<WebApiPrefsPort>.value(value: const _FakeWebApiPrefsPort()),
           Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
           ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
           Provider<BookSourceService>(
@@ -209,6 +212,9 @@ void main() {
               value: _FakeBookshelfDisplayPrefsPort(),
             ),
             Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
+            Provider<WebApiPrefsPort>.value(
+              value: const _FakeWebApiPrefsPort(),
+            ),
             Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
             ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
             Provider<BookSourceService>(
@@ -305,4 +311,14 @@ class _FakeReaderFontPort implements ReaderFontPort {
 
   @override
   List<String> cjkFallbackFamilies() => const ['TestCjk', 'sans-serif'];
+}
+
+class _FakeWebApiPrefsPort implements WebApiPrefsPort {
+  const _FakeWebApiPrefsPort();
+
+  @override
+  Future<WebApiConfig> load() async => const WebApiConfig();
+
+  @override
+  Future<void> save(WebApiConfig config) async {}
 }

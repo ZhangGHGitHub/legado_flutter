@@ -1,31 +1,14 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Web API 本地配置
-class WebApiConfig {
-  final bool enabled;
-  final int port;
-  final String token;
+import '../application/web_api/web_api_prefs_port.dart';
 
-  const WebApiConfig({
-    this.enabled = false,
-    this.port = 1122,
-    this.token = '',
-  });
-
-  WebApiConfig copyWith({bool? enabled, int? port, String? token}) {
-    return WebApiConfig(
-      enabled: enabled ?? this.enabled,
-      port: port ?? this.port,
-      token: token ?? this.token,
-    );
-  }
-}
+export '../application/web_api/web_api_prefs_port.dart' show WebApiConfig;
 
 abstract final class WebApiPrefs {
   static const enabledKey = 'web_api_enabled';
   static const portKey = 'web_api_port';
   static const tokenKey = 'web_api_token';
-  static const defaultPort = 1122;
+  static const defaultPort = WebApiPrefsPort.defaultPort;
 
   static Future<WebApiConfig> load() async {
     final prefs = await SharedPreferences.getInstance();

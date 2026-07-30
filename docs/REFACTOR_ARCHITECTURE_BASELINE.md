@@ -2850,3 +2850,17 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 架构扫描由 `102` 降至 `100` 条既有 Feature→service backlog；`git diff --check`：通过。剩余 service 依赖未加入白名单，继续按单用例推进。
 
 边界结论：本批完成阅读图片技术能力的 application/infrastructure 调用者迁移，保留旧 service 作为底层实现入口，不改变正文渲染和图片失败占位行为。
+
+## 141. 2026-07-30：R6 Web API 配置偏好端口边界
+
+- `WebApiSettingsCard`、`MyPage` 移除 `WebApiPrefs` 直接依赖，改由 application `WebApiPrefsPort` 和 SharedPreferences adapter 读写 enabled、port、token；`WebApiConfig` 移至 application 并由旧 service 兼容导出，保留既有键名和默认端口。
+- `WebApiService` 继续负责 Web API port 的配置、启动、停止、状态和 Token 生成，未改变本地 HTTP 协议、认证或失败策略。测试宿主补齐 Web API fake port；未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- Web API 偏好、Web API port、设置卡片和 MyPage 定向 `7/7`；首轮全量发现 3 个 MainShell 测试宿主缺少新 Provider，补齐依赖后复跑通过，未放宽任何断言。
+- `dart format --output=none --set-exit-if-changed`：涉及文件通过；涉及文件 `flutter analyze --no-pub`：`No issues found`。
+- `flutter test --no-pub --concurrency=1 --reporter compact`：最终 `715` 通过、`3` 项既有条件跳过；Rust workspace 复用本阶段已通过的 `cargo test --manifest-path rust/Cargo.toml`，核心 `184/184`。
+- 架构扫描由 `100` 降至 `98` 条既有 Feature→service backlog；`git diff --check`：通过。剩余 service 依赖未加入白名单，继续按单用例推进。
+
+边界结论：本批完成 Web API 配置持久化调用者的 application/infrastructure 迁移，保留旧 service 作为兼容实现入口，不改变 Web API 运行行为。

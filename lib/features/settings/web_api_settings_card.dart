@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/platform/clipboard_port.dart';
+import '../../application/web_api/web_api_prefs_port.dart';
 import '../../domain/web_api_status.dart';
-import '../../services/web_api_prefs.dart';
 import '../../services/web_api_service.dart';
 
 /// 配置页 Web API 设置卡片
@@ -35,7 +35,7 @@ class _WebApiSettingsCardState extends State<WebApiSettingsCard> {
   }
 
   Future<void> _load() async {
-    final config = await WebApiPrefs.load();
+    final config = await context.read<WebApiPrefsPort>().load();
     final status = WebApiService.currentStatus();
     if (!mounted) return;
     setState(() {
@@ -60,16 +60,18 @@ class _WebApiSettingsCardState extends State<WebApiSettingsCard> {
   }
 
   Future<void> _applySettings() async {
-    final port = int.tryParse(_portCtrl.text.trim()) ?? WebApiPrefs.defaultPort;
+    final port =
+        int.tryParse(_portCtrl.text.trim()) ?? WebApiPrefsPort.defaultPort;
     final token = _tokenCtrl.text.trim();
-    await WebApiPrefs.save(
+    final prefs = context.read<WebApiPrefsPort>();
+    await prefs.save(
       WebApiConfig(enabled: _enabled, port: port, token: token),
     );
     if (_enabled) {
       setState(() => _loading = true);
       final status = await WebApiService.start(port: port, token: token);
       if (status != null) {
-        await WebApiPrefs.save(
+        await prefs.save(
           WebApiConfig(enabled: true, port: status.port, token: status.token),
         );
       }

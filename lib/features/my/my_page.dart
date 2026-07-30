@@ -4,10 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/lifecycle/app_lifecycle_coordinator.dart';
+import '../../application/web_api/web_api_prefs_port.dart';
 import '../../services/backup_service.dart';
 import '../../services/database_status_service.dart';
 import '../../services/engine_status_service.dart';
-import '../../services/web_api_prefs.dart';
 import '../../services/web_api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/legado_list_tile.dart';
@@ -76,7 +76,7 @@ class _MyPageState extends State<MyPage> {
   }
 
   Future<void> _loadWebService() async {
-    final config = await WebApiPrefs.load();
+    final config = await context.read<WebApiPrefsPort>().load();
     final status = WebApiService.currentStatus();
     final running = config.enabled && (status?.running ?? false);
     if (!mounted) return;
@@ -156,7 +156,7 @@ class _MyPageState extends State<MyPage> {
       _snack('Rust 引擎或数据库未就绪');
       return;
     }
-    final config = await WebApiPrefs.load();
+    final config = await context.read<WebApiPrefsPort>().load();
     final next = !config.enabled;
     final status = await WebApiService.setEnabled(next);
     await _loadWebService();

@@ -31,6 +31,7 @@ import '../application/rss/public_text_rss_source_import_port.dart';
 import '../application/rss/rss_read_state_port.dart';
 import '../application/startup/startup_task_runner.dart';
 import '../application/web_api/repository_web_api_data_port.dart';
+import '../application/web_api/web_api_prefs_port.dart';
 import '../bridge/legado_db_bridge.dart';
 import '../bridge/legado_engine_bridge.dart';
 import '../config/app_config.dart';
@@ -100,6 +101,7 @@ import '../infrastructure/preferences/shared_preferences_source_variable_adapter
 import '../infrastructure/preferences/shared_preferences_txt_toc_rule_prefs_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_simulated_reading_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_read_style_prefs_adapter.dart';
+import '../infrastructure/preferences/shared_preferences_web_api_prefs_adapter.dart';
 import '../infrastructure/reader/reader_font_port_adapter.dart';
 import '../infrastructure/reader/reader_image_cache_port_adapter.dart';
 import '../infrastructure/sources/source_debug_formatter_adapter.dart';
@@ -334,6 +336,9 @@ abstract final class AppCompositionRoot {
           Provider<ReaderFontPort>.value(value: const ReaderFontPortAdapter()),
           Provider<ReaderImageCachePort>.value(
             value: ReaderImageCachePortAdapter(binaryHttpPort),
+          ),
+          Provider<WebApiPrefsPort>.value(
+            value: const SharedPreferencesWebApiPrefsAdapter(),
           ),
           Provider<SourceDebugFormatterPort>.value(
             value: const SourceDebugFormatterAdapter(),
