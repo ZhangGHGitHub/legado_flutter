@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
+import '../../application/platform/clipboard_port.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 
 /// 内容编辑 — 对齐 Jingshiro `ContentEditDialog`
@@ -82,8 +83,8 @@ class _ContentEditDialogState extends State<ContentEditDialog> {
   }
 
   Future<void> _copyAll() async {
-    await Clipboard.setData(
-      ClipboardData(text: '$_title\n${_controller.text}'),
+    await context.read<ClipboardPort>().copyText(
+      '$_title\n${_controller.text}',
     );
     if (!mounted) return;
     ScaffoldMessenger.of(

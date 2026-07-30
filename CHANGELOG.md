@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- R6/应用用例依赖：继续收口源编辑器、字典规则、TXT 目录规则和正文编辑对话框的剪贴板边界。四个页面统一通过 application `ClipboardPort`，新增定向测试覆盖源 JSON 复制/粘贴、规则复制和标题+正文复制。定向 `5/5`；Flutter 串行全量 `705` 通过、`3` 项既有条件跳过，Rust 核心 `184/184`，`flutter analyze --no-pub` 无诊断，架构 backlog 保持 `111`，`git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 - R6/应用用例依赖：继续收口阅读记录和 Web API 设置的剪贴板边界。`ReadRecordPage`、`WebApiSettingsCard` 统一通过 application `ClipboardPort` 复制文本，测试宿主注入 fake 端口并保留导出内容、API URL 和提示断言。定向 `2/2`；Flutter 串行全量 `700` 通过、`3` 项既有条件跳过，Rust 核心 `184/184`，`flutter analyze --no-pub` 无诊断，架构 backlog 保持 `111`，`git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 - R6/应用用例依赖：继续收口源管理与备份配置边界。`SourcesPage` 改用 `ReaderFontPort`，`BackupConfigPage` 改用 `AppPathsPort.backupsDir()`，测试宿主显式注入对应端口并保留源列表、备份列表、导入导出和失败提示断言。定向 `11/11`；Flutter 串行全量 `699` 通过、`3` 项既有条件跳过，Rust 核心 `184/184`，`flutter analyze --no-pub` 无诊断，架构 backlog 从 `113` 降至 `111`，`git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 - R6/应用用例依赖：继续收口 RSS Tab 和主题设置能力。`RssTabPage` 改用 `ReaderFontPort` 获取字体族与 CJK fallback，`ThemeConfigPage` 改用 application `ClipboardPort` 完成主题 JSON 导出/导入并由测试宿主显式注入 adapter；移除两处 Feature 对 `services/reader_font_loader.dart`、`services/clipboard_port.dart` 的直接依赖。定向 `8/8`；Flutter 串行全量 `699` 通过、`3` 项既有条件跳过，Rust 核心 `184/184`，`flutter analyze --no-pub` 无诊断，架构 backlog 从 `115` 降至 `113`，`git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。

@@ -2,12 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../application/preferences/source_variable_port.dart';
+import '../../application/platform/clipboard_port.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../providers/source_provider.dart';
 import '../../services/qr_code_service.dart';
@@ -692,7 +692,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
 
   Future<void> _copySource() async {
     final json = _encodeCurrent();
-    await Clipboard.setData(ClipboardData(text: json));
+    await context.read<ClipboardPort>().copyText(json);
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -700,8 +700,8 @@ class _SourceEditorPageState extends State<SourceEditorPage>
   }
 
   Future<void> _pasteSource() async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = data?.text?.trim() ?? '';
+    final text =
+        (await context.read<ClipboardPort>().pasteText())?.trim() ?? '';
     if (text.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(

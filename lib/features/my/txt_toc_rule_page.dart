@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
+import '../../application/platform/clipboard_port.dart';
 import '../../application/rules/txt_toc_rule_creation_policy.dart';
 import '../../domain/rules/txt_toc_rule.dart';
 import '../../services/txt_toc_rule_prefs.dart';
@@ -307,9 +308,9 @@ class _TxtTocRulePageState extends State<TxtTocRulePage> {
                                           });
                                           await _persist();
                                         case 'copy':
-                                          await Clipboard.setData(
-                                            ClipboardData(text: rule.rule),
-                                          );
+                                          await context
+                                              .read<ClipboardPort>()
+                                              .copyText(rule.rule);
                                           if (context.mounted) {
                                             ScaffoldMessenger.of(
                                               context,

@@ -204,6 +204,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 本批继续收口阅读记录和 Web API 设置的剪贴板边界：`ReadRecordPage` 与 `WebApiSettingsCard` 通过 application `ClipboardPort` 复制文本，移除 Flutter Clipboard 直接访问；测试宿主显式注入 fake 端口，阅读记录导出内容、API URL、提示文案和设置行为保持不变。定向 `2/2`，Flutter 串行全量 `700` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断，架构扫描保持 `111` 条既有 Feature→service backlog，`git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 
+本批继续收口源编辑器、字典规则、TXT 目录规则和正文编辑对话框的剪贴板边界：四个页面统一通过 application `ClipboardPort` 复制/粘贴，保留 JSON、规则文本、标题+正文拼接、提示和原有保存/编辑行为；新增定向测试覆盖源 JSON 双向操作、字典规则复制、TXT 规则复制及正文复制。定向 `5/5`，Flutter 串行全量 `705` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断，架构扫描保持 `111` 条既有 Feature→service backlog，`git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
 ### 0.4 重构工作规则
 
 1. 一次只迁移一个边界、一个用例或一条数据链路；完成定向测试并汇报后再进入下一项。

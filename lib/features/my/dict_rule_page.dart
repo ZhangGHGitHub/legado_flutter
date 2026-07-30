@@ -1,10 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/dictionary/dict_rule_tester.dart';
+import '../../application/platform/clipboard_port.dart';
 import '../../domain/ports/dict_rule_query_port.dart';
 import '../../domain/rules/dict_rule.dart';
 import '../../services/dict_rule_prefs.dart';
@@ -332,11 +332,9 @@ class _DictRulePageState extends State<DictRulePage> {
                                       });
                                       await _persist();
                                     case 'copy':
-                                      await Clipboard.setData(
-                                        ClipboardData(
-                                          text: jsonEncode(rule.toJson()),
-                                        ),
-                                      );
+                                      await context
+                                          .read<ClipboardPort>()
+                                          .copyText(jsonEncode(rule.toJson()));
                                       if (context.mounted) {
                                         ScaffoldMessenger.of(
                                           context,

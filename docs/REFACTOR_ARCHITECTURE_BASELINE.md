@@ -2796,3 +2796,16 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `flutter analyze --no-pub`：`No issues found`；架构扫描保持 `111` 条 Feature→service backlog（本批消除的是直接 Flutter Clipboard 访问，不计入该 service-import 数字）；`git diff --check`：通过。
 
 边界结论：本批完成两个 UI 剪贴板调用者的 application port 迁移，剩余 Feature→service backlog 继续按独立用例推进。
+
+## 137. 2026-07-30：R6 四个页面剪贴板边界
+
+- `SourceEditorPage` 通过 `ClipboardPort` 处理源 JSON 复制/粘贴；`DictRulePage` 通过端口复制规则摘要；`TxtTocRulePage` 通过端口复制正则；`ContentEditDialog` 通过端口复制清洗后的标题与正文。原有文本、提示、保存和编辑行为保持不变。
+- 新增定向测试覆盖源 JSON 双向操作、字典规则复制、TXT 目录规则复制和正文复制；测试 fake 仅替代平台剪贴板，不替换业务断言。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- 四页面定向 `5/5`；`dart format --output=none --set-exit-if-changed`：通过；涉及文件 analyze：`No issues found`。
+- `flutter test --no-pub --concurrency=1 --reporter compact`：最终 `705` 通过、`3` 项既有条件跳过；中间一次出现 `1` 个未复现的时序失败，随后完整重跑通过，未修改或跳过任何断言。
+- `cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，workspace 全量通过；`flutter analyze --no-pub`：`No issues found`；架构扫描保持 `111` 条 Feature→service backlog；`git diff --check`：通过。
+
+边界结论：本批完成四个页面的 application ClipboardPort 调用者迁移，剩余 Feature→service backlog 继续按独立用例推进。
