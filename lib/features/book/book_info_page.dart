@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
+import 'package:legado_flutter/domain/source/book_source_type.dart';
 import '../../domain/ports/book_source_search_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
@@ -20,7 +21,6 @@ import '../reader/manga_reader_page.dart';
 import 'change_cover_page.dart';
 import 'change_source_page.dart';
 import 'toc_sheet.dart';
-import '../../services/manga_prefs.dart';
 import '../../utils/site_busy_guard.dart';
 
 /// Legado 主色红（换源芯片 / 阅读按钮），对齐 Jingshiro BookInfo
@@ -489,7 +489,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
         Navigator.pop(context);
         final idx = chapters.indexWhere((c) => c.id == chapter.id);
         final source = context.read<SourceProvider>().findSourceForBook(_book);
-        final useManga = MangaPrefs.isImageSourceType(source?.bookSourceType);
+        final useManga = source?.isImageSource ?? false;
         await Navigator.push(
           context,
           MaterialPageRoute(
@@ -676,7 +676,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
         .indexWhere((c) => c.id == startChapter.id)
         .clamp(0, provider.currentChapters.length - 1);
     final source = context.read<SourceProvider>().findSourceForBook(latestBook);
-    final useManga = MangaPrefs.isImageSourceType(source?.bookSourceType);
+    final useManga = source?.isImageSource ?? false;
     Navigator.push(
       context,
       MaterialPageRoute(

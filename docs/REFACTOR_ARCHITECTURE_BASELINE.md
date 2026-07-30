@@ -2880,3 +2880,10 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 书源搜索、BookProvider 自动选源和目录顺序定向 `8/8`；涉及文件格式与 `flutter analyze --no-pub` 通过；Flutter 串行全量 `715` 通过、`3` 项既有条件跳过；架构扫描由 `97` 降至 `96` 条 Feature→service backlog；`git diff --check` 通过。
 
 边界结论：本批完成 BookInfoPage 书源搜索的 application/infrastructure 调用者迁移，保留 `BookSourceService` 供其他尚未迁移调用者使用，不改变封面补全行为。
+
+## 144. 2026-07-30：R6 BookInfoPage 漫画类型语义边界
+
+- 新增纯 domain `BookSourceTypeSemantics` 扩展，集中保留原 `MangaPrefs.isImageSourceType` 对 `2`、`image`、`漫画`、`图片` 的兼容判定；`BookInfoPage` 移除对 `services/manga_prefs.dart` 的直接依赖。
+- 书源模型、书源搜索、BookProvider 自动选源和目录顺序定向 `12/12`；涉及文件格式与 `flutter analyze --no-pub` 通过；Flutter 串行全量 `715` 通过、`3` 项既有条件跳过；架构扫描由 `96` 降至 `95` 条 Feature→service backlog；`git diff --check` 通过。
+
+边界结论：本批只迁移纯书源类型判断，不迁移漫画阅读偏好存储；漫画阅读器其余偏好仍由 `MangaPrefs` 负责，产品行为和偏好键名不变。
