@@ -160,7 +160,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 退出条件：核心用户流程在目标平台构建并通过，UI 与原版对照测试通过，平台差异有明确适配记录。
 
-当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 至 P1-4 横切基础设施任务均已完成，Flutter 全量 `678` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描保持 `144` 条既有 backlog。R6 下一固定任务是应用用例依赖、受控 UI/目标平台和发布门禁；真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
+当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 至 P1-4 横切基础设施任务均已完成，应用用例依赖开始按 Feature 边界收口；本轮 Flutter 全量 `678` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描从 `144` 降至 `142`。R6 后续继续处理剩余 Feature 依赖、受控 UI/目标平台和发布门禁；真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
 
 #### 横切基础设施：全局能力与启动可靠性（跨 R1-R6，新增）
 
@@ -191,6 +191,8 @@ P1-3 当前证据：新增纯 domain `DiagnosticRecord` 与 `DiagnosticRuntimeIn
 P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`DispatchersMonitor`、通知通道和 GMS TLS provider。原版创建下载/朗读/Web 服务三类通知通道，启用 Android WebView 慢速全量绘制，预下载 Cronet，Android Q 以下尝试插入 GMS Conscrypt，启动简繁转换预热，并在后台执行清理/同步。当前 Android 入口没有通知通道、前台服务、Cronet 或 GMS provider；`webview_flutter` 提供页面宿主但没有全局慢速全量绘制调用；阅读器已有局部简繁转换，不承诺全局词典预热。Rust HTTP 已覆盖主网络 TLS、重定向、SSRF 和超时策略，因此不重复引入 Cronet/GMS TLS。通知、后台音频、WebView 全量绘制和全局简繁预热登记为平台差异/暂停项，待明确产品需求或目标平台验收后单独立项。该审计未修改代码和原版基线；复用 P1-3 门禁：Flutter `678` 通过、`3` 项既有跳过，Rust `184/184`，analyze 无诊断，架构 backlog `144`。下一阶段进入应用用例依赖、受控 UI/目标平台和发布门禁。
 
 横切任务验收：每个任务必须有纯 Dart 单元测试；涉及启动顺序、平台错误或通知/后台能力时补充 Android 和 Windows smoke；至少验证“正常冷启动、初始化失败冷启动、同步任务失败、模拟未处理异常、重启后读取崩溃记录、清理后不重复提示”六条路径。实现应位于 lib/application、lib/infrastructure 和 lib/services，禁止页面直接安装全局 handler。
+
+应用用例依赖当前证据：`AppLogPage` 与 `AppLogDialog` 已通过 `AppLogPort` 读取、清理和导出日志，基础设施 adapter 复用既有静态 AppLog 存储；该子任务定向 `4/4`，全量 Flutter `678` 通过、`3` 项既有跳过，Rust `184/184`，analyze 无诊断。架构边界由 `144` 条降至 `142` 条，剩余 `Feature → service` 依赖继续按单边界、单用例顺序迁移，不登记为例外。
 
 ### 0.4 重构工作规则
 

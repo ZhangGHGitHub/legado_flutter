@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
-import '../../services/app_log.dart';
+import '../../application/diagnostics/app_log_port.dart';
 import '../../services/reader_font_loader.dart';
 
 /// 应用日志 Dialog — 对齐 Jingshiro [AppLogDialog]（清空；最新在前）。
 class AppLogDialog extends StatefulWidget {
-  const AppLogDialog({super.key});
+  const AppLogDialog({super.key, this.log});
+
+  final AppLogPort? log;
 
   static Future<void> show(BuildContext context) {
     return showDialog<void>(
@@ -21,17 +24,19 @@ class AppLogDialog extends StatefulWidget {
 
 class _AppLogDialogState extends State<AppLogDialog> {
   bool _ready = false;
+  late final AppLogPort _log;
 
   @override
   void initState() {
     super.initState();
-    AppLog.ensureLoaded().then((_) {
+    _log = widget.log ?? context.read<AppLogPort>();
+    _log.ensureLoaded().then((_) {
       if (mounted) setState(() => _ready = true);
     });
   }
 
   Future<void> _copyAll() async {
-    final text = AppLog.entries.map((e) => e.line).join('\n');
+    final text = _log.exportText();
     await Clipboard.setData(ClipboardData(text: text));
     if (mounted) {
       ScaffoldMessenger.of(
@@ -41,7 +46,7 @@ class _AppLogDialogState extends State<AppLogDialog> {
   }
 
   Future<void> _clear() async {
-    await AppLog.clear();
+    await _log.clear();
     if (mounted) setState(() {});
   }
 
@@ -53,7 +58,7 @@ class _AppLogDialogState extends State<AppLogDialog> {
       fontSize: 12,
       height: 1.35,
     );
-    final entries = AppLog.entries;
+    final entries = _log.entries;
     final size = MediaQuery.sizeOf(context);
 
     return AlertDialog(
@@ -84,7 +89,7 @@ class _AppLogDialogState extends State<AppLogDialog> {
                 separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (ctx, i) {
                   final e = entries[i];
-                  final color = switch (e.level) {
+                  final color = switch (e.severity.level) {
                     'E' => Theme.of(ctx).colorScheme.error,
                     'W' => Colors.orange.shade800,
                     _ => Theme.of(ctx).colorScheme.onSurface,

@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../services/app_log.dart';
+import '../../application/diagnostics/app_log_port.dart';
 import '../../services/clipboard_port.dart';
 import '../../services/reader_font_loader.dart';
 
 /// 应用日志页 — 对齐 Jingshiro [AppLogDialog]
 class AppLogPage extends StatefulWidget {
-  const AppLogPage({super.key, this.clipboard});
+  const AppLogPage({super.key, this.clipboard, this.log});
 
   final ClipboardPort? clipboard;
+  final AppLogPort? log;
 
   @override
   State<AppLogPage> createState() => _AppLogPageState();
@@ -16,17 +18,19 @@ class AppLogPage extends StatefulWidget {
 
 class _AppLogPageState extends State<AppLogPage> {
   bool _ready = false;
+  late final AppLogPort _log;
 
   @override
   void initState() {
     super.initState();
-    AppLog.ensureLoaded().then((_) {
+    _log = widget.log ?? context.read<AppLogPort>();
+    _log.ensureLoaded().then((_) {
       if (mounted) setState(() => _ready = true);
     });
   }
 
   Future<void> _copyAll() async {
-    final text = AppLog.entries.map((e) => e.line).join('\n');
+    final text = _log.exportText();
     await (widget.clipboard ?? const PlatformClipboard()).copyText(text);
     if (mounted) {
       ScaffoldMessenger.of(
@@ -36,7 +40,7 @@ class _AppLogPageState extends State<AppLogPage> {
   }
 
   Future<void> _clear() async {
-    await AppLog.clear();
+    await _log.clear();
     if (mounted) setState(() {});
   }
 
@@ -48,7 +52,7 @@ class _AppLogPageState extends State<AppLogPage> {
       fontSize: 12,
       height: 1.35,
     );
-    final entries = AppLog.entries;
+    final entries = _log.entries;
 
     return Scaffold(
       appBar: AppBar(
@@ -76,7 +80,7 @@ class _AppLogPageState extends State<AppLogPage> {
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (ctx, i) {
                 final e = entries[i];
-                final color = switch (e.level) {
+                final color = switch (e.severity.level) {
                   'E' => Theme.of(ctx).colorScheme.error,
                   'W' => Colors.orange.shade800,
                   _ => Theme.of(ctx).colorScheme.onSurface,

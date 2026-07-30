@@ -25,16 +25,18 @@ class AppLogEntry {
   final Map<String, String> metadata;
   final DiagnosticRuntimeInfo runtime;
 
+  DiagnosticRecord get record => DiagnosticRecord(
+    time: time,
+    severity: DiagnosticSeverity.fromLevel(level),
+    message: message,
+    category: category,
+    source: source,
+    metadata: metadata,
+    runtime: runtime,
+  );
+
   String get line {
-    return DiagnosticRecord(
-      time: time,
-      severity: DiagnosticSeverity.fromLevel(level),
-      message: message,
-      category: category,
-      source: source,
-      metadata: metadata,
-      runtime: runtime,
-    ).line;
+    return record.line;
   }
 }
 

@@ -2641,3 +2641,20 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `git diff --check` 在本批文档修改后通过。
 
 边界结论：P1-4 平台启动能力盘点完成。Rust 网络能力已覆盖，不重复引入 Cronet/GMS TLS；通知、后台音频、WebView 全量绘制和全局简繁预热明确登记为平台差异/暂停项。下一阶段进入应用用例依赖、受控 UI/目标平台和发布门禁。
+
+## 127. 2026-07-30：R6 应用用例依赖：AppLog 页面边界
+
+- 新增 application `AppLogPort`，只暴露 `DiagnosticRecord` 列表、加载、清理和导出文本；新增 infrastructure `AppLogPortAdapter`，复用既有 AppLog 静态持久化，不改变存储 key、条数、字节上限或脱敏规则。
+- `AppLogPage` 和 `AppLogDialog` 改为从 Provider 读取端口，页面不再直接 import `services/app_log.dart`；复制、清空、最新在前、级别颜色和空状态保持不变。
+- 组合根注册 `AppLogPort` adapter；测试宿主显式注入 adapter，未放宽既有 UI/日志断言。`legado-main/` 未修改，本轮不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- AppLog 页面与日志服务定向 `4/4`。
+- `flutter analyze --no-pub`：`No issues found`。
+- `flutter test --no-pub --concurrency=1 --reporter compact`：`678` 通过、`3` 项既有条件跳过。
+- `cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，其余集成、`legado_webdav` 和文档测试无失败。
+- 架构扫描从 `144` 降至 `142` 条：Feature 直接 SharedPreferences `12`、Feature 业务 service `130`；无新增类别。
+- `git diff --check` 通过。
+
+边界结论：AppLog 页面这一条 application 用例依赖边界已完成；剩余 Feature service 依赖继续按单边界、单用例迁移，不以旧违规作为永久例外。

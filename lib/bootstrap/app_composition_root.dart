@@ -7,6 +7,7 @@ import '../app.dart';
 import '../application/app_bootstrap.dart';
 import '../application/crash/crash_log_service.dart';
 import '../application/diagnostics/app_diagnostics_monitor.dart';
+import '../application/diagnostics/app_log_port.dart';
 import '../application/lifecycle/app_lifecycle_coordinator.dart';
 import '../application/preferences/shared_preferences_runtime.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
@@ -35,6 +36,7 @@ import '../infrastructure/content/frb_content_processing_port.dart';
 import '../infrastructure/database/frb_backup_port.dart';
 import '../infrastructure/database/frb_database_status_port.dart';
 import '../infrastructure/database/frb_legacy_room_import_port.dart';
+import '../infrastructure/diagnostics/app_log_port_adapter.dart';
 import '../infrastructure/engine/frb_book_source_book_info_port.dart';
 import '../infrastructure/engine/frb_book_source_content_port.dart';
 import '../infrastructure/engine/frb_book_source_debug_port.dart';
@@ -253,6 +255,7 @@ abstract final class AppCompositionRoot {
           ChangeNotifierProvider.value(value: AppConfig.instance),
           ChangeNotifierProvider.value(value: bootstrap.bookProvider),
           Provider<AppDiagnosticsMonitor>.value(value: diagnosticsMonitor),
+          Provider<AppLogPort>(create: (_) => const AppLogPortAdapter()),
           Provider<BookSourceService>.value(value: bookSourceService),
           Provider<PublicTextFetchPort>.value(value: publicTextPort),
           Provider<ApplicationHttpRequestPort>(

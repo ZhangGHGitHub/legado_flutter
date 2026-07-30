@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/features/bookshelf/app_log_page.dart';
+import 'package:legado_flutter/infrastructure/diagnostics/app_log_port_adapter.dart';
 import 'package:legado_flutter/services/app_log.dart';
 import 'package:legado_flutter/services/clipboard_port.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -30,7 +31,9 @@ void main() {
     final clipboard = _FakeClipboard();
 
     await tester.pumpWidget(
-      MaterialApp(home: AppLogPage(clipboard: clipboard)),
+      MaterialApp(
+        home: AppLogPage(clipboard: clipboard, log: const AppLogPortAdapter()),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('复制'));
