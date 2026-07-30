@@ -2824,3 +2824,16 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 架构扫描由 `110` 降至 `104` 条既有 Feature→service backlog；`git diff --check`：通过。剩余 service 依赖未加入白名单，继续按单用例推进。
 
 边界结论：本批完成规则偏好、点击区域、正文搜索和模拟阅读的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，未推进暂停中的真实 Android TTS、Web/WASM/PWA 或其他发布门禁。
+
+## 139. 2026-07-30：R6 阅读样式偏好端口边界
+
+- `ReaderPage` 和 `ReaderSettingsPanel` 移除 `ReadStylePrefs` 直接依赖，改由 application `ReadStylePrefsPort` 和 SharedPreferences adapter 读写共享布局、主题槽、主题覆盖、主题排版和清理操作；保留既有 SharedPreferences 键名、paper 默认主题、非法主题忽略和损坏 JSON 返回空值语义。
+- 组合根注册真实 adapter；新增 adapter 定向测试，既有 `ReadStylePrefs` service 测试继续覆盖键值 round-trip 和覆盖清理。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- 阅读样式 adapter 与既有 service/阅读配置定向 `6/6`；`dart format --output=none --set-exit-if-changed`：涉及文件通过；涉及文件 `flutter analyze --no-pub`：`No issues found`。
+- `flutter test --no-pub --concurrency=1 --reporter compact`：`715` 通过、`3` 项既有条件跳过；Rust workspace 复用本阶段已通过的 `cargo test --manifest-path rust/Cargo.toml`，核心 `184/184`。
+- 架构扫描保持 `102` 条既有 Feature→service backlog；`git diff --check`：通过。剩余 service 依赖未加入白名单，继续按单用例推进。
+
+边界结论：本批完成阅读样式持久化调用者的 application/infrastructure 迁移，保留旧 service 作为兼容实现入口，不改变阅读内容和布局行为。

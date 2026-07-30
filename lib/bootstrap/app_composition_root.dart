@@ -22,6 +22,7 @@ import '../application/preferences/search_content_prefs_port.dart';
 import '../application/preferences/source_variable_port.dart';
 import '../application/preferences/txt_toc_rule_prefs_port.dart';
 import '../application/reader/simulated_reading_prefs_port.dart';
+import '../application/reader/read_style_prefs_port.dart';
 import '../application/reader/reader_font_port.dart';
 import '../application/search/search_history_port.dart';
 import '../application/sources/source_debug_formatter_port.dart';
@@ -97,6 +98,7 @@ import '../infrastructure/preferences/shared_preferences_search_content_prefs_ad
 import '../infrastructure/preferences/shared_preferences_source_variable_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_txt_toc_rule_prefs_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_simulated_reading_prefs.dart';
+import '../infrastructure/preferences/shared_preferences_read_style_prefs_adapter.dart';
 import '../infrastructure/reader/reader_font_port_adapter.dart';
 import '../infrastructure/sources/source_debug_formatter_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_search_history_adapter.dart';
@@ -323,6 +325,9 @@ abstract final class AppCompositionRoot {
           ),
           Provider<SimulatedReadingPrefsPort>.value(
             value: const SharedPreferencesSimulatedReadingPrefs(),
+          ),
+          Provider<ReadStylePrefsPort>.value(
+            value: const SharedPreferencesReadStylePrefsAdapter(),
           ),
           Provider<ReaderFontPort>.value(value: const ReaderFontPortAdapter()),
           Provider<SourceDebugFormatterPort>.value(

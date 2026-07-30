@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../application/reader/simulated_reading_prefs_port.dart';
+import '../../application/reader/read_style_prefs_port.dart';
 import '../../application/reader/reading_position_mapper.dart';
 import '../../application/reader/book_progress_factory.dart';
 import '../../application/preferences/click_action_prefs_port.dart';
@@ -37,7 +38,6 @@ import '../../services/book_reader_prefs.dart';
 import '../../services/bookmark_service.dart';
 import '../../services/book_source_service.dart';
 import '../../services/read_book_config_prefs.dart';
-import '../../services/read_style_prefs.dart';
 import '../../services/reader_font_loader.dart';
 import '../../services/reader_image_cache.dart';
 import '../../services/reader_session_prefs.dart';
@@ -481,10 +481,11 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Future<void> _loadReadStylePrefs() async {
     // 对齐 Jingshiro ReadBookConfig.initConfigs + initShareConfig
+    final stylePrefs = context.read<ReadStylePrefsPort>();
     final saved = await ReadBookConfigPrefs.load();
-    final share = await ReadStylePrefs.loadShareLayout();
-    final overrides = await ReadStylePrefs.loadOverrides();
-    final themeName = await ReadStylePrefs.loadThemeName();
+    final share = await stylePrefs.loadShareLayout();
+    final overrides = await stylePrefs.loadOverrides();
+    final themeName = await stylePrefs.loadThemeName();
     if (!mounted) return;
     var next = saved.copyWith(
       shareLayout: share,
@@ -492,7 +493,7 @@ class _ReaderPageState extends State<ReaderPage> {
       themeName: themeName,
     );
     if (!share) {
-      final typo = await ReadStylePrefs.loadTypography(themeName);
+      final typo = await stylePrefs.loadTypography(themeName);
       if (typo != null) next = typo.applyToReaderSettings(next);
     }
     if (!mounted) return;
@@ -1889,8 +1890,9 @@ class _ReaderPageState extends State<ReaderPage> {
       unawaited(BookReaderPrefs.setPageAnim(widget.book.id, -1));
     }
     unawaited(ReadBookConfigPrefs.save(newSettings));
-    unawaited(ReadStylePrefs.saveShareLayout(newSettings.shareLayout));
-    unawaited(ReadStylePrefs.saveThemeName(newSettings.themeName));
+    final stylePrefs = context.read<ReadStylePrefsPort>();
+    unawaited(stylePrefs.saveShareLayout(newSettings.shareLayout));
+    unawaited(stylePrefs.saveThemeName(newSettings.themeName));
 
     if (modeChanged) {
       setState(() {

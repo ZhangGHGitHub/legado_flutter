@@ -1,12 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../domain/reader_config/reader_font_weight.dart';
 import '../../models/click_zone.dart';
 import '../../models/read_style_config.dart';
 import '../../models/theme_typography.dart';
-import '../../services/read_style_prefs.dart';
+import '../../application/reader/read_style_prefs_port.dart';
 import '../../services/reader_font_loader.dart';
 import 'bg_text_config_panel.dart';
 import 'click_zone_labels.dart';
@@ -497,7 +498,10 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
     widget.onChanged(s);
     if (!s.shareLayout) {
       unawaited(
-        ReadStylePrefs.saveTypography(s.themeName, s.toThemeTypography()),
+        context.read<ReadStylePrefsPort>().saveTypography(
+          s.themeName,
+          s.toThemeTypography(),
+        ),
       );
     }
   }
@@ -531,20 +535,24 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
       settings: _s,
     );
     if (result == null || !mounted) return;
+    final stylePrefs = context.read<ReadStylePrefsPort>();
 
     final nextOverrides = Map<String, ReadStyleSlotOverride>.from(
       _s.themeOverrides,
     );
     if (result.cleared) {
       nextOverrides.remove(themeId);
-      await ReadStylePrefs.clearOverride(themeId);
+      await stylePrefs.clearOverride(themeId);
     } else {
       nextOverrides[themeId] = result.override;
-      await ReadStylePrefs.upsertOverride(themeId, result.override);
+      await stylePrefs.upsertOverride(
+        themeId,
+        result.override,
+      );
     }
 
     var next = _s.copyWith(themeName: themeId, themeOverrides: nextOverrides);
-    await ReadStylePrefs.saveThemeName(themeId);
+    await stylePrefs.saveThemeName(themeId);
     // 导入 zip 时应用排版；关闭共用布局时仅提示（排版仍全局，缺口见计划）
     if (result.appliedTypography != null) {
       if (_s.shareLayout) {
@@ -939,7 +947,9 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
                           onChanged: (v) async {
                             final next = v ?? true;
                             _update(_s.copyWith(shareLayout: next));
-                            await ReadStylePrefs.saveShareLayout(next);
+                            await context
+                                .read<ReadStylePrefsPort>()
+                                .saveShareLayout(next);
                           },
                         ),
                       ),
@@ -964,7 +974,9 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
                           selected: _s.themeName == slot.$1,
                           onTap: () async {
                             _update(_s.copyWith(themeName: slot.$1));
-                            await ReadStylePrefs.saveThemeName(slot.$1);
+                            await context
+                                .read<ReadStylePrefsPort>()
+                                .saveThemeName(slot.$1);
                           },
                           onLongPress: () =>
                               _openBgTextConfig(slot.$1, slot.$2),
