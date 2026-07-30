@@ -1,24 +1,3 @@
-import 'package:flutter/services.dart';
-
-/// Shared text clipboard boundary for pages that copy or paste plain text.
-abstract interface class ClipboardPort {
-  Future<void> copyText(String text);
-
-  Future<String?> pasteText();
-}
-
-/// Production adapter for the platform clipboard.
-class PlatformClipboard implements ClipboardPort {
-  const PlatformClipboard();
-
-  @override
-  Future<void> copyText(String text) async {
-    await Clipboard.setData(ClipboardData(text: text));
-  }
-
-  @override
-  Future<String?> pasteText() async {
-    final data = await Clipboard.getData('text/plain');
-    return data?.text;
-  }
-}
+// 兼容旧 service 路径；新代码应从 application/infrastructure 引用。
+export '../application/platform/clipboard_port.dart';
+export '../infrastructure/platform/platform_clipboard.dart';

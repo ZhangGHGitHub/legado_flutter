@@ -2737,3 +2737,20 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `git diff --check`：通过。
 
 边界结论：剪贴板和代码编辑器偏好已完成第一层 application/infrastructure 收口，剩余工作继续处理更复杂的 Feature 业务 service 依赖。
+
+## 133. 2026-07-30：R6 文件管理、剪贴板与书源调试边界
+
+- `FileManagePage` 从 `services/app_paths.dart` 的静态数据根目录调用迁移到 application `AppPathsPort`；`AppPathsPortAdapter` 只在 infrastructure 层转发既有 `AppPaths.dataRoot()`，自定义数据目录创建和文件列表行为保持不变。
+- `AppLogPage`、`AddBookUrlDialog` 和 `ImportBookshelfDialog` 移除 Flutter Clipboard 直接访问，统一依赖 application `ClipboardPort`；`PlatformClipboard` 在组合根提供真实平台实现，复制/粘贴、trim、空文本和日志提示语义保持不变。旧 `services/clipboard_port.dart` 仅保留兼容导出。
+- `SourceDebugPage` 不再直接依赖调试日志格式化 service，改用 application `SourceDebugFormatterPort`；`SourceDebugFormatterAdapter` 复用既有格式化输出，搜索/目录调试请求、结果上限、错误日志和展示格式保持不变。
+- 补齐独立 widget 测试宿主此前缺失的 `BookshelfDisplayPrefsPort`、`ReaderFontPort` 和 `RssReadStatePort` 注入；这些改动只修复组合边界，不放宽已有 UI 断言。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- AppPaths、AppLog、SourceDebug、剪贴板和格式化器定向 `10/10`；测试宿主回归 `2/2` 与 `6/6`。
+- `dart format --output=none --set-exit-if-changed`：通过；`flutter analyze --no-pub`：`No issues found`。
+- `flutter test --no-pub --concurrency=1 --reporter compact`：`699` 通过、`3` 项既有条件跳过；全量过程中未放宽断言，修复的失败均为测试宿主缺少已存在的 application port 注入。
+- `cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，workspace 全量通过；保留既有 FRB cfg/linker/dead-code warnings。
+- 架构扫描为 `115` 条既有 Feature→service backlog，无新增类别；`git diff --check`：通过。
+
+边界结论：本批完成 AppPaths、平台剪贴板和 SourceDebugFormatter 的 application/infrastructure 组合边界，并将两处书架导入剪贴板调用纳入统一端口；剩余 Feature→service backlog 继续按单边界、单用例迁移，不登记为永久例外。

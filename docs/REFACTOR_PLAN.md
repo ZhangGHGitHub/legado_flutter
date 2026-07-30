@@ -196,6 +196,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 本批完成第四轮业务能力边界：`DonatePage` 通过 application `DonateClipboardPort` 复制文本，`CodeEditPage` 通过 `CodeEditPrefsPort` 读写编辑器偏好与会话日志；保留兼容导出、现有键名、编辑器 UI 和日志行为，不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。相关定向 `13/13`、Flutter 全量 `698` 通过（`3` 项既有跳过）、Rust `184/184`、analyze 无诊断，架构扫描为 `118` 条（Feature 业务 service `118`）。
 
+本批继续收口文件管理、日志复制和书源调试边界：`FileManagePage` 通过 `AppPathsPort` 获取数据根目录，`AppLogPage` 通过 application `ClipboardPort` 复制日志，`SourceDebugPage` 通过 `SourceDebugFormatterPort` 格式化调试日志；添加书籍网址和导入书单对话框也移除 Flutter Clipboard 直接访问，统一使用同一剪贴板端口。组合根注册平台 adapter，旧 `services/clipboard_port.dart` 保留兼容导出；测试宿主补齐此前 ReaderFont、书架显示和 RSS 已读端口依赖。定向 `10/10`、测试宿主回归 `2/2` 与 `6/6`，Flutter 串行全量 `699` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断，架构扫描 `115` 条既有 Feature→service backlog，`git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
 ### 0.4 重构工作规则
 
 1. 一次只迁移一个边界、一个用例或一条数据链路；完成定向测试并汇报后再进入下一项。
@@ -206,7 +208,7 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 ### 0.5 当前状态
 
-当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 崩溃防护与启动恢复、P0-2 存储初始化安全、P0-3 启动任务隔离现已通过；下一步按固定顺序推进 P1-1 全局生命周期边界。架构扫描当前为 `144` 条 Feature 偏好/业务 service backlog，不能当作例外或最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
+当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 至 P1-4 现已通过；当前继续按 Feature 应用用例边界收口。架构扫描当前为 `115` 条既有 Feature→service backlog，不能当作例外或 R6 最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
 
 ### 0.6 版本控制与变更追溯状态（2026-07-26）
 

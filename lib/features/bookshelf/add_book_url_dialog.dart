@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/diagnostics/app_log_port.dart';
+import '../../application/platform/clipboard_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 
 /// 添加书籍网址 — 对齐 Jingshiro「添加网址」：多行 URL → 匹配书源 → **直接加入书架**。
 class AddBookUrlDialog extends StatefulWidget {
-  const AddBookUrlDialog({super.key});
+  const AddBookUrlDialog({super.key, this.clipboard});
+
+  final ClipboardPort? clipboard;
 
   static Future<void> show(BuildContext context) {
     return showDialog<void>(
@@ -34,8 +36,8 @@ class _AddBookUrlDialogState extends State<AddBookUrlDialog> {
   }
 
   Future<void> _paste() async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = data?.text?.trim() ?? '';
+    final clipboard = widget.clipboard ?? context.read<ClipboardPort>();
+    final text = (await clipboard.pasteText())?.trim() ?? '';
     if (text.isNotEmpty) {
       setState(() => _controller.text = text);
     }

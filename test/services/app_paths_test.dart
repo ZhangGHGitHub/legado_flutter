@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/infrastructure/file_system/app_paths_port_adapter.dart';
 import 'package:legado_flutter/services/app_paths.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -34,6 +35,11 @@ void main() {
     final backupsDir = await AppPaths.backupsDir();
     expect(backupsDir.path, p.join(tempRoot.path, AppPaths.backupsFolder));
     expect(await backupsDir.exists(), isTrue);
+  });
+
+  test('AppPathsPortAdapter exposes the configured data root', () async {
+    final root = await const AppPathsPortAdapter().dataRoot();
+    expect(root.path, tempRoot.path);
   });
 
   test('AppDataPrefs clears override when empty', () async {

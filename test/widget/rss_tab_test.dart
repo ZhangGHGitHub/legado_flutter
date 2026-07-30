@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:legado_flutter/features/rss/rss_tab_page.dart';
+import 'package:legado_flutter/infrastructure/reader/reader_font_port_adapter.dart';
 import 'package:legado_flutter/providers/rss_provider.dart';
 
 void main() {
@@ -17,6 +19,7 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => RssProvider()..loadSources()),
+          Provider<ReaderFontPort>.value(value: const ReaderFontPortAdapter()),
         ],
         child: const MaterialApp(home: RssTabPage()),
       ),

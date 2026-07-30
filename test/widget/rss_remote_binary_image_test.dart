@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
+import 'package:legado_flutter/application/rss/rss_read_state_port.dart';
 import 'package:legado_flutter/domain/ports/application_binary_http_request_port.dart';
 import 'package:legado_flutter/domain/ports/application_http_request_port.dart';
 import 'package:legado_flutter/domain/ports/rss_port.dart';
@@ -72,6 +73,14 @@ class _FakeReaderFontPort implements ReaderFontPort {
 
   @override
   List<String> cjkFallbackFamilies() => const ['TestCjk', 'sans-serif'];
+}
+
+class _FakeRssReadStatePort implements RssReadStatePort {
+  @override
+  Future<Set<String>> read(String sourceUrl) async => <String>{};
+
+  @override
+  Future<void> write(String sourceUrl, Iterable<String> links) async {}
 }
 
 void main() {
@@ -142,11 +151,17 @@ void main() {
     await tester.pumpWidget(
       Provider<ApplicationBinaryHttpRequestPort>.value(
         value: port,
-        child: const MaterialApp(
-          home: RssArticlesPage(
-            source: RssSource(
-              sourceUrl: 'http://localhost:8080/feed',
-              sourceName: '本地源',
+        child: Provider<ReaderFontPort>.value(
+          value: _FakeReaderFontPort(),
+          child: Provider<RssReadStatePort>.value(
+            value: _FakeRssReadStatePort(),
+            child: const MaterialApp(
+              home: RssArticlesPage(
+                source: RssSource(
+                  sourceUrl: 'http://localhost:8080/feed',
+                  sourceName: '本地源',
+                ),
+              ),
             ),
           ),
         ),
@@ -183,7 +198,10 @@ void main() {
     await tester.pumpWidget(
       Provider<ApplicationBinaryHttpRequestPort>.value(
         value: port,
-        child: const MaterialApp(home: RssFavoritesPage()),
+        child: Provider<ReaderFontPort>.value(
+          value: _FakeReaderFontPort(),
+          child: const MaterialApp(home: RssFavoritesPage()),
+        ),
       ),
     );
     await tester.pumpAndSettle();

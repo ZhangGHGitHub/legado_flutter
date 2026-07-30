@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/diagnostics/app_log_port.dart';
+import '../../application/platform/clipboard_port.dart';
 import '../../application/reader/reader_font_port.dart';
-import '../../services/clipboard_port.dart';
 
 /// 应用日志页 — 对齐 Jingshiro [AppLogDialog]
 class AppLogPage extends StatefulWidget {
@@ -32,7 +32,8 @@ class _AppLogPageState extends State<AppLogPage> {
 
   Future<void> _copyAll() async {
     final text = _log.exportText();
-    await (widget.clipboard ?? const PlatformClipboard()).copyText(text);
+    final clipboard = widget.clipboard ?? context.read<ClipboardPort>();
+    await clipboard.copyText(text);
     if (mounted) {
       ScaffoldMessenger.of(
         context,

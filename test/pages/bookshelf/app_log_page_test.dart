@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/platform/clipboard_port.dart';
 import 'package:legado_flutter/features/bookshelf/app_log_page.dart';
 import 'package:legado_flutter/infrastructure/reader/reader_font_port_adapter.dart';
 import 'package:legado_flutter/infrastructure/diagnostics/app_log_port_adapter.dart';
 import 'package:legado_flutter/services/app_log.dart';
-import 'package:legado_flutter/services/clipboard_port.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeClipboard implements ClipboardPort {

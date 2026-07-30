@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
 
-import '../../services/app_paths.dart';
+import '../../application/file_system/app_paths_port.dart';
 
 /// 文件管理 — 1:1 对齐 Jingshiro [FileManageActivity] /
 /// `activity_file_manage.xml`（TitleBar 搜索 + 路径条 + 文件列表）。
@@ -64,7 +65,7 @@ class _FileManagePageState extends State<FileManagePage> {
 
   Future<void> _init() async {
     try {
-      final root = await AppPaths.dataRoot();
+      final root = await context.read<AppPathsPort>().dataRoot();
       if (!mounted) return;
       setState(() => _root = root);
       await _upFiles(root);

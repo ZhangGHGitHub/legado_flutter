@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/diagnostics/app_log_port.dart';
+import '../../application/platform/clipboard_port.dart';
 import '../../domain/ports/public_text_fetch_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
@@ -36,8 +36,8 @@ class _ImportBookshelfDialogState extends State<ImportBookshelfDialog> {
   }
 
   Future<void> _paste() async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = data?.text?.trim() ?? '';
+    final text =
+        (await context.read<ClipboardPort>().pasteText())?.trim() ?? '';
     if (text.isNotEmpty) {
       setState(() => _controller.text = text);
     }

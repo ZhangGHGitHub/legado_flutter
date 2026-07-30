@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/sources/source_debug_formatter_port.dart';
 import '../../domain/ports/book_source_debug_port.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../providers/source_provider.dart';
-import '../../services/source_debug_formatter.dart';
 import '../../widgets/source_debug_panel.dart';
 import '../../widgets/source_validation_sheet.dart';
 
@@ -96,7 +96,7 @@ class _SourceDebugPageState extends State<SourceDebugPage>
       );
       setState(() {
         _lastDebugResult = result;
-        _debugLog = formatDebugLog(result);
+        _debugLog = context.read<SourceDebugFormatterPort>().format(result);
         _rawResponse = result.responseBodyPreview.isNotEmpty
             ? result.responseBodyPreview
             : null;
@@ -131,7 +131,7 @@ class _SourceDebugPageState extends State<SourceDebugPage>
       setState(() {
         _lastDebugResult = result;
         _testChapters = result.results;
-        _debugLog = formatDebugLog(result);
+        _debugLog = context.read<SourceDebugFormatterPort>().format(result);
       });
     } catch (e) {
       _appendLog('❌ 出错: $e');

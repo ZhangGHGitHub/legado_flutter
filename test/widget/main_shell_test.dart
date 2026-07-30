@@ -6,6 +6,8 @@ import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/database/dao/replace_rule_dao.dart';
 import 'package:legado_flutter/database/dao/source_dao.dart';
 import 'package:legado_flutter/application/lifecycle/app_lifecycle_coordinator.dart';
+import 'package:legado_flutter/application/preferences/bookshelf_display_prefs_port.dart';
+import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:legado_flutter/application/startup/startup_task_runner.dart';
 import 'package:legado_flutter/domain/crash/crash_report.dart';
 import 'package:legado_flutter/domain/ports/public_text_fetch_port.dart';
@@ -72,6 +74,10 @@ void main() {
           Provider<PublicTextFetchPort>.value(
             value: const _EmptyPublicTextFetchPort(),
           ),
+          Provider<BookshelfDisplayPrefsPort>.value(
+            value: _FakeBookshelfDisplayPrefsPort(),
+          ),
+          Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
           Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
           ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
           Provider<BookSourceService>(
@@ -134,6 +140,10 @@ void main() {
           Provider<PublicTextFetchPort>.value(
             value: const _EmptyPublicTextFetchPort(),
           ),
+          Provider<BookshelfDisplayPrefsPort>.value(
+            value: _FakeBookshelfDisplayPrefsPort(),
+          ),
+          Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
           Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
           ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
           Provider<BookSourceService>(
@@ -195,6 +205,10 @@ void main() {
             Provider<PublicTextFetchPort>.value(
               value: const _EmptyPublicTextFetchPort(),
             ),
+            Provider<BookshelfDisplayPrefsPort>.value(
+              value: _FakeBookshelfDisplayPrefsPort(),
+            ),
+            Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
             Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
             ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
             Provider<BookSourceService>(
@@ -270,4 +284,25 @@ class _EmptyPublicTextFetchPort implements PublicTextFetchPort {
 
   @override
   Future<String> fetch(String url, {String userAgent = ''}) async => '[]';
+}
+
+class _FakeBookshelfDisplayPrefsPort implements BookshelfDisplayPrefsPort {
+  @override
+  Future<BookshelfDisplayPrefs> load() async => const BookshelfDisplayPrefs();
+
+  @override
+  Future<bool> saveGrouped(bool value) async => true;
+
+  @override
+  Future<bool> savePinned(Iterable<String> ids) async => true;
+}
+
+class _FakeReaderFontPort implements ReaderFontPort {
+  const _FakeReaderFontPort();
+
+  @override
+  String platformSansFamily() => 'TestSans';
+
+  @override
+  List<String> cjkFallbackFamilies() => const ['TestCjk', 'sans-serif'];
 }

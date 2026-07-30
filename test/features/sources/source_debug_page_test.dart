@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/sources/source_debug_formatter_port.dart';
 import 'package:legado_flutter/domain/ports/book_source_debug_port.dart';
 import 'package:legado_flutter/features/sources/source_debug_page.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
+import 'package:provider/provider.dart';
 
 void main() {
   final source = BookSource(
@@ -17,7 +19,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: SourceDebugPage(source: source, debugPort: port),
+        home: _withFormatter(SourceDebugPage(source: source, debugPort: port)),
       ),
     );
 
@@ -39,7 +41,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: SourceDebugPage(source: source, debugPort: port),
+        home: _withFormatter(SourceDebugPage(source: source, debugPort: port)),
       ),
     );
 
@@ -58,7 +60,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: SourceDebugPage(source: source, debugPort: port),
+        home: _withFormatter(SourceDebugPage(source: source, debugPort: port)),
       ),
     );
 
@@ -69,6 +71,20 @@ void main() {
     expect(find.textContaining('搜索出错'), findsOneWidget);
     expect(find.textContaining('fixture failure'), findsOneWidget);
   });
+}
+
+Widget _withFormatter(Widget child) {
+  return Provider<SourceDebugFormatterPort>.value(
+    value: _FakeFormatter(),
+    child: child,
+  );
+}
+
+class _FakeFormatter implements SourceDebugFormatterPort {
+  @override
+  String format(BookSourceDebugSnapshot snapshot) {
+    return 'formatted ${snapshot.results.first.name}';
+  }
 }
 
 class _FakeDebugPort implements BookSourceDebugPort {
