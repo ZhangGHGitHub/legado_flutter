@@ -13,10 +13,10 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../application/reader/simulated_reading_prefs_port.dart';
 import '../../application/reader/read_style_prefs_port.dart';
+import '../../application/reader/reader_image_cache_port.dart';
 import '../../application/reader/reading_position_mapper.dart';
 import '../../application/reader/book_progress_factory.dart';
 import '../../application/preferences/click_action_prefs_port.dart';
-import '../../domain/ports/application_binary_http_request_port.dart';
 import '../../domain/reader/book_progress.dart';
 import '../../model/read_book.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -39,7 +39,6 @@ import '../../services/bookmark_service.dart';
 import '../../services/book_source_service.dart';
 import '../../services/read_book_config_prefs.dart';
 import '../../services/reader_font_loader.dart';
-import '../../services/reader_image_cache.dart';
 import '../../services/reader_session_prefs.dart';
 import '../../services/reader_selection_browser.dart';
 import '../../services/reader_selection_share.dart';
@@ -109,7 +108,7 @@ class _ReaderPageState extends State<ReaderPage> {
   late final DetailedReadingSessionTracker _detailedReadingSession;
   int _lastCountedChapterIndex = -1;
   int _contentRequestGeneration = 0;
-  ReaderImageCache? _readerImageCache;
+  ReaderImageCachePort? _readerImageCache;
   Map<String, ReaderImageSize> _readerImageNaturalSizes = const {};
   Map<String, String> _readerImageHeaders = const {};
   int _imageSizeRequestGeneration = 0;
@@ -235,16 +234,10 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _loadReaderImageCache() async {
-    try {
-      final cache = await ReaderImageCache.createDefault(
-        context.read<ApplicationBinaryHttpRequestPort>(),
-      );
-      if (!mounted) return;
-      setState(() => _readerImageCache = cache);
-      unawaited(_loadReaderImageSizes());
-    } catch (_) {
-      // Stable inline-image bounds remain available when cache setup fails.
-    }
+    final cache = context.read<ReaderImageCachePort>();
+    if (!mounted) return;
+    setState(() => _readerImageCache = cache);
+    unawaited(_loadReaderImageSizes());
   }
 
   Future<void> _loadReaderImageSizes() async {

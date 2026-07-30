@@ -160,7 +160,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 退出条件：核心用户流程在目标平台构建并通过，UI 与原版对照测试通过，平台差异有明确适配记录。
 
-当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 至 P1-4 横切基础设施任务均已完成，应用用例依赖继续按 Feature 边界收口；本批 Flutter 全量 `715` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描降至 `102` 条 Feature→service backlog。R6 后续继续处理剩余 Feature 依赖、受控 UI/目标平台和发布门禁；真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
+当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 至 P1-4 横切基础设施任务均已完成，应用用例依赖继续按 Feature 边界收口；本批 Flutter 全量 `715` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描降至 `100` 条 Feature→service backlog。R6 后续继续处理剩余 Feature 依赖、受控 UI/目标平台和发布门禁；真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
 
 #### 横切基础设施：全局能力与启动可靠性（跨 R1-R6，新增）
 
@@ -209,6 +209,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 本批继续收口规则偏好、点击区域、正文搜索和模拟阅读边界：`DictRulePage`、`TxtTocRulePage` 通过规则偏好端口读写并保留既有 JSON 键名和默认规则；`ClickActionPanel`、`ReaderPage` 通过点击区域端口读写九宫格与首次提示；`SearchContentPage` 通过正文搜索偏好端口读写替换、正则和搜索范围；阅读器、模拟追读对话框和书架未读计算通过模拟阅读端口复用既有 Book/SharedPreferences 迁移语义。新增端口/adapter 与页面定向测试，未改变规则内容、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。定向测试全部通过；Flutter 串行全量 `714` 通过、`3` 项既有条件跳过，Rust 核心 `184/184`，`flutter analyze --no-pub` 无诊断，架构扫描由 `110` 降至 `104` 条 Feature→service backlog，`git diff --check` 通过。继续按单一用例收口剩余依赖。
 
 本批继续收口阅读样式偏好边界：`ReaderPage` 和 `ReaderSettingsPanel` 通过 `ReadStylePrefsPort` 读写共享布局、主题槽、主题覆盖和排版映射，SharedPreferences adapter 保留既有键名、默认主题、非法主题校验和 JSON 容错；未改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。新增 adapter 定向测试，现有 service 行为测试继续作为兼容基线。定向 `6/6`；Flutter 串行全量 `715` 通过、`3` 项既有条件跳过，Rust 核心 `184/184`，`flutter analyze --no-pub` 无诊断，架构扫描保持 `102` 条既有 Feature→service backlog，`git diff --check` 通过。
+
+本批继续收口阅读图片缓存边界：`ReaderPage`、`ReaderMarkup`、`ReaderSelectableText` 和 `ReaderInlineImage` 通过 `ReaderImageCachePort` 访问图片下载、磁盘缓存和尺寸探测；infrastructure adapter 保留 Rust 二进制 HTTP、缓存键、SVG/位图尺寸解析、懒初始化和失败占位行为，不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。图片缓存、正文标记、真实媒体、内联 SVG 和可选文本定向 `22/22`；Flutter 串行全量 `715` 通过、`3` 项既有条件跳过，Rust 核心 `184/184`，涉及文件 analyze 无诊断，架构扫描由 `102` 降至 `100` 条 Feature→service backlog，`git diff --check` 通过。
 
 ### 0.4 重构工作规则
 

@@ -4,8 +4,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
+import '../../application/reader/reader_image_cache_port.dart';
 import '../../widgets/reader_inline_image.dart';
-import '../../services/reader_image_cache.dart';
 
 class ReaderMarkupRun {
   final int start;
@@ -101,7 +101,7 @@ class ReaderMarkupDocument {
     int? end,
     void Function(String url)? onLink,
     List<GestureRecognizer>? recognizers,
-    ReaderImageCache? imageCache,
+    ReaderImageCachePort? imageCache,
     Map<String, Size>? imageSizes,
     Map<String, String> imageHeaders = const {},
   }) {

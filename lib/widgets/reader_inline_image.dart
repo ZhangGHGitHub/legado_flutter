@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import '../services/reader_image_cache.dart';
+import '../application/reader/reader_image_cache_port.dart';
 import 'remote_binary_image.dart';
 
 /// Inline reader image with stable layout bounds and a non-network fallback.
@@ -14,7 +14,7 @@ class ReaderInlineImage extends StatefulWidget {
   final Map<String, String> headers;
   final VoidCallback? onTap;
   final ImageProvider? imageProvider;
-  final ReaderImageCache? imageCache;
+  final ReaderImageCachePort? imageCache;
 
   const ReaderInlineImage({
     super.key,

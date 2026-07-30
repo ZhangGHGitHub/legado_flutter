@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import '../features/reader/reader_markup.dart';
-import '../services/reader_image_cache.dart';
+import '../application/reader/reader_image_cache_port.dart';
 
 int readerChapterPosition(int markupStart, int selectionStart) =>
     (markupStart + selectionStart).clamp(0, 0x7fffffff);
@@ -20,7 +20,7 @@ class ReaderSelectableText extends StatefulWidget {
   final int markupStart;
   final int? markupEnd;
   final ValueChanged<String>? onOpenLink;
-  final ReaderImageCache? imageCache;
+  final ReaderImageCachePort? imageCache;
   final Map<String, Size>? imageSizes;
   final Map<String, String> imageHeaders;
   final TextAlign textAlign;

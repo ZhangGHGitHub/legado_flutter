@@ -2837,3 +2837,16 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 架构扫描保持 `102` 条既有 Feature→service backlog；`git diff --check`：通过。剩余 service 依赖未加入白名单，继续按单用例推进。
 
 边界结论：本批完成阅读样式持久化调用者的 application/infrastructure 迁移，保留旧 service 作为兼容实现入口，不改变阅读内容和布局行为。
+
+## 140. 2026-07-30：R6 阅读图片缓存端口边界
+
+- 新增 application `ReaderImageCachePort` 与懒初始化 infrastructure adapter；`ReaderPage` 不再创建或持有 `ReaderImageCache` service，`ReaderMarkup`、`ReaderSelectableText` 和 `ReaderInlineImage` 统一使用端口类型。缓存目录探测与下载能力仍在首次图片访问时初始化，不阻塞首屏。
+- adapter 继续复用既有 Rust 二进制 HTTP、本地文件缓存、请求头参与缓存键、位图/SVG 尺寸解析和失败返回 null 语义；未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- 图片缓存、ReaderMarkup、真实媒体/正文 pipeline、内联 SVG 和 ReaderSelectableText 定向 `22/22`；`dart format --output=none --set-exit-if-changed`：涉及文件通过；涉及文件 `flutter analyze --no-pub`：`No issues found`。
+- `flutter test --no-pub --concurrency=1 --reporter compact`：`715` 通过、`3` 项既有条件跳过；Rust workspace 复用本阶段已通过的 `cargo test --manifest-path rust/Cargo.toml`，核心 `184/184`。
+- 架构扫描由 `102` 降至 `100` 条既有 Feature→service backlog；`git diff --check`：通过。剩余 service 依赖未加入白名单，继续按单用例推进。
+
+边界结论：本批完成阅读图片技术能力的 application/infrastructure 调用者迁移，保留旧 service 作为底层实现入口，不改变正文渲染和图片失败占位行为。
