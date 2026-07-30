@@ -23,12 +23,14 @@ import '../application/preferences/source_variable_port.dart';
 import '../application/preferences/txt_toc_rule_prefs_port.dart';
 import '../application/reader/simulated_reading_prefs_port.dart';
 import '../application/reader/read_style_prefs_port.dart';
+import '../application/reader/read_style_zip_port.dart';
 import '../application/reader/reader_image_cache_port.dart';
 import '../application/reader/reader_font_port.dart';
 import '../application/search/search_history_port.dart';
 import '../application/sources/source_debug_formatter_port.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
 import '../application/rss/rss_read_state_port.dart';
+import '../application/source_market/source_market_port.dart';
 import '../application/startup/startup_task_runner.dart';
 import '../application/web_api/repository_web_api_data_port.dart';
 import '../application/web_api/web_api_prefs_port.dart';
@@ -44,6 +46,7 @@ import '../domain/ports/backup_local_file_port.dart';
 import '../domain/ports/application_binary_http_request_port.dart';
 import '../domain/ports/application_http_request_port.dart';
 import '../domain/ports/book_source_debug_port.dart';
+import '../domain/ports/book_source_explore_port.dart';
 import '../domain/ports/book_source_search_port.dart';
 import '../domain/ports/book_source_validation_port.dart';
 import '../domain/ports/dict_rule_query_port.dart';
@@ -51,6 +54,7 @@ import '../domain/ports/legacy_room_import_use_case.dart';
 import '../domain/ports/public_text_fetch_port.dart';
 import '../domain/ports/rss_source_import_port.dart';
 import '../domain/ports/note_port.dart';
+import '../domain/ports/reading_record_port.dart';
 import '../domain/ports/webdav_repository.dart';
 import '../infrastructure/cache/file_chapter_content_cache.dart';
 import '../infrastructure/content/frb_content_processing_port.dart';
@@ -90,6 +94,8 @@ import '../infrastructure/platform/platform_crash_metadata_loader.dart';
 import '../infrastructure/platform/platform_donate_clipboard.dart';
 import '../infrastructure/platform/platform_clipboard.dart';
 import '../infrastructure/file_system/app_paths_port_adapter.dart';
+import '../infrastructure/reader/read_style_zip_port_adapter.dart';
+import '../infrastructure/source_market/builtin_source_market_port.dart';
 import '../infrastructure/preferences/shared_preferences_code_edit_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_click_action_prefs_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_book_group_prefs.dart';
@@ -209,11 +215,12 @@ abstract final class AppCompositionRoot {
     TtsService.configureBinaryHttpPort(binaryHttpPort);
 
     final bookSourceSearchPort = FrbBookSourceSearchPort();
+    final bookSourceExplorePort = FrbBookSourceExplorePort();
     final bookSourceService = BookSourceService(
       searchPort: bookSourceSearchPort,
       bookInfoPort: FrbBookSourceBookInfoPort(),
       contentPort: FrbBookSourceContentPort(),
-      explorePort: FrbBookSourceExplorePort(),
+      explorePort: bookSourceExplorePort,
       tocPort: FrbBookSourceTocPort(),
       publicTextPort: publicTextPort,
     );
@@ -337,6 +344,9 @@ abstract final class AppCompositionRoot {
             value: const SharedPreferencesReadStylePrefsAdapter(),
           ),
           Provider<ReaderFontPort>.value(value: const ReaderFontPortAdapter()),
+          Provider<ReadStyleZipPort>.value(
+            value: ReadStyleZipPortAdapter(binaryHttpPort),
+          ),
           Provider<ReaderImageCachePort>.value(
             value: ReaderImageCachePortAdapter(binaryHttpPort),
           ),
@@ -346,8 +356,13 @@ abstract final class AppCompositionRoot {
           Provider<SourceDebugFormatterPort>.value(
             value: const SourceDebugFormatterAdapter(),
           ),
+          Provider<SourceMarketPort>.value(
+            value: const BuiltinSourceMarketPort(),
+          ),
           Provider<NotePort>.value(value: FrbNotePort()),
+          Provider<ReadingRecordPort>.value(value: readingRecordPort),
           Provider<BookSourceSearchPort>.value(value: bookSourceSearchPort),
+          Provider<BookSourceExplorePort>.value(value: bookSourceExplorePort),
           Provider<SearchHistoryPort>.value(
             value: const SharedPreferencesSearchHistoryAdapter(),
           ),

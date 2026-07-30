@@ -2887,3 +2887,17 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 书源模型、书源搜索、BookProvider 自动选源和目录顺序定向 `12/12`；涉及文件格式与 `flutter analyze --no-pub` 通过；Flutter 串行全量 `715` 通过、`3` 项既有条件跳过；架构扫描由 `96` 降至 `95` 条 Feature→service backlog；`git diff --check` 通过。
 
 边界结论：本批只迁移纯书源类型判断，不迁移漫画阅读偏好存储；漫画阅读器其余偏好仍由 `MangaPrefs` 负责，产品行为和偏好键名不变。
+
+## 145. 2026-07-30：R6 四 agent Feature 端口并行收口
+
+- `ExploreListPage` 移除 `BookSourceService` 直接依赖，使用 `BookSourceExplorePort` 和 application `mapBookSourceResults`；`SourceMarketPage` 移除 service 和 data 层直接读取，使用 `SourceMarketPort`、内置资源 infrastructure adapter 与 `SourceMarketMapper`。
+- `ReadRecordPage` 改用可选 `ReadingRecordPort`，保留统计字段、导出格式和引擎不可用回退；`BgTextConfigPanel` 改用 `ReadStyleZipPort`，由 adapter 复用既有 ZIP 服务；`ReaderSettings` 的系统字体预览改用已有 `ReaderFontPort`，自定义字体扫描/解析仍保留 `ReaderFontLoader`。
+- 主 agent 负责组合根注入和集成，四个子 agent 使用不重叠写入范围并行完成；未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- 子线定向测试分别通过：SourceMarket `9/9`、ReadRecord `8/8`、ReadStyleZip `12/12` 加 Reader 回归 `19/19`、ReaderFont `8/8`；主线合并定向 `28/28`，SourceMarket Provider 集成 `3/3`。
+- `dart format`、涉及文件 `flutter analyze`、`git diff --check` 通过；Flutter 串行全量 `721` 通过、`3` 项既有条件跳过；Rust 未改动，沿用核心 `184/184` 结果。
+- 架构扫描由 `95` 降至 `91` 条既有 Feature→service backlog；ReaderSettings 的自定义字体能力尚未完全端口化，未伪装为零依赖。
+
+边界结论：本批完成五个独立 Feature 调用者的第一层 application/infrastructure 收口，保留旧 service 作为兼容实现入口，后续继续按单边界推进剩余 `91` 条 backlog。

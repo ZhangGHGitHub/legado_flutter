@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
+import '../../application/source_market/source_market_mapper.dart';
+import '../../application/source_market/source_market_port.dart';
 import '../../providers/source_provider.dart';
-import '../../services/book_source_service.dart';
 
 /// 书源市场 - 内置推荐书源，一键导入
 class SourceMarketPage extends StatefulWidget {
@@ -22,8 +23,8 @@ class _SourceMarketPageState extends State<SourceMarketPage> {
   }
 
   Future<Map<String, List<BookSource>>> _loadMarket() async {
-    final sources = await BookSourceService.loadBuiltInSources();
-    return BookSourceService.sourceMarketFrom(sources);
+    final sources = await context.read<SourceMarketPort>().loadSources();
+    return SourceMarketMapper.fromSources(sources);
   }
 
   @override

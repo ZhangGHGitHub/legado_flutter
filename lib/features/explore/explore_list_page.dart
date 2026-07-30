@@ -3,8 +3,9 @@ import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
+import '../../application/book/book_source_result_mapper.dart';
+import '../../domain/ports/book_source_explore_port.dart';
 import '../../providers/book_provider.dart';
-import '../../services/book_source_service.dart';
 import '../../widgets/book_list_tile.dart';
 import '../../widgets/empty_state.dart';
 import '../book/book_info_page.dart';
@@ -29,7 +30,7 @@ class ExploreListPage extends StatefulWidget {
 }
 
 class _ExploreListPageState extends State<ExploreListPage> {
-  late final BookSourceService _service;
+  late final BookSourceExplorePort _explorePort;
   List<Book> _books = [];
   bool _loading = true;
   String? _error;
@@ -38,7 +39,7 @@ class _ExploreListPageState extends State<ExploreListPage> {
   @override
   void initState() {
     super.initState();
-    _service = context.read<BookSourceService>();
+    _explorePort = context.read<BookSourceExplorePort>();
     _load();
   }
 
@@ -69,14 +70,14 @@ class _ExploreListPageState extends State<ExploreListPage> {
     });
 
     try {
-      final results = await _service.explore(
+      final results = await _explorePort.explore(
         widget.source,
         widget.exploreUrl,
         page: _page,
       );
       if (!mounted) return;
       setState(() {
-        _books = _service.resultsToBooks(results, widget.source.bookSourceUrl);
+        _books = mapBookSourceResults(results, widget.source.bookSourceUrl);
         _loading = false;
         if (_books.isEmpty) _error = '此分类暂无书籍';
       });

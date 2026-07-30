@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/platform/clipboard_port.dart';
+import '../../domain/ports/reading_record_port.dart';
 import '../../domain/reading_stats.dart';
-import '../../services/reading_record_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../../widgets/reading_stats_chart.dart';
@@ -36,14 +36,20 @@ class _ReadRecordPageState extends State<ReadRecordPage> {
       _loading = true;
       _error = null;
     });
-    if (!ReadingRecordService.isReady) {
+    final recordPort = context.read<ReadingRecordPort?>();
+    if (!(recordPort?.isAvailable ?? false)) {
       setState(() {
         _loading = false;
         _error = 'Rust 引擎或数据库未就绪';
       });
       return;
     }
-    final stats = ReadingRecordService.getStats(_range);
+    ReadingStats? stats;
+    try {
+      stats = recordPort!.getStats(_range);
+    } catch (_) {
+      stats = null;
+    }
     if (!mounted) return;
     setState(() {
       _stats = stats;
@@ -53,7 +59,15 @@ class _ReadRecordPageState extends State<ReadRecordPage> {
   }
 
   Future<void> _export(String format) async {
-    final text = ReadingRecordService.exportRecords(format);
+    final recordPort = context.read<ReadingRecordPort?>();
+    String? text;
+    if (recordPort?.isAvailable ?? false) {
+      try {
+        text = recordPort!.exportRecords(format);
+      } catch (_) {
+        text = null;
+      }
+    }
     if (text == null || text.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -157,21 +171,38 @@ class _SummaryCards extends StatelessWidget {
       children: [
         _StatCard(
           label: '今日阅读',
-          value: ReadingRecordService.formatChars(stats.todayChars),
-          sub: ReadingRecordService.formatDuration(stats.todayDurationSeconds),
+          value: _formatChars(stats.todayChars),
+          sub: _formatDuration(stats.todayDurationSeconds),
         ),
-        _StatCard(
-          label: '本周阅读',
-          value: ReadingRecordService.formatChars(stats.weekChars),
-        ),
+        _StatCard(label: '本周阅读', value: _formatChars(stats.weekChars)),
         _StatCard(
           label: '累计阅读',
-          value: ReadingRecordService.formatChars(stats.totalChars),
-          sub: ReadingRecordService.formatDuration(stats.totalDurationSeconds),
+          value: _formatChars(stats.totalChars),
+          sub: _formatDuration(stats.totalDurationSeconds),
         ),
       ],
     );
   }
+}
+
+String _formatChars(int chars) {
+  if (chars >= 10000) {
+    return '${(chars / 10000).toStringAsFixed(1)} 万字';
+  }
+  if (chars >= 1000) {
+    return '${(chars / 1000).toStringAsFixed(1)} 千字';
+  }
+  return '$chars 字';
+}
+
+String _formatDuration(int seconds) {
+  if (seconds < 60) return '$seconds 秒';
+  final minutes = seconds ~/ 60;
+  if (minutes < 60) return '$minutes 分钟';
+  final hours = minutes ~/ 60;
+  final remain = minutes % 60;
+  if (remain == 0) return '$hours 小时';
+  return '$hours 小时 $remain 分';
 }
 
 class _StatCard extends StatelessWidget {

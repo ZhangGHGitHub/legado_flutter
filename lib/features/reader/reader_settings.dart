@@ -8,6 +8,7 @@ import '../../models/click_zone.dart';
 import '../../models/read_style_config.dart';
 import '../../models/theme_typography.dart';
 import '../../application/reader/read_style_prefs_port.dart';
+import '../../application/reader/reader_font_port.dart';
 import '../../services/reader_font_loader.dart';
 import 'bg_text_config_panel.dart';
 import 'click_zone_labels.dart';
@@ -545,10 +546,7 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
       await stylePrefs.clearOverride(themeId);
     } else {
       nextOverrides[themeId] = result.override;
-      await stylePrefs.upsertOverride(
-        themeId,
-        result.override,
-      );
+      await stylePrefs.upsertOverride(themeId, result.override);
     }
 
     var next = _s.copyWith(themeName: themeId, themeOverrides: nextOverrides);
@@ -681,6 +679,7 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
   }
 
   Future<void> _pickFont() async {
+    final fontPort = context.read<ReaderFontPort>();
     final customFiles = await ReaderFontLoader.listCustomFontFiles();
     if (!mounted) return;
     final picked = await showModalBottomSheet<String>(
@@ -691,13 +690,15 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
       builder: (ctx) {
         Widget tile(String family, String label) {
           final selected = _s.fontFamily == family;
-          final previewFamily = ReaderFontLoader.resolveFamilySync(family);
+          final previewFamily = family.isEmpty
+              ? fontPort.platformSansFamily()
+              : ReaderFontLoader.resolveFamilySync(family);
           return ListTile(
             title: Text(
               label,
               style: TextStyle(
                 fontFamily: previewFamily,
-                fontFamilyFallback: ReaderFontLoader.cjkFallbackFamilies(),
+                fontFamilyFallback: fontPort.cjkFallbackFamilies(),
                 fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
               ),
             ),

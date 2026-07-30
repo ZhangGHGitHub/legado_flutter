@@ -160,7 +160,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 退出条件：核心用户流程在目标平台构建并通过，UI 与原版对照测试通过，平台差异有明确适配记录。
 
-当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 至 P1-4 横切基础设施任务均已完成，应用用例依赖继续按 Feature 边界收口；本批 Flutter 全量 `715` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描降至 `95` 条 Feature→service backlog。R6 后续继续处理剩余 Feature 依赖、受控 UI/目标平台和发布门禁；真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
+当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 至 P1-4 横切基础设施任务均已完成，应用用例依赖继续按 Feature 边界收口；本批 Flutter 全量 `721` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描降至 `91` 条 Feature→service backlog。R6 后续继续处理剩余 Feature 依赖、受控 UI/目标平台和发布门禁；真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
 
 #### 横切基础设施：全局能力与启动可靠性（跨 R1-R6，新增）
 
@@ -220,6 +220,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 本批继续收口书籍详情页漫画类型语义：新增纯 domain `BookSourceTypeSemantics` 扩展，复用原有 `2`、`image`、`漫画`、`图片` 判定，`BookInfoPage` 不再直接依赖 `MangaPrefs`。书源模型、书源搜索、BookProvider 自动选源和目录顺序定向 `12/12`，Flutter 串行全量 `715` 通过、`3` 项既有条件跳过，涉及文件 analyze 无诊断，架构扫描由 `96` 降至 `95` 条 Feature→service backlog，`git diff --check` 通过。
 
+本批由主 agent 与四个子 agent 并行收口五条 Feature 边界：`ExploreListPage` 通过 `BookSourceExplorePort` 和 application mapper 获取发现书籍；`SourceMarketPage` 通过 `SourceMarketPort` 读取内置书源并使用 mapper 分组；`ReadRecordPage` 通过 `ReadingRecordPort` 读取统计/导出；`BgTextConfigPanel` 通过 `ReadStyleZipPort` 处理样式 ZIP；`ReaderSettings` 的系统字体预览通过 `ReaderFontPort` 获取字体族和 CJK fallback。组合根统一注入共享端口实例，保留原有字段映射、市场分组、统计导出、ZIP 错误和字体行为。合并定向 `28/28` 与 SourceMarket Provider `3/3`，Flutter 串行全量 `721` 通过、`3` 项既有条件跳过，架构扫描由 `95` 降至 `91` 条 Feature→service backlog，`git diff --check` 通过。
+
 ### 0.4 重构工作规则
 
 1. 一次只迁移一个边界、一个用例或一条数据链路；完成定向测试并汇报后再进入下一项。
@@ -230,7 +232,7 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 ### 0.5 当前状态
 
-当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 至 P1-4 现已通过；当前继续按 Feature 应用用例边界收口。架构扫描当前为 `115` 条既有 Feature→service backlog，不能当作例外或 R6 最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
+当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 至 P1-4 现已通过；当前继续按 Feature 应用用例边界收口。架构扫描当前为 `91` 条既有 Feature→service backlog，不能当作例外或 R6 最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
 
 ### 0.6 版本控制与变更追溯状态（2026-07-26）
 
