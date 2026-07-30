@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/preferences/search_content_prefs_port.dart';
 import '../../domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../providers/replace_provider.dart';
-import '../../services/search_content_prefs.dart';
 import '../../widgets/legado_popup_menu.dart';
 import 'search_content_result.dart';
 
@@ -81,7 +81,7 @@ class _SearchContentPageState extends State<SearchContentPage> {
   bool _cancelled = false;
   int _searchGeneration = 0;
   int _resultCount = 0;
-  SearchContentPrefs _prefs = SearchContentPrefs();
+  SearchContentPrefs _prefs = const SearchContentPrefs();
   late final Future<void> _prefsReady;
 
   @override
@@ -109,31 +109,34 @@ class _SearchContentPageState extends State<SearchContentPage> {
   }
 
   Future<void> _loadPrefs() async {
-    _prefs = await SearchContentPrefs.load();
+    _prefs = await context.read<SearchContentPrefsPort>().load();
     if (mounted) setState(() {});
     if (!mounted) return;
     await context.read<ReplaceProvider>().loadRules();
   }
 
   Future<void> _toggleReplace(bool value) async {
-    setState(() => _prefs.enableReplace = value);
-    await _prefs.save();
+    final prefs = _prefs.copyWith(enableReplace: value);
+    setState(() => _prefs = prefs);
+    await context.read<SearchContentPrefsPort>().save(prefs);
     if (_queryCtrl.text.trim().isNotEmpty) {
       _startSearch(_queryCtrl.text.trim());
     }
   }
 
   Future<void> _toggleRegex(bool value) async {
-    setState(() => _prefs.enableRegex = value);
-    await _prefs.save();
+    final prefs = _prefs.copyWith(enableRegex: value);
+    setState(() => _prefs = prefs);
+    await context.read<SearchContentPrefsPort>().save(prefs);
     if (_queryCtrl.text.trim().isNotEmpty) {
       _startSearch(_queryCtrl.text.trim());
     }
   }
 
   Future<void> _setScope(String scope) async {
-    setState(() => _prefs.scope = scope);
-    await _prefs.save();
+    final prefs = _prefs.copyWith(scope: scope);
+    setState(() => _prefs = prefs);
+    await context.read<SearchContentPrefsPort>().save(prefs);
     if (_queryCtrl.text.trim().isNotEmpty) {
       _startSearch(_queryCtrl.text.trim());
     }

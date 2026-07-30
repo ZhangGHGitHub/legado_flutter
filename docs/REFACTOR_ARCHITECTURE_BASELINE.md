@@ -2809,3 +2809,18 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，workspace 全量通过；`flutter analyze --no-pub`：`No issues found`；架构扫描保持 `111` 条 Feature→service backlog；`git diff --check`：通过。
 
 边界结论：本批完成四个页面的 application ClipboardPort 调用者迁移，剩余 Feature→service backlog 继续按独立用例推进。
+
+## 138. 2026-07-30：R6 规则与阅读偏好端口边界
+
+- `DictRulePage`、`TxtTocRulePage` 移除对规则偏好 service 的直接依赖，改由 application `DictRulePrefsPort`、`TxtTocRulePrefsPort` 读写；SharedPreferences adapter 保留既有 JSON 键名、默认规则、排序、重置和编辑行为。
+- `ClickActionPanel` 与 `ReaderPage` 通过 `ClickActionPrefsPort` 读写九宫格、菜单兜底和首次提示标记；`SearchContentPage` 通过 `SearchContentPrefsPort` 读写替换开关、正则开关和搜索范围；Reader、模拟追读对话框及 `ShelfUnread` 通过 `SimulatedReadingPrefsPort` 复用既有 Book 字段优先和旧 SharedPreferences 迁移语义。
+- 新增端口、SharedPreferences adapter 和定向测试；测试 fake 只替代持久化/平台边界，不替代规则、搜索、阅读和未读计算断言。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- 规则页、点击区域、搜索偏好、模拟阅读和缓存页面定向测试通过；点击区域补齐 ReaderPage 读取/首次提示后定向回归仍通过。
+- `dart format --output=none --set-exit-if-changed`：涉及文件通过；`flutter analyze --no-pub`：`No issues found`。
+- `flutter test --no-pub --concurrency=1 --reporter compact`：`714` 通过、`3` 项既有条件跳过；`cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，workspace 通过。
+- 架构扫描由 `110` 降至 `104` 条既有 Feature→service backlog；`git diff --check`：通过。剩余 service 依赖未加入白名单，继续按单用例推进。
+
+边界结论：本批完成规则偏好、点击区域、正文搜索和模拟阅读的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，未推进暂停中的真实 Android TTS、Web/WASM/PWA 或其他发布门禁。

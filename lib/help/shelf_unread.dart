@@ -1,5 +1,5 @@
 import 'package:legado_flutter/domain/book/book.dart';
-import '../services/simulated_reading_prefs.dart';
+import '../application/reader/simulated_reading_prefs_port.dart';
 
 /// 书架未读章评估 — 对齐 Jingshiro `totalChapterNum - durChapterIndex - 1`
 ///
@@ -69,7 +69,9 @@ abstract final class ShelfUnread {
   static int? _resolveDurIndex(Book book, int? total, int? override) {
     if (override != null && override >= 0) return override;
     // 有总章数即可用持久化索引（含 0 = 第一章）
-    if (total != null && total > 0) return book.durChapterIndex.clamp(0, total - 1);
+    if (total != null && total > 0) {
+      return book.durChapterIndex.clamp(0, total - 1);
+    }
     return null;
   }
 

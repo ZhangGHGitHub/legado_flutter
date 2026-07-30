@@ -11,8 +11,10 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../../application/reader/simulated_reading_prefs_port.dart';
 import '../../application/reader/reading_position_mapper.dart';
 import '../../application/reader/book_progress_factory.dart';
+import '../../application/preferences/click_action_prefs_port.dart';
 import '../../domain/ports/application_binary_http_request_port.dart';
 import '../../domain/reader/book_progress.dart';
 import '../../model/read_book.dart';
@@ -33,7 +35,6 @@ import '../../help/bookmark_hint.dart';
 import '../../services/book_progress_sync.dart';
 import '../../services/book_reader_prefs.dart';
 import '../../services/bookmark_service.dart';
-import '../../services/click_action_prefs.dart';
 import '../../services/book_source_service.dart';
 import '../../services/read_book_config_prefs.dart';
 import '../../services/read_style_prefs.dart';
@@ -42,7 +43,6 @@ import '../../services/reader_image_cache.dart';
 import '../../services/reader_session_prefs.dart';
 import '../../services/reader_selection_browser.dart';
 import '../../services/reader_selection_share.dart';
-import '../../services/simulated_reading_prefs.dart';
 import 'auto_read_panel.dart';
 import 'click_action_panel.dart';
 import 'click_region_tip_overlay.dart';
@@ -415,8 +415,9 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _loadClickActionPrefs() async {
-    final layout = await ClickActionPrefs.load();
-    final tipShown = await ClickActionPrefs.isTipShown();
+    final prefs = context.read<ClickActionPrefsPort>();
+    final layout = await prefs.load();
+    final tipShown = await prefs.isTipShown();
     if (!mounted) return;
     setState(() {
       _settings = _settings.copyWith(
@@ -437,7 +438,7 @@ class _ReaderPageState extends State<ReaderPage> {
   Future<void> _dismissClickRegionTip() async {
     if (!_showClickRegionTip) return;
     setState(() => _showClickRegionTip = false);
-    await ClickActionPrefs.markTipShown();
+    await context.read<ClickActionPrefsPort>().markTipShown();
   }
 
   ClickZoneLayout get _clickLayout => ClickZoneLayout(
@@ -454,8 +455,9 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Future<void> _loadSimulatedReading() async {
     final provider = context.read<BookProvider>();
+    final prefs = context.read<SimulatedReadingPrefsPort>();
     final book = provider.findBookById(widget.book.id) ?? widget.book;
-    final loaded = await SimulatedReadingPrefs.loadForBook(book);
+    final loaded = await prefs.loadForBook(book);
     var cfg = loaded.config;
     if (loaded.needsBookMigrate) {
       final persisted = await provider.updateSimulatedReading(
@@ -466,7 +468,7 @@ class _ReaderPageState extends State<ReaderPage> {
         dailyChapters: cfg.dailyChapters,
       );
       cfg = SimulatedReadingConfig.fromBook(persisted);
-      await SimulatedReadingPrefs.save(widget.book.id, cfg);
+      await prefs.save(widget.book.id, cfg);
     }
     if (!mounted) return;
     setState(() => _simRead = cfg);
@@ -1630,6 +1632,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (!mounted) return;
     if (next != null) {
       final provider = context.read<BookProvider>();
+      final prefs = context.read<SimulatedReadingPrefsPort>();
       final book = provider.findBookById(widget.book.id) ?? widget.book;
       await provider.updateSimulatedReading(
         book,
@@ -1638,7 +1641,7 @@ class _ReaderPageState extends State<ReaderPage> {
         startChapter: next.startChapter,
         dailyChapters: next.dailyChapters,
       );
-      await SimulatedReadingPrefs.save(widget.book.id, next);
+      await prefs.save(widget.book.id, next);
       if (!mounted) return;
       setState(() => _simRead = next);
       if (next.enabled &&

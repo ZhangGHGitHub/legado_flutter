@@ -5,9 +5,9 @@ import 'package:provider/provider.dart';
 
 import '../../application/dictionary/dict_rule_tester.dart';
 import '../../application/platform/clipboard_port.dart';
+import '../../application/preferences/dict_rule_prefs_port.dart';
 import '../../domain/ports/dict_rule_query_port.dart';
 import '../../domain/rules/dict_rule.dart';
-import '../../services/dict_rule_prefs.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/legado_popup_menu.dart';
 
@@ -32,7 +32,7 @@ class _DictRulePageState extends State<DictRulePage> {
   }
 
   Future<void> _load() async {
-    final rules = await DictRulePrefs.load();
+    final rules = await context.read<DictRulePrefsPort>().load();
     if (!mounted) return;
     setState(() {
       _rules = rules;
@@ -42,7 +42,7 @@ class _DictRulePageState extends State<DictRulePage> {
   }
 
   Future<void> _persist() async {
-    await DictRulePrefs.save(_rules);
+    await context.read<DictRulePrefsPort>().save(_rules);
     if (mounted) setState(() {});
   }
 
@@ -186,7 +186,9 @@ class _DictRulePageState extends State<DictRulePage> {
 
   Future<void> _importDefaults() async {
     final existing = _rules.map((r) => r.name).toSet();
-    final toAdd = DictRulePrefs.defaultRules
+    final toAdd = context
+        .read<DictRulePrefsPort>()
+        .defaultRules
         .where((r) => !existing.contains(r.name))
         .toList();
     if (toAdd.isEmpty) {
@@ -226,7 +228,7 @@ class _DictRulePageState extends State<DictRulePage> {
                 case 'defaults':
                   await _importDefaults();
                 case 'reset':
-                  await DictRulePrefs.resetToDefaults();
+                  await context.read<DictRulePrefsPort>().resetToDefaults();
                   await _load();
                 case 'select':
                   _selectAll(_selected.length != _rules.length);

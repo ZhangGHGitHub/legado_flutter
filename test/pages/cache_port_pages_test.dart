@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/preferences/search_content_prefs_port.dart';
 import 'package:legado_flutter/domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/domain/repositories/replace_rule_repository.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
@@ -10,7 +11,6 @@ import 'package:legado_flutter/features/book/toc_sheet.dart';
 import 'package:legado_flutter/features/reader/search_content_page.dart';
 import 'package:legado_flutter/infrastructure/content/content_processor_adapter.dart';
 import 'package:legado_flutter/providers/replace_provider.dart';
-import 'package:legado_flutter/services/search_content_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
@@ -78,14 +78,17 @@ void main() {
               repository: _EmptyRuleRepository(),
               contentProcessor: ContentProcessorAdapter(),
             ),
-            child: SearchContentPage(
-              bookId: 'book',
-              bookName: '测试书',
-              chapters: chapters,
-              durChapterIndex: 0,
-              currentChapterContent: '当前正文没有命中',
-              initialQuery: '目标词',
-              contentCache: cache,
+            child: Provider<SearchContentPrefsPort>.value(
+              value: _FakeSearchContentPrefsPort(),
+              child: SearchContentPage(
+                bookId: 'book',
+                bookName: '测试书',
+                chapters: chapters,
+                durChapterIndex: 0,
+                currentChapterContent: '当前正文没有命中',
+                initialQuery: '目标词',
+                contentCache: cache,
+              ),
             ),
           ),
         ),
@@ -103,9 +106,7 @@ void main() {
   testWidgets('stopping a network search drops late results from the old run', (
     tester,
   ) async {
-    SharedPreferences.setMockInitialValues({
-      'search_content_scope': SearchContentPrefs.scopeCurrentAndNetwork,
-    });
+    SharedPreferences.setMockInitialValues({});
     final lateContent = Completer<String?>();
     final chapters = [
       _chapter(id: 'chapter-1', title: '当前章', index: 0),
@@ -119,15 +120,22 @@ void main() {
             repository: _EmptyRuleRepository(),
             contentProcessor: ContentProcessorAdapter(),
           ),
-          child: SearchContentPage(
-            bookId: 'book',
-            bookName: '测试书',
-            chapters: chapters,
-            durChapterIndex: 0,
-            currentChapterContent: '当前正文没有命中',
-            initialQuery: '迟到词',
-            onlineContentLoader: (_) => lateContent.future,
-            contentCache: _FakeChapterContentCache(),
+          child: Provider<SearchContentPrefsPort>.value(
+            value: _FakeSearchContentPrefsPort(
+              loaded: SearchContentPrefs(
+                scope: SearchContentPrefs.scopeCurrentAndNetwork,
+              ),
+            ),
+            child: SearchContentPage(
+              bookId: 'book',
+              bookName: '测试书',
+              chapters: chapters,
+              durChapterIndex: 0,
+              currentChapterContent: '当前正文没有命中',
+              initialQuery: '迟到词',
+              onlineContentLoader: (_) => lateContent.future,
+              contentCache: _FakeChapterContentCache(),
+            ),
           ),
         ),
       ),
@@ -144,6 +152,18 @@ void main() {
     expect(find.textContaining('远程章'), findsNothing);
     expect(find.textContaining('迟到词应该被丢弃'), findsNothing);
   });
+}
+
+final class _FakeSearchContentPrefsPort implements SearchContentPrefsPort {
+  const _FakeSearchContentPrefsPort({this.loaded = const SearchContentPrefs()});
+
+  final SearchContentPrefs loaded;
+
+  @override
+  Future<SearchContentPrefs> load() async => loaded;
+
+  @override
+  Future<void> save(SearchContentPrefs prefs) async {}
 }
 
 Chapter _chapter({

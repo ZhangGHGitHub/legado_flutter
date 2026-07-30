@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/platform/clipboard_port.dart';
+import '../../application/preferences/txt_toc_rule_prefs_port.dart';
 import '../../application/rules/txt_toc_rule_creation_policy.dart';
 import '../../domain/rules/txt_toc_rule.dart';
-import '../../services/txt_toc_rule_prefs.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/legado_popup_menu.dart';
 
@@ -29,7 +29,7 @@ class _TxtTocRulePageState extends State<TxtTocRulePage> {
   }
 
   Future<void> _load() async {
-    final rules = await TxtTocRulePrefs.load();
+    final rules = await context.read<TxtTocRulePrefsPort>().load();
     if (!mounted) return;
     setState(() {
       _rules = rules;
@@ -39,7 +39,7 @@ class _TxtTocRulePageState extends State<TxtTocRulePage> {
   }
 
   Future<void> _persist() async {
-    await TxtTocRulePrefs.save(_rules);
+    await context.read<TxtTocRulePrefsPort>().save(_rules);
     if (mounted) setState(() {});
   }
 
@@ -164,7 +164,9 @@ class _TxtTocRulePageState extends State<TxtTocRulePage> {
 
   Future<void> _importDefaults() async {
     final existingIds = _rules.map((r) => r.id).toSet();
-    final toAdd = TxtTocRulePrefs.defaultRules
+    final toAdd = context
+        .read<TxtTocRulePrefsPort>()
+        .defaultRules
         .where((r) => !existingIds.contains(r.id))
         .toList();
     if (toAdd.isEmpty) {
@@ -204,7 +206,7 @@ class _TxtTocRulePageState extends State<TxtTocRulePage> {
                 case 'defaults':
                   await _importDefaults();
                 case 'reset':
-                  await TxtTocRulePrefs.resetToDefaults();
+                  await context.read<TxtTocRulePrefsPort>().resetToDefaults();
                   await _load();
                 case 'select':
                   _selectAll(_selected.length != _rules.length);

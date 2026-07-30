@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../services/click_action_prefs.dart';
+import '../../application/preferences/click_action_prefs_port.dart';
 import 'click_zone_labels.dart';
 import 'reader_settings.dart';
 
@@ -61,7 +62,7 @@ class _ClickActionPanelState extends State<ClickActionPanel> {
     }
     setState(() => _s = next);
     widget.onChanged(next);
-    await ClickActionPrefs.save(layout);
+    await context.read<ClickActionPrefsPort>().save(layout);
   }
 
   Future<void> _pickZone({

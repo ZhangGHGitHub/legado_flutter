@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/platform/clipboard_port.dart';
+import 'package:legado_flutter/application/preferences/dict_rule_prefs_port.dart';
 import 'package:legado_flutter/domain/rules/dict_rule.dart';
 import 'package:legado_flutter/features/my/dict_rule_page.dart';
 import 'package:provider/provider.dart';
@@ -23,10 +24,14 @@ void main() {
       'dict_rules_v1': jsonEncode([rule.toJson()]),
     });
     final clipboard = _FakeClipboardPort();
+    final preferences = _FakeDictRulePrefs([rule]);
 
     await tester.pumpWidget(
-      Provider<ClipboardPort>.value(
-        value: clipboard,
+      MultiProvider(
+        providers: [
+          Provider<ClipboardPort>.value(value: clipboard),
+          Provider<DictRulePrefsPort>.value(value: preferences),
+        ],
         child: const MaterialApp(home: DictRulePage()),
       ),
     );
@@ -47,6 +52,28 @@ void main() {
     expect(clipboard.copiedText, jsonEncode(rule.toJson()));
     expect(find.text('已复制规则摘要'), findsOneWidget);
   });
+}
+
+class _FakeDictRulePrefs implements DictRulePrefsPort {
+  _FakeDictRulePrefs(this.rules);
+
+  List<DictRule> rules;
+
+  @override
+  List<DictRule> get defaultRules => const [];
+
+  @override
+  Future<List<DictRule>> load() async => List.of(rules);
+
+  @override
+  Future<void> save(List<DictRule> rules) async {
+    this.rules = List.of(rules);
+  }
+
+  @override
+  Future<void> resetToDefaults() async {
+    rules = const [];
+  }
 }
 
 class _FakeClipboardPort implements ClipboardPort {

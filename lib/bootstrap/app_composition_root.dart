@@ -12,11 +12,16 @@ import '../application/donate/donate_clipboard_port.dart';
 import '../application/file_system/app_paths_port.dart';
 import '../application/platform/clipboard_port.dart';
 import '../application/preferences/code_edit_prefs_port.dart';
+import '../application/preferences/click_action_prefs_port.dart';
+import '../application/preferences/dict_rule_prefs_port.dart';
 import '../application/lifecycle/app_lifecycle_coordinator.dart';
 import '../application/preferences/shared_preferences_runtime.dart';
 import '../application/preferences/bookshelf_display_prefs_port.dart';
 import '../application/preferences/download_choice_prefs_port.dart';
+import '../application/preferences/search_content_prefs_port.dart';
 import '../application/preferences/source_variable_port.dart';
+import '../application/preferences/txt_toc_rule_prefs_port.dart';
+import '../application/reader/simulated_reading_prefs_port.dart';
 import '../application/reader/reader_font_port.dart';
 import '../application/search/search_history_port.dart';
 import '../application/sources/source_debug_formatter_port.dart';
@@ -81,12 +86,17 @@ import '../infrastructure/platform/platform_donate_clipboard.dart';
 import '../infrastructure/platform/platform_clipboard.dart';
 import '../infrastructure/file_system/app_paths_port_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_code_edit_prefs.dart';
+import '../infrastructure/preferences/shared_preferences_click_action_prefs_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_book_group_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_bookshelf_display_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
 import '../infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
+import '../infrastructure/preferences/shared_preferences_dict_rule_prefs_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_download_choice_prefs.dart';
+import '../infrastructure/preferences/shared_preferences_search_content_prefs_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_source_variable_adapter.dart';
+import '../infrastructure/preferences/shared_preferences_txt_toc_rule_prefs_adapter.dart';
+import '../infrastructure/preferences/shared_preferences_simulated_reading_prefs.dart';
 import '../infrastructure/reader/reader_font_port_adapter.dart';
 import '../infrastructure/sources/source_debug_formatter_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_search_history_adapter.dart';
@@ -175,6 +185,8 @@ abstract final class AppCompositionRoot {
     final rssReadStatePort = await SharedPreferencesRssReadStateAdapter.load();
     final downloadChoicePrefs =
         await SharedPreferencesDownloadChoicePrefs.loadFromRuntime();
+    final searchContentPrefs =
+        await SharedPreferencesSearchContentPrefsAdapter.create();
     final sourceVariablePort =
         await SharedPreferencesSourceVariableAdapter.create();
     final codeEditPrefs =
@@ -293,12 +305,25 @@ abstract final class AppCompositionRoot {
           Provider<AppPathsPort>.value(value: const AppPathsPortAdapter()),
           Provider<ClipboardPort>.value(value: const PlatformClipboard()),
           Provider<CodeEditPrefsPort>.value(value: codeEditPrefs),
+          Provider<ClickActionPrefsPort>.value(
+            value: const SharedPreferencesClickActionPrefsAdapter(),
+          ),
+          Provider<DictRulePrefsPort>.value(
+            value: const SharedPreferencesDictRulePrefsAdapter(),
+          ),
           Provider<BookshelfDisplayPrefsPort>.value(
             value: bookshelfDisplayPrefs,
           ),
           Provider<RssReadStatePort>.value(value: rssReadStatePort),
           Provider<DownloadChoicePrefsPort>.value(value: downloadChoicePrefs),
+          Provider<SearchContentPrefsPort>.value(value: searchContentPrefs),
           Provider<SourceVariablePort>.value(value: sourceVariablePort),
+          Provider<TxtTocRulePrefsPort>.value(
+            value: const SharedPreferencesTxtTocRulePrefsAdapter(),
+          ),
+          Provider<SimulatedReadingPrefsPort>.value(
+            value: const SharedPreferencesSimulatedReadingPrefs(),
+          ),
           Provider<ReaderFontPort>.value(value: const ReaderFontPortAdapter()),
           Provider<SourceDebugFormatterPort>.value(
             value: const SourceDebugFormatterAdapter(),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../services/simulated_reading_prefs.dart';
+import '../../application/reader/simulated_reading_prefs_port.dart';
 
 /// 模拟追读（对齐 `dialog_simulated_reading.xml` + `showSimulatedReading`）
 class SimulatedReadingDialog {
