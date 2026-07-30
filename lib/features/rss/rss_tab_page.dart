@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/reader/reader_font_port.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../providers/rss_provider.dart';
-import '../../services/reader_font_loader.dart';
 import '../../services/source_login_service.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_refresh_indicator.dart';
@@ -177,6 +177,7 @@ class RssTabPageState extends State<RssTabPage> {
   /// TitleBar 内嵌搜索 — 对齐 `view_search.xml` + `bg_searchview`（主色上 10% 透明底）
   Widget _buildSearchField(ColorScheme scheme) {
     final onBar = scheme.onPrimary;
+    final font = context.read<ReaderFontPort>();
     return SizedBox(
       height: 36,
       child: TextField(
@@ -186,8 +187,8 @@ class RssTabPageState extends State<RssTabPage> {
           color: onBar,
           fontSize: 14,
           fontWeight: FontWeight.w400,
-          fontFamily: ReaderFontLoader.platformSansFamily(),
-          fontFamilyFallback: ReaderFontLoader.cjkFallbackFamilies(),
+          fontFamily: font.platformSansFamily(),
+          fontFamilyFallback: font.cjkFallbackFamilies(),
         ),
         cursorColor: onBar,
         decoration: InputDecoration(
@@ -196,8 +197,8 @@ class RssTabPageState extends State<RssTabPage> {
             color: onBar.withValues(alpha: 0.72),
             fontSize: 14,
             fontWeight: FontWeight.w400,
-            fontFamily: ReaderFontLoader.platformSansFamily(),
-            fontFamilyFallback: ReaderFontLoader.cjkFallbackFamilies(),
+            fontFamily: font.platformSansFamily(),
+            fontFamilyFallback: font.cjkFallbackFamilies(),
           ),
           isDense: true,
           filled: true,

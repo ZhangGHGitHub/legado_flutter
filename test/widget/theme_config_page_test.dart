@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/platform/clipboard_port.dart';
 import 'package:legado_flutter/features/settings/theme_config_page.dart';
-import 'package:legado_flutter/services/clipboard_port.dart';
+import 'package:legado_flutter/infrastructure/platform/platform_clipboard.dart';
 import 'package:legado_flutter/theme/app_theme.dart';
 import 'package:legado_flutter/theme/color_presets.dart';
 import 'package:provider/provider.dart';
@@ -33,7 +34,10 @@ void main() {
         value: ctrl,
         child: MaterialApp(
           theme: AppTheme.light(preset: ctrl.preset),
-          home: Scaffold(body: ThemeConfigPage(clipboard: clipboard)),
+          home: Provider<ClipboardPort>.value(
+            value: clipboard ?? const PlatformClipboard(),
+            child: const Scaffold(body: ThemeConfigPage()),
+          ),
         ),
       ),
     );

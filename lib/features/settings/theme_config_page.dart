@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../domain/ports/public_text_fetch_port.dart';
-import '../../services/clipboard_port.dart';
+import '../../application/platform/clipboard_port.dart';
 import '../../services/theme_import_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/color_presets.dart';
@@ -14,9 +14,7 @@ import '../../features/reader/reader_settings.dart';
 
 /// 主题设置 — MD3 预设 + 12 色板 + 导入/市场（Phase 4.1）
 class ThemeConfigPage extends StatefulWidget {
-  const ThemeConfigPage({super.key, this.clipboard});
-
-  final ClipboardPort? clipboard;
+  const ThemeConfigPage({super.key});
 
   @override
   State<ThemeConfigPage> createState() => _ThemeConfigPageState();
@@ -181,7 +179,7 @@ class _ThemeConfigPageState extends State<ThemeConfigPage> {
     final json = const JsonEncoder.withIndent(
       '  ',
     ).convert(ctrl.exportConfig());
-    unawaited((widget.clipboard ?? const PlatformClipboard()).copyText(json));
+    unawaited(context.read<ClipboardPort>().copyText(json));
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('主题配置已复制到剪贴板')));
@@ -204,8 +202,7 @@ class _ThemeConfigPageState extends State<ThemeConfigPage> {
         actions: [
           TextButton(
             onPressed: () async {
-              final text = await (widget.clipboard ?? const PlatformClipboard())
-                  .pasteText();
+              final text = await context.read<ClipboardPort>().pasteText();
               if (text != null) {
                 _clipboardCtrl.text = text;
               }

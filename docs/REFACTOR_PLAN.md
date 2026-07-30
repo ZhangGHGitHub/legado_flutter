@@ -198,6 +198,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 本批继续收口文件管理、日志复制和书源调试边界：`FileManagePage` 通过 `AppPathsPort` 获取数据根目录，`AppLogPage` 通过 application `ClipboardPort` 复制日志，`SourceDebugPage` 通过 `SourceDebugFormatterPort` 格式化调试日志；添加书籍网址和导入书单对话框也移除 Flutter Clipboard 直接访问，统一使用同一剪贴板端口。组合根注册平台 adapter，旧 `services/clipboard_port.dart` 保留兼容导出；测试宿主补齐此前 ReaderFont、书架显示和 RSS 已读端口依赖。定向 `10/10`、测试宿主回归 `2/2` 与 `6/6`，Flutter 串行全量 `699` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断，架构扫描 `115` 条既有 Feature→service backlog，`git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 
+本批继续收口 RSS Tab 与主题设置能力：`RssTabPage` 通过已有 `ReaderFontPort` 读取字体族和 CJK fallback，`ThemeConfigPage` 通过 application `ClipboardPort` 完成主题 JSON 导出/导入，移除 Feature 对 `services/reader_font_loader.dart` 和 `services/clipboard_port.dart` 的直接依赖。主题测试宿主改为显式注入剪贴板 adapter，原有主题预设、复制、粘贴和 JSON 应用断言保持不变。定向 `8/8`，Flutter 串行全量 `699` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断，架构扫描降至 `113` 条 Feature→service backlog，`git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
 ### 0.4 重构工作规则
 
 1. 一次只迁移一个边界、一个用例或一条数据链路；完成定向测试并汇报后再进入下一项。

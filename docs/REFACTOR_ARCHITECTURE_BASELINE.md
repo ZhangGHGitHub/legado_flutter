@@ -2754,3 +2754,17 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 架构扫描为 `115` 条既有 Feature→service backlog，无新增类别；`git diff --check`：通过。
 
 边界结论：本批完成 AppPaths、平台剪贴板和 SourceDebugFormatter 的 application/infrastructure 组合边界，并将两处书架导入剪贴板调用纳入统一端口；剩余 Feature→service backlog 继续按单边界、单用例迁移，不登记为永久例外。
+
+## 134. 2026-07-30：R6 RSS Tab 与主题 Clipboard 边界
+
+- `RssTabPage` 移除 `services/reader_font_loader.dart` 直接依赖，改由 Provider 注入既有 `ReaderFontPort`；搜索栏字体族和 CJK fallback 顺序保持不变，RSS 导航和订阅源展示不变。
+- `ThemeConfigPage` 移除 `services/clipboard_port.dart` 直接依赖，改由 Provider 注入 application `ClipboardPort`；主题 JSON 导出、从剪贴板粘贴、导入应用和提示语义保持不变，测试宿主显式提供 fake/平台 adapter。
+- 这两个调用者未修改正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则或 `legado-main/`。
+
+验证结果：
+
+- RSS Tab 和主题配置定向 `8/8`；`dart format --output=none --set-exit-if-changed`：通过；涉及文件 analyze：`No issues found`。
+- `flutter test --no-pub --concurrency=1 --reporter compact`：`699` 通过、`3` 项既有条件跳过；`cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，workspace 全量通过。
+- `flutter analyze --no-pub`：`No issues found`；架构扫描由 `115` 降至 `113` 条 Feature→service backlog；`git diff --check`：通过。
+
+边界结论：本批完成 RSS Tab ReaderFont 和主题设置 Clipboard 的 application port 调用者迁移，剩余 Feature→service backlog 继续按独立用例推进。
