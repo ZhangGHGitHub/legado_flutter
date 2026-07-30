@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/diagnostics/app_log_port.dart';
 import '../../domain/ports/public_text_fetch_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/app_log.dart';
 import '../../services/bookshelf_list_io.dart';
 
 /// 导入书单 — 对齐 Jingshiro：粘贴 url/json +「选文件」，按 name/author 精准搜索入库。
@@ -57,6 +57,7 @@ class _ImportBookshelfDialogState extends State<ImportBookshelfDialog> {
   }
 
   Future<void> _submit() async {
+    final appLog = context.read<AppLogPort>();
     final books = context.read<BookProvider>();
     final sources = context.read<SourceProvider>().sources;
     setState(() {
@@ -88,7 +89,7 @@ class _ImportBookshelfDialogState extends State<ImportBookshelfDialog> {
           setState(() => _progress = '$status ($i/$total)');
         },
       );
-      await AppLog.i(
+      await appLog.i(
         '导入书单: 新增 ${result.added}，跳过 ${result.skipped}，失败 ${result.failed}',
       );
       if (!mounted) return;
@@ -101,7 +102,7 @@ class _ImportBookshelfDialogState extends State<ImportBookshelfDialog> {
         ),
       );
     } catch (e) {
-      await AppLog.e('导入书单失败: $e');
+      await appLog.e('导入书单失败: $e');
       if (mounted) {
         setState(() {
           _busy = false;

@@ -3,13 +3,14 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../application/diagnostics/app_log_port.dart';
 import '../domain/annotation/bookmark_snapshot.dart';
 import '../domain/ports/bookmark_port.dart';
-import 'app_log.dart';
 
 /// 独立书签服务；字段对齐 Jingshiro Bookmark。
 class BookmarkService {
   static BookmarkPort? _configuredBookmarkPort;
+  static AppLogPort? _configuredAppLogPort;
 
   static BookmarkPort get _bookmarkPort =>
       _configuredBookmarkPort ??
@@ -21,9 +22,18 @@ class BookmarkService {
     _configuredBookmarkPort = port;
   }
 
+  static void configureAppLogPort(AppLogPort port) {
+    _configuredAppLogPort = port;
+  }
+
   @visibleForTesting
   static void resetBookmarkPort() {
     _configuredBookmarkPort = null;
+  }
+
+  @visibleForTesting
+  static void resetAppLogPort() {
+    _configuredAppLogPort = null;
   }
 
   static List<BookmarkSnapshot> list({String? bookId}) {
@@ -31,7 +41,7 @@ class BookmarkService {
     try {
       return _bookmarkPort.list(bookId: bookId);
     } catch (e) {
-      unawaited(AppLog.e('BookmarkService.list: $e'));
+      unawaited(_configuredAppLogPort?.e('BookmarkService.list: $e'));
       return [];
     }
   }
@@ -41,7 +51,7 @@ class BookmarkService {
     try {
       return _bookmarkPort.list(bookId: bookId);
     } catch (e) {
-      unawaited(AppLog.e('BookmarkService.listSnapshots: $e'));
+      unawaited(_configuredAppLogPort?.e('BookmarkService.listSnapshots: $e'));
       return const [];
     }
   }
@@ -77,7 +87,7 @@ class BookmarkService {
       if (!saved) return null;
       return bookmarkTime;
     } catch (e) {
-      unawaited(AppLog.e('BookmarkService.save: $e'));
+      unawaited(_configuredAppLogPort?.e('BookmarkService.save: $e'));
       return null;
     }
   }
@@ -87,7 +97,7 @@ class BookmarkService {
     try {
       _bookmarkPort.delete(time);
     } catch (e) {
-      unawaited(AppLog.e('BookmarkService.delete: $e'));
+      unawaited(_configuredAppLogPort?.e('BookmarkService.delete: $e'));
     }
   }
 

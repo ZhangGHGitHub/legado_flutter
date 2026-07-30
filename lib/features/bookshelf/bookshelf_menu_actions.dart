@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/diagnostics/app_log_port.dart';
 import '../../providers/book_provider.dart';
-import '../../services/app_log.dart';
 import '../../services/bookshelf_list_io.dart';
 import 'add_book_url_dialog.dart';
 import 'app_log_dialog.dart';
@@ -38,6 +38,7 @@ abstract final class BookshelfMenuActions {
   }
 
   static Future<void> _exportList(BuildContext context) async {
+    final appLog = context.read<AppLogPort>();
     final books = context.read<BookProvider>().books;
     if (books.isEmpty) {
       ScaffoldMessenger.of(
@@ -48,14 +49,14 @@ abstract final class BookshelfMenuActions {
     try {
       final path = await BookshelfListIo.exportBooks(books);
       if (path == null) return;
-      await AppLog.i('导出书单 ${books.length} 本 → $path');
+      await appLog.i('导出书单 ${books.length} 本 → $path');
       if (context.mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('已导出 ${books.length} 本\n$path')));
       }
     } catch (e) {
-      await AppLog.e('导出书单失败: $e');
+      await appLog.e('导出书单失败: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('导出失败: $e'), backgroundColor: Colors.red),

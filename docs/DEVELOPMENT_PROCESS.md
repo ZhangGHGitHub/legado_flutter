@@ -283,6 +283,8 @@ Day 2  PR/Issue 模板
 
 这样后续每个 Task 都有章可循，避免「直接写代码、计划文档越来越滞后」。
 
+2026-07-30 当前 R6 记录：AppLog 页面及书架/书签/笔记写入边界已按“先定向测试、再全量门禁、最后记录”流程完成；架构扫描为 `138` 条既有 backlog，未将剩余 Feature 依赖白名单化。相关实际命令和结果以 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 与 `docs/REFACTOR_ARCHITECTURE_BASELINE.md` 为准。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)

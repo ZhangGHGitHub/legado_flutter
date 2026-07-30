@@ -13,6 +13,33 @@ class AppLogPortAdapter implements AppLogPort {
   Future<void> ensureLoaded() => AppLog.ensureLoaded();
 
   @override
+  Future<void> i(
+    String message, {
+    String category = 'app',
+    String? source,
+    Map<String, String> metadata = const {},
+  }) =>
+      AppLog.i(message, category: category, source: source, metadata: metadata);
+
+  @override
+  Future<void> w(
+    String message, {
+    String category = 'app',
+    String? source,
+    Map<String, String> metadata = const {},
+  }) =>
+      AppLog.w(message, category: category, source: source, metadata: metadata);
+
+  @override
+  Future<void> e(
+    String message, {
+    String category = 'app',
+    String? source,
+    Map<String, String> metadata = const {},
+  }) =>
+      AppLog.e(message, category: category, source: source, metadata: metadata);
+
+  @override
   Future<void> clear() => AppLog.clear();
 
   @override

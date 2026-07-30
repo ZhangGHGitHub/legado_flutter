@@ -338,12 +338,15 @@ abstract final class AppCompositionRoot {
     FrbSourceLoginCookiePort sourceLoginCookiePort,
     FrbReadingRecordPort readingRecordPort,
   ) async {
+    const appLogPort = AppLogPortAdapter();
     BookmarkService.configureBookmarkPort(FrbBookmarkPort());
+    BookmarkService.configureAppLogPort(appLogPort);
     BookplateService.configureBookplatePort(FrbBookplatePort());
     DatabaseStatusService.configurePort(const FrbDatabaseStatusPort());
     EngineStatusService.configurePort(const FrbEngineStatusPort());
     NetworkPrefs.configureEnginePort(networkEnginePort);
     NoteService.configureNotePort(FrbNotePort());
+    NoteService.configureAppLogPort(appLogPort);
     ReadingRecordService.configureRecordPort(readingRecordPort);
     RssService.configureRssPort(FrbRssPort());
     RssSortUrls.configureJsPort(FrbRssSortUrlJsPort());

@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/diagnostics/app_log_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/app_log.dart';
 
 /// 添加书籍网址 — 对齐 Jingshiro「添加网址」：多行 URL → 匹配书源 → **直接加入书架**。
 class AddBookUrlDialog extends StatefulWidget {
@@ -42,6 +42,7 @@ class _AddBookUrlDialogState extends State<AddBookUrlDialog> {
   }
 
   Future<void> _submit() async {
+    final appLog = context.read<AppLogPort>();
     final text = _controller.text.trim();
     if (text.isEmpty) {
       setState(() => _error = '请输入书籍详情页网址（支持多行）');
@@ -65,7 +66,7 @@ class _AddBookUrlDialogState extends State<AddBookUrlDialog> {
           setState(() => _progress = '添加中 $i/$total');
         },
       );
-      await AppLog.i('添加网址: 成功 ${result.success}，失败 ${result.fail}');
+      await appLog.i('添加网址: 成功 ${result.success}，失败 ${result.fail}');
       if (!mounted) return;
       Navigator.pop(context);
       final msg = result.fail == 0
@@ -78,7 +79,7 @@ class _AddBookUrlDialogState extends State<AddBookUrlDialog> {
         ),
       );
     } catch (e) {
-      await AppLog.e('添加网址失败: $e');
+      await appLog.e('添加网址失败: $e');
       if (mounted) {
         setState(() {
           _busy = false;

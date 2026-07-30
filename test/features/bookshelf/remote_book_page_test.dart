@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:legado_flutter/application/diagnostics/app_log_port.dart';
 import 'package:legado_flutter/domain/ports/webdav_repository.dart';
 import 'package:legado_flutter/domain/remote/webdav_entry.dart';
 import 'package:legado_flutter/features/bookshelf/remote_book_page.dart';
+import 'package:legado_flutter/infrastructure/diagnostics/app_log_port_adapter.dart';
 
 class _FakeWebDavRepository implements WebDavRepository {
   int ensureDirCalls = 0;
@@ -99,7 +102,10 @@ void main() {
     final fake = _FakeWebDavRepository();
 
     await tester.pumpWidget(
-      MaterialApp(home: RemoteBookPage(webdavRepository: fake)),
+      Provider<AppLogPort>.value(
+        value: const AppLogPortAdapter(),
+        child: MaterialApp(home: RemoteBookPage(webdavRepository: fake)),
+      ),
     );
     await tester.pumpAndSettle();
 

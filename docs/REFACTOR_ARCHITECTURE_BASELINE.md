@@ -2658,3 +2658,20 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `git diff --check` 通过。
 
 边界结论：AppLog 页面这一条 application 用例依赖边界已完成；剩余 Feature service 依赖继续按单边界、单用例迁移，不以旧违规作为永久例外。
+
+## 128. 2026-07-30：R6 应用用例依赖：AppLog 写入边界
+
+- `AppLogPort` 扩展 `i/w/e` 写入契约，`AppLogPortAdapter` 继续转发到既有静态 `AppLog`，不改变日志持久化 key、条数、字节上限、脱敏和最新在前语义。
+- `AddBookUrlDialog`、`BookshelfMenuActions`、`ImportBookshelfDialog` 和 `RemoteBookPage` 通过 Provider 读取 `AppLogPort`；异步流程在等待前捕获端口，避免跨 async gap 使用 `BuildContext`。
+- `BookmarkService` 与 `NoteService` 移除 `services/app_log.dart` 直接依赖，由组合根注入同一 `AppLogPort`；未配置端口时错误日志安全跳过，原有静态书签/笔记业务 API、返回值和异常降级不变。
+- 远程书籍页面测试宿主补齐显式日志端口注入，未放宽或删除既有断言。`legado-main/` 未修改，本批未改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- AppLog/远程书籍定向 `5/5`；书签/笔记服务定向及集成回归 `7/7`。
+- `flutter analyze --no-pub`：`No issues found`；Flutter 串行全量 `678` 通过、`3` 项既有条件跳过。
+- `cargo test --manifest-path rust/Cargo.toml`：workspace 全量通过，Rust 核心 `184/184`；现有 FRB 宏和未使用代码 warning 未新增为失败。
+- 架构扫描为 `138` 条 backlog：Feature 直接 SharedPreferences `12`、Feature 业务 service `126`；无新增类别。
+- `git diff --check`：通过。
+
+边界结论：AppLog 写入已从书架 Feature、书签服务和笔记服务收口到 application port 与组合根；剩余 Feature 偏好/业务服务依赖继续按单边界、单用例迁移。

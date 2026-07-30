@@ -5,11 +5,11 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/diagnostics/app_log_port.dart';
 import '../../domain/ports/webdav_repository.dart';
 import '../../domain/remote/webdav_entry.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import '../../providers/book_provider.dart';
-import '../../services/app_log.dart';
 import '../../services/remote_archive_import_service.dart';
 import '../../services/remote_book_sort.dart';
 import '../../services/webdav_prefs.dart';
@@ -114,6 +114,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
   }
 
   Future<void> _reload() async {
+    final appLog = context.read<AppLogPort>();
     final cfg = _config;
     if (cfg == null || !cfg.isReady) {
       setState(() {
@@ -158,7 +159,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
         _selected.removeWhere((path) => filtered.every((e) => e.path != path));
       });
     } catch (e) {
-      await AppLog.e('获取webDav书籍出错\n$e');
+      await appLog.e('获取webDav书籍出错\n$e');
       if (!mounted) return;
       final raw = '$e';
       final hint =
@@ -310,6 +311,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
   }
 
   Future<void> _addSelectedToShelf() async {
+    final appLog = context.read<AppLogPort>();
     final cfg = _config;
     if (cfg == null || _selected.isEmpty) return;
     final targets = _entries
@@ -330,7 +332,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
         if (!_isSelectableImport(e.name)) {
           // RAR/7z/UMD/PDF/MOBI remain outside the current local importer.
           fail++;
-          await AppLog.e('导入出错\n暂不支持: ${e.name}');
+          await appLog.e('导入出错\n暂不支持: ${e.name}');
           continue;
         }
         try {
@@ -368,10 +370,10 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
           }
         } catch (err) {
           fail++;
-          await AppLog.e('导入出错\n$err');
+          await appLog.e('导入出错\n$err');
         }
       }
-      await AppLog.i('远程书籍加入书架: 成功 $ok / ${targets.length}');
+      await appLog.i('远程书籍加入书架: 成功 $ok / ${targets.length}');
       if (!mounted) return;
       setState(() => _selected.clear());
       final msg = fail == 0 ? '成功添加 $ok 本书' : '成功 $ok 本，失败 $fail 本';

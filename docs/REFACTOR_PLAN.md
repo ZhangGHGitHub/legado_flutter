@@ -6,7 +6,7 @@
 > **重构来源与基线：** [Jingshiro/legado](https://github.com/Jingshiro/legado)；UI 1:1 对齐和行为兼容是重构验收子目标，不是独立产品定位。
 > **本地原版基线：** 根目录 `legado-main/` 是只读的原版行为、数据结构、UI 和错误语义核对目录，不是本项目的主源码目录，也不参与 Flutter/Rust 构建。
 > 目标平台：Android / iOS / Windows / macOS / Linux / Web (WASM)  
-> 最后更新：2026-07-29
+> 最后更新：2026-07-30
 > 引擎版本：**v0.5.6** | Rust DB Schema：**v17** | 原版 Room：**v99** | FRB：**2.11.1**
 >
 > 当前暂停项（2026-07-26）：Web 平台/WASM/PWA 构建、Web 平台适配和相关验收；TTS 真实 Android 引擎验收。除这两类门禁外，Android/Windows 重构继续按固定顺序推进。
@@ -160,7 +160,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 退出条件：核心用户流程在目标平台构建并通过，UI 与原版对照测试通过，平台差异有明确适配记录。
 
-当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 至 P1-4 横切基础设施任务均已完成，应用用例依赖开始按 Feature 边界收口；本轮 Flutter 全量 `678` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描从 `144` 降至 `142`。R6 后续继续处理剩余 Feature 依赖、受控 UI/目标平台和发布门禁；真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
+当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 至 P1-4 横切基础设施任务均已完成，应用用例依赖继续按 Feature 边界收口；本批 Flutter 全量 `678` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描从 `142` 降至 `138`。R6 后续继续处理剩余 Feature 依赖、受控 UI/目标平台和发布门禁；真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
 
 #### 横切基础设施：全局能力与启动可靠性（跨 R1-R6，新增）
 
@@ -193,6 +193,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 横切任务验收：每个任务必须有纯 Dart 单元测试；涉及启动顺序、平台错误或通知/后台能力时补充 Android 和 Windows smoke；至少验证“正常冷启动、初始化失败冷启动、同步任务失败、模拟未处理异常、重启后读取崩溃记录、清理后不重复提示”六条路径。实现应位于 lib/application、lib/infrastructure 和 lib/services，禁止页面直接安装全局 handler。
 
 应用用例依赖当前证据：`AppLogPage` 与 `AppLogDialog` 已通过 `AppLogPort` 读取、清理和导出日志，基础设施 adapter 复用既有静态 AppLog 存储；该子任务定向 `4/4`，全量 Flutter `678` 通过、`3` 项既有跳过，Rust `184/184`，analyze 无诊断。架构边界由 `144` 条降至 `142` 条，剩余 `Feature → service` 依赖继续按单边界、单用例顺序迁移，不登记为例外。
+
+本批继续收口 AppLog 写入边界：四个书架 Feature 通过 `AppLogPort` 写入日志，`BookmarkService` 与 `NoteService` 由组合根注入同一端口；保留日志文本、失败返回和静态业务 API，不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。相关定向 `5/5`、Flutter 全量 `678` 通过（`3` 项既有跳过）、Rust `184/184`、analyze 无诊断，架构扫描为 `138` 条（SharedPreferences `12`、Feature 业务 service `126`）。
 
 ### 0.4 重构工作规则
 
