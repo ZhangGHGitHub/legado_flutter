@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../services/reader_font_loader.dart';
+import '../../application/reader/reader_font_port.dart';
 
 /// 书架右上角溢出菜单 — 对齐 Jingshiro `menu_bookshelf_*` 文案与顺序。
 abstract final class BookshelfOverflowMenu {
@@ -30,9 +31,10 @@ abstract final class BookshelfOverflowMenu {
   /// 锁定同一 CJK 字体 + Regular，避免 Windows 默认 fallback 混字重。
   static TextStyle _labelStyle(BuildContext context) {
     final base = Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
+    final font = context.read<ReaderFontPort>();
     return base.copyWith(
-      fontFamily: ReaderFontLoader.platformSansFamily(),
-      fontFamilyFallback: ReaderFontLoader.cjkFallbackFamilies(),
+      fontFamily: font.platformSansFamily(),
+      fontFamilyFallback: font.cjkFallbackFamilies(),
       fontWeight: FontWeight.w400,
       fontSize: base.fontSize ?? 14,
       height: 1.25,

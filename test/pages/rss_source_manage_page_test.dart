@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:legado_flutter/features/rss/rss_source_manage_page.dart';
 import 'package:legado_flutter/providers/rss_provider.dart';
 import 'package:legado_flutter/services/rss_source_transfer_port.dart';
@@ -19,6 +20,14 @@ class _FakeRssSourceTransfer implements RssSourceTransferPort {
   Future<void> copyText(String text) async {}
 }
 
+class _FakeReaderFontPort implements ReaderFontPort {
+  @override
+  String platformSansFamily() => 'TestSans';
+
+  @override
+  List<String> cjkFallbackFamilies() => const ['TestCjk', 'sans-serif'];
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -29,10 +38,17 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => RssProvider(),
-        child: MaterialApp(home: RssSourceManagePage(transfer: transfer)),
+        child: Provider<ReaderFontPort>.value(
+          value: _FakeReaderFontPort(),
+          child: MaterialApp(home: RssSourceManagePage(transfer: transfer)),
+        ),
       ),
     );
     await tester.pumpAndSettle();
+
+    final searchField = tester.widget<TextField>(find.byType(TextField));
+    expect(searchField.style?.fontFamily, 'TestSans');
+    expect(searchField.style?.fontFamilyFallback, ['TestCjk', 'sans-serif']);
 
     await tester.tap(find.byTooltip('更多'));
     await tester.pumpAndSettle();

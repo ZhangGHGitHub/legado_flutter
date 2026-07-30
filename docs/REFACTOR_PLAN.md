@@ -160,7 +160,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 退出条件：核心用户流程在目标平台构建并通过，UI 与原版对照测试通过，平台差异有明确适配记录。
 
-当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 至 P1-4 横切基础设施任务均已完成，应用用例依赖继续按 Feature 边界收口；本批 Flutter 全量 `690` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描从 `128` 降至 `123`。R6 后续继续处理剩余 Feature 依赖、受控 UI/目标平台和发布门禁；真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
+当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 至 P1-4 横切基础设施任务均已完成，应用用例依赖继续按 Feature 边界收口；本批 Flutter 全量 `694` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描从 `123` 降至 `120`。R6 后续继续处理剩余 Feature 依赖、受控 UI/目标平台和发布门禁；真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
 
 #### 横切基础设施：全局能力与启动可靠性（跨 R1-R6，新增）
 
@@ -194,7 +194,7 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 应用用例依赖当前证据：`AppLogPage` 与 `AppLogDialog` 已通过 `AppLogPort` 读取、清理和导出日志，基础设施 adapter 复用既有静态 AppLog 存储；该子任务定向 `4/4`，全量 Flutter `678` 通过、`3` 项既有跳过，Rust `184/184`，analyze 无诊断。架构边界由 `144` 条降至 `142` 条，剩余 `Feature → service` 依赖继续按单边界、单用例顺序迁移，不登记为例外。
 
-本批完成第二轮三线边界：`SourceEditorPage` 的源变量、`SearchPage` 的搜索历史、`AppLogPage/AppLogDialog` 的 ReaderFont 展示能力均通过 application port 与 infrastructure adapter 接入，组合根统一注入；保留既有键名、搜索历史 20 条规则、字体族/fallback 顺序和 UI 行为，不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。相关定向 `7/7`、Flutter 全量 `690` 通过（`3` 项既有跳过）、Rust `184/184`、analyze 无诊断，架构扫描为 `123` 条（SharedPreferences `0`、Feature 业务 service `123`）。
+本批完成第三轮 ReaderFont 边界：书架溢出菜单、RSS 源管理页和 RSS 源 tile 均通过既有 `ReaderFontPort` 获取字体族/fallback；保留菜单顺序、RSS UI 和字体行为，不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。相关定向 `4/4`、Flutter 全量 `694` 通过（`3` 项既有跳过）、Rust `184/184`、analyze 无诊断，架构扫描为 `120` 条（Feature 业务 service `120`）。
 
 ### 0.4 重构工作规则
 

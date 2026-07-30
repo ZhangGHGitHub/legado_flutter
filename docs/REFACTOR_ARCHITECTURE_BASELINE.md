@@ -2707,3 +2707,18 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `git diff --check`：通过。
 
 边界结论：Feature 直接 SharedPreferences 访问已归零，搜索历史、源变量和 ReaderFont 展示能力均完成第一层 application/infrastructure 边界收口；剩余工作集中在 Feature 业务 service 依赖。
+
+## 131. 2026-07-30：R6 第三轮 ReaderFont Feature 边界
+
+- `BookshelfOverflowMenu`、`RssSourceManagePage` 和 `RssSourceTile` 移除对 `services/reader_font_loader.dart` 的直接依赖，统一通过已有 application `ReaderFontPort` 获取平台字体和 CJK fallback。
+- 菜单保留既有 action 顺序/文案；RSS 源管理页和 tile 保留字体族、fallback 顺序与原有 UI 行为。测试宿主补齐 fake port，未放宽既有菜单、导入和远程图片断言。
+- 本批由两个子 agent 分别处理书架和 RSS 文件，主 agent 负责共享端口审查、组合根集成和全量门禁；未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- ReaderFont/书架菜单/RSS 页面定向 `4/4`；`flutter analyze --no-pub`：`No issues found`。
+- Flutter 串行全量 `694` 通过、`3` 项既有条件跳过；`cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，workspace 全量通过。
+- 架构扫描为 `120` 条 backlog：Feature 业务 service `120`，无 SharedPreferences 类别新增或残留。
+- `git diff --check`：通过。
+
+边界结论：ReaderFont 展示能力已从当前命中的书架/RSS Feature 调用点收口到 application port；剩余 backlog 全部是 Feature 业务 service 依赖，继续按独立用例迁移。

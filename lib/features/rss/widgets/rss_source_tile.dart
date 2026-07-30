@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../../domain/ports/application_http_request_port.dart';
-import '../../../services/reader_font_loader.dart';
 import '../../../theme/legado_tokens.dart';
 import '../../../widgets/remote_binary_image.dart';
 
@@ -40,6 +41,7 @@ class RssSourceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final font = context.read<ReaderFontPort>();
     return Material(
       color: scheme.surfaceContainerHigh,
       borderRadius: LegadoTokens.cardRadius,
@@ -66,8 +68,8 @@ class RssSourceTile extends StatelessWidget {
                     height: 1.25,
                     fontWeight: FontWeight.w400,
                     color: scheme.onSurfaceVariant,
-                    fontFamily: ReaderFontLoader.platformSansFamily(),
-                    fontFamilyFallback: ReaderFontLoader.cjkFallbackFamilies(),
+                    fontFamily: font.platformSansFamily(),
+                    fontFamilyFallback: font.cjkFallbackFamilies(),
                   ),
                 ),
               ),

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image_lib;
+import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:legado_flutter/domain/ports/application_binary_http_request_port.dart';
 import 'package:legado_flutter/domain/ports/application_http_request_port.dart';
 import 'package:legado_flutter/domain/ports/rss_port.dart';
@@ -65,6 +66,14 @@ class _FakeRssPort implements RssPort {
   }) async => article.content ?? '';
 }
 
+class _FakeReaderFontPort implements ReaderFontPort {
+  @override
+  String platformSansFamily() => 'TestSans';
+
+  @override
+  List<String> cjkFallbackFamilies() => const ['TestCjk', 'sans-serif'];
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -82,15 +91,18 @@ void main() {
     await tester.pumpWidget(
       Provider<ApplicationBinaryHttpRequestPort>.value(
         value: port,
-        child: const MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 180,
-              height: 180,
-              child: RssSourceTile(
-                name: '本地订阅',
-                icon: Icons.rss_feed,
-                iconUrl: 'http://192.168.1.2/icon.png',
+        child: Provider<ReaderFontPort>.value(
+          value: _FakeReaderFontPort(),
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 180,
+                height: 180,
+                child: RssSourceTile(
+                  name: '本地订阅',
+                  icon: Icons.rss_feed,
+                  iconUrl: 'http://192.168.1.2/icon.png',
+                ),
               ),
             ),
           ),

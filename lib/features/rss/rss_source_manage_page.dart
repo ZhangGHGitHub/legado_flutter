@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../providers/rss_provider.dart';
-import '../../services/reader_font_loader.dart';
 import '../../services/rss_source_transfer_port.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/empty_state.dart';
@@ -48,13 +48,14 @@ class _RssSourceManagePageState extends State<RssSourceManagePage> {
     double size = 14,
     FontWeight weight = FontWeight.w400,
   }) {
+    final font = context.read<ReaderFontPort>();
     return TextStyle(
       color: color,
       fontSize: size,
       fontWeight: weight,
       height: 1.25,
-      fontFamily: ReaderFontLoader.platformSansFamily(),
-      fontFamilyFallback: ReaderFontLoader.cjkFallbackFamilies(),
+      fontFamily: font.platformSansFamily(),
+      fontFamilyFallback: font.cjkFallbackFamilies(),
     );
   }
 
