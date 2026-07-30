@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/lifecycle/app_lifecycle_coordinator.dart';
+import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:legado_flutter/features/my/my_page.dart';
@@ -38,6 +39,7 @@ void main() {
         providers: [
           ChangeNotifierProvider.value(value: themeController),
           ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
+          Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
         ],
         child: const MaterialApp(home: MyPage()),
       ),
@@ -48,4 +50,14 @@ void main() {
       expect(find.text(title), findsOneWidget);
     }
   });
+}
+
+class _FakeReaderFontPort implements ReaderFontPort {
+  const _FakeReaderFontPort();
+
+  @override
+  String platformSansFamily() => 'TestSans';
+
+  @override
+  List<String> cjkFallbackFamilies() => const ['TestCjk', 'sans-serif'];
 }

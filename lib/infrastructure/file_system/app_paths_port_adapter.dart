@@ -8,4 +8,7 @@ final class AppPathsPortAdapter implements AppPathsPort {
 
   @override
   Future<Directory> dataRoot() => AppPaths.dataRoot();
+
+  @override
+  Future<Directory> backupsDir() => AppPaths.backupsDir();
 }

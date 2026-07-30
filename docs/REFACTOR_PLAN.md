@@ -200,6 +200,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 本批继续收口 RSS Tab 与主题设置能力：`RssTabPage` 通过已有 `ReaderFontPort` 读取字体族和 CJK fallback，`ThemeConfigPage` 通过 application `ClipboardPort` 完成主题 JSON 导出/导入，移除 Feature 对 `services/reader_font_loader.dart` 和 `services/clipboard_port.dart` 的直接依赖。主题测试宿主改为显式注入剪贴板 adapter，原有主题预设、复制、粘贴和 JSON 应用断言保持不变。定向 `8/8`，Flutter 串行全量 `699` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断，架构扫描降至 `113` 条 Feature→service backlog，`git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 
+本批继续收口源管理与备份配置边界：`SourcesPage` 通过 `ReaderFontPort` 获取字体族和 CJK fallback，`BackupConfigPage` 通过 `AppPathsPort.backupsDir()` 获取本地备份目录；端口 adapter 仅转发既有路径能力，源列表字体、备份列表、导入导出和失败提示行为保持不变。定向 `11/11`，Flutter 串行全量 `699` 通过（`3` 项既有跳过）、Rust 核心 `184/184`、analyze 无诊断，架构扫描降至 `111` 条 Feature→service backlog，`git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
 ### 0.4 重构工作规则
 
 1. 一次只迁移一个边界、一个用例或一条数据链路；完成定向测试并汇报后再进入下一项。

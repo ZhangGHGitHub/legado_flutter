@@ -8,13 +8,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../providers/source_provider.dart';
 import '../../services/import_url_history_store.dart';
 import '../../services/check_source_prefs.dart';
 import '../../services/source_group_tags.dart';
 import '../../services/source_manage_help_prefs.dart';
-import '../../services/reader_font_loader.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/check_source_keyword_dialog.dart';
 import '../../widgets/error_view.dart';
@@ -265,13 +265,14 @@ class _SourcesPageState extends State<SourcesPage> {
     double size = 14,
     FontWeight weight = FontWeight.w400,
   }) {
+    final fontPort = context.read<ReaderFontPort>();
     return TextStyle(
       color: color,
       fontSize: size,
       fontWeight: weight,
       height: 1.25,
-      fontFamily: ReaderFontLoader.platformSansFamily(),
-      fontFamilyFallback: ReaderFontLoader.cjkFallbackFamilies(),
+      fontFamily: fontPort.platformSansFamily(),
+      fontFamilyFallback: fontPort.cjkFallbackFamilies(),
     );
   }
 

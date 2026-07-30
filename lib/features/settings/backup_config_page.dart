@@ -9,7 +9,7 @@ import '../../domain/remote/webdav_entry.dart';
 import '../../services/backup_service.dart';
 import '../../services/database_status_service.dart';
 import '../../services/engine_status_service.dart';
-import '../../services/app_paths.dart';
+import '../../application/file_system/app_paths_port.dart';
 import '../../services/webdav_prefs.dart';
 import '../../theme/legado_tokens.dart';
 
@@ -102,6 +102,7 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
       widget.localFilePort ?? context.read<BackupLocalFilePort>();
   late final LegacyRoomImportUseCase _legacyRoomImportService =
       widget.legacyRoomImportService ?? context.read<LegacyRoomImportUseCase>();
+  late final AppPathsPort _appPathsPort = context.read<AppPathsPort>();
   bool _busy = false;
   WebDavConfig? _webdav;
   List<LocalBackupEntry> _localBackups = [];
@@ -184,7 +185,7 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
 
     setState(() => _busy = true);
     try {
-      final backupsDir = await AppPaths.backupsDir();
+      final backupsDir = await _appPathsPort.backupsDir();
       final stamp = DateTime.now()
           .toIso8601String()
           .replaceAll(':', '-')

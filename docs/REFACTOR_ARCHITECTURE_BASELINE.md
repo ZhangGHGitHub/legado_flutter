@@ -2768,3 +2768,17 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `flutter analyze --no-pub`：`No issues found`；架构扫描由 `115` 降至 `113` 条 Feature→service backlog；`git diff --check`：通过。
 
 边界结论：本批完成 RSS Tab ReaderFont 和主题设置 Clipboard 的 application port 调用者迁移，剩余 Feature→service backlog 继续按独立用例推进。
+
+## 135. 2026-07-30：R6 源管理与备份路径边界
+
+- `SourcesPage` 移除 `services/reader_font_loader.dart` 直接依赖，改由 Provider 注入既有 `ReaderFontPort`；源列表的字体族、CJK fallback、搜索、排序和交互行为保持不变。
+- `BackupConfigPage` 移除 `services/app_paths.dart` 直接依赖，改由 Provider 注入 `AppPathsPort`；端口补充与既有 `AppPaths.backupsDir()` 对应的 `backupsDir()` 能力，保留本地备份列表、导入导出路径、WebDAV 配置和失败提示语义。
+- 测试宿主补齐 `ReaderFontPort` 与 `AppPathsPort`，未放宽源管理、MainShell、备份失败策略和恢复安全断言；未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- AppPaths、BackupConfig、Sources、MyPage 和 MainShell 定向 `11/11`；`dart format --output=none --set-exit-if-changed`：通过；涉及文件 analyze：`No issues found`。
+- `flutter test --no-pub --concurrency=1 --reporter compact`：`699` 通过、`3` 项既有条件跳过；`cargo test --manifest-path rust/Cargo.toml`：Rust 核心 `184/184`，workspace 全量通过。
+- `flutter analyze --no-pub`：`No issues found`；架构扫描由 `113` 降至 `111` 条 Feature→service backlog；`git diff --check`：通过。
+
+边界结论：本批完成源管理字体能力与备份路径能力的 application/infrastructure 调用者迁移，剩余 Feature→service backlog 继续按独立用例推进。

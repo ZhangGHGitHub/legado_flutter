@@ -38,8 +38,12 @@ void main() {
   });
 
   test('AppPathsPortAdapter exposes the configured data root', () async {
-    final root = await const AppPathsPortAdapter().dataRoot();
+    final adapter = const AppPathsPortAdapter();
+    final root = await adapter.dataRoot();
     expect(root.path, tempRoot.path);
+
+    final backupsDir = await adapter.backupsDir();
+    expect(backupsDir.path, p.join(tempRoot.path, AppPaths.backupsFolder));
   });
 
   test('AppDataPrefs clears override when empty', () async {

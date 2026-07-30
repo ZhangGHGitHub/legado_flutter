@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/file_system/app_paths_port.dart';
 import 'package:legado_flutter/domain/ports/backup_local_file_port.dart';
 import 'package:legado_flutter/domain/ports/legacy_room_import_use_case.dart';
 import 'package:legado_flutter/domain/remote/webdav_entry.dart';
@@ -7,6 +10,8 @@ import 'package:legado_flutter/domain/remote/legacy_room_import_report.dart';
 import 'package:legado_flutter/features/settings/backup_config_page.dart';
 import 'package:legado_flutter/application/preferences/shared_preferences_runtime.dart';
 import 'package:legado_flutter/services/backup_service.dart';
+import 'package:path/path.dart' as p;
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../helpers/sync_test_ports.dart';
@@ -92,6 +97,20 @@ class _FakeLegacyRoomImportUseCase implements LegacyRoomImportUseCase {
 
 final _testLocalFilePort = _FakeBackupLocalFilePort(const []);
 final _testLegacyRoomImport = _FakeLegacyRoomImportUseCase();
+final _testAppPaths = _FakeAppPathsPort(Directory.systemTemp);
+
+class _FakeAppPathsPort implements AppPathsPort {
+  _FakeAppPathsPort(this.root);
+
+  final Directory root;
+
+  @override
+  Future<Directory> dataRoot() async => root;
+
+  @override
+  Future<Directory> backupsDir() async =>
+      Directory(p.join(root.path, 'backups'));
+}
 
 Future<void> _pumpWebDavPage(WidgetTester tester, BackupService service) async {
   SharedPreferences.setMockInitialValues({
@@ -101,12 +120,15 @@ Future<void> _pumpWebDavPage(WidgetTester tester, BackupService service) async {
   });
   SharedPreferencesRuntime.resetForTest();
   await tester.pumpWidget(
-    MaterialApp(
-      home: Scaffold(
-        body: BackupConfigPage(
-          service: service,
-          localFilePort: _testLocalFilePort,
-          legacyRoomImportService: _testLegacyRoomImport,
+    Provider<AppPathsPort>.value(
+      value: _testAppPaths,
+      child: MaterialApp(
+        home: Scaffold(
+          body: BackupConfigPage(
+            service: service,
+            localFilePort: _testLocalFilePort,
+            legacyRoomImportService: _testLegacyRoomImport,
+          ),
         ),
       ),
     ),
@@ -117,12 +139,15 @@ Future<void> _pumpWebDavPage(WidgetTester tester, BackupService service) async {
 void main() {
   testWidgets('BackupConfigPage shows backup actions', (tester) async {
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: BackupConfigPage(
-            service: _backupService(),
-            localFilePort: _testLocalFilePort,
-            legacyRoomImportService: _testLegacyRoomImport,
+      Provider<AppPathsPort>.value(
+        value: _testAppPaths,
+        child: MaterialApp(
+          home: Scaffold(
+            body: BackupConfigPage(
+              service: _backupService(),
+              localFilePort: _testLocalFilePort,
+              legacyRoomImportService: _testLegacyRoomImport,
+            ),
           ),
         ),
       ),
