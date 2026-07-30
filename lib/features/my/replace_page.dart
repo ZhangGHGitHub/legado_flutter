@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/replace/replace_preset_port.dart';
 import '../../domain/content/replace_rule.dart';
 import '../../providers/replace_provider.dart';
-import '../../services/replace_preset_library.dart';
 import '../../widgets/replace_preview_panel.dart';
 import '../../widgets/legado_popup_menu.dart';
 
@@ -89,7 +89,9 @@ class _ReplacePageState extends State<ReplacePage>
   }
 
   void _showPresetPicker(BuildContext context) {
-    final groups = ReplacePresetLibrary.grouped();
+    final presetPort = context.read<ReplacePresetPort>();
+    final allPresets = presetPort.all;
+    final groups = presetPort.grouped();
     final selected = <String>{};
 
     showModalBottomSheet<void>(
@@ -123,20 +125,15 @@ class _ReplacePageState extends State<ReplacePage>
                       TextButton(
                         onPressed: () {
                           setSheet(() {
-                            if (selected.length ==
-                                ReplacePresetLibrary.all.length) {
+                            if (selected.length == allPresets.length) {
                               selected.clear();
                             } else {
-                              selected.addAll(
-                                ReplacePresetLibrary.all.map((p) => p.id),
-                              );
+                              selected.addAll(allPresets.map((p) => p.id));
                             }
                           });
                         },
                         child: Text(
-                          selected.length == ReplacePresetLibrary.all.length
-                              ? '取消全选'
-                              : '全选',
+                          selected.length == allPresets.length ? '取消全选' : '全选',
                         ),
                       ),
                     ],
@@ -192,10 +189,10 @@ class _ReplacePageState extends State<ReplacePage>
                     onPressed: selected.isEmpty
                         ? null
                         : () async {
-                            final presets = ReplacePresetLibrary.all.where(
+                            final presets = allPresets.where(
                               (p) => selected.contains(p.id),
                             );
-                            final rules = ReplacePresetLibrary.toRules(presets);
+                            final rules = presetPort.toRules(presets);
                             final added = await context
                                 .read<ReplaceProvider>()
                                 .importPresets(rules);

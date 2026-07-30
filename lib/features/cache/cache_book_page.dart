@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../application/cache/book_cache_export_port.dart';
 import '../../domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/book_cache_export_service.dart';
 import '../../widgets/legado_popup_menu.dart';
 import 'download_choice_dialog.dart';
 import 'download_helpers.dart';
@@ -231,11 +231,19 @@ class _CacheBookPageState extends State<CacheBookPage> {
 
   Future<void> _exportBooks(List<Book> books) async {
     if (books.isEmpty) return;
-    final text = await BookCacheExportService(contentCache: widget.contentCache)
-        .buildBooksText(
-          books: books,
-          loadChapters: context.read<BookProvider>().getLocalChapters,
-        );
+    final exporter = context.read<BookCacheExportPort?>();
+    if (exporter == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('缓存导出引擎不可用')));
+      }
+      return;
+    }
+    final text = await exporter.buildBooksText(
+      books: books,
+      loadChapters: context.read<BookProvider>().getLocalChapters,
+    );
     if (text.isEmpty || !mounted) {
       if (mounted) {
         ScaffoldMessenger.of(

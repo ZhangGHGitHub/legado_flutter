@@ -3,9 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
+import '../helpers/fake_reader_font_port.dart';
 import 'package:legado_flutter/features/rss/widgets/rss_source_tile.dart';
 
-class _FakeReaderFontPort implements ReaderFontPort {
+class _FakeReaderFontPort extends FakeReaderFontPort {
   @override
   String platformSansFamily() => 'TestSans';
 

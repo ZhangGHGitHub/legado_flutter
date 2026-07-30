@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/lifecycle/app_lifecycle_coordinator.dart';
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
+import '../helpers/fake_reader_font_port.dart';
 import 'package:legado_flutter/application/web_api/web_api_prefs_port.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -64,7 +65,7 @@ class _FakeWebApiPrefs implements WebApiPrefsPort {
   Future<void> save(WebApiConfig config) async {}
 }
 
-class _FakeReaderFontPort implements ReaderFontPort {
+class _FakeReaderFontPort extends FakeReaderFontPort {
   const _FakeReaderFontPort();
 
   @override

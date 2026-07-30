@@ -2901,3 +2901,17 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 架构扫描由 `95` 降至 `91` 条既有 Feature→service backlog；ReaderSettings 的自定义字体能力尚未完全端口化，未伪装为零依赖。
 
 边界结论：本批完成五个独立 Feature 调用者的第一层 application/infrastructure 收口，保留旧 service 作为兼容实现入口，后续继续按单边界推进剩余 `91` 条 backlog。
+
+## 146. 2026-07-30：R6 四 agent 偏好与缓存端口并行收口
+
+- `ReaderSettings` 完成 `ReaderFontPort` 扩展，覆盖自定义字体扫描、路径判断、显示名、serif/mono 解析、加载和目录访问；`ReaderFontPortAdapter` 继续复用 `ReaderFontLoader` 原有行为。
+- `ReplacePage` 改用 `ReplacePresetPort` 和应用层预置模型；`ConfigPage` 改用 `BookshelfConfigPrefsPort`，保留 `bookGroupStyle` 键名、默认值、迁移和用户确认后保存；`CacheBookPage` 改用 `BookCacheExportPort`，adapter 复用既有缓存导出服务。
+- 组合根注册四类端口；6 个使用 ReaderFontPort 的既有测试 fake 改为共享测试基类，以适配新增接口成员，未改变业务断言。
+
+验证结果：
+
+- ReaderFont adapter `5/5`、原有字体回归 `9/9`；Replace adapter `2/2`、替换服务/预览 `8/8`；Config adapter `4/4`；Cache adapter `2/2`、缓存回归 `5/5`；接口 fake 修复后受影响 widget 定向 `11/11`。
+- 首轮 Flutter 全量仅因测试 fake 缺少新增接口成员编译失败；补齐后 `flutter test --no-pub --concurrency=1 --reporter compact`：`732` 通过、`3` 项既有条件跳过。`dart format`、涉及文件 `flutter analyze`、`git diff --check` 通过；Rust 未改动，沿用核心 `184/184` 结果。
+- 架构扫描由 `91` 降至 `87` 条既有 Feature→service backlog；未修改 `legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+边界结论：本批完成四个独立 Feature 调用者的第一层 application/infrastructure 收口；ReaderFont 的自定义字体能力已进入端口，剩余 Feature backlog 继续按单边界推进。

@@ -9,7 +9,6 @@ import '../../models/read_style_config.dart';
 import '../../models/theme_typography.dart';
 import '../../application/reader/read_style_prefs_port.dart';
 import '../../application/reader/reader_font_port.dart';
-import '../../services/reader_font_loader.dart';
 import 'bg_text_config_panel.dart';
 import 'click_zone_labels.dart';
 
@@ -357,7 +356,7 @@ class ReaderSettings {
     );
   }
 
-  String get fontLabel => ReaderFontLoader.displayName(fontFamily);
+  String fontLabel(ReaderFontPort fontPort) => fontPort.displayName(fontFamily);
 
   String get indentLabel {
     const labels = ['无缩进', '一字符缩进', '二字符缩进', '三字符缩进', '四字符缩进'];
@@ -680,7 +679,7 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
 
   Future<void> _pickFont() async {
     final fontPort = context.read<ReaderFontPort>();
-    final customFiles = await ReaderFontLoader.listCustomFontFiles();
+    final customFiles = await fontPort.listCustomFontFiles();
     if (!mounted) return;
     final picked = await showModalBottomSheet<String>(
       context: context,
@@ -690,9 +689,7 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
       builder: (ctx) {
         Widget tile(String family, String label) {
           final selected = _s.fontFamily == family;
-          final previewFamily = family.isEmpty
-              ? fontPort.platformSansFamily()
-              : ReaderFontLoader.resolveFamilySync(family);
+          final previewFamily = fontPort.resolveFamilySync(family);
           return ListTile(
             title: Text(
               label,
@@ -730,7 +727,7 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
               if (customFiles.isNotEmpty) ...[
                 const Divider(height: 1),
                 for (final f in customFiles)
-                  tile(f.path, ReaderFontLoader.displayName(f.path)),
+                  tile(f.path, fontPort.displayName(f.path)),
               ],
               ListTile(
                 leading: const Icon(Icons.upload_file_outlined),
@@ -738,7 +735,7 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
                 subtitle: const Text('将 .ttf/.otf 放入应用字体目录后可选'),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  final dir = await ReaderFontLoader.fontDirectory();
+                  final dir = await fontPort.fontDirectory();
                   _toast('请将字体文件复制到：\n${dir.path}');
                 },
               ),
@@ -749,8 +746,8 @@ class ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
       },
     );
     if (picked == null) return;
-    if (ReaderFontLoader.isFontFilePath(picked)) {
-      await ReaderFontLoader.ensureLoaded(picked);
+    if (fontPort.isFontFilePath(picked)) {
+      await fontPort.ensureLoaded(picked);
     }
     if (!mounted) return;
     _update(_s.copyWith(fontFamily: picked));

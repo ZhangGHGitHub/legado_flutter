@@ -8,6 +8,7 @@ import 'package:legado_flutter/database/dao/source_dao.dart';
 import 'package:legado_flutter/application/lifecycle/app_lifecycle_coordinator.dart';
 import 'package:legado_flutter/application/preferences/bookshelf_display_prefs_port.dart';
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
+import '../helpers/fake_reader_font_port.dart';
 import 'package:legado_flutter/application/web_api/web_api_prefs_port.dart';
 import 'package:legado_flutter/application/startup/startup_task_runner.dart';
 import 'package:legado_flutter/domain/crash/crash_report.dart';
@@ -303,7 +304,7 @@ class _FakeBookshelfDisplayPrefsPort implements BookshelfDisplayPrefsPort {
   Future<bool> savePinned(Iterable<String> ids) async => true;
 }
 
-class _FakeReaderFontPort implements ReaderFontPort {
+class _FakeReaderFontPort extends FakeReaderFontPort {
   const _FakeReaderFontPort();
 
   @override

@@ -283,7 +283,7 @@ Day 2  PR/Issue 模板
 
 这样后续每个 Task 都有章可循，避免「直接写代码、计划文档越来越滞后」。
 
-2026-07-30 当前 R6 记录：AppLog 页面及书架/书签/笔记写入边界、四轮 Feature 偏好/展示/业务能力端口，以及本轮 AppPaths/Clipboard/SourceDebug、RSS ReaderFont、主题 Clipboard、Sources ReaderFont、Backup AppPaths、ReadRecord Clipboard、Web API Clipboard、SourceEditor Clipboard、DictRule Clipboard、TxtToc Clipboard 和 ContentEdit Clipboard 边界均按“先定向测试、再全量门禁、最后记录”流程完成；本批由主 agent 与四个子 agent 并行完成规则偏好、点击区域、正文搜索、模拟阅读、阅读样式、阅读图片缓存、Web API 配置偏好、TocSheet 笔记读取、BookInfoPage 书源搜索/类型语义，以及 Explore、SourceMarket、ReadRecord、阅读样式 ZIP 和 ReaderSettings 字体预览端口，架构扫描由 `110` 降至 `91` 条既有 Feature→service backlog，未将剩余 Feature 依赖白名单化。四子线定向均通过，主线合并定向 `28/28` 与 Provider 集成 `3/3`；Flutter 全量 `721` 通过、`3` 项既有条件跳过，Rust 核心 `184/184`，analyze 和 `git diff --check` 通过。相关实际命令和结果以 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 与 `docs/REFACTOR_ARCHITECTURE_BASELINE.md` 为准。
+2026-07-30 当前 R6 记录：AppLog 页面及书架/书签/笔记写入边界、四轮 Feature 偏好/展示/业务能力端口，以及本轮 AppPaths/Clipboard/SourceDebug、RSS ReaderFont、主题 Clipboard、Sources ReaderFont、Backup AppPaths、ReadRecord Clipboard、Web API Clipboard、SourceEditor Clipboard、DictRule Clipboard、TxtToc Clipboard 和 ContentEdit Clipboard 边界均按“先定向测试、再全量门禁、最后记录”流程完成；本批由主 agent 与四个子 agent 并行完成规则偏好、点击区域、正文搜索、模拟阅读、阅读样式、阅读图片缓存、Web API 配置偏好、TocSheet 笔记读取、BookInfoPage 书源搜索/类型语义、Explore、SourceMarket、ReadRecord、阅读样式 ZIP、ReaderSettings 字体、ReplacePage、ConfigPage 和 CacheBookPage 端口，架构扫描由 `110` 降至 `87` 条既有 Feature→service backlog，未将剩余 Feature 依赖白名单化。四子线定向均通过；ReaderFont fake 接口缺口已修复后受影响宿主 `11/11`；Flutter 全量 `732` 通过、`3` 项既有条件跳过，Rust 核心 `184/184`，analyze 和 `git diff --check` 通过。相关实际命令和结果以 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 与 `docs/REFACTOR_ARCHITECTURE_BASELINE.md` 为准。
 
 ---
 

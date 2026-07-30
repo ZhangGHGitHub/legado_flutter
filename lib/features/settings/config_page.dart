@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/preferences/bookshelf_config_prefs_port.dart';
 import '../../config/app_config.dart';
-import '../../services/bookshelf_prefs.dart';
 import '../../theme/legado_tokens.dart';
 import '../../features/bookshelf/bookshelf_config_dialog.dart';
 import 'backup_config_page.dart';
@@ -38,7 +38,9 @@ class _ConfigPageState extends State<ConfigPage>
   }
 
   Future<void> _loadPrefs() async {
-    final style = await BookshelfPrefs.loadGroupStyle();
+    final style = await context
+        .read<BookshelfConfigPrefsPort>()
+        .loadGroupStyle();
     if (mounted) setState(() => _bookGroupStyle = style);
   }
 
@@ -80,12 +82,7 @@ class _ConfigPageState extends State<ConfigPage>
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () async {
-                    final cur = await BookshelfPrefs.load();
-                    if (!context.mounted) return;
-                    final next = await BookshelfConfigDialog.show(
-                      context,
-                      initial: cur,
-                    );
+                    final next = await BookshelfConfigDialog.show(context);
                     if (next != null && mounted) {
                       setState(() => _bookGroupStyle = next.bookGroupStyle);
                     }

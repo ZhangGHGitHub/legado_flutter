@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
+import '../helpers/fake_reader_font_port.dart';
 import 'package:legado_flutter/application/rss/rss_read_state_port.dart';
 import 'package:legado_flutter/domain/ports/application_binary_http_request_port.dart';
 import 'package:legado_flutter/domain/ports/application_http_request_port.dart';
@@ -67,7 +68,7 @@ class _FakeRssPort implements RssPort {
   }) async => article.content ?? '';
 }
 
-class _FakeReaderFontPort implements ReaderFontPort {
+class _FakeReaderFontPort extends FakeReaderFontPort {
   @override
   String platformSansFamily() => 'TestSans';
 

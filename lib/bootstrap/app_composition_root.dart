@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../app.dart';
 import '../application/app_bootstrap.dart';
+import '../application/cache/book_cache_export_port.dart';
 import '../application/crash/crash_log_service.dart';
 import '../application/diagnostics/app_diagnostics_monitor.dart';
 import '../application/diagnostics/app_log_port.dart';
@@ -17,6 +18,7 @@ import '../application/preferences/dict_rule_prefs_port.dart';
 import '../application/lifecycle/app_lifecycle_coordinator.dart';
 import '../application/preferences/shared_preferences_runtime.dart';
 import '../application/preferences/bookshelf_display_prefs_port.dart';
+import '../application/preferences/bookshelf_config_prefs_port.dart';
 import '../application/preferences/download_choice_prefs_port.dart';
 import '../application/preferences/search_content_prefs_port.dart';
 import '../application/preferences/source_variable_port.dart';
@@ -26,6 +28,7 @@ import '../application/reader/read_style_prefs_port.dart';
 import '../application/reader/read_style_zip_port.dart';
 import '../application/reader/reader_image_cache_port.dart';
 import '../application/reader/reader_font_port.dart';
+import '../application/replace/replace_preset_port.dart';
 import '../application/search/search_history_port.dart';
 import '../application/sources/source_debug_formatter_port.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
@@ -57,6 +60,7 @@ import '../domain/ports/note_port.dart';
 import '../domain/ports/reading_record_port.dart';
 import '../domain/ports/webdav_repository.dart';
 import '../infrastructure/cache/file_chapter_content_cache.dart';
+import '../infrastructure/cache/book_cache_export_port_adapter.dart';
 import '../infrastructure/content/frb_content_processing_port.dart';
 import '../infrastructure/database/frb_backup_port.dart';
 import '../infrastructure/database/frb_database_status_port.dart';
@@ -100,6 +104,7 @@ import '../infrastructure/preferences/shared_preferences_code_edit_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_click_action_prefs_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_book_group_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_bookshelf_display_prefs.dart';
+import '../infrastructure/preferences/shared_preferences_bookshelf_config_prefs_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
 import '../infrastructure/preferences/shared_preferences_code_edit_prefs_store.dart';
 import '../infrastructure/preferences/shared_preferences_dict_rule_prefs_adapter.dart';
@@ -112,6 +117,7 @@ import '../infrastructure/preferences/shared_preferences_read_style_prefs_adapte
 import '../infrastructure/preferences/shared_preferences_web_api_prefs_adapter.dart';
 import '../infrastructure/reader/reader_font_port_adapter.dart';
 import '../infrastructure/reader/reader_image_cache_port_adapter.dart';
+import '../infrastructure/replace/replace_preset_port_adapter.dart';
 import '../infrastructure/sources/source_debug_formatter_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_search_history_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_rss_read_state_adapter.dart';
@@ -330,6 +336,9 @@ abstract final class AppCompositionRoot {
           Provider<BookshelfDisplayPrefsPort>.value(
             value: bookshelfDisplayPrefs,
           ),
+          Provider<BookshelfConfigPrefsPort>.value(
+            value: const SharedPreferencesBookshelfConfigPrefsAdapter(),
+          ),
           Provider<RssReadStatePort>.value(value: rssReadStatePort),
           Provider<DownloadChoicePrefsPort>.value(value: downloadChoicePrefs),
           Provider<SearchContentPrefsPort>.value(value: searchContentPrefs),
@@ -344,6 +353,9 @@ abstract final class AppCompositionRoot {
             value: const SharedPreferencesReadStylePrefsAdapter(),
           ),
           Provider<ReaderFontPort>.value(value: const ReaderFontPortAdapter()),
+          Provider<BookCacheExportPort>.value(
+            value: BookCacheExportPortAdapter(contentCache),
+          ),
           Provider<ReadStyleZipPort>.value(
             value: ReadStyleZipPortAdapter(binaryHttpPort),
           ),
@@ -361,6 +373,9 @@ abstract final class AppCompositionRoot {
           ),
           Provider<NotePort>.value(value: FrbNotePort()),
           Provider<ReadingRecordPort>.value(value: readingRecordPort),
+          Provider<ReplacePresetPort>.value(
+            value: const ReplacePresetPortAdapter(),
+          ),
           Provider<BookSourceSearchPort>.value(value: bookSourceSearchPort),
           Provider<BookSourceExplorePort>.value(value: bookSourceExplorePort),
           Provider<SearchHistoryPort>.value(
