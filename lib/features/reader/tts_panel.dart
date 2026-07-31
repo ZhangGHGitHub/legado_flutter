@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../services/http_tts_service.dart';
-import '../../services/tts_service.dart';
+import '../../application/reader/tts_port.dart';
 
 /// TTS 朗读面板（对齐 dialog_read_aloud）。
 /// 系统引擎经 [TtsService] 朗读当前页；支持上/下句（桌面 Windows 为 stub）。
@@ -54,11 +54,12 @@ class TtsPanel extends StatefulWidget {
 }
 
 class _TtsPanelState extends State<TtsPanel> {
-  final _tts = TtsService.instance;
+  late final TtsPort _tts;
 
   @override
   void initState() {
     super.initState();
+    _tts = context.read<TtsPort>();
     _tts.addListener(_onTts);
     _tts.bindText(widget.sampleText);
     _tts.ensureInitialized();
@@ -81,8 +82,8 @@ class _TtsPanelState extends State<TtsPanel> {
     }
     await _tts.togglePlay(widget.sampleText);
     if (!mounted) return;
-    if (_tts.capability == TtsCapability.stub &&
-        _tts.state == TtsPlaybackState.playing) {
+    if (_tts.capability == TtsCapabilityPort.stub &&
+        _tts.state == TtsPlaybackStatePort.playing) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('系统语音引擎不可用，请检查 TTS 权限或安装语音包'),
@@ -121,14 +122,14 @@ class _TtsPanelState extends State<TtsPanel> {
     );
     controller.dispose();
     if (url != null && url.isNotEmpty) {
-      _tts.configureHttpTts(HttpTtsConfig(url: url));
+      _tts.configureHttpTts(url);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final playing = _tts.state == TtsPlaybackState.playing;
-    final paused = _tts.state == TtsPlaybackState.paused;
+    final playing = _tts.state == TtsPlaybackStatePort.playing;
+    final paused = _tts.state == TtsPlaybackStatePort.paused;
     final sentenceHint = _tts.sentenceCount == 0
         ? '无正文'
         : '第 ${_tts.sentenceIndex + 1}/${_tts.sentenceCount} 句';
@@ -168,9 +169,9 @@ class _TtsPanelState extends State<TtsPanel> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                _tts.capability == TtsCapability.platform
+                _tts.capability == TtsCapabilityPort.platform
                     ? '正在使用 ${_tts.engineLabel} · $sentenceHint'
-                    : _tts.capability == TtsCapability.http
+                    : _tts.capability == TtsCapabilityPort.http
                     ? '正在使用 HTTP TTS · $sentenceHint'
                     : _tts.engineId == 'http'
                     ? 'HTTP TTS 未配置 · $sentenceHint'
@@ -297,7 +298,7 @@ class _TtsPanelState extends State<TtsPanel> {
                   DropdownButton<String>(
                     value: _tts.engineId,
                     underline: const SizedBox.shrink(),
-                    items: TtsService.engines
+                    items: _tts.engines
                         .map(
                           (e) => DropdownMenuItem(
                             value: e.id,

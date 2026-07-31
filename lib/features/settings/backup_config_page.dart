@@ -3,14 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
+import '../../application/bookshelf/webdav_prefs_port.dart';
+import '../../application/settings/backup_config_status_port.dart';
 import '../../domain/ports/backup_local_file_port.dart';
 import '../../domain/ports/legacy_room_import_use_case.dart';
 import '../../domain/remote/webdav_entry.dart';
 import '../../services/backup_service.dart';
-import '../../services/database_status_service.dart';
-import '../../services/engine_status_service.dart';
 import '../../application/file_system/app_paths_port.dart';
-import '../../services/webdav_prefs.dart';
 import '../../theme/legado_tokens.dart';
 
 enum BackupOperation { other, list, upload, restore, delete, rename }
@@ -80,6 +79,8 @@ class BackupConfigPage extends StatefulWidget {
     this.service,
     this.localFilePort,
     this.legacyRoomImportService,
+    this.webDavPrefs,
+    this.statusPort,
   });
 
   @visibleForTesting
@@ -90,6 +91,12 @@ class BackupConfigPage extends StatefulWidget {
 
   @visibleForTesting
   final LegacyRoomImportUseCase? legacyRoomImportService;
+
+  @visibleForTesting
+  final WebDavPrefsPort? webDavPrefs;
+
+  @visibleForTesting
+  final BackupConfigStatusPort? statusPort;
 
   @override
   State<BackupConfigPage> createState() => _BackupConfigPageState();
@@ -103,6 +110,10 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
   late final LegacyRoomImportUseCase _legacyRoomImportService =
       widget.legacyRoomImportService ?? context.read<LegacyRoomImportUseCase>();
   late final AppPathsPort _appPathsPort = context.read<AppPathsPort>();
+  late final WebDavPrefsPort _webDavPrefs =
+      widget.webDavPrefs ?? context.read<WebDavPrefsPort>();
+  late final BackupConfigStatusPort _statusPort =
+      widget.statusPort ?? context.read<BackupConfigStatusPort>();
   bool _busy = false;
   WebDavConfig? _webdav;
   List<LocalBackupEntry> _localBackups = [];
@@ -116,7 +127,7 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
   }
 
   Future<void> _load() async {
-    final webdav = await WebDavPrefs.load();
+    final webdav = await _webDavPrefs.load();
     List<LocalBackupEntry> local = [];
     if (_localFilePort.isAvailable) {
       try {
@@ -419,8 +430,7 @@ class _BackupConfigPageState extends State<BackupConfigPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final engineReady =
-        EngineStatusService.isAvailable && DatabaseStatusService.isReady;
+    final engineReady = _statusPort.engineReady;
     final webdavOk = _webdav?.isReady ?? false;
 
     return ListView(

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/settings/other_settings_port.dart';
 import 'package:legado_flutter/domain/ports/network_engine_port.dart';
 import 'package:legado_flutter/features/settings/other_settings_card.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
@@ -44,9 +45,12 @@ void main() {
     await tester.pumpWidget(
       Provider<CacheService>.value(
         value: _cacheService(),
-        child: const MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(child: OtherSettingsCard()),
+        child: Provider<OtherSettingsPort>.value(
+          value: const _FakeOtherSettingsPort(),
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(child: OtherSettingsCard()),
+            ),
           ),
         ),
       ),
@@ -79,9 +83,12 @@ void main() {
     await tester.pumpWidget(
       Provider<CacheService>.value(
         value: _cacheService(),
-        child: const MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(child: OtherSettingsCard()),
+        child: Provider<OtherSettingsPort>.value(
+          value: const _FakeOtherSettingsPort(),
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(child: OtherSettingsCard()),
+            ),
           ),
         ),
       ),
@@ -132,4 +139,29 @@ class _FakeNetworkEnginePort implements NetworkEnginePort {
     required String proxyPassword,
     required String dnsServers,
   }) {}
+}
+
+class _FakeOtherSettingsPort implements OtherSettingsPort {
+  const _FakeOtherSettingsPort();
+
+  @override
+  bool get engineAvailable => false;
+
+  @override
+  Future<OtherNetworkConfig> loadNetwork() async => const OtherNetworkConfig();
+
+  @override
+  Future<void> saveNetwork(OtherNetworkConfig config) async {}
+
+  @override
+  Future<void> applyNetwork(OtherNetworkConfig config) async {}
+
+  @override
+  Future<String?> loadDataDir() async => null;
+
+  @override
+  Future<void> saveDataDir(String? path) async {}
+
+  @override
+  Future<void> clearHttpTtsCache() async {}
 }

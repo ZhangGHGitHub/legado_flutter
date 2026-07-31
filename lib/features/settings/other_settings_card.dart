@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/settings/other_settings_port.dart';
 import '../../config/app_config.dart';
-import '../../services/app_paths.dart';
 import '../../services/cache_service.dart';
-import '../../services/engine_status_service.dart';
-import '../../services/network_prefs.dart';
-import '../../services/tts_service.dart';
 import '../../theme/legado_tokens.dart';
 
 /// 其它设置 — 代理 / DNS / 缓存 / 数据目录（Phase 4.3）
@@ -19,6 +16,7 @@ class OtherSettingsCard extends StatefulWidget {
 
 class _OtherSettingsCardState extends State<OtherSettingsCard> {
   late final CacheService _cacheService;
+  late final OtherSettingsPort _settingsPort;
   bool _loading = true;
   bool _proxyEnabled = false;
   String _proxyType = 'http';
@@ -34,6 +32,7 @@ class _OtherSettingsCardState extends State<OtherSettingsCard> {
   void initState() {
     super.initState();
     _cacheService = context.read<CacheService>();
+    _settingsPort = context.read<OtherSettingsPort>();
     _load();
   }
 
@@ -50,8 +49,8 @@ class _OtherSettingsCardState extends State<OtherSettingsCard> {
 
   Future<void> _load() async {
     try {
-      final net = await NetworkPrefs.load();
-      final dataDir = await AppDataPrefs.loadDataDir();
+      final net = await _settingsPort.loadNetwork();
+      final dataDir = await _settingsPort.loadDataDir();
       CacheStats? stats;
       try {
         stats = await _cacheService.loadStats();
@@ -74,8 +73,8 @@ class _OtherSettingsCardState extends State<OtherSettingsCard> {
     }
   }
 
-  NetworkPrefsConfig _currentNetworkConfig() {
-    return NetworkPrefsConfig(
+  OtherNetworkConfig _currentNetworkConfig() {
+    return OtherNetworkConfig(
       proxyEnabled: _proxyEnabled,
       proxyType: _proxyType,
       proxyHost: _hostCtrl.text.trim(),
@@ -88,8 +87,8 @@ class _OtherSettingsCardState extends State<OtherSettingsCard> {
 
   Future<void> _saveNetwork() async {
     final config = _currentNetworkConfig();
-    await NetworkPrefs.save(config);
-    await NetworkPrefs.applyToEngine(config);
+    await _settingsPort.saveNetwork(config);
+    await _settingsPort.applyNetwork(config);
     if (mounted) {
       ScaffoldMessenger.of(
         context,
@@ -99,7 +98,7 @@ class _OtherSettingsCardState extends State<OtherSettingsCard> {
 
   Future<void> _saveDataDir() async {
     final path = _dataDirCtrl.text.trim();
-    await AppDataPrefs.saveDataDir(path.isEmpty ? null : path);
+    await _settingsPort.saveDataDir(path.isEmpty ? null : path);
     if (mounted) {
       ScaffoldMessenger.of(
         context,
@@ -128,7 +127,7 @@ class _OtherSettingsCardState extends State<OtherSettingsCard> {
 
   Future<void> _clearHttpTtsCache() async {
     try {
-      await TtsService.instance.clearHttpTtsCache();
+      await _settingsPort.clearHttpTtsCache();
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -154,7 +153,7 @@ class _OtherSettingsCardState extends State<OtherSettingsCard> {
       );
     }
 
-    final engineReady = EngineStatusService.isAvailable;
+    final engineReady = _settingsPort.engineAvailable;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

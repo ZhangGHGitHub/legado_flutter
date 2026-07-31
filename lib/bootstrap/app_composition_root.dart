@@ -43,6 +43,7 @@ import '../application/reader/read_style_prefs_port.dart';
 import '../application/reader/read_style_zip_port.dart';
 import '../application/reader/reader_image_cache_port.dart';
 import '../application/reader/reader_font_port.dart';
+import '../application/reader/tts_port.dart';
 import '../application/reader/manga_prefs_port.dart';
 import '../application/replace/replace_preset_port.dart';
 import '../application/qr/qr_code_port.dart';
@@ -57,6 +58,9 @@ import '../application/startup/startup_task_runner.dart';
 import '../application/theme/theme_import_port.dart';
 import '../application/web_api/repository_web_api_data_port.dart';
 import '../application/web_api/web_api_prefs_port.dart';
+import '../application/settings/web_api_settings_port.dart';
+import '../application/settings/other_settings_port.dart';
+import '../application/settings/backup_config_status_port.dart';
 import '../bridge/legado_db_bridge.dart';
 import '../bridge/legado_engine_bridge.dart';
 import '../config/app_config.dart';
@@ -153,6 +157,7 @@ import '../infrastructure/preferences/shared_preferences_simulated_reading_prefs
 import '../infrastructure/preferences/shared_preferences_read_style_prefs_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_web_api_prefs_adapter.dart';
 import '../infrastructure/reader/reader_font_port_adapter.dart';
+import '../infrastructure/reader/tts_port_adapter.dart';
 import '../infrastructure/reader/manga_prefs_port_adapter.dart';
 import '../infrastructure/reader/reader_image_cache_port_adapter.dart';
 import '../infrastructure/replace/replace_preset_port_adapter.dart';
@@ -164,6 +169,9 @@ import '../infrastructure/qr/qr_code_port_adapter.dart';
 import '../infrastructure/rss/rss_star_prefs_port_adapter.dart';
 import '../infrastructure/theme/theme_import_port_adapter.dart';
 import '../infrastructure/web_api/dart_io_web_api_port.dart';
+import '../infrastructure/settings/web_api_settings_port_adapter.dart';
+import '../infrastructure/settings/other_settings_port_adapter.dart';
+import '../infrastructure/settings/backup_config_status_port_adapter.dart';
 import '../infrastructure/webdav/frb_webdav_repository.dart';
 import '../providers/replace_provider.dart';
 import '../providers/rss_provider.dart';
@@ -427,6 +435,7 @@ abstract final class AppCompositionRoot {
             value: const SharedPreferencesReadStylePrefsAdapter(),
           ),
           Provider<ReaderFontPort>.value(value: const ReaderFontPortAdapter()),
+          Provider<TtsPort>.value(value: TtsPortAdapter(TtsService.instance)),
           Provider<BookCacheExportPort>.value(
             value: BookCacheExportPortAdapter(contentCache),
           ),
@@ -438,6 +447,15 @@ abstract final class AppCompositionRoot {
           ),
           Provider<WebApiPrefsPort>.value(
             value: const SharedPreferencesWebApiPrefsAdapter(),
+          ),
+          Provider<WebApiSettingsPort>.value(
+            value: WebApiSettingsPortAdapter(),
+          ),
+          Provider<OtherSettingsPort>.value(
+            value: const OtherSettingsPortAdapter(),
+          ),
+          Provider<BackupConfigStatusPort>.value(
+            value: const BackupConfigStatusPortAdapter(),
           ),
           Provider<SourceDebugFormatterPort>.value(
             value: const SourceDebugFormatterAdapter(),

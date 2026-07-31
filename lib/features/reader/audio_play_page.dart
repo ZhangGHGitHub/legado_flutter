@@ -6,9 +6,9 @@ import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
+import '../../application/reader/tts_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/tts_service.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../../widgets/remote_binary_image.dart';
@@ -62,7 +62,7 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
   static const _chromeFg = Colors.white;
   static const _accentBorder = Color(0xFFFF6D00);
 
-  final _tts = TtsService.instance;
+  late final TtsPort _tts;
   late int _chapterIndex;
   String _content = '';
   bool _loading = false;
@@ -73,6 +73,7 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
   @override
   void initState() {
     super.initState();
+    _tts = context.read<TtsPort>();
     _chapterIndex = widget.initialChapterIndex.clamp(
       0,
       max(0, widget.chapters.length - 1),
@@ -162,8 +163,8 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
   }
 
   void _maybeWarnCapability() {
-    if (_tts.capability == TtsCapability.stub &&
-        _tts.state == TtsPlaybackState.playing) {
+    if (_tts.capability == TtsCapabilityPort.stub &&
+        _tts.state == TtsPlaybackStatePort.playing) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('系统语音引擎不可用（桌面 stub），界面控件可正常预览'),
@@ -208,13 +209,13 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
       final size = widget.chapters.length;
       if (size == 0) return;
       switch (_tts.playMode) {
-        case TtsPlayMode.listEndStop:
+        case TtsPlayModePort.listEndStop:
           if (_chapterIndex + 1 < size) {
             await _skipTo(_chapterIndex + 1);
           }
-        case TtsPlayMode.singleLoop:
+        case TtsPlayModePort.singleLoop:
           await _tts.speak(_content);
-        case TtsPlayMode.random:
+        case TtsPlayModePort.random:
           if (size == 1) {
             await _tts.speak(_content);
           } else {
@@ -224,7 +225,7 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
             }
             await _skipTo(next);
           }
-        case TtsPlayMode.listLoop:
+        case TtsPlayModePort.listLoop:
           await _skipTo((_chapterIndex + 1) % size);
       }
     } finally {
@@ -431,11 +432,11 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
     }
   }
 
-  IconData _playModeIcon(TtsPlayMode mode) => switch (mode) {
-    TtsPlayMode.listEndStop => Icons.playlist_play,
-    TtsPlayMode.singleLoop => Icons.repeat_one,
-    TtsPlayMode.random => Icons.shuffle,
-    TtsPlayMode.listLoop => Icons.repeat,
+  IconData _playModeIcon(TtsPlayModePort mode) => switch (mode) {
+    TtsPlayModePort.listEndStop => Icons.playlist_play,
+    TtsPlayModePort.singleLoop => Icons.repeat_one,
+    TtsPlayModePort.random => Icons.shuffle,
+    TtsPlayModePort.listLoop => Icons.repeat,
   };
 
   String _fmtClock(int units) {
@@ -471,7 +472,7 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
 
   @override
   Widget build(BuildContext context) {
-    final playing = _tts.state == TtsPlaybackState.playing;
+    final playing = _tts.state == TtsPlaybackStatePort.playing;
     final timerLeft = _tts.timerRemainingMinutes;
     final showSpeed = (_tts.speechRate - 1.0).abs() > 0.05;
     final progress = _seeking ? _seekValue : _progressValue.toDouble();
@@ -479,8 +480,8 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
     final lyricLine = _tts.currentSentence.trim();
     final showLyric =
         lyricLine.isNotEmpty &&
-        (_tts.state == TtsPlaybackState.playing ||
-            _tts.state == TtsPlaybackState.paused);
+        (_tts.state == TtsPlaybackStatePort.playing ||
+            _tts.state == TtsPlaybackStatePort.paused);
 
     return Theme(
       data: ThemeData(

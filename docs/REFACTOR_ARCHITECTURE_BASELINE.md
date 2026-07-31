@@ -3044,3 +3044,17 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。
 
 边界结论：本批完成 Obsidian 导出和 Reader AI Chat 的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `41` 条 Feature 依赖继续按单边界推进。
+
+## 157. 2026-07-31：R6 Web API、TTS、其它设置与备份配置端口边界
+
+- `WebApiSettingsCard` 改用 `WebApiSettingsPort`，由 adapter 保留既有 Web API 启停、状态和 API URL 语义；`AudioPlayPage` 与 `TtsPanel` 共用 `TtsPort`，adapter 映射既有系统/HTTP TTS、stub、句子控制、播放模式、定时和 HTTP TTS 配置行为。
+- `OtherSettingsCard` 改用 `OtherSettingsPort`，统一封装网络代理/DNS、数据目录、引擎就绪状态和 HTTP TTS 缓存清理；`BackupConfigPage` 改用 WebDAV 偏好端口和备份状态端口，保留 BackupService、文件端口、Room 导入和 WebDAV 业务流程。
+- 组合根注册新增 adapter；受影响测试宿主显式注入 fake，未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则；剩余 Feature→service 依赖未加入白名单。
+
+验证结果：
+
+- 端口/页面组合定向 `24/24`，新增 TTS adapter 契约测试覆盖状态、播放模式、句子绑定和定位。
+- Flutter 串行全量 `flutter test --no-pub --concurrency=1 --reporter compact`：`798` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`：`No issues found`；架构扫描由 `41` 降至 `30` 条既有 Feature→service backlog；`git diff --check` 在文档更新后复核。
+- 全仓 analyze 首次因命令时限退出 `124`，在延长时限后通过；期间发现并修复 Web API 异步 `BuildContext` 诊断，未放宽断言。Rust 未改动，本批不重复运行 Rust 测试。
+
+边界结论：本批完成 Web API 设置、AudioPlay/TTS、其它设置和备份配置的 application/infrastructure 调用者迁移，旧 service 继续作为兼容实现入口，剩余 `30` 条 Feature 依赖继续按单边界推进。Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 仍按暂停门禁执行。

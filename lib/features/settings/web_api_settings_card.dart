@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/platform/clipboard_port.dart';
+import '../../application/settings/web_api_settings_port.dart';
 import '../../application/web_api/web_api_prefs_port.dart';
 import '../../domain/web_api_status.dart';
-import '../../services/web_api_service.dart';
 
 /// 配置页 Web API 设置卡片
 class WebApiSettingsCard extends StatefulWidget {
@@ -35,8 +35,10 @@ class _WebApiSettingsCardState extends State<WebApiSettingsCard> {
   }
 
   Future<void> _load() async {
-    final config = await context.read<WebApiPrefsPort>().load();
-    final status = WebApiService.currentStatus();
+    final prefs = context.read<WebApiPrefsPort>();
+    final webApi = context.read<WebApiSettingsPort>();
+    final config = await prefs.load();
+    final status = webApi.currentStatus();
     if (!mounted) return;
     setState(() {
       _enabled = config.enabled;
@@ -48,12 +50,13 @@ class _WebApiSettingsCardState extends State<WebApiSettingsCard> {
   }
 
   Future<void> _toggle(bool value) async {
-    if (!WebApiService.isAvailable) {
+    final webApi = context.read<WebApiSettingsPort>();
+    if (!webApi.isAvailable) {
       _showSnack('Rust 引擎或数据库未就绪');
       return;
     }
     setState(() => _loading = true);
-    final status = await WebApiService.setEnabled(value);
+    final status = await webApi.setEnabled(value);
     await _load();
     if (!mounted) return;
     _showSnack(value ? 'Web API 已启动: ${status?.baseUrl ?? ''}' : 'Web API 已停止');
@@ -64,12 +67,11 @@ class _WebApiSettingsCardState extends State<WebApiSettingsCard> {
         int.tryParse(_portCtrl.text.trim()) ?? WebApiPrefsPort.defaultPort;
     final token = _tokenCtrl.text.trim();
     final prefs = context.read<WebApiPrefsPort>();
-    await prefs.save(
-      WebApiConfig(enabled: _enabled, port: port, token: token),
-    );
+    final webApi = context.read<WebApiSettingsPort>();
+    await prefs.save(WebApiConfig(enabled: _enabled, port: port, token: token));
     if (_enabled) {
       setState(() => _loading = true);
-      final status = await WebApiService.start(port: port, token: token);
+      final status = await webApi.start(port: port, token: token);
       if (status != null) {
         await prefs.save(
           WebApiConfig(enabled: true, port: status.port, token: status.token),
@@ -147,7 +149,10 @@ class _WebApiSettingsCardState extends State<WebApiSettingsCard> {
                 if (running && baseUrl.isNotEmpty)
                   OutlinedButton.icon(
                     onPressed: () async {
-                      final url = '$baseUrl/api/books';
+                      final url = context.read<WebApiSettingsPort>().apiUrl(
+                        _status!,
+                        '/api/books',
+                      );
                       await context.read<ClipboardPort>().copyText(url);
                       _showSnack('API 地址已复制，Token 请通过 Authorization 请求头传递');
                     },

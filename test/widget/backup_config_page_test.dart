@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/file_system/app_paths_port.dart';
+import 'package:legado_flutter/application/settings/backup_config_status_port.dart';
 import 'package:legado_flutter/domain/ports/backup_local_file_port.dart';
 import 'package:legado_flutter/domain/ports/legacy_room_import_use_case.dart';
 import 'package:legado_flutter/domain/remote/webdav_entry.dart';
@@ -10,6 +11,7 @@ import 'package:legado_flutter/domain/remote/legacy_room_import_report.dart';
 import 'package:legado_flutter/features/settings/backup_config_page.dart';
 import 'package:legado_flutter/application/preferences/shared_preferences_runtime.dart';
 import 'package:legado_flutter/services/backup_service.dart';
+import 'package:legado_flutter/infrastructure/bookshelf/shared_preferences_webdav_prefs_port_adapter.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -99,6 +101,13 @@ final _testLocalFilePort = _FakeBackupLocalFilePort(const []);
 final _testLegacyRoomImport = _FakeLegacyRoomImportUseCase();
 final _testAppPaths = _FakeAppPathsPort(Directory.systemTemp);
 
+class _FakeBackupConfigStatusPort implements BackupConfigStatusPort {
+  const _FakeBackupConfigStatusPort();
+
+  @override
+  bool get engineReady => false;
+}
+
 class _FakeAppPathsPort implements AppPathsPort {
   _FakeAppPathsPort(this.root);
 
@@ -128,6 +137,8 @@ Future<void> _pumpWebDavPage(WidgetTester tester, BackupService service) async {
             service: service,
             localFilePort: _testLocalFilePort,
             legacyRoomImportService: _testLegacyRoomImport,
+            webDavPrefs: const SharedPreferencesWebDavPrefsPortAdapter(),
+            statusPort: const _FakeBackupConfigStatusPort(),
           ),
         ),
       ),
@@ -147,6 +158,8 @@ void main() {
               service: _backupService(),
               localFilePort: _testLocalFilePort,
               legacyRoomImportService: _testLegacyRoomImport,
+              webDavPrefs: const SharedPreferencesWebDavPrefsPortAdapter(),
+              statusPort: const _FakeBackupConfigStatusPort(),
             ),
           ),
         ),
@@ -181,6 +194,8 @@ void main() {
             service: _backupService(),
             localFilePort: port,
             legacyRoomImportService: _testLegacyRoomImport,
+            webDavPrefs: const SharedPreferencesWebDavPrefsPortAdapter(),
+            statusPort: const _FakeBackupConfigStatusPort(),
           ),
         ),
       ),

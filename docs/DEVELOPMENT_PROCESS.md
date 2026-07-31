@@ -305,6 +305,8 @@ Day 2  PR/Issue 模板
 
 2026-07-31 当前 R6 记录：D1/D2 两条不重叠 agent 线完成 Obsidian 导出和 Reader AI Chat，主线完成 Obsidian port 的组合根接入。定向 `8/8`；Flutter 串行全量 `796` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `46` 降至 `41` 条既有 Feature→service backlog。Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。详见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
 
+2026-07-31 当前 R6 记录：继续按“先定向测试、再全量门禁、最后记录”推进 Web API 设置、AudioPlay/TTS、其它设置和备份配置的 application/infrastructure 端口化。新增 `WebApiSettingsPort`、`TtsPort`、`OtherSettingsPort`、备份状态端口；组合根注册 adapter，测试宿主补齐端口依赖；TTS 面板与 AudioPlay 共用同一端口，保留播放模式、章节切换、定时、HTTP TTS 和系统 stub 行为。定向组合 `24/24`；Flutter 串行全量 `798` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `41` 降至 `30` 条既有 Feature→service backlog。全仓 analyze 首次因执行时限 `124` 终止，延长时限重跑通过；未削弱断言。Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)
