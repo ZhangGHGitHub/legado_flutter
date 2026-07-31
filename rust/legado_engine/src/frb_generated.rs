@@ -1466,7 +1466,7 @@ fn wire__crate__api__network__fetch_public_text_impl(
             let api_user_agent = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok =
                             crate::api::network::fetch_public_text(api_url, api_user_agent).await?;
@@ -2772,7 +2772,7 @@ fn wire__crate__api__network__send_application_binary_http_request_impl(
             let api_max_response_bytes = <i32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok = crate::api::network::send_application_binary_http_request(
                             api_url,
@@ -2823,7 +2823,7 @@ fn wire__crate__api__network__send_application_http_request_impl(
             let api_allow_private_network = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok = crate::api::network::send_application_http_request(
                             api_url,

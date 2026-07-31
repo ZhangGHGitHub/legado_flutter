@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/网络 FFI 错误边界：将公开的文本抓取、应用 HTTP 文本请求和应用二进制请求迁移到 Rust `AppError`，保留原请求与错误文本语义；新增 `Validation`、`Parse`、`Network` 分类回归，Rust 网络定向 `9/9`、全量 `199` 通过，Windows FRB HTTP 集成 `2/2`，Flutter 全量 `894` 通过、`3` 项既有条件跳过，analyze 通过，并同步重新生成 FRB。其它网络配置/Cookie、裸 HTTP、RSS、JS、笔记和书签入口仍按后续批次迁移。
 - 架构/模型与状态样板：在已有 `SearchResultItem` Freezed 镜像基础上，补充 `BookReadConfig`、`BookGroup`、`Chapter` 的 Freezed 定义与兼容映射；新增 `BookshelfNotifier`，覆盖初始、加载、成功、失败、刷新保留旧数据、并发旧结果丢弃和不可变列表，定向 `8` 项通过。Book/BookSource 仍未全部迁移。
 - 架构/FFI 追溯：`debug_search`、`debug_toc` 和 23 个数据库入口已接入 Rust `AppError`，FRB 生成链已恢复并验证；Rust 全量 `192` 项通过，Flutter 串行全量 `894` 项通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构扫描和 `git diff --check` 均通过。运行时曾由过期 debug DLL 暴露 FRB 错误标签不匹配，重建 `rust/target/debug/legado_engine.dll` 后定向/全量恢复通过；生成器的 SDK `3.11.0`/analyzer `3.9.0` 版本提示为非阻塞警告，其它公开 FFI `Result<T, String>` 仍按计划继续迁移。
 - 架构/组合根：生产组合根通过 ProviderScope 注入真实 `RealCoreApi`，复用现有 Book/BookSource Repository 与书源端口；书架页面仍保留 `BookProvider` 单一事实源，未提前切换到 `BookshelfNotifier`，避免刷新、删除和分组命令出现双状态。

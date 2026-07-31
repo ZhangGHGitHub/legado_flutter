@@ -335,6 +335,8 @@ Day 2  PR/Issue 模板
 2026-08-01 当前 R6 记录：Batch 11/12 将 Rust 校验及主请求桥接的收尾统一为 `finally`：`validateSource`、搜索、发现、详情、目录、正文均在 Rust 操作结束后先同步登录头，再 drain HTTP trace，保持返回值、原始异常和下一轮 trace 初始化语义。引擎/source debug 定向 `2` 个可运行测试通过、`2` 个在线 smoke 按开关跳过；Flutter 串行全量 `873` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构脚本和 `git diff --check` 通过。调试搜索/目录、裸 HTTP、登录头队列失败重试/空值删除及 Rust loginCheckJs 错误语义继续作为后续 backlog，未修改 `legado-main/`。
 2026-08-01 当前 R6 记录：Batch 13 补齐 `debugSearch`、`debugToc`、`httpFetch` 的 bridge finally 收尾；调试入口按同步登录头后 drain trace，裸 HTTP 始终 drain trace且有 source 时执行防御性登录头同步。owner 定向 `4/4`；Flutter 串行全量 `873` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构脚本和 `git diff --check` 通过。未修改 Rust/`legado-main/`；真实登录头持久化链路、trace 异常 fixture、队列 ack/重试和空值删除继续作为 backlog。
 
+2026-08-01 当前 R2/R6 追溯记录：网络文本与二进制 HTTP 的三个公开 FFI 入口统一为 Rust `AppError`，同步更新 FRB 绑定，未改变网络策略、请求体/头、超时、大小限制和非 2xx 响应。新增分类回归后 `cargo test -p legado_engine api::network::tests -- --nocapture` 为 `9/9`；`cargo test -p legado_engine` 为 `199` 通过；Windows FRB HTTP 集成为 `2/2`；Flutter 串行全量为 `894` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 已通过。架构边界和最终 diff 检查随后执行。其余公开 `Result<T, String>` 入口、QuickJS 超时、初始化合并、编码事实源和生产书架 Riverpod 切换保持未完成状态。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)

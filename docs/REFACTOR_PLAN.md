@@ -32,6 +32,8 @@
 
 2026-08-01 当前追溯补充：工作树继续完成 `BookReadConfig`、`BookGroup`、`Chapter` Freezed/兼容映射、`BookshelfNotifier` 状态样板、`debug_search/debug_toc` 和 23 个数据库入口的 Rust `AppError` 迁移；书架 Notifier 定向 `8` 项、Chapter 定向 `6` 项、组合根定向 `4` 项通过。FRB 生成链已恢复并验证：Rust 全量 `192` 项通过，Flutter 串行全量 `894` 项通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 均通过。运行时验证补建了过期的 `rust/target/debug/legado_engine.dll`，确认生成绑定与动态库协议一致。生成器的 SDK/analyzer 版本提示为非阻塞警告。本条只做追溯记录，不改变既定 Phase 顺序、R1-R6 退出条件或 Room v99 -> Rust v17、正文/目录/分页/章节身份/UTF-16 阅读位置门禁。
 
+2026-08-01 网络错误边界批次：将 `fetch_public_text`、应用 HTTP 文本请求和二进制请求的公开 FFI 错误统一为 `AppError`，保留输入校验、文本解码、SSRF、响应大小、请求方法/头体和非 2xx 响应行为；新增网络错误分类回归并重新生成 FRB。Rust 网络定向 `9` 项、Rust 全量 `199` 项、Windows FRB HTTP 集成 `2` 项、Flutter 串行全量 `894` 项通过，`3` 项既有条件跳过；`flutter analyze --no-pub` 已通过。架构扫描和 `git diff --check` 待本批最后执行。其余网络配置/Cookie、裸 HTTP、RSS、JS、笔记和书签入口仍未迁移，不宣称统一错误边界已完成。
+
 ---
 
 ## 0.0 R0 重基线附录（2026-07-27）

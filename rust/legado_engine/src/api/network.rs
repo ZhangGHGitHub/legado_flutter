@@ -1,3 +1,4 @@
+use super::AppError;
 use crate::http::client;
 use crate::http::network_config::{self, NetworkConfig};
 use crate::rule::js_engine;
@@ -108,7 +109,7 @@ pub fn get_network_config() -> NetworkConfigDto {
 ///
 /// `user_agent` 为空时使用引擎默认值；传入 `null` 对齐规则订阅
 /// `#requestWithoutUA` 的既有请求语义。
-pub async fn fetch_public_text(url: String, user_agent: String) -> Result<String, String> {
+pub async fn fetch_public_text(url: String, user_agent: String) -> Result<String, AppError> {
     let source_json = if user_agent.is_empty() {
         serde_json::json!({ "bookSourceUrl": url }).to_string()
     } else {
@@ -118,7 +119,17 @@ pub async fn fetch_public_text(url: String, user_agent: String) -> Result<String
         })
         .to_string()
     };
-    client::fetch_with_source(&url, "GET", None, "UTF-8", &source_json).await
+    client::fetch_with_source(&url, "GET", None, "UTF-8", &source_json)
+        .await
+        .map_err(AppError::Network)
+}
+
+fn map_application_http_error(message: String) -> AppError {
+    if message.starts_with("响应不是 UTF-8:") {
+        AppError::Parse(message)
+    } else {
+        AppError::Network(message)
+    }
 }
 
 /// 发送应用服务 HTTP 请求。`allow_private_network` 仅供用户显式配置的本地服务使用。
@@ -130,9 +141,9 @@ pub async fn send_application_http_request(
     body: Option<String>,
     timeout_seconds: i32,
     allow_private_network: bool,
-) -> Result<ApplicationHttpResponseDto, String> {
+) -> Result<ApplicationHttpResponseDto, AppError> {
     if timeout_seconds <= 0 {
-        return Err("请求超时秒数必须大于 0".to_string());
+        return Err(AppError::Validation("请求超时秒数必须大于 0".to_string()));
     }
     let policy = if allow_private_network {
         client::ApplicationNetworkPolicy::LocalNetwork
@@ -147,7 +158,8 @@ pub async fn send_application_http_request(
         Duration::from_secs(timeout_seconds as u64),
         policy,
     )
-    .await?;
+    .await
+    .map_err(map_application_http_error)?;
     Ok(ApplicationHttpResponseDto {
         status_code: i32::from(response.status_code),
         body: response.body,
@@ -164,12 +176,12 @@ pub async fn send_application_binary_http_request(
     timeout_seconds: i32,
     allow_private_network: bool,
     max_response_bytes: i32,
-) -> Result<ApplicationBinaryHttpResponseDto, String> {
+) -> Result<ApplicationBinaryHttpResponseDto, AppError> {
     if timeout_seconds <= 0 {
-        return Err("请求超时秒数必须大于 0".to_string());
+        return Err(AppError::Validation("请求超时秒数必须大于 0".to_string()));
     }
     if max_response_bytes < 0 {
-        return Err("最大响应字节数不能小于 0".to_string());
+        return Err(AppError::Validation("最大响应字节数不能小于 0".to_string()));
     }
     let policy = if allow_private_network {
         client::ApplicationNetworkPolicy::LocalNetwork
@@ -185,7 +197,8 @@ pub async fn send_application_binary_http_request(
         policy,
         (max_response_bytes > 0).then_some(max_response_bytes as usize),
     )
-    .await?;
+    .await
+    .map_err(AppError::Network)?;
     Ok(ApplicationBinaryHttpResponseDto {
         status_code: i32::from(response.status_code),
         content_type: response.content_type.unwrap_or_default(),
@@ -311,7 +324,10 @@ mod tests {
         )
         .await
         .unwrap_err();
-        assert!(error.contains("SSRF"), "unexpected error: {error}");
+        assert!(
+            matches!(error, AppError::Network(ref message) if message.contains("SSRF")),
+            "unexpected error: {error}"
+        );
 
         let (base, _) = start_fixture(200, "local-ok");
         let response =
@@ -344,7 +360,10 @@ mod tests {
         )
         .await
         .unwrap_err();
-        assert!(error.contains("响应过大"), "unexpected error: {error}");
+        assert!(
+            matches!(error, AppError::Network(ref message) if message.contains("响应过大")),
+            "unexpected error: {error}"
+        );
     }
 
     #[tokio::test]
@@ -376,7 +395,10 @@ mod tests {
         )
         .await
         .unwrap_err();
-        assert!(error.contains("响应过大"), "unexpected error: {error}");
+        assert!(
+            matches!(error, AppError::Network(ref message) if message.contains("响应过大")),
+            "unexpected error: {error}"
+        );
     }
 
     #[tokio::test]
@@ -412,6 +434,58 @@ mod tests {
         assert_eq!(response.status_code, 409);
         assert_eq!(response.content_type, "application/octet-stream");
         assert_eq!(response.body, vec![0, 128, 255]);
+    }
+
+    #[tokio::test]
+    async fn application_http_input_errors_are_validation_errors() {
+        let error = send_application_http_request(
+            "http://localhost:4567/validation".to_string(),
+            "GET".to_string(),
+            HashMap::new(),
+            None,
+            0,
+            true,
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            AppError::Validation(ref message) if message == "请求超时秒数必须大于 0"
+        ));
+
+        let error = send_application_binary_http_request(
+            "http://localhost:4567/validation".to_string(),
+            "GET".to_string(),
+            HashMap::new(),
+            None,
+            5,
+            true,
+            -1,
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            AppError::Validation(ref message) if message == "最大响应字节数不能小于 0"
+        ));
+    }
+
+    #[tokio::test]
+    async fn public_text_http_errors_are_network_errors_with_original_text() {
+        let error = fetch_public_text("file:///private".to_string(), String::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            AppError::Network(ref message) if message == "仅允许 http/https 请求"
+        ));
+    }
+
+    #[test]
+    fn application_text_decode_errors_are_parse_errors_with_original_text() {
+        let message = "响应不是 UTF-8: invalid byte".to_string();
+        let error = map_application_http_error(message.clone());
+        assert!(matches!(error, AppError::Parse(ref value) if value == &message));
     }
 
     #[test]

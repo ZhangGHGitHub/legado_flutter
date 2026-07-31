@@ -9,10 +9,12 @@
 目标错误类型：
 
 ```text
-AppError = Network | Parse | Database | JsExecution | Validation | Unsupported | Cancelled
+AppError = Network | Parse | Database | JsExecution | Validation | Unsupported | Cancelled | Unknown
 ```
 
-当前 Rust FFI 仍以 `String` 返回错误；在 AppError 迁移完成前，Real adapter 必须集中负责字符串到分类错误的映射，页面不得自行解析错误文本。
+当前已迁移的 Rust FFI 入口使用结构化 `AppError`；尚未迁移的入口仍可能返回 `String`，由后续批次逐条收敛。Real adapter 必须集中负责过渡期错误映射，页面不得自行解析错误文本。
+
+已完成的首批错误边界包括书源主链、调试入口、数据库入口、阅读记录/备份入口，以及统一 HTTP 文本和二进制请求入口。错误原文保留在对应 `AppError` 变体中。
 
 ## 模型
 
@@ -86,3 +88,13 @@ abstract interface class CoreApi {
 2. 修改错误：先更新 `AppError`、Dart 映射和 Mock 错误样本。
 3. 修改函数签名：必须同时更新 Real adapter、Mock adapter、调用者和契约测试。
 4. 契约测试通过后，才允许迁移下一条链路。
+
+## 网络 HTTP 边界（2026-08-01）
+
+| Rust 入口 | 成功输出 | 错误分类 |
+|---|---|---|
+| `fetch_public_text` | `String` | `Network` |
+| `send_application_http_request` | `ApplicationHttpResponseDto` | `Validation`、`Parse`、`Network` |
+| `send_application_binary_http_request` | `ApplicationBinaryHttpResponseDto` | `Validation`、`Network` |
+
+输入校验、文本解码、SSRF、响应大小和传输错误均保留原错误文本；本批不改变请求方法、请求头、Cookie、超时、大小限制或非 2xx 响应行为。

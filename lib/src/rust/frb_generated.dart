@@ -1756,7 +1756,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiNetworkFetchPublicTextConstMeta,
         argValues: [url, userAgent],
@@ -2951,7 +2951,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_application_binary_http_response_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiNetworkSendApplicationBinaryHttpRequestConstMeta,
         argValues: [
@@ -3010,7 +3010,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_application_http_response_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiNetworkSendApplicationHttpRequestConstMeta,
         argValues: [
