@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/reader/manga_prefs_port.dart';
 import '../../help/manga_image_extractor.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/manga_prefs.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../../widgets/remote_binary_image.dart';
@@ -24,6 +24,7 @@ class MangaReaderPage extends StatefulWidget {
   final List<Chapter> chapters;
   final int initialChapterIndex;
   final String? initialContent;
+  final MangaPrefsPort? prefs;
 
   const MangaReaderPage({
     super.key,
@@ -31,6 +32,7 @@ class MangaReaderPage extends StatefulWidget {
     required this.chapters,
     this.initialChapterIndex = 0,
     this.initialContent,
+    this.prefs,
   });
 
   static Future<void> open(
@@ -39,6 +41,7 @@ class MangaReaderPage extends StatefulWidget {
     required List<Chapter> chapters,
     int initialChapterIndex = 0,
     String? initialContent,
+    MangaPrefsPort? prefs,
   }) {
     return Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -47,6 +50,7 @@ class MangaReaderPage extends StatefulWidget {
           chapters: chapters,
           initialChapterIndex: initialChapterIndex,
           initialContent: initialContent,
+          prefs: prefs,
         ),
       ),
     );
@@ -58,6 +62,7 @@ class MangaReaderPage extends StatefulWidget {
 
 class _MangaReaderPageState extends State<MangaReaderPage>
     with SingleTickerProviderStateMixin {
+  late final MangaPrefsPort _prefs;
   late int _chapterIndex;
   List<String> _imageUrls = const [];
   Map<String, String> _imageHeaders = const {};
@@ -79,6 +84,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
   @override
   void initState() {
     super.initState();
+    _prefs = widget.prefs ?? context.read<MangaPrefsPort>();
     _chapterIndex = widget.initialChapterIndex.clamp(
       0,
       math.max(0, widget.chapters.length - 1),
@@ -94,7 +100,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     );
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await MangaPrefs.ensureLoaded();
+      await _prefs.ensureLoaded();
       if (!mounted) return;
       setState(() {});
       await _loadChapter(seed: widget.initialContent);
@@ -128,9 +134,9 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     return widget.chapters[_chapterIndex.clamp(0, widget.chapters.length - 1)];
   }
 
-  bool get _isHorizontal => MangaPrefs.direction != MangaReadDirection.vertical;
+  bool get _isHorizontal => _prefs.direction != MangaReadDirection.vertical;
 
-  bool get _isRtl => MangaPrefs.direction == MangaReadDirection.rightToLeft;
+  bool get _isRtl => _prefs.direction == MangaReadDirection.rightToLeft;
 
   Future<void> _loadChapter({String? seed, bool resetPage = true}) async {
     if (widget.chapters.isEmpty) {
@@ -208,7 +214,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
 
   void _precacheNearby() {
     if (!mounted || _imageUrls.isEmpty) return;
-    final n = MangaPrefs.preDownloadNum;
+    final n = _prefs.preDownloadNum;
     final start = _pageIndex;
     final end = math.min(_imageUrls.length, start + math.max(1, n));
     for (var i = start; i < end; i++) {
@@ -278,7 +284,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     if (_isHorizontal &&
         _pageController != null &&
         _pageController!.hasClients) {
-      if (MangaPrefs.disablePageAnim) {
+      if (_prefs.disablePageAnim) {
         _pageController!.jumpToPage(i);
       } else {
         _pageController!.animateToPage(
@@ -307,7 +313,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       _toggleChrome();
       return;
     }
-    if (MangaPrefs.disableClickScroll) {
+    if (_prefs.disableClickScroll) {
       _toggleChrome();
       return;
     }
@@ -331,8 +337,8 @@ class _MangaReaderPageState extends State<MangaReaderPage>
   }
 
   ColorFilter? _imageColorFilter() {
-    if (MangaPrefs.enableEInk) {
-      final t = MangaPrefs.eInkThreshold / 255.0;
+    if (_prefs.enableEInk) {
+      final t = _prefs.eInkThreshold / 255.0;
       final c = 1.0 + (t - 0.5) * 2.0;
       final o = 128 * (1 - c);
       return ColorFilter.matrix(<double>[
@@ -358,7 +364,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
         0,
       ]);
     }
-    if (MangaPrefs.enableGray) {
+    if (_prefs.enableGray) {
       return const ColorFilter.matrix(<double>[
         0.2126,
         0.7152,
@@ -382,7 +388,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
         0,
       ]);
     }
-    final f = MangaPrefs.colorFilter;
+    final f = _prefs.colorFilter;
     if (f.isIdentity) return null;
     final b = f.brightness.toDouble();
     return ColorFilter.matrix(<double>[
@@ -411,13 +417,13 @@ class _MangaReaderPageState extends State<MangaReaderPage>
 
   Widget _wrapFilter(Widget child) {
     final matrix = _imageColorFilter();
-    final f = MangaPrefs.colorFilter;
+    final f = _prefs.colorFilter;
     Widget w = child;
     if (matrix != null) {
       w = ColorFiltered(colorFilter: matrix, child: w);
     }
-    if (!MangaPrefs.enableEInk &&
-        !MangaPrefs.enableGray &&
+    if (!_prefs.enableEInk &&
+        !_prefs.enableGray &&
         (f.a > 0 || f.r > 0 || f.g > 0 || f.b > 0)) {
       w = ColorFiltered(
         colorFilter: ColorFilter.mode(
@@ -459,7 +465,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     );
 
     final filtered = _wrapFilter(img);
-    if (MangaPrefs.disableScale) return filtered;
+    if (_prefs.disableScale) return filtered;
     return InteractiveViewer(minScale: 1, maxScale: 4, child: filtered);
   }
 
@@ -475,7 +481,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       return PageView.builder(
         controller: _pageController,
         reverse: _isRtl,
-        physics: MangaPrefs.disableHorizontalPageSnap
+        physics: _prefs.disableHorizontalPageSnap
             ? const ClampingScrollPhysics()
             : const PageScrollPhysics(),
         itemCount: _imageUrls.length,
@@ -492,9 +498,9 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     return ListView.builder(
       controller: _verticalController,
       padding: EdgeInsets.zero,
-      itemCount: _imageUrls.length + (MangaPrefs.hideTitle ? 0 : 1),
+      itemCount: _imageUrls.length + (_prefs.hideTitle ? 0 : 1),
       itemBuilder: (_, i) {
-        if (!MangaPrefs.hideTitle && i == 0) {
+        if (!_prefs.hideTitle && i == 0) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Text(
@@ -504,7 +510,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
             ),
           );
         }
-        final imgIndex = MangaPrefs.hideTitle ? i : i - 1;
+        final imgIndex = _prefs.hideTitle ? i : i - 1;
         return _buildImage(_imageUrls[imgIndex], fillWidth: true);
       },
     );
@@ -512,7 +518,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
 
   /// 对齐 [ReaderInfoBarView]：高 20dp、底边距 10、左右 pad 10；左文案 + 右时钟
   Widget _infoBar(ThemeData theme) {
-    final cfg = MangaPrefs.footer;
+    final cfg = _prefs.footer;
     if (cfg.hideFooter || _loading || _imageUrls.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -651,7 +657,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
   }
 
   Future<void> _showColorFilterDialog() async {
-    var cfg = MangaPrefs.colorFilter;
+    var cfg = _prefs.colorFilter;
     await showDialog<void>(
       context: context,
       builder: (ctx) {
@@ -716,7 +722,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
                 ),
                 TextButton(
                   onPressed: () async {
-                    await MangaPrefs.setColorFilter(cfg);
+                    await _prefs.setColorFilter(cfg);
                     if (ctx.mounted) Navigator.pop(ctx);
                     if (mounted) setState(() {});
                   },
@@ -731,7 +737,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
   }
 
   Future<void> _showEpaperDialog() async {
-    var threshold = MangaPrefs.eInkThreshold;
+    var threshold = _prefs.eInkThreshold;
     await showDialog<void>(
       context: context,
       builder: (ctx) {
@@ -768,10 +774,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
                 ),
                 TextButton(
                   onPressed: () async {
-                    await MangaPrefs.setEInk(
-                      enabled: true,
-                      threshold: threshold,
-                    );
+                    await _prefs.setEInk(enabled: true, threshold: threshold);
                     if (ctx.mounted) Navigator.pop(ctx);
                     if (mounted) setState(() {});
                   },
@@ -786,7 +789,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
   }
 
   Future<void> _showFooterConfigDialog() async {
-    var cfg = MangaPrefs.footer;
+    var cfg = _prefs.footer;
     await showDialog<void>(
       context: context,
       builder: (ctx) {
@@ -934,7 +937,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
                 ),
                 TextButton(
                   onPressed: () async {
-                    await MangaPrefs.setFooter(cfg);
+                    await _prefs.setFooter(cfg);
                     if (ctx.mounted) Navigator.pop(ctx);
                     if (mounted) setState(() {});
                   },
@@ -987,6 +990,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
           book: result,
           chapters: List<Chapter>.from(chapters),
           initialChapterIndex: idx,
+          prefs: _prefs,
         ),
       ),
     );
@@ -996,7 +1000,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     _autoPageTimer?.cancel();
     _autoPageEnabled = enabled;
     if (!enabled) return;
-    final secs = math.max(1, MangaPrefs.autoPageSpeed);
+    final secs = math.max(1, _prefs.autoPageSpeed);
     _autoPageTimer = Timer.periodic(Duration(seconds: secs), (_) {
       if (!mounted || !_autoPageEnabled || _imageUrls.isEmpty) return;
       if (_pageIndex + 1 < _imageUrls.length) {
@@ -1012,20 +1016,20 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       case 'pre_download':
         final n = await _pickNumber(
           title: '预下载',
-          value: MangaPrefs.preDownloadNum,
+          value: _prefs.preDownloadNum,
           min: 0,
           max: 50,
         );
         if (n != null) {
-          await MangaPrefs.setPreDownloadNum(n);
+          await _prefs.setPreDownloadNum(n);
           _precacheNearby();
           setState(() {});
         }
       case 'disable_scale':
-        await MangaPrefs.setDisableScale(!MangaPrefs.disableScale);
+        await _prefs.setDisableScale(!_prefs.disableScale);
         setState(() {});
       case 'disable_click':
-        await MangaPrefs.setDisableClickScroll(!MangaPrefs.disableClickScroll);
+        await _prefs.setDisableClickScroll(!_prefs.disableClickScroll);
         setState(() {});
       case 'auto_page':
         final next = !_autoPageEnabled;
@@ -1034,19 +1038,17 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       case 'auto_page_speed':
         final n = await _pickNumber(
           title: '设置自动翻页速度',
-          value: MangaPrefs.autoPageSpeed,
+          value: _prefs.autoPageSpeed,
           min: 1,
           max: 20,
         );
         if (n != null) {
-          await MangaPrefs.setAutoPageSpeed(n);
+          await _prefs.setAutoPageSpeed(n);
           if (_autoPageEnabled) _setAutoPage(true);
           setState(() {});
         }
       case 'horizontal':
-        await MangaPrefs.setHorizontalScroll(
-          !MangaPrefs.enableHorizontalScroll,
-        );
+        await _prefs.setHorizontalScroll(!_prefs.enableHorizontalScroll);
         setState(() {
           _pageController?.dispose();
           _pageController = _isHorizontal
@@ -1054,29 +1056,29 @@ class _MangaReaderPageState extends State<MangaReaderPage>
               : null;
         });
       case 'disable_h_snap':
-        await MangaPrefs.setDisableHorizontalPageSnap(
-          !MangaPrefs.disableHorizontalPageSnap,
+        await _prefs.setDisableHorizontalPageSnap(
+          !_prefs.disableHorizontalPageSnap,
         );
         setState(() {});
       case 'disable_anim':
-        await MangaPrefs.setDisablePageAnim(!MangaPrefs.disablePageAnim);
+        await _prefs.setDisablePageAnim(!_prefs.disablePageAnim);
         setState(() {});
       case 'footer':
         await _showFooterConfigDialog();
       case 'filter':
         await _showColorFilterDialog();
       case 'hide_title':
-        await MangaPrefs.setHideTitle(!MangaPrefs.hideTitle);
+        await _prefs.setHideTitle(!_prefs.hideTitle);
         setState(() {});
       case 'eink':
-        final next = !MangaPrefs.enableEInk;
-        await MangaPrefs.setEInk(enabled: next);
+        final next = !_prefs.enableEInk;
+        await _prefs.setEInk(enabled: next);
         setState(() {});
         if (next && mounted) await _showEpaperDialog();
       case 'eink_setting':
         await _showEpaperDialog();
       case 'gray':
-        await MangaPrefs.setGray(!MangaPrefs.enableGray);
+        await _prefs.setGray(!_prefs.enableGray);
         setState(() {});
     }
   }
@@ -1191,12 +1193,12 @@ class _MangaReaderPageState extends State<MangaReaderPage>
                     itemBuilder: (_) => [
                       CheckedPopupMenuItem(
                         value: 'disable_scale',
-                        checked: MangaPrefs.disableScale,
+                        checked: _prefs.disableScale,
                         child: const Text('禁用漫画缩放'),
                       ),
                       CheckedPopupMenuItem(
                         value: 'disable_click',
-                        checked: MangaPrefs.disableClickScroll,
+                        checked: _prefs.disableClickScroll,
                         child: const Text('禁用点击翻页'),
                       ),
                       CheckedPopupMenuItem(
@@ -1207,49 +1209,49 @@ class _MangaReaderPageState extends State<MangaReaderPage>
                       if (_autoPageEnabled)
                         PopupMenuItem(
                           value: 'auto_page_speed',
-                          child: Text('翻页速度 ${MangaPrefs.autoPageSpeed}'),
+                          child: Text('翻页速度 ${_prefs.autoPageSpeed}'),
                         ),
                       CheckedPopupMenuItem(
                         value: 'horizontal',
-                        checked: MangaPrefs.enableHorizontalScroll,
+                        checked: _prefs.enableHorizontalScroll,
                         child: const Text('水平滚动'),
                       ),
-                      if (MangaPrefs.enableHorizontalScroll)
+                      if (_prefs.enableHorizontalScroll)
                         CheckedPopupMenuItem(
                           value: 'disable_h_snap',
-                          checked: MangaPrefs.disableHorizontalPageSnap,
+                          checked: _prefs.disableHorizontalPageSnap,
                           child: const Text('禁用水平翻页效果'),
                         ),
                       CheckedPopupMenuItem(
                         value: 'disable_anim',
-                        checked: MangaPrefs.disablePageAnim,
+                        checked: _prefs.disablePageAnim,
                         child: const Text('禁用翻页动画'),
                       ),
                       const PopupMenuItem(value: 'footer', child: Text('页脚配置')),
                       const PopupMenuItem(value: 'filter', child: Text('滤镜')),
                       CheckedPopupMenuItem(
                         value: 'hide_title',
-                        checked: MangaPrefs.hideTitle,
+                        checked: _prefs.hideTitle,
                         child: const Text('隐藏漫画列表标题'),
                       ),
                       CheckedPopupMenuItem(
                         value: 'eink',
-                        checked: MangaPrefs.enableEInk,
+                        checked: _prefs.enableEInk,
                         child: const Text('墨水屏'),
                       ),
-                      if (MangaPrefs.enableEInk)
+                      if (_prefs.enableEInk)
                         const PopupMenuItem(
                           value: 'eink_setting',
                           child: Text('墨水屏设置'),
                         ),
                       CheckedPopupMenuItem(
                         value: 'gray',
-                        checked: MangaPrefs.enableGray,
+                        checked: _prefs.enableGray,
                         child: const Text('开启图片灰色'),
                       ),
                       PopupMenuItem(
                         value: 'pre_download',
-                        child: Text('预下载${MangaPrefs.preDownloadNum}页'),
+                        child: Text('预下载${_prefs.preDownloadNum}页'),
                       ),
                     ],
                   ),

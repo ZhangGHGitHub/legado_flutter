@@ -1,20 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../domain/ports/application_http_request_port.dart';
-import '../../services/ai_config_prefs.dart';
-import '../../services/ai_config_http_service.dart';
+import '../../application/ai/ai_config_http_port.dart';
+import '../../application/ai/ai_config_prefs_port.dart';
 
 /// AI 配置 — 对齐 Jingshiro `dialog_ai_config.xml` / `AiConfigDialog`
 class AiConfigDialog extends StatefulWidget {
-  const AiConfigDialog({super.key});
+  const AiConfigDialog({super.key, this.prefsPort, this.httpPort});
 
-  static Future<void> show(BuildContext context) {
+  final AiConfigPrefsPort? prefsPort;
+  final AiConfigHttpPort? httpPort;
+
+  static Future<void> show(
+    BuildContext context, {
+    AiConfigPrefsPort? prefsPort,
+    AiConfigHttpPort? httpPort,
+  }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => const AiConfigDialog(),
+      builder: (_) => AiConfigDialog(prefsPort: prefsPort, httpPort: httpPort),
     );
   }
 
@@ -23,7 +29,8 @@ class AiConfigDialog extends StatefulWidget {
 }
 
 class _AiConfigDialogState extends State<AiConfigDialog> {
-  late final AiConfigHttpService _httpService;
+  late final AiConfigPrefsPort _prefsPort;
+  late final AiConfigHttpPort _httpPort;
   late final TextEditingController _apiUrl;
   late final TextEditingController _apiKey;
   late final TextEditingController _model;
@@ -34,14 +41,13 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
   bool _loading = true;
   bool _busy = false;
   String? _message;
-  AiConfigPrefs? _prefs;
+  AiConfigSettings? _prefs;
 
   @override
   void initState() {
     super.initState();
-    _httpService = AiConfigHttpService(
-      context.read<ApplicationHttpRequestPort>(),
-    );
+    _prefsPort = widget.prefsPort ?? context.read<AiConfigPrefsPort>();
+    _httpPort = widget.httpPort ?? context.read<AiConfigHttpPort>();
     _apiUrl = TextEditingController();
     _apiKey = TextEditingController();
     _model = TextEditingController();
@@ -63,7 +69,7 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
   }
 
   Future<void> _load() async {
-    final prefs = await AiConfigPrefs.load();
+    final prefs = await _prefsPort.load();
     if (!mounted) return;
     setState(() {
       _prefs = prefs;
@@ -79,16 +85,17 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
   }
 
   Future<void> _save() async {
-    final prefs = _prefs ?? AiConfigPrefs();
-    prefs
-      ..apiUrl = _apiUrl.text.trim()
-      ..apiKey = _apiKey.text.trim()
-      ..model = _model.text.trim()
-      ..userAvatar = _userAvatar.text.trim()
-      ..aiAvatar = _aiAvatar.text.trim()
-      ..persona = _persona.text.trim()
-      ..toolEnabled = _toolEnabled;
-    await prefs.save();
+    final current = _prefs ?? const AiConfigSettings();
+    final prefs = current.copyWith(
+      apiUrl: _apiUrl.text.trim(),
+      apiKey: _apiKey.text.trim(),
+      model: _model.text.trim(),
+      userAvatar: _userAvatar.text.trim(),
+      aiAvatar: _aiAvatar.text.trim(),
+      persona: _persona.text.trim(),
+      toolEnabled: _toolEnabled,
+    );
+    await _prefsPort.save(prefs);
     if (mounted) {
       setState(() {
         _prefs = prefs;
@@ -107,7 +114,7 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
     });
     try {
       final base = _apiUrl.text.trim();
-      final ids = await _httpService.fetchModels(
+      final ids = await _httpPort.fetchModels(
         apiUrl: base,
         apiKey: _apiKey.text,
       );
@@ -151,7 +158,7 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
       _message = null;
     });
     try {
-      final code = await _httpService.testModel(
+      final code = await _httpPort.testModel(
         apiUrl: _apiUrl.text,
         model: _model.text,
         apiKey: _apiKey.text,
@@ -170,8 +177,8 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
   }
 
   Future<void> _openMemory() async {
-    await AiMemoryDialog.show(context);
-    final prefs = await AiConfigPrefs.load();
+    await AiMemoryDialog.show(context, prefsPort: _prefsPort);
+    final prefs = await _prefsPort.load();
     if (mounted) setState(() => _prefs = prefs);
   }
 
@@ -194,11 +201,12 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
       ),
     );
     if (ok != true) return;
-    final prefs = _prefs ?? await AiConfigPrefs.load();
-    await prefs.clearMemory();
+    await _prefsPort.clearMemory();
     if (mounted) {
       setState(() {
-        _prefs = prefs;
+        _prefs = (_prefs ?? const AiConfigSettings()).copyWith(
+          memoryList: const [],
+        );
         _message = '记忆已清除';
       });
     }
@@ -379,14 +387,19 @@ class _AiConfigDialogState extends State<AiConfigDialog> {
 
 /// AI 记忆列表 — 对齐 `dialog_ai_memory.xml`
 class AiMemoryDialog extends StatefulWidget {
-  const AiMemoryDialog({super.key});
+  const AiMemoryDialog({super.key, this.prefsPort});
 
-  static Future<void> show(BuildContext context) {
+  final AiConfigPrefsPort? prefsPort;
+
+  static Future<void> show(
+    BuildContext context, {
+    AiConfigPrefsPort? prefsPort,
+  }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => const AiMemoryDialog(),
+      builder: (_) => AiMemoryDialog(prefsPort: prefsPort),
     );
   }
 
@@ -405,7 +418,8 @@ class _AiMemoryDialogState extends State<AiMemoryDialog> {
   }
 
   Future<void> _load() async {
-    final prefs = await AiConfigPrefs.load();
+    final port = widget.prefsPort ?? context.read<AiConfigPrefsPort>();
+    final prefs = await port.load();
     if (!mounted) return;
     setState(() {
       _items = prefs.memoryList;
@@ -414,8 +428,8 @@ class _AiMemoryDialogState extends State<AiMemoryDialog> {
   }
 
   Future<void> _clearAll() async {
-    final prefs = await AiConfigPrefs.load();
-    await prefs.clearMemory();
+    final port = widget.prefsPort ?? context.read<AiConfigPrefsPort>();
+    await port.clearMemory();
     if (mounted) {
       setState(() => _items = []);
       ScaffoldMessenger.of(

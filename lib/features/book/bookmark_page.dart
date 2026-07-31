@@ -5,17 +5,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../domain/annotation/note_snapshot.dart';
-import '../../domain/annotation/bookmark_snapshot.dart';
+import '../../application/bookmark/bookmark_page_port.dart';
 import '../../help/bookmark_hint.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/bookmark_service.dart';
-import '../../services/bookmark_migration_service.dart';
-import '../../services/bookmark_sync_service.dart';
-import '../../services/note_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/bookmark_editor_sheet.dart';
 import '../../widgets/note_editor_sheet.dart';
@@ -23,53 +18,11 @@ import '../../widgets/note_share_card.dart';
 import '../obsidian/obsidian_export_dialog.dart';
 import '../../features/reader/reader_page.dart';
 
-bool _isBookmarkNote(NoteSnapshot n) => n.noteContent.startsWith('书签');
-
-String _bookmarkSignature({
-  required String bookId,
-  required int chapterIndex,
-  required int chapterPos,
-  required String chapterName,
-  required String bookText,
-}) =>
-    '$bookId\u0000$chapterIndex\u0000$chapterPos\u0000$chapterName\u0000$bookText';
-
-class _MarkItem {
-  final BookmarkSnapshot? bookmark;
-  final NoteSnapshot? thought;
-  final bool isLegacyBookmark;
-
-  const _MarkItem.bookmark(this.bookmark)
-    : thought = null,
-      isLegacyBookmark = false;
-
-  const _MarkItem.thought(this.thought)
-    : bookmark = null,
-      isLegacyBookmark = false;
-
-  const _MarkItem.legacyBookmark(this.thought)
-    : bookmark = null,
-      isLegacyBookmark = true;
-
-  bool get isBookmark => bookmark != null || isLegacyBookmark;
-  String get id =>
-      bookmark != null ? 'bookmark:${bookmark!.time}' : 'note:${thought!.id}';
-  String get bookId => bookmark?.bookId ?? thought!.bookId;
-  String get bookName => bookmark?.bookName ?? thought!.bookId;
-  String get bookAuthor => bookmark?.bookAuthor ?? '';
-  String get chapterTitle => bookmark?.chapterName ?? thought!.chapterTitle;
-  String get selectedText => bookmark?.bookText ?? thought!.selectedText;
-  String get noteContent => bookmark?.content ?? thought!.noteContent;
-  int get position => bookmark?.chapterIndex ?? thought!.position;
-  int get chapterPos => bookmark?.chapterPos ?? thought!.chapterPos;
-  String get createdAt => bookmark == null
-      ? thought!.createdAt
-      : DateTime.fromMillisecondsSinceEpoch(bookmark!.time).toIso8601String();
-}
-
 /// 书签与想法 — 对齐 AllBookmarkActivity：书签 / 想法分 Tab
 class BookmarkPage extends StatefulWidget {
-  const BookmarkPage({super.key});
+  const BookmarkPage({super.key, this.port});
+
+  final BookmarkPagePort? port;
 
   @override
   State<BookmarkPage> createState() => _BookmarkPageState();
@@ -78,12 +31,13 @@ class BookmarkPage extends StatefulWidget {
 class _BookmarkPageState extends State<BookmarkPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
-  List<_MarkItem> _all = [];
+  late final BookmarkPagePort _port;
+  List<BookmarkPageMark> _all = [];
   bool _loading = true;
   bool _syncing = false;
   final _shareKeys = <String, GlobalKey>{};
 
-  List<_MarkItem> get _bookmarks {
+  List<BookmarkPageMark> get _bookmarks {
     final bookmarks = _all.where((item) => item.isBookmark).toList();
     bookmarks.sort((a, b) {
       final book = a.bookName.compareTo(b.bookName);
@@ -99,12 +53,16 @@ class _BookmarkPageState extends State<BookmarkPage>
     return List.unmodifiable(bookmarks);
   }
 
-  List<_MarkItem> get _thoughts =>
+  List<BookmarkPageMark> get _thoughts =>
       _all.where((item) => !item.isBookmark).toList(growable: false);
 
   @override
   void initState() {
     super.initState();
+    _port =
+        widget.port ??
+        Provider.of<BookmarkPagePort?>(context, listen: false) ??
+        const UnavailableBookmarkPagePort();
     _tabs = TabController(length: 2, vsync: this);
     _load();
   }
@@ -117,42 +75,8 @@ class _BookmarkPageState extends State<BookmarkPage>
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final notes = NoteService.list();
     final provider = Provider.of<BookProvider?>(context, listen: false);
-    BookmarkMigrationService.migrateLegacyNoteSnapshots(
-      notes: notes,
-      books: provider?.books ?? const <Book>[],
-    );
-    final bookmarks = BookmarkService.listSnapshots();
-    final migratedKeys = bookmarks
-        .map(
-          (bookmark) => _bookmarkSignature(
-            bookId: bookmark.bookId,
-            chapterIndex: bookmark.chapterIndex,
-            chapterPos: bookmark.chapterPos,
-            chapterName: bookmark.chapterName,
-            bookText: bookmark.bookText,
-          ),
-        )
-        .toSet();
-    final marks = <_MarkItem>[
-      ...bookmarks.map(_MarkItem.bookmark),
-      ...notes
-          .where(_isBookmarkNote)
-          .where(
-            (note) => !migratedKeys.contains(
-              _bookmarkSignature(
-                bookId: note.bookId,
-                chapterIndex: note.position,
-                chapterPos: note.chapterPos >= 0 ? note.chapterPos : 0,
-                chapterName: note.chapterTitle,
-                bookText: note.selectedText,
-              ),
-            ),
-          )
-          .map(_MarkItem.legacyBookmark),
-      ...notes.where((note) => !_isBookmarkNote(note)).map(_MarkItem.thought),
-    ];
+    final marks = _port.load(books: provider?.books ?? const <Book>[]).marks;
     if (!mounted) return;
     setState(() {
       _all = marks;
@@ -173,7 +97,7 @@ class _BookmarkPageState extends State<BookmarkPage>
       fileName: 'bookmark.json',
       type: FileType.custom,
       allowedExtensions: const ['json'],
-      bytes: utf8.encode(BookmarkService.exportJson()),
+      bytes: utf8.encode(_port.exportJson()),
     );
     if (!mounted || path == null) return;
     ScaffoldMessenger.of(
@@ -189,9 +113,7 @@ class _BookmarkPageState extends State<BookmarkPage>
     final path = result?.files.single.path;
     if (path == null) return;
     try {
-      final imported = BookmarkService.importJson(
-        await File(path).readAsString(),
-      );
+      final imported = _port.importJson(await File(path).readAsString());
       await _load();
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -206,19 +128,12 @@ class _BookmarkPageState extends State<BookmarkPage>
   }
 
   Future<void> _syncBookmarks({required bool upload}) async {
-    if (_syncing || !BookmarkService.isReady) return;
+    if (_syncing || !_port.isAvailable) return;
     setState(() => _syncing = true);
     try {
-      final local = BookmarkService.list();
-      final syncService = context.read<BookmarkSyncService>();
       final count = upload
-          ? await syncService.uploadMerged(local: local)
-          : await syncService.downloadAndMerge(
-              local: local,
-              apply: (json) async {
-                BookmarkService.importJson(json);
-              },
-            );
+          ? await _port.uploadBookmarks()
+          : await _port.downloadBookmarks();
       if (!upload) await _load();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -236,7 +151,7 @@ class _BookmarkPageState extends State<BookmarkPage>
     }
   }
 
-  Future<void> _shareNote(_MarkItem mark) async {
+  Future<void> _shareNote(BookmarkPageMark mark) async {
     final note = mark.thought;
     if (note == null) return;
     final key = _shareKeys[mark.id];
@@ -245,7 +160,7 @@ class _BookmarkPageState extends State<BookmarkPage>
     await shareNoteAsImage(repaintKey: key, fileName: 'note_${note.id}');
   }
 
-  Future<void> _deleteNote(_MarkItem mark) async {
+  Future<void> _deleteNote(BookmarkPageMark mark) async {
     final isBm = mark.isBookmark;
     final ok = await showDialog<bool>(
       context: context,
@@ -266,19 +181,19 @@ class _BookmarkPageState extends State<BookmarkPage>
     );
     if (ok != true) return;
     if (mark.bookmark != null) {
-      BookmarkService.delete(mark.bookmark!.time);
+      _port.deleteBookmark(mark.bookmark!.time);
     } else if (mark.thought != null) {
-      NoteService.delete(mark.thought!.id);
+      _port.deleteNote(mark.thought!.id);
     }
     await _load();
   }
 
-  Book _bookFromNote(_MarkItem mark) {
+  Book _bookFromNote(BookmarkPageMark mark) {
     return Book(id: mark.bookId, name: mark.bookName, author: mark.bookAuthor);
   }
 
   /// 点击书签/想法：书架有书则打开 ReaderPage 并尽量定位章节，否则 SnackBar
-  Future<void> _openNoteInReader(_MarkItem mark) async {
+  Future<void> _openNoteInReader(BookmarkPageMark mark) async {
     final provider = context.read<BookProvider>();
     final book = provider.findBookById(mark.bookId);
     if (book == null) {
@@ -338,7 +253,7 @@ class _BookmarkPageState extends State<BookmarkPage>
     );
   }
 
-  Future<void> _editThought(_MarkItem mark) async {
+  Future<void> _editThought(BookmarkPageMark mark) async {
     final note = mark.thought;
     if (note == null || mark.isBookmark) return;
     await showNoteEditorSheet(
@@ -353,7 +268,7 @@ class _BookmarkPageState extends State<BookmarkPage>
     await _load();
   }
 
-  Future<void> _editBookmark(_MarkItem mark) async {
+  Future<void> _editBookmark(BookmarkPageMark mark) async {
     final bookmark = mark.bookmark;
     if (bookmark == null) return;
     await showBookmarkEditorSheet(
@@ -364,7 +279,10 @@ class _BookmarkPageState extends State<BookmarkPage>
     await _load();
   }
 
-  Widget _buildList({required List<_MarkItem> items, required bool bookmarks}) {
+  Widget _buildList({
+    required List<BookmarkPageMark> items,
+    required bool bookmarks,
+  }) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -465,31 +383,31 @@ class _BookmarkPageState extends State<BookmarkPage>
         actions: [
           IconButton(
             tooltip: '导入书签 JSON',
-            onPressed: BookmarkService.isReady ? _importBookmarks : null,
+            onPressed: _port.isAvailable ? _importBookmarks : null,
             icon: const Icon(Icons.file_open_outlined),
           ),
           IconButton(
             tooltip: '导出书签 JSON',
-            onPressed: BookmarkService.isReady ? _exportBookmarks : null,
+            onPressed: _port.isAvailable ? _exportBookmarks : null,
             icon: const Icon(Icons.file_download_outlined),
           ),
           IconButton(
             tooltip: '上传书签到 WebDAV',
-            onPressed: BookmarkService.isReady && !_syncing
+            onPressed: _port.isAvailable && !_syncing
                 ? () => _syncBookmarks(upload: true)
                 : null,
             icon: const Icon(Icons.cloud_upload_outlined),
           ),
           IconButton(
             tooltip: '从 WebDAV 合并书签',
-            onPressed: BookmarkService.isReady && !_syncing
+            onPressed: _port.isAvailable && !_syncing
                 ? () => _syncBookmarks(upload: false)
                 : null,
             icon: const Icon(Icons.cloud_download_outlined),
           ),
           IconButton(
             tooltip: '导出 Obsidian Markdown',
-            onPressed: NoteService.isReady ? _exportObsidian : null,
+            onPressed: _port.notesAvailable ? _exportObsidian : null,
             icon: const Icon(Icons.upload_file_outlined),
           ),
         ],

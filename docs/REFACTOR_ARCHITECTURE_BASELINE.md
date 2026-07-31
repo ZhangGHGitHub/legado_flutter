@@ -2975,3 +2975,16 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `dart format` 通过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `80` 降至 `79` 条既有 Feature→service backlog；`git diff --check` 在文档更新后复核。
 
 边界结论：本批完成 SourceEditor 登录 Cookie 清理的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `79` 条 Feature 依赖继续按单边界推进。
+
+## 152. 2026-07-31：R6 四 agent AI、书签、书架与漫画偏好并行收口
+
+- 四条不重叠子线完成：`AiConfigDialog` 改用 AI 配置偏好/HTTP port；`BookmarkPage` 改用书签页面 port，集中处理书签迁移、笔记读取、JSON 导入导出和同步；`BookshelfArrangePage` 改用排列偏好与分组目录 port；`MangaReaderPage` 改用 `MangaPrefsPort` 读取和保存漫画偏好。组合根注册共享 adapter，书架页面去除默认 infrastructure adapter，改从 Provider 获取 application port。
+- 保留 AI 配置/记忆、书签迁移/同步/导入导出、书架分组与排序、漫画偏好键名/默认值/互斥和阅读行为；未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- 子线定向证据：AI `9/9`、书签 `25`、书架端口/服务 `8/8`、漫画 `11`；owner 合并定向 `16/16`。
+- Flutter 串行全量 `flutter test --no-pub --concurrency=1 --reporter compact`：`755` 通过、`3` 项既有条件跳过；`dart format`、`flutter analyze --no-pub`（`No issues found`）和 `git diff --check` 通过。
+- 架构扫描由 `79` 降至 `69` 条既有 Feature→service backlog；剩余依赖未加入白名单，继续按单边界推进。
+
+边界结论：本批完成四个独立 Feature 的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `69` 条 Feature 依赖继续按单边界推进。

@@ -4,13 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../application/bookshelf/book_group_store_port.dart';
+import '../../application/bookshelf/bookshelf_arrange_port.dart';
 import '../../domain/book/book_group.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/book_group_store.dart';
-import '../../services/bookshelf_arrange_prefs.dart';
-import '../../services/bookshelf_prefs.dart';
 import '../../widgets/book_group_manage_dialog.dart';
 import '../../widgets/book_group_select_dialog.dart';
 import '../../widgets/legado_popup_menu.dart';
@@ -23,7 +22,8 @@ class BookshelfArrangePage extends StatefulWidget {
     this.groupFilter,
     this.groupLabel = '全部',
     this.gridLayout = false,
-    this.preferences = const SharedPreferencesBookshelfArrangePrefs(),
+    this.preferences,
+    this.groupStore,
   });
 
   /// `null` = 全部；`''` = 未分组；其它 = 分组名
@@ -34,7 +34,10 @@ class BookshelfArrangePage extends StatefulWidget {
   final bool gridLayout;
 
   /// Storage boundary for page-local preferences.
-  final BookshelfArrangePrefsPort preferences;
+  final BookshelfArrangePort? preferences;
+
+  /// 书架分组目录边界；测试宿主可显式注入 fake。
+  final BookGroupStorePort? groupStore;
 
   @override
   State<BookshelfArrangePage> createState() => _BookshelfArrangePageState();
@@ -53,6 +56,8 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
   bool _dragEnabled = true;
   bool _dirty = false;
   bool _openInfoByTitle = false;
+  late final BookshelfArrangePort _preferences;
+  late final BookGroupStorePort _groupStore;
 
   /// 当前筛选：全部 / 本地 / 未分组 / 自定义分组名
   late String _filterKey;
@@ -61,6 +66,8 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
   @override
   void initState() {
     super.initState();
+    _preferences = widget.preferences ?? context.read<BookshelfArrangePort>();
+    _groupStore = widget.groupStore ?? context.read<BookGroupStorePort>();
     _filterKey = _filterKeyFromWidget(widget.groupFilter);
     _groupLabel = widget.groupLabel;
     _loadSortMode();
@@ -82,19 +89,19 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
   }
 
   Future<void> _loadSortMode() async {
-    final mode = await BookshelfPrefs.loadSortMode();
+    final mode = await _preferences.loadSortMode();
     if (!mounted) return;
     setState(() => _dragEnabled = mode == 3);
   }
 
   Future<void> _loadOpenInfoPref() async {
-    final value = await widget.preferences.loadOpenBookInfoByTitle();
+    final value = await _preferences.loadOpenBookInfoByTitle();
     if (!mounted) return;
     setState(() => _openInfoByTitle = value);
   }
 
   Future<void> _setOpenInfoByTitle(bool v) async {
-    await widget.preferences.saveOpenBookInfoByTitle(v);
+    await _preferences.saveOpenBookInfoByTitle(v);
     if (!mounted) return;
     setState(() => _openInfoByTitle = v);
   }
@@ -102,7 +109,7 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
   void _reloadBooks() {
     var all = context.read<BookProvider>().books;
     all = _applyGroupFilter(all);
-    _books = BookshelfPrefs.applyBookOrder(all, _cachedOrder, (b) => b.id);
+    _books = BookshelfArrangeOrderPolicy.apply(all, _cachedOrder, (b) => b.id);
     _selected.removeWhere((id) => !_books.any((b) => b.id == id));
   }
 
@@ -131,10 +138,10 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
   }
 
   Future<void> _loadOrderAndBooks() async {
-    _cachedOrder = await BookshelfPrefs.loadBookOrder();
+    _cachedOrder = await _preferences.loadBookOrder();
     if (!mounted) return;
     final books = context.read<BookProvider>().books;
-    await BookGroupStore.syncNamesFromBooks(
+    await _groupStore.syncNamesFromBooks(
       books.map((b) => b.group).where((g) => g.isNotEmpty),
     );
     if (!mounted) return;
@@ -161,8 +168,8 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
   }
 
   Future<void> _persistOrder() async {
-    await BookshelfPrefs.saveBookOrder(_books.map((b) => b.id).toList());
-    await BookshelfPrefs.saveSortMode(3);
+    await _preferences.saveBookOrder(_books.map((b) => b.id).toList());
+    await _preferences.saveSortMode(3);
     _dirty = false;
   }
 
@@ -416,7 +423,7 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
           final id = int.tryParse(value.substring(4));
           if (id == null) return;
           BookGroup? g;
-          for (final x in BookGroupStore.cached) {
+          for (final x in _groupStore.cached) {
             if (x.groupId == id) {
               g = x;
               break;
@@ -627,7 +634,7 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
   Widget build(BuildContext context) {
     final visible = _visibleBooks;
     final scheme = Theme.of(context).colorScheme;
-    final menuGroups = BookGroupStore.cached.where((g) => g.show).toList()
+    final menuGroups = _groupStore.cached.where((g) => g.show).toList()
       ..sort((a, b) => a.order.compareTo(b.order));
 
     return PopScope(

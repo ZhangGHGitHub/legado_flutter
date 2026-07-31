@@ -5,6 +5,11 @@ import 'package:provider/provider.dart';
 
 import '../app.dart';
 import '../application/app_bootstrap.dart';
+import '../application/ai/ai_config_http_port.dart';
+import '../application/ai/ai_config_prefs_port.dart';
+import '../application/bookmark/bookmark_page_port.dart';
+import '../application/bookshelf/book_group_store_port.dart';
+import '../application/bookshelf/bookshelf_arrange_port.dart';
 import '../application/cache/book_cache_export_port.dart';
 import '../application/crash/crash_log_service.dart';
 import '../application/diagnostics/app_diagnostics_monitor.dart';
@@ -28,6 +33,7 @@ import '../application/reader/read_style_prefs_port.dart';
 import '../application/reader/read_style_zip_port.dart';
 import '../application/reader/reader_image_cache_port.dart';
 import '../application/reader/reader_font_port.dart';
+import '../application/reader/manga_prefs_port.dart';
 import '../application/replace/replace_preset_port.dart';
 import '../application/qr/qr_code_port.dart';
 import '../application/search/search_history_port.dart';
@@ -65,6 +71,11 @@ import '../domain/ports/reading_record_port.dart';
 import '../domain/ports/rss_port.dart';
 import '../domain/ports/webdav_repository.dart';
 import '../infrastructure/cache/file_chapter_content_cache.dart';
+import '../infrastructure/ai/ai_config_http_port_adapter.dart';
+import '../infrastructure/ai/shared_preferences_ai_config_prefs_adapter.dart';
+import '../infrastructure/bookmark/bookmark_page_port_adapter.dart';
+import '../infrastructure/bookshelf/book_group_store_port_adapter.dart';
+import '../infrastructure/bookshelf/bookshelf_arrange_port_adapter.dart';
 import '../infrastructure/cache/book_cache_export_port_adapter.dart';
 import '../infrastructure/content/frb_content_processing_port.dart';
 import '../infrastructure/database/frb_backup_port.dart';
@@ -121,6 +132,7 @@ import '../infrastructure/preferences/shared_preferences_simulated_reading_prefs
 import '../infrastructure/preferences/shared_preferences_read_style_prefs_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_web_api_prefs_adapter.dart';
 import '../infrastructure/reader/reader_font_port_adapter.dart';
+import '../infrastructure/reader/manga_prefs_port_adapter.dart';
 import '../infrastructure/reader/reader_image_cache_port_adapter.dart';
 import '../infrastructure/replace/replace_preset_port_adapter.dart';
 import '../infrastructure/sources/source_debug_formatter_adapter.dart';
@@ -201,6 +213,9 @@ abstract final class AppCompositionRoot {
     final sourceRepository = SourceDao();
     final readingRecordPort = FrbReadingRecordPort();
     final rssPort = FrbRssPort();
+    final aiConfigHttpPort = AiConfigHttpPortAdapter(
+      const FrbApplicationHttpRequestPort(),
+    );
     final webApiPort = DartIoWebApiPort(
       dataPort: RepositoryWebApiDataPort(
         bookRepository: bookRepository,
@@ -332,6 +347,10 @@ abstract final class AppCompositionRoot {
           ChangeNotifierProvider.value(value: bootstrap.bookProvider),
           Provider<AppDiagnosticsMonitor>.value(value: diagnosticsMonitor),
           Provider<AppLogPort>(create: (_) => const AppLogPortAdapter()),
+          Provider<AiConfigPrefsPort>.value(
+            value: const SharedPreferencesAiConfigPrefsAdapter(),
+          ),
+          Provider<AiConfigHttpPort>.value(value: aiConfigHttpPort),
           Provider<DonateClipboardPort>.value(
             value: const PlatformDonateClipboard(),
           ),
@@ -389,6 +408,16 @@ abstract final class AppCompositionRoot {
             value: const BuiltinSourceMarketPort(),
           ),
           Provider<NotePort>.value(value: FrbNotePort()),
+          Provider<BookmarkPagePort>.value(
+            value: BookmarkPagePortAdapter(syncService: bookmarkSyncService),
+          ),
+          Provider<BookshelfArrangePort>.value(
+            value: const SharedPreferencesBookshelfArrangePortAdapter(),
+          ),
+          Provider<BookGroupStorePort>.value(
+            value: const BookGroupStorePortAdapter(),
+          ),
+          Provider<MangaPrefsPort>.value(value: const MangaPrefsPortAdapter()),
           Provider<ReadingRecordPort>.value(value: readingRecordPort),
           Provider<RssPort>.value(value: rssPort),
           Provider<QrCodePort>.value(value: const QrCodePortAdapter()),
