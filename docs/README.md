@@ -11,6 +11,9 @@
 | 查看每次开发变更记录 | [CHANGELOG.md](../CHANGELOG.md) |
 | 查看项目重构主计划与阶段进度 | [REFACTOR_PLAN.md](./REFACTOR_PLAN.md) |
 | 查看统一目标架构与强制设计要求 | [LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md](./LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md) |
+| 查看统一 API 契约 | [../api_contract.md](../api_contract.md) |
+| 查看原 Android 模块迁移映射 | [MODULE_MIGRATION_MAPPING.md](./MODULE_MIGRATION_MAPPING.md) |
+| 查看设计差距和下一步门禁 | [ARCHITECTURE_GAP_ANALYSIS.md](./ARCHITECTURE_GAP_ANALYSIS.md) |
 | 查看重构前架构基线与依赖边界 | [REFACTOR_ARCHITECTURE_BASELINE.md](./REFACTOR_ARCHITECTURE_BASELINE.md) |
 | 查看 R0 架构残留、工件分类与边界检查 | [R0_REBASELINE.md](./R0_REBASELINE.md) |
 | 查看现有工作树的可追溯提交分组 | [R0_WORKTREE_GROUPS.md](./R0_WORKTREE_GROUPS.md) |
