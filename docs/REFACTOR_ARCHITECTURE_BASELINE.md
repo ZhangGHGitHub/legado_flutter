@@ -3002,3 +3002,17 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 首轮全量曾因 L4 已落地而 MainShell 测试宿主尚未注册 `MyPagePort` 出现 ProviderNotFound；补齐 fake 后定向和最终全量通过，未放宽断言。Rust 未改动，本批不重复运行 Rust 测试。
 
 边界结论：本批完成书架展示/配置、MainShell 启动和 MyPage 的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `57` 条 Feature 依赖继续按单边界推进。
+
+## 154. 2026-07-31：R6 书架书单与 RemoteBook 端口边界
+
+- 书架菜单与导入对话框改用 `BookshelfListPort`，由 adapter 继续复用既有书单 JSON/URL/文件解析、导出和剪贴板相关实现。
+- `RemoteBookPage` 改用 `RemoteArchiveImportPort`、`RemoteBookSortPort` 和 `WebDavPrefsPort`；组合根注册四类 adapter，远程 ZIP 导入 adapter 复用已有 `RemoteArchiveImportService`。保留远程 ZIP/TXT/EPUB 导入、目录优先排序、WebDAV 配置和错误提示行为。
+- 未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则；剩余 Feature→service 依赖未加入白名单。
+
+验证结果：
+
+- 受影响定向 `25/25`，其中 RemoteArchive/Sort 既有回归 `5/5`；Flutter 串行全量 `flutter test --no-pub --concurrency=1 --reporter compact`：`779` 通过、`3` 项既有条件跳过。
+- `dart format` 通过；`flutter analyze --no-pub`：`No issues found`；架构扫描由 `57` 降至 `52` 条既有 Feature→service backlog；`git diff --check` 在文档更新后复核。
+- Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。
+
+边界结论：本批完成书架书单和 RemoteBook 的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `52` 条 Feature 依赖继续按单边界推进。

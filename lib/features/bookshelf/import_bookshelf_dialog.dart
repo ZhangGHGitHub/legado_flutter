@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/bookshelf/bookshelf_list_port.dart';
 import '../../application/diagnostics/app_log_port.dart';
 import '../../application/platform/clipboard_port.dart';
 import '../../domain/ports/public_text_fetch_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/bookshelf_list_io.dart';
 
 /// 导入书单 — 对齐 Jingshiro：粘贴 url/json +「选文件」，按 name/author 精准搜索入库。
 class ImportBookshelfDialog extends StatefulWidget {
-  const ImportBookshelfDialog({super.key});
+  const ImportBookshelfDialog({super.key, this.listPort});
+
+  final BookshelfListPort? listPort;
 
   static Future<void> show(BuildContext context) {
     return showDialog<void>(
@@ -35,6 +37,9 @@ class _ImportBookshelfDialogState extends State<ImportBookshelfDialog> {
     super.dispose();
   }
 
+  BookshelfListPort get _listPort =>
+      widget.listPort ?? context.read<BookshelfListPort>();
+
   Future<void> _paste() async {
     final text =
         (await context.read<ClipboardPort>().pasteText())?.trim() ?? '';
@@ -45,7 +50,7 @@ class _ImportBookshelfDialogState extends State<ImportBookshelfDialog> {
 
   Future<void> _pickFile() async {
     try {
-      final text = await BookshelfListIo.pickFileText();
+      final text = await _listPort.pickFileText();
       if (text == null || text.isEmpty) return;
       setState(() {
         _controller.text = text;
@@ -66,11 +71,11 @@ class _ImportBookshelfDialogState extends State<ImportBookshelfDialog> {
       _progress = '解析书单…';
     });
     try {
-      final raw = await BookshelfListIo.resolveInput(
+      final raw = await _listPort.resolveInput(
         _controller.text,
         fetchPort: context.read<PublicTextFetchPort>(),
       );
-      final entries = BookshelfListIo.parseEntries(raw);
+      final entries = _listPort.parseEntries(raw);
       if (entries.isEmpty) {
         if (!mounted) return;
         setState(() {

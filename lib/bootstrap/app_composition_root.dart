@@ -12,8 +12,12 @@ import '../application/bookshelf/book_group_store_port.dart';
 import '../application/bookshelf/bookshelf_arrange_port.dart';
 import '../application/bookshelf/bookshelf_config_dialog_port.dart';
 import '../application/bookshelf/bookshelf_display_port.dart';
+import '../application/bookshelf/bookshelf_list_port.dart';
 import '../application/mine/my_page_port.dart';
 import '../application/main/main_shell_startup_port.dart';
+import '../application/bookshelf/remote_archive_import_port.dart';
+import '../application/bookshelf/remote_book_sort_port.dart';
+import '../application/bookshelf/webdav_prefs_port.dart';
 import '../application/cache/book_cache_export_port.dart';
 import '../application/crash/crash_log_service.dart';
 import '../application/diagnostics/app_diagnostics_monitor.dart';
@@ -82,6 +86,10 @@ import '../infrastructure/bookshelf/book_group_store_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_arrange_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_config_dialog_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_display_port_adapter.dart';
+import '../infrastructure/bookshelf/bookshelf_list_port_adapter.dart';
+import '../infrastructure/bookshelf/remote_archive_import_port_adapter.dart';
+import '../infrastructure/bookshelf/remote_book_sort_port_adapter.dart';
+import '../infrastructure/bookshelf/shared_preferences_webdav_prefs_port_adapter.dart';
 import '../infrastructure/cache/book_cache_export_port_adapter.dart';
 import '../infrastructure/content/frb_content_processing_port.dart';
 import '../infrastructure/database/frb_backup_port.dart';
@@ -383,6 +391,15 @@ abstract final class AppCompositionRoot {
           Provider<BookshelfDisplayPort>.value(
             value: const SharedPreferencesBookshelfDisplayPortAdapter(),
           ),
+          Provider<BookshelfListPort>.value(
+            value: const BookshelfListPortAdapter(),
+          ),
+          Provider<RemoteBookSortPort>.value(
+            value: const RemoteBookSortPortAdapter(),
+          ),
+          Provider<WebDavPrefsPort>.value(
+            value: const SharedPreferencesWebDavPrefsPortAdapter(),
+          ),
           Provider<RssReadStatePort>.value(value: rssReadStatePort),
           Provider<RssStarPrefsPort>.value(
             value: const RssStarPrefsPortAdapter(),
@@ -486,6 +503,9 @@ abstract final class AppCompositionRoot {
           ),
           Provider<RemoteArchiveImportService>.value(
             value: remoteArchiveImportService,
+          ),
+          Provider<RemoteArchiveImportPort>.value(
+            value: RemoteArchiveImportPortAdapter(remoteArchiveImportService),
           ),
           Provider<BackupLocalFilePort>(
             create: (_) => FileSystemBackupLocalFileAdapter(backupService),

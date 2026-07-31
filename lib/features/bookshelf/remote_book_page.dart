@@ -5,14 +5,14 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/bookshelf/remote_archive_import_port.dart';
+import '../../application/bookshelf/remote_book_sort_port.dart';
+import '../../application/bookshelf/webdav_prefs_port.dart';
 import '../../application/diagnostics/app_log_port.dart';
 import '../../domain/ports/webdav_repository.dart';
 import '../../domain/remote/webdav_entry.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import '../../providers/book_provider.dart';
-import '../../services/remote_archive_import_service.dart';
-import '../../services/remote_book_sort.dart';
-import '../../services/webdav_prefs.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../../features/book/book_info_page.dart';
 import '../../features/my/webdav_config_dialog.dart';
@@ -30,13 +30,21 @@ class RemoteBookPage extends StatefulWidget {
     super.key,
     this.webdavRepository,
     this.archiveImporter,
+    this.bookSorter,
+    this.webdavPrefs,
   });
 
   @visibleForTesting
   final WebDavRepository? webdavRepository;
 
   @visibleForTesting
-  final RemoteArchiveImportService? archiveImporter;
+  final RemoteArchiveImportPort? archiveImporter;
+
+  @visibleForTesting
+  final RemoteBookSortPort? bookSorter;
+
+  @visibleForTesting
+  final WebDavPrefsPort? webdavPrefs;
 
   @override
   State<RemoteBookPage> createState() => _RemoteBookPageState();
@@ -61,8 +69,14 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
   bool _searchOpen = false;
   bool _booksRootEnsured = false;
   final _searchCtl = TextEditingController();
-  RemoteArchiveImportService get _archiveImporter =>
-      widget.archiveImporter ?? context.read<RemoteArchiveImportService>();
+  RemoteArchiveImportPort get _archiveImporter =>
+      widget.archiveImporter ?? context.read<RemoteArchiveImportPort>();
+
+  RemoteBookSortPort get _bookSorter =>
+      widget.bookSorter ?? context.read<RemoteBookSortPort>();
+
+  WebDavPrefsPort get _webdavPrefs =>
+      widget.webdavPrefs ?? context.read<WebDavPrefsPort>();
 
   /// Jingshiro `bookFileRegex` 可导入子集（本地引擎仅 txt/epub）。
   static final _importableExt = RegExp(r'\.(txt|epub)$', caseSensitive: false);
@@ -90,7 +104,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
   }
 
   Future<void> _bootstrap() async {
-    final cfg = await WebDavPrefs.load();
+    final cfg = await _webdavPrefs.load();
     if (!mounted) return;
     _applyConfig(cfg);
     await _reload();
@@ -180,7 +194,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
     if (key.isNotEmpty) {
       list = list.where((e) => e.name.toLowerCase().contains(key)).toList();
     }
-    return sortRemoteBookEntries(
+    return _bookSorter.sort(
       list,
       mode: _sort == _RemoteSort.name
           ? RemoteBookSortMode.name

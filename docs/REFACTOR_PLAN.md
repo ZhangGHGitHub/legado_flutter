@@ -238,6 +238,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 本批继续收口书架展示、书架配置、MainShell 启动编排和 MyPage 边界：`BookshelfPage`、两种书架样式和书架展示组件改用 `BookshelfDisplayPort`；配置对话框改用 `BookshelfConfigDialogPort`；`MainShell` 改用 `MainShellStartupPort`；`MyPage` 改用 `MyPagePort`。组合根注册共享 adapter，MainShell Provider 按 `SourceProvider`、`ReplaceProvider`、`RssProvider` 依赖顺序注入；测试宿主补齐 `MyPagePort` fake。保留书架配置键名、默认值、排序/手动顺序、启动任务、Web API、备份、引擎/数据库状态和 UI 提示语义。受影响定向 `20/20`；Flutter 串行全量 `769` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `69` 降至 `57` 条既有 Feature→service backlog。首轮全量发现的测试宿主 Provider 缺失已补齐，未削弱断言；Rust 未改动，本批不重复运行 Rust 测试。Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行；后续按剩余 57 条 Feature 依赖继续单边界推进。
 
+本批继续收口书架书单导入/导出和 RemoteBook 远程书籍能力：书架菜单与导入对话框改用 `BookshelfListPort`；RemoteBook 改用 `RemoteArchiveImportPort`、`RemoteBookSortPort` 和 `WebDavPrefsPort`。组合根注册四类 adapter，其中远程 ZIP 导入复用已有 `RemoteArchiveImportService`；保留书单 JSON/URL/文件、剪贴板、远程 ZIP/TXT/EPUB、目录优先排序、WebDAV 配置和错误提示语义。受影响定向 `25/25`，包含 RemoteArchive/Sort 既有回归 `5/5`；Flutter 串行全量 `779` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `57` 降至 `52` 条既有 Feature→service backlog。Rust 未改动，本批不重复运行 Rust 测试；后续按剩余 52 条 Feature 依赖继续单边界推进。
+
 ### 0.4 重构工作规则
 
 1. 一次只迁移一个边界、一个用例或一条数据链路；完成定向测试并汇报后再进入下一项。

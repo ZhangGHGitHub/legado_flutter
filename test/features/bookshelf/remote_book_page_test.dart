@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:legado_flutter/application/bookshelf/remote_archive_import_port.dart';
+import 'package:legado_flutter/application/bookshelf/remote_book_sort_port.dart';
+import 'package:legado_flutter/application/bookshelf/webdav_prefs_port.dart';
 import 'package:legado_flutter/application/diagnostics/app_log_port.dart';
 import 'package:legado_flutter/domain/ports/webdav_repository.dart';
 import 'package:legado_flutter/domain/remote/webdav_entry.dart';
@@ -87,24 +91,55 @@ class _FakeWebDavRepository implements WebDavRepository {
   }) async {}
 }
 
+final class _FakeArchiveImporter implements RemoteArchiveImportPort {
+  @override
+  Future<List<String>> extractZipBookFiles(
+    List<int> bytes, {
+    required Directory outputDir,
+    required String archiveName,
+  }) async => const [];
+}
+
+final class _FakeBookSorter implements RemoteBookSortPort {
+  @override
+  List<WebDavEntry> sort(
+    Iterable<WebDavEntry> entries, {
+    required RemoteBookSortMode mode,
+    required bool ascending,
+  }) => entries.toList();
+}
+
+final class _FakeWebDavPrefs implements WebDavPrefsPort {
+  const _FakeWebDavPrefs();
+
+  @override
+  Future<WebDavConfig> load() async => const WebDavConfig(
+    url: 'https://example.test/dav',
+    account: 'reader',
+    password: 'secret',
+    dir: '/legado',
+  );
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('uses the injected WebDAV port for initial directory loading', (
     tester,
   ) async {
-    SharedPreferences.setMockInitialValues({
-      'webdav_url': 'https://example.test/dav',
-      'webdav_account': 'reader',
-      'webdav_password': 'secret',
-      'webdav_dir': '/legado',
-    });
     final fake = _FakeWebDavRepository();
 
     await tester.pumpWidget(
       Provider<AppLogPort>.value(
         value: const AppLogPortAdapter(),
-        child: MaterialApp(home: RemoteBookPage(webdavRepository: fake)),
+        child: MaterialApp(
+          home: RemoteBookPage(
+            webdavRepository: fake,
+            archiveImporter: _FakeArchiveImporter(),
+            bookSorter: _FakeBookSorter(),
+            webdavPrefs: const _FakeWebDavPrefs(),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
