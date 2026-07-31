@@ -111,6 +111,17 @@ abstract interface class CoreApi {
 | `upsert_bookmark`、`delete_bookmark` | `void` | `Database` |
 | `list_bookmarks` | `Vec<BookmarkDto>` | `Database`、`Parse` |
 
-这些入口保留原有成功输出、CRUD、排序、Markdown、UTF-16 位置和错误原文语义。目录/校验内部仍通过 `AppError::into_legacy` 过渡到旧 `String` 链，避免改变既有错误文本；FRB 公开入口使用结构化 `AppError`。RSS、EPUB、浏览器宿主和其余公开 `Result<T, String>` 入口不在本批范围内。
+这些入口保留原有成功输出、CRUD、排序、Markdown、UTF-16 位置和错误原文语义。目录/校验内部仍通过 `AppError::into_legacy` 过渡到旧 `String` 链，避免改变既有错误文本；FRB 公开入口使用结构化 `AppError`。浏览器宿主和其余公开 `Result<T, String>` 入口不在本批范围内。
 
 输入校验、文本解码、SSRF、响应大小和传输错误均保留原错误文本；本批不改变请求方法、请求头、Cookie、超时、大小限制或非 2xx 响应行为。
+
+## 本地书籍与 RSS 错误边界（2026-08-01）
+
+| Rust 入口 | 成功输出 | 错误分类 |
+|---|---|---|
+| `parse_epub` | `LocalBookInfo` | `Parse` |
+| `parse_remote_archive_book_files` | `Vec<RemoteArchiveBookFile>` | `Parse` |
+| `get_rss_articles` | `RssArticlesResult` | `Network`、`Parse` |
+| `get_rss_content` | `String` | `Network`、`Parse` |
+
+EPUB/ZIP 保留解析、大小限制、路径安全、文件筛选和成功结果；RSS 保留请求参数、排序、分页、文章字段和正文解析。所有分类保留 Rust 原始错误文本；Dart FRB 适配层不使用 `AppError.toString()` 作为用户可见消息。此节不表示 RSS CoreApi、浏览器宿主或其它公开 FFI 的错误边界已经全部完成。

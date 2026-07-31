@@ -60,7 +60,11 @@ pub fn parse_txt_chapters(content: &str) -> Vec<LocalChapterItem> {
 }
 
 /// EPUB 解析 — zip → OPF spine → 章节正文
-pub fn parse_epub(data: &[u8]) -> Result<LocalBookInfo, String> {
+pub fn parse_epub(data: &[u8]) -> Result<LocalBookInfo, super::AppError> {
+    parse_epub_legacy(data).map_err(super::AppError::Parse)
+}
+
+fn parse_epub_legacy(data: &[u8]) -> Result<LocalBookInfo, String> {
     let cursor = Cursor::new(data);
     let mut archive = ZipArchive::new(cursor).map_err(|e| format!("EPUB 解压失败: {e}"))?;
 
@@ -106,8 +110,9 @@ pub fn parse_epub(data: &[u8]) -> Result<LocalBookInfo, String> {
 
 pub(crate) fn parse_remote_archive_book_files(
     data: &[u8],
-) -> Result<Vec<RemoteArchiveBookFile>, String> {
+) -> Result<Vec<RemoteArchiveBookFile>, super::AppError> {
     parse_remote_archive_book_files_with_limits(data, MAX_REMOTE_ZIP_BYTES, MAX_REMOTE_ZIP_BYTES)
+        .map_err(super::AppError::Parse)
 }
 
 fn parse_remote_archive_book_files_with_limits(
@@ -396,6 +401,7 @@ fn collapse_blank_lines(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::AppError;
     use std::io::Write;
     use zip::write::SimpleFileOptions;
 
@@ -423,6 +429,26 @@ mod tests {
     #[test]
     fn txt_no_chapters_returns_empty() {
         assert!(parse_txt_chapters("没有章节标记的纯文本").is_empty());
+    }
+
+    #[test]
+    fn epub_maps_malformed_archive_to_parse_error() {
+        let error = parse_epub(b"not an epub").unwrap_err();
+
+        assert!(matches!(
+            error,
+            AppError::Parse(ref message) if message.starts_with("EPUB 解压失败:")
+        ));
+    }
+
+    #[test]
+    fn remote_archive_maps_corrupted_archive_to_parse_error() {
+        let error = parse_remote_archive_book_files(b"not a zip").unwrap_err();
+
+        assert!(matches!(
+            error,
+            AppError::Parse(ref message) if message.starts_with("ZIP 压缩包损坏或无法读取:")
+        ));
     }
 
     #[test]

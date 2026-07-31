@@ -1,8 +1,10 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/domain/ports/remote_archive_parser_port.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_remote_archive_parser_port.dart';
 import 'package:legado_flutter/src/rust/api.dart' as rust_api;
+import 'package:legado_flutter/src/rust/api/error.dart';
 
 void main() {
   test('maps Rust archive files without changing order, paths, or bytes', () {
@@ -39,6 +41,27 @@ void main() {
     const port = FrbRemoteArchiveParserPort(isAvailable: _unavailable);
 
     expect(() => port.parseZipBookFiles(const <int>[]), throwsStateError);
+  });
+
+  test('keeps the original Rust parse error text at the domain port', () {
+    const message = 'ZIP 解析失败: 不支持的压缩包';
+    final port = FrbRemoteArchiveParserPort(
+      isAvailable: () => true,
+      parseRemoteArchiveBookFiles: ({required data}) {
+        throw AppError.parse(message);
+      },
+    );
+
+    expect(
+      () => port.parseZipBookFiles(const <int>[]),
+      throwsA(
+        isA<RemoteArchiveParserException>().having(
+          (error) => error.message,
+          'message',
+          message,
+        ),
+      ),
+    );
   });
 }
 

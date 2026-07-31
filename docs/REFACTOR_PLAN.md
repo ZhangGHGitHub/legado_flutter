@@ -39,6 +39,8 @@
 2026-08-01 QuickJS/数据库初始化追溯补充：`rust/legado_engine/src/rule/js_engine.rs` 统一脚本入口使用 QuickJS Runtime，增加 5 秒纯 QuickJS 执行 interrupt 和 `script/jsLib` 单项 256 KiB 输入上限；定向测试 `29/29` 通过。该 interrupt 只覆盖纯 QuickJS 执行；`java.ajax`、`getStrResponse` 和 WebView 宿主阻塞不在本批保证范围内，不据此宣称完整宿主端到端超时门禁已完成。`rust/legado_engine/src/db/mod.rs` 与 `src/api/db.rs` 增加 `init(app_dir)`：固定使用 `app_dir/legado.db`，空路径/文件路径拒绝，同目录幂等、异目录拒绝，schema 初始化在单事务中执行且失败不发布；初始化锁覆盖首次并发调用；数据库定向测试 `19/19` 通过。FRB 绑定已重新生成，`LegadoDbBridge` 已从旧文件路径入口切换为应用数据目录入口；release DLL 重建后备份服务定向测试 `10/10` 通过。`cargo test -p legado_engine` 为 `208` 项通过，Flutter 串行全量为 `894` 项通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构边界扫描、`cargo fmt -p legado_engine` 和 `git diff --check` 均通过。本条仅记录当前代码与证据，不新增或扩展 R1-12、R2、R6 阶段退出声明。
 2026-08-01 公开 FFI 错误边界追溯补充：`get_book_info`、`query_dict_rule`、笔记和书签入口统一返回 Rust `AppError`；详情/字典保持解析、网络、JS、校验和不支持错误分类，笔记/书签保持数据库 CRUD、Markdown、排序、UTF-16 位置和错误原文。目录/校验内部通过 `AppError::into_legacy` 兼容既有 `String` 链。FRB 已重新生成，Rust 全量 `218` 项、Flutter 全量 `894` 项通过，`3` 项既有条件跳过，`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 均通过。RSS、EPUB、浏览器宿主及其它公开 `Result<T, String>` 入口仍未迁移，本条不扩展 R1-12、R2、R6 阶段退出声明。
 
+2026-08-01 公开 FFI 错误边界扩展批次：本地 EPUB/远程 ZIP 解析入口统一为 `AppError::Parse`，RSS 文章/正文入口统一为 `AppError::Network` 或 `AppError::Parse`；保留 EPUB/ZIP 的解析、大小限制、路径安全、文件筛选和成功结果，保留 RSS 的排序、分页、文章字段、正文解析和错误原文。FRB 已重新生成；新增 Rust RSS 分类边界测试、Dart `AppError` 原文和 ZIP 适配器回归。Rust 定向 RSS `4/4`、Rust 全量 `224` 项，Flutter 定向 `10/10`、Flutter 全量 `897` 项，均通过；另有 `3` 项既有 Flutter 条件跳过，`flutter analyze --no-pub`、release DLL 构建、架构边界扫描和 `git diff --check` 通过。本批同时修复 FRB 适配层的 `AppError` 原文提取，非 Rust 异常仍按原路径传播。浏览器宿主、QuickJS 宿主阻塞、其它公开 `Result<T, String>`、Dart 全链路统一展示和阶段退出条件仍未完成，本条不扩展 R1-12、R2、R3 或 R6 阶段退出声明。
+
 ---
 
 ## 0.0 R0 重基线附录（2026-07-27）

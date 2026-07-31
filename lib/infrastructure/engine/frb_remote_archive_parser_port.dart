@@ -1,6 +1,7 @@
 import '../../bridge/legado_engine_bridge.dart';
 import '../../domain/ports/remote_archive_parser_port.dart';
 import '../../src/rust/api.dart' as rust_api;
+import 'app_error_message.dart';
 
 typedef RustParseRemoteArchiveBookFiles =
     List<rust_api.RemoteArchiveBookFile> Function({required List<int> data});
@@ -23,14 +24,20 @@ class FrbRemoteArchiveParserPort implements RemoteArchiveParserPort {
   @override
   List<RemoteArchiveBookFile> parseZipBookFiles(List<int> bytes) {
     if (!isAvailable) throw StateError('Rust engine not available');
-    return _parseRemoteArchiveBookFiles(data: bytes)
-        .map(
-          (file) => RemoteArchiveBookFile(
-            relativePath: file.relativePath,
-            bytes: file.bytes,
-          ),
-        )
-        .toList(growable: false);
+    try {
+      return _parseRemoteArchiveBookFiles(data: bytes)
+          .map(
+            (file) => RemoteArchiveBookFile(
+              relativePath: file.relativePath,
+              bytes: file.bytes,
+            ),
+          )
+          .toList(growable: false);
+    } catch (error) {
+      final message = appErrorMessage(error);
+      if (message != null) throw RemoteArchiveParserException(message);
+      rethrow;
+    }
   }
 
   static bool _defaultIsAvailable() => LegadoEngineBridge.isAvailable;

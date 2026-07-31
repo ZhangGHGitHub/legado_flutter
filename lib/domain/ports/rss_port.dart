@@ -8,6 +8,15 @@ class RssArticlesResult {
   final String? nextUrl;
 }
 
+class RssPortException implements Exception {
+  const RssPortException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 abstract interface class RssPort {
   bool get isAvailable;
 

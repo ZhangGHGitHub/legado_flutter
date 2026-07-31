@@ -1819,7 +1819,7 @@ fn wire__crate__api__get_rss_articles_impl(
             let api_page = <i32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok = crate::api::get_rss_articles(
                             api_source_json,
@@ -1862,7 +1862,7 @@ fn wire__crate__api__get_rss_content_impl(
             let api_article_link = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok =
                             crate::api::get_rss_content(api_source_json, api_article_link).await?;
@@ -2176,7 +2176,7 @@ fn wire__crate__api__parse_epub_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_data = <Vec<u8>>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::parse_epub(api_data)?;
                 Ok(output_ok)
             })())
@@ -2208,7 +2208,7 @@ fn wire__crate__api__local_book__parse_epub_impl(
             let api_data = <Vec<u8>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::error::AppError>((move || {
                     let output_ok = crate::api::local_book::parse_epub(&api_data)?;
                     Ok(output_ok)
                 })())
@@ -2239,7 +2239,7 @@ fn wire__crate__api__parse_remote_archive_book_files_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_data = <Vec<u8>>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::parse_remote_archive_book_files(api_data)?;
                 Ok(output_ok)
             })())

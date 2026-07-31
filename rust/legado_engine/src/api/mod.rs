@@ -341,7 +341,7 @@ pub fn parse_txt_chapters(content: String) -> Vec<LocalChapterItem> {
 
 /// EPUB 解析
 #[frb(sync)]
-pub fn parse_epub(data: Vec<u8>) -> Result<LocalBookInfo, String> {
+pub fn parse_epub(data: Vec<u8>) -> Result<LocalBookInfo, AppError> {
     local_book::parse_epub(&data)
 }
 
@@ -349,7 +349,7 @@ pub fn parse_epub(data: Vec<u8>) -> Result<LocalBookInfo, String> {
 #[frb(sync)]
 pub fn parse_remote_archive_book_files(
     data: Vec<u8>,
-) -> Result<Vec<RemoteArchiveBookFile>, String> {
+) -> Result<Vec<RemoteArchiveBookFile>, AppError> {
     local_book::parse_remote_archive_book_files(&data)
 }
 
@@ -592,7 +592,7 @@ pub async fn get_rss_articles(
     sort_url: String,
     sort_name: String,
     page: i32,
-) -> Result<RssArticlesResult, String> {
+) -> Result<RssArticlesResult, AppError> {
     let (articles, next_url) =
         rss::get_rss_articles(&source_json, &sort_url, &sort_name, page).await?;
     Ok(RssArticlesResult {
@@ -615,7 +615,10 @@ pub async fn get_rss_articles(
 
 /// 获取 RSS 正文 — 对齐 Jingshiro Rss.getContentAwait
 #[frb]
-pub async fn get_rss_content(source_json: String, article_link: String) -> Result<String, String> {
+pub async fn get_rss_content(
+    source_json: String,
+    article_link: String,
+) -> Result<String, AppError> {
     rss::get_rss_content(&source_json, &article_link).await
 }
 

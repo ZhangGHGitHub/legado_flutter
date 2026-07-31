@@ -9,6 +9,15 @@ class RemoteArchiveBookFile {
   final List<int> bytes;
 }
 
+class RemoteArchiveParserException implements Exception {
+  const RemoteArchiveParserException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// 远端书籍 ZIP 解析所需的最小引擎端口。
 abstract interface class RemoteArchiveParserPort {
   bool get isAvailable;

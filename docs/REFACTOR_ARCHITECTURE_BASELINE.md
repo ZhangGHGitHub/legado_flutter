@@ -1,5 +1,15 @@
 # Legado Flutter 架构重构基线
 
+## 173. 2026-08-01：公开 FFI 错误边界扩展：本地 EPUB/远程 ZIP 与 RSS
+
+- Rust 公开 `parse_epub`、`parse_remote_archive_book_files` 失败结果统一为 `AppError::Parse`；`get_rss_articles`、`get_rss_content` 统一为 `AppError::Network` 或 `AppError::Parse`。具体解析和分类仍归 Rust engine，FRB 生成文件只作为绑定产物，不向页面扩散。
+- FRB 适配层提取 `AppError.field0` 并通过 `RssPortException`、`RemoteArchiveParserException` 保留原错误文本；非 Rust 异常继续原路径传播。新增 RSS 分类边界、AppError 原文和 ZIP 适配器回归测试。
+- 未改变 EPUB/ZIP 解析、输入大小、路径安全、文件筛选和成功结果；未改变 RSS 排序、分页、文章字段、正文解析和请求参数，也未修改正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证记录：`cargo fmt -p legado_engine`、Rust RSS 定向 `4/4`、Rust 全量 `224`、Flutter 适配器定向 `10/10`、Flutter 全量 `897` 通过，`3` 项既有 Flutter 条件跳过；release DLL 构建、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。
+
+边界结论：本批只收敛公开错误契约，没有迁移 RSS/本地书籍的 application/UI 用例；浏览器宿主、QuickJS 宿主阻塞、其它公开 `Result<T, String>`、Dart 全链路错误展示和 R1-12/R2/R3/R6 阶段退出仍按计划排队。
+
 状态：R0-R5 本地门禁已完成；R6 功能域迁移及 P0-1 崩溃防护与启动恢复已完成，下一项为 P0-2 存储初始化安全；发布前正式/主流 WebDAV 和其余目标平台验收待执行
 日期：2026-07-29
 依据：当前工作区代码、`docs/REFACTOR_PLAN.md`、根目录 `legado-main/`
