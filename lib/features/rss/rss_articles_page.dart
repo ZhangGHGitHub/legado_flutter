@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/rss/rss_sort_urls_port.dart';
 import '../../domain/ports/application_http_request_port.dart';
 import '../../domain/rss/rss_article.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../application/rss/rss_read_state_port.dart';
 import '../../application/rss/rss_star_prefs_port.dart';
 import '../../domain/ports/rss_port.dart';
-import '../../services/rss_sort_urls.dart';
 import '../../services/source_login_service.dart';
 import '../../widgets/remote_binary_image.dart';
 import '../../features/sources/source_login_page.dart';
@@ -16,9 +16,12 @@ import 'rss_source_edit_page.dart';
 
 /// RSS 文章列表 — 对齐 Jingshiro RssSortActivity / RssArticlesFragment。
 class RssArticlesPage extends StatefulWidget {
-  const RssArticlesPage({super.key, required this.source});
+  const RssArticlesPage({super.key, required this.source, this.sortUrlsPort});
 
   final RssSource source;
+
+  @visibleForTesting
+  final RssSortUrlsPort? sortUrlsPort;
 
   @override
   State<RssArticlesPage> createState() => _RssArticlesPageState();
@@ -30,12 +33,14 @@ class _RssArticlesPageState extends State<RssArticlesPage>
   TabController? _tabController;
   var _resolving = true;
   String? _resolveError;
+  late final RssSortUrlsPort _sortUrlsPort;
 
   RssSource get source => widget.source;
 
   @override
   void initState() {
     super.initState();
+    _sortUrlsPort = widget.sortUrlsPort ?? context.read<RssSortUrlsPort>();
     _resolveSorts();
   }
 
@@ -51,7 +56,7 @@ class _RssArticlesPageState extends State<RssArticlesPage>
       _resolveError = null;
     });
     try {
-      final sorts = await RssSortUrls.resolve(source);
+      final sorts = await _sortUrlsPort.resolve(source);
       if (!mounted) return;
       _tabController?.dispose();
       _tabController = sorts.length > 1
@@ -72,7 +77,7 @@ class _RssArticlesPageState extends State<RssArticlesPage>
   }
 
   Future<void> _clearSortCacheAndReload() async {
-    await RssSortUrls.clearCache(source);
+    await _sortUrlsPort.clearCache(source);
     await _resolveSorts();
   }
 

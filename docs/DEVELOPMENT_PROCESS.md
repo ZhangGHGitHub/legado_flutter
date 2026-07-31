@@ -315,6 +315,8 @@ Day 2  PR/Issue 模板
 
 2026-07-31 当前 R6 记录：继续收口 ReaderPage TTS 边界。扩展 `TtsPort` 覆盖选区朗读、连续朗读回调、句子位置和播放模式能力，ReaderPage 改用注入端口，保留系统/HTTP TTS、stub、选区模式、章节切换和正文位置语义。定向 TTS/Reader `29/29`；Flutter 串行全量 `798` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `26` 降至 `25` 条既有 Feature→service backlog。Rust 未改动，真实 Android TTS 继续按暂停门禁执行。
 
+2026-07-31 当前 R6 记录：三条并行线收口 RSS 分类排序、RSS 源管理传输和 ReaderPage 书籍阅读偏好。新增 `RssSortUrlsPort`、`RssSourceTransferPort`、`BookReaderPrefsPort`，组合根统一注入；owner 验收移除 agent fallback 的 Feature→infrastructure 直连。定向 `8/8`；Flutter 串行全量 `802` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `25` 降至 `22` 条既有 Feature→service backlog。Rust 未改动，真实 Android TTS、Web/WASM/PWA 和正式/主流 WebDAV 继续按暂停门禁执行。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)

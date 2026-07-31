@@ -14,6 +14,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../application/reader/simulated_reading_prefs_port.dart';
 import '../../application/reader/read_style_prefs_port.dart';
 import '../../application/reader/reader_image_cache_port.dart';
+import '../../application/reader/book_reader_prefs_port.dart';
 import '../../application/reader/reading_session_tracker.dart';
 import '../../application/reader/tts_port.dart';
 import '../../domain/ports/reading_record_port.dart';
@@ -35,7 +36,6 @@ import '../cache/download_helpers.dart';
 import 'ai_chat_page.dart';
 import '../../help/bookmark_hint.dart';
 import '../../services/book_progress_sync.dart';
-import '../../services/book_reader_prefs.dart';
 import '../../services/bookmark_service.dart';
 import '../../services/book_source_service.dart';
 import '../../services/read_book_config_prefs.dart';
@@ -78,6 +78,9 @@ class ReaderPage extends StatefulWidget {
   /// 打开时跳转到的章内字符偏移（对齐 Jingshiro chapterPos）；优先于 [initialPageIndex]。
   final int? initialChapterPos;
 
+  /// 单本书阅读配置端口；未注入时使用旧存储服务的适配器。
+  final BookReaderPrefsPort? prefs;
+
   const ReaderPage({
     super.key,
     required this.book,
@@ -85,6 +88,7 @@ class ReaderPage extends StatefulWidget {
     required this.allChapters,
     this.initialPageIndex,
     this.initialChapterPos,
+    this.prefs,
   });
 
   @override
@@ -107,6 +111,7 @@ class _ReaderPageState extends State<ReaderPage> {
   BookProvider? _bookProvider; // 缓存引用，避免 dispose 时 context.read 崩溃
   late final ReadingRecordPort _readingRecordPort;
   late final TtsPort _ttsPort;
+  late final BookReaderPrefsPort _bookReaderPrefs;
   final _readingSession = ReadingSessionTracker();
   late final DetailedReadingSessionTracker _detailedReadingSession;
   int _lastCountedChapterIndex = -1;
@@ -198,6 +203,7 @@ class _ReaderPageState extends State<ReaderPage> {
     super.initState();
     _readingRecordPort = context.read<ReadingRecordPort>();
     _ttsPort = context.read<TtsPort>();
+    _bookReaderPrefs = widget.prefs ?? context.read<BookReaderPrefsPort>();
     _readingSession.start();
     _detailedReadingSession = DetailedReadingSessionTracker(
       bookName: widget.book.name,
@@ -394,8 +400,8 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _loadBookReaderPrefs() async {
-    final anim = await BookReaderPrefs.getPageAnim(widget.book.id);
-    final reSeg = await BookReaderPrefs.getReSegment(widget.book.id);
+    final anim = await _bookReaderPrefs.getPageAnim(widget.book.id);
+    final reSeg = await _bookReaderPrefs.getReSegment(widget.book.id);
     if (!mounted) return;
     setState(() {
       _bookPageAnim = anim ?? -1;
@@ -1875,7 +1881,7 @@ class _ReaderPageState extends State<ReaderPage> {
 
     // Jingshiro ReadStyleDialog：改全局翻页时 book.setPageAnim(-1)，dismiss 时 ReadBookConfig.save()
     if (modeChanged) {
-      unawaited(BookReaderPrefs.setPageAnim(widget.book.id, -1));
+      unawaited(_bookReaderPrefs.setPageAnim(widget.book.id, -1));
     }
     unawaited(ReadBookConfigPrefs.save(newSettings));
     final stylePrefs = context.read<ReadStylePrefsPort>();
@@ -2052,7 +2058,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (selected == null || !mounted) return;
     final anim = selected - 1;
     final oldMode = _pageAnim.id;
-    await BookReaderPrefs.setPageAnim(widget.book.id, anim);
+    await _bookReaderPrefs.setPageAnim(widget.book.id, anim);
     setState(() => _bookPageAnim = anim);
     await _applyEffectivePageAnimChange(oldMode, _pageAnim.id);
   }
@@ -2306,7 +2312,7 @@ class _ReaderPageState extends State<ReaderPage> {
     final next = !_reSegment;
     setState(() => _reSegment = next);
     ReadBook.instance.reSegment = next;
-    await BookReaderPrefs.setReSegment(widget.book.id, next);
+    await _bookReaderPrefs.setReSegment(widget.book.id, next);
     final chapter = widget.allChapters[_currentIndex];
     ReadBook.instance.invalidateMemoryCache(chapter.id, bookId: widget.book.id);
     if (!mounted) return;

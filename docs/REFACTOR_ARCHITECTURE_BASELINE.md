@@ -3095,3 +3095,13 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：TTS/Reader 定向 `29/29`；Flutter 串行全量 `798` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`：`No issues found`；架构扫描由 `26` 降至 `25` 条既有 Feature→service backlog；格式门禁通过，Rust 未改动。
 
 边界结论：本批完成 ReaderPage TTS 的 application/infrastructure 调用者迁移，真实 Android TTS 仍按暂停门禁，剩余 `25` 条 Feature 依赖继续按单边界推进。
+
+## 162. 2026-07-31：R6 RSS 分类、源管理与 Reader 书籍偏好端口边界
+
+- `RssArticlesPage` 的分类 URL 解析/缓存清理改用 `RssSortUrlsPort`；`RssSourceManagePage` 的文件/剪贴板传输改用 `RssSourceTransferPort`；`ReaderPage` 的 `BookReaderPrefs` 改用 `BookReaderPrefsPort`。
+- 组合根统一注册三个 infrastructure adapter；owner 验收移除 agent fallback 的 Feature→infrastructure 直接构造，保留 RSS 分类刷新、源导入导出、阅读动画/重新分段和原有兼容 export 语义。
+- 未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则；剩余 Feature→service 依赖未加入白名单。
+
+验证结果：三条线定向 `8/8`；Flutter 串行全量 `802` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`：`No issues found`；架构扫描由 `25` 降至 `22` 条既有 Feature→service backlog；格式和 `git diff --check` 通过，Rust 未改动。
+
+边界结论：本批完成 RSS 分类、RSS 源管理传输和 Reader 书籍阅读偏好的 application/infrastructure 调用者迁移，剩余 `22` 条 Feature 依赖继续按单边界推进。

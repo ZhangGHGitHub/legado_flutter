@@ -3,10 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
+import 'package:legado_flutter/application/rss/rss_source_transfer_port.dart';
 import '../helpers/fake_reader_font_port.dart';
 import 'package:legado_flutter/features/rss/rss_source_manage_page.dart';
 import 'package:legado_flutter/providers/rss_provider.dart';
-import 'package:legado_flutter/services/rss_source_transfer_port.dart';
 
 class _FakeRssSourceTransfer implements RssSourceTransferPort {
   int pickCount = 0;

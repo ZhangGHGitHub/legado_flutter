@@ -7,6 +7,7 @@ import 'package:image/image.dart' as image_lib;
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import '../helpers/fake_reader_font_port.dart';
 import 'package:legado_flutter/application/rss/rss_read_state_port.dart';
+import 'package:legado_flutter/application/rss/rss_sort_urls_port.dart';
 import 'package:legado_flutter/application/rss/rss_star_prefs_port.dart';
 import 'package:legado_flutter/domain/ports/application_binary_http_request_port.dart';
 import 'package:legado_flutter/domain/ports/application_http_request_port.dart';
@@ -84,6 +85,18 @@ class _FakeRssReadStatePort implements RssReadStatePort {
 
   @override
   Future<void> write(String sourceUrl, Iterable<String> links) async {}
+}
+
+class _FakeRssSortUrlsPort implements RssSortUrlsPort {
+  const _FakeRssSortUrlsPort();
+
+  @override
+  Future<List<(String name, String url)>> resolve(RssSource source) async => [
+    ('', source.sourceUrl),
+  ];
+
+  @override
+  Future<void> clearCache(RssSource source) async {}
 }
 
 void main() {
@@ -168,6 +181,7 @@ void main() {
                       sourceUrl: 'http://localhost:8080/feed',
                       sourceName: '本地源',
                     ),
+                    sortUrlsPort: _FakeRssSortUrlsPort(),
                   ),
                 ),
               ),

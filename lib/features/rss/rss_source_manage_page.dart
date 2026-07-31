@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../providers/rss_provider.dart';
-import '../../services/rss_source_transfer_port.dart';
+import 'package:legado_flutter/application/rss/rss_source_transfer_port.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/legado_popup_menu.dart';
@@ -15,12 +15,9 @@ import 'rss_source_edit_page.dart';
 /// 订阅源管理 — 对齐 Jingshiro [RssSourceActivity] /
 /// `activity_rss_source.xml` + `item_rss_source.xml` + `menu/rss_source.xml`
 class RssSourceManagePage extends StatefulWidget {
-  const RssSourceManagePage({
-    super.key,
-    this.transfer = const PlatformRssSourceTransfer(),
-  });
+  const RssSourceManagePage({super.key, this.transfer});
 
-  final RssSourceTransferPort transfer;
+  final RssSourceTransferPort? transfer;
 
   @override
   State<RssSourceManagePage> createState() => _RssSourceManagePageState();
@@ -30,9 +27,16 @@ class _RssSourceManagePageState extends State<RssSourceManagePage> {
   final _searchController = TextEditingController();
   final _selected = <String>{};
   final _selectBarKey = GlobalKey();
+  late final RssSourceTransferPort _transfer;
 
   /// all | enabled | disabled | login | null_group | group:xxx
   String _filter = 'all';
+
+  @override
+  void initState() {
+    super.initState();
+    _transfer = widget.transfer ?? context.read<RssSourceTransferPort>();
+  }
 
   @override
   void dispose() {
@@ -179,7 +183,7 @@ class _RssSourceManagePageState extends State<RssSourceManagePage> {
 
   Future<void> _importLocal() async {
     try {
-      final jsonText = await widget.transfer.pickImportText();
+      final jsonText = await _transfer.pickImportText();
       if (jsonText == null) return;
       if (!mounted) return;
       final ok = await context.read<RssProvider>().importSources(jsonText);
@@ -324,7 +328,7 @@ class _RssSourceManagePageState extends State<RssSourceManagePage> {
             .map((s) => s.toJson())
             .toList();
         final text = const JsonEncoder.withIndent('  ').convert(list);
-        await widget.transfer.copyText(text);
+        await _transfer.copyText(text);
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
