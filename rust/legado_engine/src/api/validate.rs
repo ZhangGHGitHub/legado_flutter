@@ -1,7 +1,6 @@
 use std::time::Instant;
 
-use super::SearchItem;
-use super::SourceValidation;
+use super::{SearchItem, SourceValidation};
 use crate::api::{book_info, content, explore, search, toc};
 use crate::model::book_source::BookSource;
 
@@ -120,7 +119,7 @@ pub async fn validate_source(source_json: &str, keyword: &str) -> Result<SourceV
     let info = match book_info::get_book_info(source_json, &book.book_url).await {
         Ok(info) => info,
         Err(e) => {
-            push_err(&mut errors, "详情", e);
+            push_err(&mut errors, "详情", e.into_legacy());
             return Ok(SourceValidation {
                 search_ok,
                 discovery_ok,

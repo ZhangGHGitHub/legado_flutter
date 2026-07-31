@@ -1,4 +1,4 @@
-use super::ChapterItem;
+use super::{AppError, ChapterItem};
 use crate::api::book_info;
 use crate::http;
 use crate::model::book_source::BookSource;
@@ -444,7 +444,9 @@ async fn resolve_toc_fetch_url(source: &BookSource, book_url: &str) -> Result<St
     }
 
     if source.is_json_api() && (flat_rule.contains("<js>") || obj_toc.contains("<js>")) {
-        let info = book_info::get_book_info(&source.raw_json, book_url).await?;
+        let info = book_info::get_book_info(&source.raw_json, book_url)
+            .await
+            .map_err(AppError::into_legacy)?;
         if is_usable_toc_url(&info.toc_url) {
             return Ok(info.toc_url);
         }

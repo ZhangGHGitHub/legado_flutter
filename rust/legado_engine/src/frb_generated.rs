@@ -1018,7 +1018,7 @@ fn wire__crate__api__delete_bookmark_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_time = <i64>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::delete_bookmark(api_time)?;
                 Ok(output_ok)
             })())
@@ -1048,7 +1048,7 @@ fn wire__crate__api__delete_note_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::delete_note(api_id)?;
                 Ok(output_ok)
             })())
@@ -1370,7 +1370,7 @@ fn wire__crate__api__export_notes_markdown_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_book_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::export_notes_markdown(api_book_id)?;
                 Ok(output_ok)
             })())
@@ -1542,7 +1542,7 @@ fn wire__crate__api__book_info__get_book_info_impl(
             let api_book_url = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok =
                             crate::api::book_info::get_book_info(&api_source_json, &api_book_url)
@@ -2116,7 +2116,7 @@ fn wire__crate__api__list_bookmarks_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_book_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::list_bookmarks(api_book_id)?;
                 Ok(output_ok)
             })())
@@ -2146,7 +2146,7 @@ fn wire__crate__api__list_notes_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_book_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::list_notes(api_book_id)?;
                 Ok(output_ok)
             })())
@@ -2463,7 +2463,7 @@ fn wire__crate__api__dict__query_dict_rule_impl(
             let api_word = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok =
                             crate::api::dict::query_dict_rule(api_rule_json, api_word).await?;
@@ -3052,7 +3052,7 @@ fn wire__crate__api__upsert_bookmark_impl(
             let api_book_text = <String>::sse_decode(&mut deserializer);
             let api_content = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::upsert_bookmark(
                     api_time,
                     api_book_id,
@@ -3098,7 +3098,7 @@ fn wire__crate__api__upsert_note_impl(
             let api_position = <i32>::sse_decode(&mut deserializer);
             let api_chapter_pos = <i32>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::upsert_note(
                     api_id,
                     api_book_id,

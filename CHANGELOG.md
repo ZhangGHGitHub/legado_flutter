@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/公开 FFI 错误边界：将 `get_book_info`、`query_dict_rule`、笔记和书签入口迁移到 Rust `AppError`，保留详情/字典成功结果、数据库 CRUD、Markdown、排序、UTF-16 位置和错误原文；目录/校验内部使用 `AppError::into_legacy` 保持旧错误文本过渡。FRB 已重新生成；Rust 全量 `218`、Flutter 全量 `894` 通过，`3` 项既有条件跳过，`flutter analyze --no-pub`、架构扫描和 `git diff --check` 通过。RSS、EPUB、浏览器宿主及其它公开 `Result<T, String>` 入口仍未迁移，本批不新增 R1-12、R2 或 R6 阶段退出声明。
 - 架构/QuickJS 与数据库初始化边界：统一 Rust QuickJS 脚本入口的 Runtime，增加 5 秒纯 QuickJS 执行 interrupt 和 `script/jsLib` 单项 256 KiB 输入上限；在 `rust/` 工作目录执行 `cargo test -p legado_engine rule::js_engine::tests -- --nocapture` 为 `29/29` 通过。该 interrupt 不覆盖 `java.ajax`、`getStrResponse` 或 WebView 宿主阻塞，完整宿主端到端超时仍未完成。
 - 架构/数据库初始化契约：`init(app_dir)` 固定使用 `app_dir/legado.db`，拒绝空路径和文件路径，同目录幂等、异目录拒绝，初始化锁覆盖首次并发调用，schema 初始化使用事务且失败不发布；FRB 已重新生成，`LegadoDbBridge` 已切换到应用数据目录入口。Rust 数据库定向 `19/19`、Rust 全量 `208` 通过，`flutter test --no-pub test/services/backup_service_test.dart` 为 `10/10` 通过，Flutter 全量 `894` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构扫描、`cargo fmt -p legado_engine` 和 `git diff --check` 均通过。本批不新增 R1-12、R2 或 R6 阶段退出声明。
 - 架构/网络错误边界扩展：将裸 `http_fetch`、网络配置、Cookie 和 HTTP trace FFI 入口统一为 Rust `AppError`，保留请求参数、Cookie 域规则、trace 和错误原文语义；Rust API 定向 `57/57`、全量 `202` 通过，Windows FRB HTTP 集成 `2/2`，Flutter 全量 `894` 通过、`3` 项既有条件跳过，analyze/架构边界/diff 检查通过，并重新生成 FRB。QuickJS 超时、统一初始化、书架生产 Riverpod 和其它公开字符串错误入口仍未完成。

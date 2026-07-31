@@ -2,40 +2,43 @@ use base64::Engine;
 use regex::Regex;
 use scraper::{Html, Selector};
 
+use super::AppError;
 use crate::http::{analyze_url, client};
 use crate::rule::{engine, js_engine, json_rule, source_rule};
 use source_rule::{RuleMode, RuleState};
 
 /// 执行字典规则，对齐原版 DictRule.search 的 AnalyzeUrl -> showRule 链路。
-pub async fn query_dict_rule(rule_json: String, word: String) -> Result<String, String> {
+pub async fn query_dict_rule(rule_json: String, word: String) -> Result<String, AppError> {
     let key = word.trim();
     if key.is_empty() {
-        return Err("请输入测试词".to_string());
+        return Err(AppError::Validation("请输入测试词".to_string()));
     }
 
-    let rule: serde_json::Value =
-        serde_json::from_str(&rule_json).map_err(|error| format!("字典规则 JSON 无效: {error}"))?;
+    let rule: serde_json::Value = serde_json::from_str(&rule_json)
+        .map_err(|error| AppError::Parse(format!("字典规则 JSON 无效: {error}")))?;
     let url_rule = rule
         .get("urlRule")
         .and_then(serde_json::Value::as_str)
         .unwrap_or("")
         .trim();
     if url_rule.is_empty() {
-        return Err("URL 规则为空".to_string());
+        return Err(AppError::Validation("URL 规则为空".to_string()));
     }
     let show_rule = rule
         .get("showRule")
         .and_then(serde_json::Value::as_str)
         .unwrap_or("");
 
-    let request = analyze_url::resolve_request(url_rule, key, 1, "", "")?;
+    let request = analyze_url::resolve_request(url_rule, key, 1, "", "").map_err(map_rule_error)?;
     if request.url.trim().is_empty() {
-        return Err("字典 URL 规则解析为空".to_string());
+        return Err(AppError::Parse("字典 URL 规则解析为空".to_string()));
     }
     let body = if request.url.starts_with("data:") {
         decode_data_url(&request.url)?
     } else {
-        client::fetch_request_config(&request, None).await?
+        client::fetch_request_config(&request, None)
+            .await
+            .map_err(AppError::Network)?
     };
     if show_rule.trim().is_empty() {
         return Ok(body);
@@ -49,20 +52,21 @@ pub async fn query_dict_rule(rule_json: String, word: String) -> Result<String, 
     apply_show_rule(show_rule, &body, &base_url)
 }
 
-fn decode_data_url(url: &str) -> Result<String, String> {
+fn decode_data_url(url: &str) -> Result<String, AppError> {
     let (metadata, payload) = url
         .split_once(',')
-        .ok_or_else(|| "data URL 缺少内容分隔符".to_string())?;
+        .ok_or_else(|| AppError::Parse("data URL 缺少内容分隔符".to_string()))?;
     if metadata.to_ascii_lowercase().ends_with(";base64") {
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(payload)
-            .map_err(|error| format!("data URL Base64 无效: {error}"))?;
-        return String::from_utf8(bytes).map_err(|error| format!("data URL 不是 UTF-8: {error}"));
+            .map_err(|error| AppError::Parse(format!("data URL Base64 无效: {error}")))?;
+        return String::from_utf8(bytes)
+            .map_err(|error| AppError::Parse(format!("data URL 不是 UTF-8: {error}")));
     }
     Ok(payload.to_string())
 }
 
-fn apply_show_rule(show_rule: &str, body: &str, base_url: &str) -> Result<String, String> {
+fn apply_show_rule(show_rule: &str, body: &str, base_url: &str) -> Result<String, AppError> {
     let rules = source_rule::split_source_rules(show_rule, false);
     if rules.is_empty() {
         return Ok(body.to_string());
@@ -78,24 +82,30 @@ fn apply_show_rule(show_rule: &str, body: &str, base_url: &str) -> Result<String
         });
         current = match materialized.mode {
             RuleMode::Js => {
-                js_engine::run_with_result_as_string(&materialized.rule, &current, "", base_url)?
+                js_engine::run_with_result_as_string(&materialized.rule, &current, "", base_url)
+                    .map_err(AppError::JsExecution)?
             }
             RuleMode::Json => {
-                let value: serde_json::Value = serde_json::from_str(&current)
-                    .map_err(|error| format!("字典 showRule JSON 输入无效: {error}"))?;
+                let value: serde_json::Value = serde_json::from_str(&current).map_err(|error| {
+                    AppError::Parse(format!("字典 showRule JSON 输入无效: {error}"))
+                })?;
                 json_rule::resolve_field(&value, &materialized.rule, "", base_url)
             }
             RuleMode::Default | RuleMode::XPath => extract_html_rule(&current, &materialized.rule)?,
             RuleMode::Regex => Regex::new(&materialized.rule)
-                .map_err(|error| format!("字典 showRule 正则无效: {error}"))?
+                .map_err(|error| AppError::Parse(format!("字典 showRule 正则无效: {error}")))?
                 .find(&current)
                 .map(|value| value.as_str().to_string())
                 .unwrap_or_default(),
-            RuleMode::WebJs => return Err("字典 showRule 的 @webjs 需要 WebView".to_string()),
+            RuleMode::WebJs => {
+                return Err(AppError::Unsupported(
+                    "字典 showRule 的 @webjs 需要 WebView".to_string(),
+                ))
+            }
         };
         if !materialized.replace_regex.is_empty() {
             let regex = Regex::new(&materialized.replace_regex)
-                .map_err(|error| format!("字典 showRule 替换正则无效: {error}"))?;
+                .map_err(|error| AppError::Parse(format!("字典 showRule 替换正则无效: {error}")))?;
             current = if materialized.replace_first {
                 regex
                     .replace(&current, materialized.replacement.as_str())
@@ -110,13 +120,22 @@ fn apply_show_rule(show_rule: &str, body: &str, base_url: &str) -> Result<String
     Ok(current)
 }
 
-fn extract_html_rule(html: &str, rule: &str) -> Result<String, String> {
+fn extract_html_rule(html: &str, rule: &str) -> Result<String, AppError> {
     let document = Html::parse_document(html);
     let body = document
         .select(&Selector::parse("body").expect("body selector is valid"))
         .next()
         .unwrap_or_else(|| document.root_element());
     Ok(engine::extract_text(&body, rule))
+}
+
+fn map_rule_error(message: String) -> AppError {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("javascript") || lower.contains("quickjs") || lower.contains("js ") {
+        AppError::JsExecution(message)
+    } else {
+        AppError::Parse(message)
+    }
 }
 
 #[cfg(test)]
@@ -245,22 +264,45 @@ key + ':' + rr.read('$.data.pinyin');"#;
 
     #[tokio::test]
     async fn rejects_empty_inputs_and_private_hosts() {
-        assert!(
+        assert!(matches!(
             query_dict_rule(rule_json("https://example.com", ""), " ".to_string())
-                .await
-                .unwrap_err()
-                .contains("测试词")
-        );
-        assert!(query_dict_rule(rule_json("", ""), "word".to_string())
             .await
-            .unwrap_err()
-            .contains("URL 规则为空"));
-        assert!(query_dict_rule(
-            rule_json("http://127.0.0.1/private", ""),
-            "word".to_string(),
-        )
-        .await
-        .unwrap_err()
-        .contains("SSRF"));
+            .unwrap_err(),
+            AppError::Validation(ref message) if message == "请输入测试词"
+        ));
+        assert!(matches!(
+            query_dict_rule(rule_json("", ""), "word".to_string())
+                .await
+                .unwrap_err(),
+            AppError::Validation(ref message) if message == "URL 规则为空"
+        ));
+        assert!(matches!(
+            query_dict_rule(
+                rule_json("http://127.0.0.1/private", ""),
+                "word".to_string(),
+            )
+            .await
+            .unwrap_err(),
+            AppError::Network(ref message) if message.contains("SSRF")
+        ));
+    }
+
+    #[tokio::test]
+    async fn preserves_parse_and_js_error_categories_and_text() {
+        let parse_error = query_dict_rule("{".to_string(), "word".to_string())
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            parse_error,
+            AppError::Parse(ref message) if message.starts_with("字典规则 JSON 无效:")
+        ));
+
+        let js_error = query_dict_rule(rule_json("@js:(", ""), "word".to_string())
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            js_error,
+            AppError::JsExecution(ref message) if message.starts_with("JS 执行失败:")
+        ));
     }
 }

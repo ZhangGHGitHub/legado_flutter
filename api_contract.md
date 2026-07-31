@@ -14,7 +14,7 @@ AppError = Network | Parse | Database | JsExecution | Validation | Unsupported |
 
 当前已迁移的 Rust FFI 入口使用结构化 `AppError`；尚未迁移的入口仍可能返回 `String`，由后续批次逐条收敛。Real adapter 必须集中负责过渡期错误映射，页面不得自行解析错误文本。
 
-已完成的首批错误边界包括书源主链、调试入口、数据库入口、阅读记录/备份入口，以及统一 HTTP 文本和二进制请求入口。错误原文保留在对应 `AppError` 变体中。
+已完成的首批错误边界包括书源主链、调试入口、数据库入口、阅读记录/备份入口、书籍详情/字典入口、笔记/书签入口，以及统一 HTTP 文本和二进制请求入口。错误原文保留在对应 `AppError` 变体中；未迁移入口仍按后续批次处理。
 
 ## 模型
 
@@ -99,5 +99,18 @@ abstract interface class CoreApi {
 | `http_fetch` | `String` | `Parse`、`Network` |
 | `set_network_config`、`set_source_cookie`、`clear_source_cookie`、`source_cookie_domain` | `void`/`String` | `Validation` |
 | `clear_engine_cache`、`start_http_request_trace` | `void` | `Unknown` 或 `JsExecution` |
+
+## 书籍详情、字典、笔记与书签错误边界（2026-08-01）
+
+| Rust 入口 | 成功输出 | 错误分类 |
+|---|---|---|
+| `get_book_info` | `BookInfoItem` | `Parse`、`Network`、`JsExecution` |
+| `query_dict_rule` | `String` | `Validation`、`Parse`、`Network`、`JsExecution`、`Unsupported` |
+| `upsert_note`、`delete_note`、`export_notes_markdown` | `void`/`String` | `Database` |
+| `list_notes` | `Vec<NoteDto>` | `Database`、`Parse` |
+| `upsert_bookmark`、`delete_bookmark` | `void` | `Database` |
+| `list_bookmarks` | `Vec<BookmarkDto>` | `Database`、`Parse` |
+
+这些入口保留原有成功输出、CRUD、排序、Markdown、UTF-16 位置和错误原文语义。目录/校验内部仍通过 `AppError::into_legacy` 过渡到旧 `String` 链，避免改变既有错误文本；FRB 公开入口使用结构化 `AppError`。RSS、EPUB、浏览器宿主和其余公开 `Result<T, String>` 入口不在本批范围内。
 
 输入校验、文本解码、SSRF、响应大小和传输错误均保留原错误文本；本批不改变请求方法、请求头、Cookie、超时、大小限制或非 2xx 响应行为。

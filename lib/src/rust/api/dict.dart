@@ -4,9 +4,10 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `apply_show_rule`, `decode_data_url`, `extract_html_rule`
+// These functions are ignored because they are not marked as `pub`: `apply_show_rule`, `decode_data_url`, `extract_html_rule`, `map_rule_error`
 
 /// 执行字典规则，对齐原版 DictRule.search 的 AnalyzeUrl -> showRule 链路。
 Future<String> queryDictRule({

@@ -13,9 +13,9 @@
 | Riverpod/Notifier | 已加入 `flutter_riverpod`；CoreApi 有首个 Notifier 样板，`BookshelfNotifier` 已覆盖加载、失败、刷新和并发旧结果丢弃；业务页面仍使用 Provider | 部分完成 | 逐模块迁移并保持 Widget 回归 |
 | freezed 镜像模型 | `SearchResultItem`、`BookReadConfig`、`BookGroup`、`Chapter` 已引入 Freezed 定义和兼容映射，生成链已通过；Book/BookSource 仍未全部迁移 | 部分完成 | 继续扩展 Book/BookSource，并保持旧 JSON 契约 |
 | CoreApi + Mock/Real | 书架/搜索 CoreApi、MockCoreApi、RealCoreApi 和契约测试已建立；生产组合根通过 ProviderScope 注入 RealCoreApi | 基本完成首批 | 先补书架命令契约，再迁移页面单一事实源 |
-| 统一 AppError | `search/explore/get_book_info/get_toc/get_content/get_content_with_next_chapter/validate_source/debug_search/debug_toc`、23 个 `db_*` 入口、HTTP 文本/二进制入口、`http_fetch` 和网络配置/Cookie/trace 入口已改为 Rust `AppError`；其它 FFI 公开 API 仍有 `Result<T, String>` | 部分完成 | 继续迁移其它公开 FFI 错误和 Dart 统一映射 |
-| QuickJS 5 秒超时 | 已接入 QuickJS；未见 interrupt handler/执行预算 | 不符合 | 死循环、超时、取消和资源上限 fixture |
-| 统一 `init(app_dir)` | `init_engine()` 与 `db_init(path)` 分离 | 部分完成 | 统一初始化入口，保持旧入口兼容过渡 |
+| 统一 AppError | `search/explore/get_book_info/get_toc/get_content/get_content_with_next_chapter/validate_source/debug_search/debug_toc`、`query_dict_rule`、笔记/书签入口、23 个 `db_*` 入口、HTTP 文本/二进制入口、`http_fetch` 和网络配置/Cookie/trace 入口已改为 Rust `AppError`；RSS、EPUB、浏览器宿主和其它公开 FFI 仍有 `Result<T, String>` | 部分完成 | 继续迁移其它公开 FFI 错误和 Dart 统一映射 |
+| QuickJS 5 秒超时 | 已接入统一 QuickJS Runtime interrupt，纯脚本执行预算为 5 秒；脚本和 `jsLib` 输入上限均为 256 KiB；定向测试 29/29、Rust 全量 208 项通过。`java.ajax`、`getStrResponse` 和 WebView 宿主同步阻塞不受本批 interrupt 中断 | 部分完成 | 单独补齐宿主调用超时、取消和资源上限边界，不宣称本批已覆盖宿主阻塞 |
+| 统一 `init(app_dir)` | `init(app_dir)` 固定使用 `app_dir/legado.db`，schema 初始化在单事务中执行，失败不发布；同目录幂等且首次并发调用受初始化锁保护。FRB 已重新生成，生产 `LegadoDbBridge` 传入应用数据目录；数据库定向 19/19、备份桥接 10/10、Flutter 全量 894 项通过且有 3 项既有跳过 | 基本完成首批 | 继续补齐历史 schema 异常版本覆盖并保持旧入口兼容过渡；不宣称 R1-12/R2/R6 阶段退出 |
 | 编码探测 | Rust 使用 `encoding_rs`；本地 TXT 仍有 Dart GBK fallback | 部分完成 | GBK/GB18030 fixture 和 Rust 唯一事实源 |
 | Rust `core/ffi_bridge` 目录 | 实际为 `rust/legado_engine` | 部分符合 | 先按逻辑边界隔离，目录迁移需独立决策 |
 | 模块映射和 API 清单 | 本批新增 `MODULE_MIGRATION_MAPPING.md` | 已建立初版 | 对照原版逐项补全 |
@@ -41,3 +41,5 @@
 - 网络边界批次将 `fetch_public_text`、应用 HTTP 文本请求和二进制请求迁移为 `AppError`，Rust 定向 `9/9` 通过；FRB 绑定已同步生成。其余网络配置、Cookie、裸 HTTP、RSS、JS、笔记和书签入口仍按后续低风险批次推进。
 - 网络边界批次最终验证：Rust 全量 `199` 项、Windows FRB HTTP 集成 `2/2`、Flutter 串行全量 `894` 项通过，`3` 项既有条件跳过；`flutter analyze --no-pub` 通过。该结果不改变 QuickJS 超时、初始化、编码、Book/BookSource Freezed 和生产书架 Riverpod 等未完成差距。
 - 网络扩展批次将裸 `http_fetch`、网络配置、Cookie 和 HTTP trace 入口统一为 `AppError`；Rust API 定向 `57/57`、全量 `202` 通过，Windows FRB HTTP 集成 `2/2`，Flutter 串行全量 `894` 通过、`3` 项既有条件跳过；analyze、架构边界和 diff 检查通过。其余书源、RSS、JS、笔记和书签入口仍未迁移。
+- QuickJS 与数据库初始化批次验证：QuickJS Runtime interrupt 纯脚本预算 `5` 秒、脚本和 `jsLib` 输入上限 `256 KiB`，定向 `29/29`、Rust 全量 `208` 通过；`java.ajax`、`getStrResponse` 和 WebView 宿主同步阻塞仍不在本批 interrupt 覆盖范围。`init(app_dir)` 使用 `app_dir/legado.db`，事务初始化失败不发布，同目录幂等并覆盖首次并发调用锁；数据库定向 `19/19`、备份桥接 `10/10`、Flutter 全量 `894` 通过且 `3` 项既有条件跳过，`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 均通过。FRB 已重新生成并接入生产 `LegadoDbBridge`；本条不表示 R1-12/R2/R6 阶段退出，也不表示已覆盖全部宿主超时、编码或剩余 `AppError` 差距。
+- 公开 FFI 错误边界批次验证：`get_book_info`、`query_dict_rule`、笔记和书签入口改用 `AppError`，保留详情/字典成功结果、数据库 CRUD、Markdown、排序、UTF-16 位置和错误原文；FRB 已重新生成。Rust 全量 `218` 项、Flutter 全量 `894` 项通过，`3` 项既有条件跳过，`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 均通过。RSS、EPUB、浏览器宿主及其它公开 `Result<T, String>` 入口继续排队，本条不表示 R1-12/R2/R6 阶段退出。

@@ -1369,7 +1369,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiDeleteBookmarkConstMeta,
         argValues: [time],
@@ -1392,7 +1392,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiDeleteNoteConstMeta,
         argValues: [id],
@@ -1664,7 +1664,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiExportNotesMarkdownConstMeta,
         argValues: [bookId],
@@ -1827,7 +1827,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_book_info_item,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiBookInfoGetBookInfoConstMeta,
         argValues: [sourceJson, bookUrl],
@@ -2330,7 +2330,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_bookmark_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiListBookmarksConstMeta,
         argValues: [bookId],
@@ -2353,7 +2353,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_note_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiListNotesConstMeta,
         argValues: [bookId],
@@ -2659,7 +2659,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiDictQueryDictRuleConstMeta,
         argValues: [ruleJson, word],
@@ -3266,7 +3266,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiUpsertBookmarkConstMeta,
         argValues: [
@@ -3325,7 +3325,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiUpsertNoteConstMeta,
         argValues: [

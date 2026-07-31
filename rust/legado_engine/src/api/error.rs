@@ -22,6 +22,19 @@ pub enum AppError {
 }
 
 impl AppError {
+    pub(crate) fn into_legacy(self) -> String {
+        match self {
+            Self::Network(message)
+            | Self::Parse(message)
+            | Self::Database(message)
+            | Self::JsExecution(message)
+            | Self::Validation(message)
+            | Self::Unsupported(message)
+            | Self::Cancelled(message)
+            | Self::Unknown(message) => message,
+        }
+    }
+
     pub(crate) fn from_legacy(message: String) -> Self {
         let lower = message.to_ascii_lowercase();
         if lower.contains("http")

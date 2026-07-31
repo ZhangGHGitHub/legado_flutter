@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'error.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `from_legacy`
+// These functions are ignored because they are not marked as `pub`: `from_legacy`, `into_legacy`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `fmt`
 
 @freezed

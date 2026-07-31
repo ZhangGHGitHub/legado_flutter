@@ -275,9 +275,7 @@ pub async fn get_book_info(
     source_json: String,
     book_url: String,
 ) -> Result<BookInfoItem, AppError> {
-    book_info::get_book_info(&source_json, &book_url)
-        .await
-        .map_err(AppError::from_legacy)
+    book_info::get_book_info(&source_json, &book_url).await
 }
 
 /// 获取目录
@@ -480,7 +478,7 @@ pub fn upsert_note(
     note_content: String,
     position: i32,
     chapter_pos: i32,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     crate::notes_store::upsert_note(
         &id,
         &book_id,
@@ -494,19 +492,19 @@ pub fn upsert_note(
 
 /// 删除想法笔记
 #[frb(sync)]
-pub fn delete_note(id: String) -> Result<(), String> {
+pub fn delete_note(id: String) -> Result<(), AppError> {
     crate::notes_store::delete_note(&id)
 }
 
 /// 列出想法笔记（book_id 为空则全部）
 #[frb(sync)]
-pub fn list_notes(book_id: String) -> Result<Vec<NoteDto>, String> {
+pub fn list_notes(book_id: String) -> Result<Vec<NoteDto>, AppError> {
     crate::notes_store::list_notes(book_id)
 }
 
 /// 导出 Obsidian 风格 Markdown
 #[frb(sync)]
-pub fn export_notes_markdown(book_id: String) -> Result<String, String> {
+pub fn export_notes_markdown(book_id: String) -> Result<String, AppError> {
     crate::notes_store::export_notes_markdown(book_id)
 }
 
@@ -522,7 +520,7 @@ pub fn upsert_bookmark(
     chapter_name: String,
     book_text: String,
     content: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     crate::bookmarks_store::upsert_bookmark(
         time,
         &book_id,
@@ -538,13 +536,13 @@ pub fn upsert_bookmark(
 
 /// 删除独立书签
 #[frb(sync)]
-pub fn delete_bookmark(time: i64) -> Result<(), String> {
+pub fn delete_bookmark(time: i64) -> Result<(), AppError> {
     crate::bookmarks_store::delete_bookmark(time)
 }
 
 /// 列出独立书签；book_id 为空则全部
 #[frb(sync)]
-pub fn list_bookmarks(book_id: String) -> Result<Vec<BookmarkDto>, String> {
+pub fn list_bookmarks(book_id: String) -> Result<Vec<BookmarkDto>, AppError> {
     crate::bookmarks_store::list_bookmarks(book_id)
 }
 
