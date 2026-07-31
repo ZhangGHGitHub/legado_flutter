@@ -8,9 +8,9 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../application/preferences/source_variable_port.dart';
 import '../../application/platform/clipboard_port.dart';
+import '../../application/qr/qr_code_port.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../providers/source_provider.dart';
-import '../../services/qr_code_service.dart';
 import '../../services/source_login_cookie_service.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_popup_menu.dart';
@@ -776,7 +776,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
 
   Future<void> _shareQr() async {
     final json = _encodeCurrent();
-    final png = QrCodeService.encodeToPngBytes(json);
+    final png = context.read<QrCodePort>().encodeToPngBytes(json);
     if (png == null) {
       await Share.share(json, subject: '分享书源');
       if (!mounted) return;

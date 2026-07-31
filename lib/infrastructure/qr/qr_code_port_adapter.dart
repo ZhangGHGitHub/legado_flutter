@@ -8,6 +8,11 @@ final class QrCodePortAdapter implements QrCodePort {
   const QrCodePortAdapter();
 
   @override
+  Uint8List? encodeToPngBytes(String text) {
+    return QrCodeService.encodeToPngBytes(text);
+  }
+
+  @override
   Future<String?> decodeFromImageBytes(Uint8List bytes) {
     return compute(QrCodeService.decodeFromImageBytes, bytes);
   }

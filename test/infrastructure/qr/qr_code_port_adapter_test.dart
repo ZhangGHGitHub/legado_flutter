@@ -17,6 +17,14 @@ void main() {
     expect(result, payload);
   });
 
+  test('adapter encodes QR text through the application port', () async {
+    const adapter = QrCodePortAdapter();
+    final png = adapter.encodeToPngBytes('source-json');
+
+    expect(png, isNotNull);
+    expect(await adapter.decodeFromImageBytes(png!), 'source-json');
+  });
+
   test('adapter preserves service failure as a null decode result', () async {
     final result = await const QrCodePortAdapter().decodeFromImageBytes(
       Uint8List.fromList(const [1, 2, 3]),

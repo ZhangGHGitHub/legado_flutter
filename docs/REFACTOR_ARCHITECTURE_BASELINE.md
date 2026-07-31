@@ -2939,3 +2939,15 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `dart format` 通过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `83` 降至 `82` 条既有 Feature→service backlog；`git diff --check` 在文档更新后复核。
 
 边界结论：本批完成 RSS 文章列表收藏写入的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `82` 条 Feature 依赖继续按单边界推进。
+
+## 149. 2026-07-31：R6 SourceEditor 二维码能力端口
+
+- `QrCodePort` 扩展为完整二维码能力端口，包含 PNG 编码和图片解码；`SourceEditorPage` 移除对 `services/qr_code_service.dart` 的直接依赖，二维码分享通过 application port 获取 PNG，adapter 继续复用既有服务。
+- 保留二维码导入、分享图片/字符串、内容过长回退和错误提示行为；SourceEditor 测试宿主显式注入端口并新增编码后解码回归。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- 二维码 adapter、二维码服务、扫码页和 SourceEditor 定向 `8/8`；Flutter 串行全量 `flutter test --no-pub --concurrency=1 --reporter compact`：`741` 通过、`3` 项既有条件跳过。
+- `dart format` 通过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `82` 降至 `81` 条既有 Feature→service backlog；`git diff --check` 在文档更新后复核。
+
+边界结论：本批完成 SourceEditor 二维码能力的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `81` 条 Feature 依赖继续按单边界推进。

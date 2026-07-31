@@ -289,6 +289,8 @@ Day 2  PR/Issue 模板
 
 2026-07-31 当前 R6 记录：继续按“先定向测试、再全量门禁、最后记录”推进 `RssArticlesPage` 收藏写入端口。`RssStarPrefsPort` 增加 `toggle` 契约，页面和测试宿主改用注入端口，保留既有 SharedPreferences 和 UI 语义；定向 `10/10`，Flutter 串行全量 `740` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub` 为 `No issues found`，架构扫描 `82` 条既有 Feature→service backlog。Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。相关记录见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
 
+2026-07-31 当前 R6 记录：继续按“先定向测试、再全量门禁、最后记录”推进 `SourceEditorPage` 二维码能力端口。`QrCodePort` 完整承载 PNG 编码与图片解码，页面和测试宿主改用注入端口，保留既有二维码导入/分享语义；定向 `8/8`，Flutter 串行全量 `741` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub` 为 `No issues found`，架构扫描 `81` 条既有 Feature→service backlog。Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。相关记录见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)
