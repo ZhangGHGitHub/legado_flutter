@@ -61,6 +61,7 @@ import '../application/web_api/web_api_prefs_port.dart';
 import '../application/settings/web_api_settings_port.dart';
 import '../application/settings/other_settings_port.dart';
 import '../application/settings/backup_config_status_port.dart';
+import '../application/settings/backup_config_operations_port.dart';
 import '../application/settings/cache_management_port.dart';
 import '../bridge/legado_db_bridge.dart';
 import '../bridge/legado_engine_bridge.dart';
@@ -173,6 +174,7 @@ import '../infrastructure/web_api/dart_io_web_api_port.dart';
 import '../infrastructure/settings/web_api_settings_port_adapter.dart';
 import '../infrastructure/settings/other_settings_port_adapter.dart';
 import '../infrastructure/settings/backup_config_status_port_adapter.dart';
+import '../infrastructure/settings/backup_config_operations_port_adapter.dart';
 import '../infrastructure/settings/cache_management_port_adapter.dart';
 import '../infrastructure/webdav/frb_webdav_repository.dart';
 import '../providers/replace_provider.dart';
@@ -458,6 +460,9 @@ abstract final class AppCompositionRoot {
           ),
           Provider<BackupConfigStatusPort>.value(
             value: const BackupConfigStatusPortAdapter(),
+          ),
+          Provider<BackupConfigOperationsPort>.value(
+            value: BackupConfigOperationsPortAdapter(backupService),
           ),
           Provider<CacheManagementPort>.value(
             value: CacheManagementPortAdapter(cacheService),

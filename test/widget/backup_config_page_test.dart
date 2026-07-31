@@ -12,6 +12,7 @@ import 'package:legado_flutter/features/settings/backup_config_page.dart';
 import 'package:legado_flutter/application/preferences/shared_preferences_runtime.dart';
 import 'package:legado_flutter/services/backup_service.dart';
 import 'package:legado_flutter/infrastructure/bookshelf/shared_preferences_webdav_prefs_port_adapter.dart';
+import 'package:legado_flutter/infrastructure/settings/backup_config_operations_port_adapter.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -134,7 +135,7 @@ Future<void> _pumpWebDavPage(WidgetTester tester, BackupService service) async {
       child: MaterialApp(
         home: Scaffold(
           body: BackupConfigPage(
-            service: service,
+            service: BackupConfigOperationsPortAdapter(service),
             localFilePort: _testLocalFilePort,
             legacyRoomImportService: _testLegacyRoomImport,
             webDavPrefs: const SharedPreferencesWebDavPrefsPortAdapter(),
@@ -155,7 +156,7 @@ void main() {
         child: MaterialApp(
           home: Scaffold(
             body: BackupConfigPage(
-              service: _backupService(),
+              service: BackupConfigOperationsPortAdapter(_backupService()),
               localFilePort: _testLocalFilePort,
               legacyRoomImportService: _testLegacyRoomImport,
               webDavPrefs: const SharedPreferencesWebDavPrefsPortAdapter(),
@@ -191,7 +192,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: BackupConfigPage(
-            service: _backupService(),
+            service: BackupConfigOperationsPortAdapter(_backupService()),
             localFilePort: port,
             legacyRoomImportService: _testLegacyRoomImport,
             webDavPrefs: const SharedPreferencesWebDavPrefsPortAdapter(),

@@ -11,7 +11,10 @@ import 'package:legado_flutter/infrastructure/database/frb_backup_port.dart';
 import 'package:legado_flutter/infrastructure/database/frb_legacy_room_import_port.dart';
 import 'package:legado_flutter/infrastructure/file_system/backup_local_file_adapter.dart';
 import 'package:legado_flutter/infrastructure/preferences/shared_preferences_book_progress_sync_store.dart';
+import 'package:legado_flutter/infrastructure/bookshelf/shared_preferences_webdav_prefs_port_adapter.dart';
 import 'package:legado_flutter/infrastructure/webdav/frb_webdav_repository.dart';
+import 'package:legado_flutter/application/settings/backup_config_status_port.dart';
+import 'package:legado_flutter/infrastructure/settings/backup_config_operations_port_adapter.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/reader/book_progress.dart';
 import 'package:legado_flutter/features/settings/backup_config_page.dart';
@@ -113,7 +116,9 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: BackupConfigPage(
-            service: backupService,
+            service: BackupConfigOperationsPortAdapter(backupService),
+            webDavPrefs: const SharedPreferencesWebDavPrefsPortAdapter(),
+            statusPort: const _ReadyBackupConfigStatusPort(),
             localFilePort: FileSystemBackupLocalFileAdapter(backupService),
             legacyRoomImportService: LegacyRoomImportServices.create(
               FrbLegacyRoomImportPort(),
@@ -139,4 +144,11 @@ void main() {
       containsPair('database', isA<Map<String, dynamic>>()),
     );
   });
+}
+
+class _ReadyBackupConfigStatusPort implements BackupConfigStatusPort {
+  const _ReadyBackupConfigStatusPort();
+
+  @override
+  bool get engineReady => true;
 }

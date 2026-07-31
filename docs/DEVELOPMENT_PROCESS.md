@@ -309,6 +309,8 @@ Day 2  PR/Issue 模板
 
 2026-07-31 当前 R6 记录：继续收口 `OtherSettingsCard` 缓存管理边界。新增 `CacheManagementPort` 与 infrastructure adapter，页面改用缓存统计/清理端口，保留统计格式、清理范围和既有 UI 行为。定向 `2/2`；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `30` 降至 `29` 条既有 Feature→service backlog。上一批 Flutter 串行全量为 `798` 通过、`3` 项既有条件跳过，本小批未重复全量；未削弱断言，Rust 未改动。
 
+2026-07-31 当前 R6 记录：继续收口 `BackupConfigPage` 备份/WebDAV 操作边界。新增 `BackupConfigOperationsPort` 与 infrastructure adapter，R5 Android smoke 宿主补齐操作、WebDAV 偏好和状态端口；备份页定向 `4/4`，`flutter analyze --no-pub` 为 `No issues found`，架构扫描由 `29` 降至 `28` 条既有 Feature→service backlog。全仓 analyze 通过；本批未执行 Android 真机 smoke，未削弱断言，Rust 未改动。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)

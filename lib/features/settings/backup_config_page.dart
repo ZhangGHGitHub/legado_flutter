@@ -4,11 +4,11 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import '../../application/bookshelf/webdav_prefs_port.dart';
+import '../../application/settings/backup_config_operations_port.dart';
 import '../../application/settings/backup_config_status_port.dart';
 import '../../domain/ports/backup_local_file_port.dart';
 import '../../domain/ports/legacy_room_import_use_case.dart';
 import '../../domain/remote/webdav_entry.dart';
-import '../../services/backup_service.dart';
 import '../../application/file_system/app_paths_port.dart';
 import '../../theme/legado_tokens.dart';
 
@@ -84,7 +84,7 @@ class BackupConfigPage extends StatefulWidget {
   });
 
   @visibleForTesting
-  final BackupService? service;
+  final BackupConfigOperationsPort? service;
 
   @visibleForTesting
   final BackupLocalFilePort? localFilePort;
@@ -103,8 +103,8 @@ class BackupConfigPage extends StatefulWidget {
 }
 
 class _BackupConfigPageState extends State<BackupConfigPage> {
-  late final BackupService _service =
-      widget.service ?? context.read<BackupService>();
+  late final BackupConfigOperationsPort _service =
+      widget.service ?? context.read<BackupConfigOperationsPort>();
   late final BackupLocalFilePort _localFilePort =
       widget.localFilePort ?? context.read<BackupLocalFilePort>();
   late final LegacyRoomImportUseCase _legacyRoomImportService =
