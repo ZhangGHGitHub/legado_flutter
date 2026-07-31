@@ -250,6 +250,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 本小批继续收口 `BackupConfigPage` 的备份/WebDAV 操作边界：页面通过 `BackupConfigOperationsPort` 执行本地备份、WebDAV 上传/恢复/删除/重命名和本地恢复，infrastructure adapter 复用 `BackupService`；R5 Android smoke 宿主补齐操作、WebDAV 偏好和状态端口。备份页定向 `4/4`；全仓 `flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `29` 降至 `28` 条既有 Feature→service backlog`。本批未执行 Android 真机 smoke，后续按剩余 28 条 Feature 依赖继续单边界推进。
 
+本批继续收口 RSS 文章获取和 ReaderPage 阅读记录边界：`RssArticlesPage` 改用已有 `RssPort`；`ReaderPage` 改用 `ReadingRecordPort`，纯 Dart 阅读会话计时器迁移到 application 文件，旧 `ReadingRecordService` 保留兼容 export。保留 RSS 分页/刷新/错误、阅读记录增量提交、详细阅读会话的两分钟门槛和正文/位置行为。定向组合 `17/17`；Flutter 串行全量 `798` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `28` 降至 `26` 条既有 Feature→service backlog`。Rust 未改动，本批后续按剩余 26 条 Feature 依赖继续单边界推进。
+
 ### 0.4 重构工作规则
 
 1. 一次只迁移一个边界、一个用例或一条数据链路；完成定向测试并汇报后再进入下一项。
@@ -261,6 +263,7 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 ### 0.5 当前状态
 
 当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 至 P1-4 现已通过；当前继续按 Feature 应用用例边界收口。架构扫描当前为 `28` 条既有 Feature→service backlog，不能当作例外或 R6 最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
+当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 至 P1-4 现已通过；当前继续按 Feature 应用用例边界收口。架构扫描当前为 `26` 条既有 Feature→service backlog，不能当作例外或 R6 最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
 
 ### 0.6 版本控制与变更追溯状态（2026-07-26）
 

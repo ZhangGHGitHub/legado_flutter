@@ -160,11 +160,14 @@ void main() {
             value: _FakeRssReadStatePort(),
             child: Provider<RssStarPrefsPort>.value(
               value: const RssStarPrefsPortAdapter(),
-              child: const MaterialApp(
-                home: RssArticlesPage(
-                  source: RssSource(
-                    sourceUrl: 'http://localhost:8080/feed',
-                    sourceName: '本地源',
+              child: Provider<RssPort>.value(
+                value: _FakeRssPort(article),
+                child: const MaterialApp(
+                  home: RssArticlesPage(
+                    source: RssSource(
+                      sourceUrl: 'http://localhost:8080/feed',
+                      sourceName: '本地源',
+                    ),
                   ),
                 ),
               ),

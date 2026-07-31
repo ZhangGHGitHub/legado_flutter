@@ -14,6 +14,8 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../application/reader/simulated_reading_prefs_port.dart';
 import '../../application/reader/read_style_prefs_port.dart';
 import '../../application/reader/reader_image_cache_port.dart';
+import '../../application/reader/reading_session_tracker.dart';
+import '../../domain/ports/reading_record_port.dart';
 import '../../application/reader/reading_position_mapper.dart';
 import '../../application/reader/book_progress_factory.dart';
 import '../../application/preferences/click_action_prefs_port.dart';
@@ -23,7 +25,6 @@ import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/reading_record_service.dart';
 import '../../services/tts_service.dart';
 import '../../utils/chinese_convert.dart';
 import '../../features/book/change_source_page.dart';
@@ -104,6 +105,7 @@ class _ReaderPageState extends State<ReaderPage> {
   final GlobalKey<ReaderTurnViewState> _turnKey =
       GlobalKey<ReaderTurnViewState>();
   BookProvider? _bookProvider; // 缓存引用，避免 dispose 时 context.read 崩溃
+  late final ReadingRecordPort _readingRecordPort;
   final _readingSession = ReadingSessionTracker();
   late final DetailedReadingSessionTracker _detailedReadingSession;
   int _lastCountedChapterIndex = -1;
@@ -193,6 +195,7 @@ class _ReaderPageState extends State<ReaderPage> {
   @override
   void initState() {
     super.initState();
+    _readingRecordPort = context.read<ReadingRecordPort>();
     _readingSession.start();
     _detailedReadingSession = DetailedReadingSessionTracker(
       bookName: widget.book.name,
@@ -682,7 +685,7 @@ class _ReaderPageState extends State<ReaderPage> {
     _flushReadingSession();
     final detailed = _detailedReadingSession.stop();
     if (detailed != null) {
-      ReadingRecordService.recordDetailedReadSession(
+      _readingRecordPort.recordDetailedReadSession(
         bookName: detailed.bookName,
         startTime: detailed.startTime,
         endTime: detailed.endTime,
@@ -1034,7 +1037,7 @@ class _ReaderPageState extends State<ReaderPage> {
   void _flushReadingSession() {
     final delta = _readingSession.pending();
     if (delta == null) return;
-    final committed = ReadingRecordService.recordReading(
+    final committed = _readingRecordPort.recordReading(
       bookId: widget.book.id,
       bookName: widget.book.name,
       chars: delta.chars,

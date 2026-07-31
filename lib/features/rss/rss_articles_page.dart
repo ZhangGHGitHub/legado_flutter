@@ -6,7 +6,7 @@ import '../../domain/rss/rss_article.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../application/rss/rss_read_state_port.dart';
 import '../../application/rss/rss_star_prefs_port.dart';
-import '../../services/rss_service.dart';
+import '../../domain/ports/rss_port.dart';
 import '../../services/rss_sort_urls.dart';
 import '../../services/source_login_service.dart';
 import '../../widgets/remote_binary_image.dart';
@@ -190,6 +190,7 @@ class _RssArticlesListState extends State<_RssArticlesList>
   String? _error;
   String? _nextUrl;
   var _page = 1;
+  late final RssPort _rssPort;
 
   RssSource get source => widget.source;
 
@@ -201,6 +202,7 @@ class _RssArticlesListState extends State<_RssArticlesList>
   @override
   void initState() {
     super.initState();
+    _rssPort = context.read<RssPort>();
     _loadMeta();
     _refresh();
   }
@@ -251,7 +253,7 @@ class _RssArticlesListState extends State<_RssArticlesList>
       _page = 1;
     });
     try {
-      final r = await RssService.getArticles(
+      final r = await _rssPort.getArticles(
         source: source,
         sortName: widget.sortName,
         sortUrl: widget.sortUrl,
@@ -278,7 +280,7 @@ class _RssArticlesListState extends State<_RssArticlesList>
     if (_loadingMore || _nextUrl == null || _nextUrl!.isEmpty) return;
     setState(() => _loadingMore = true);
     try {
-      final r = await RssService.getArticles(
+      final r = await _rssPort.getArticles(
         source: source,
         sortName: widget.sortName,
         sortUrl: _nextUrl!,

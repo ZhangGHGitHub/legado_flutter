@@ -311,6 +311,8 @@ Day 2  PR/Issue 模板
 
 2026-07-31 当前 R6 记录：继续收口 `BackupConfigPage` 备份/WebDAV 操作边界。新增 `BackupConfigOperationsPort` 与 infrastructure adapter，R5 Android smoke 宿主补齐操作、WebDAV 偏好和状态端口；备份页定向 `4/4`，`flutter analyze --no-pub` 为 `No issues found`，架构扫描由 `29` 降至 `28` 条既有 Feature→service backlog。全仓 analyze 通过；本批未执行 Android 真机 smoke，未削弱断言，Rust 未改动。
 
+2026-07-31 当前 R6 记录：继续收口 RSS 文章获取和 ReaderPage 阅读记录边界。`RssArticlesPage` 改用已有 `RssPort`；`ReaderPage` 改用 `ReadingRecordPort`，阅读会话计时器迁移至 application，`ReadingRecordService` 保留兼容 export。定向组合 `17/17`；Flutter 串行全量 `798` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `28` 降至 `26` 条既有 Feature→service backlog。未削弱断言，Rust 未改动；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)

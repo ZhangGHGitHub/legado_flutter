@@ -3076,3 +3076,13 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：备份页定向 `4/4`；目标文件 analyze、全仓 `flutter analyze --no-pub` 和格式检查通过；架构扫描由 `29` 降至 `28` 条既有 Feature→service backlog。本批未执行 Android 真机 smoke，Rust 未改动。
 
 边界结论：本小批完成 BackupConfig 的 application/infrastructure 操作调用者迁移，剩余 `28` 条 Feature 依赖继续按单边界推进。
+
+## 160. 2026-07-31：R6 RSS 文章与 Reader 阅读记录端口边界
+
+- `RssArticlesPage` 移除 `RssService` 直接依赖，改用已由组合根注册的 `RssPort`，保留文章分页、刷新、错误回退和文章字段行为。
+- `ReaderPage` 移除 `ReadingRecordService` 静态写入依赖，改用 `ReadingRecordPort`；`ReadingSessionTracker`、`DetailedReadingSessionTracker` 和相关纯模型迁移到 application 文件，旧 service 通过 export 保留测试和历史调用兼容。
+- 未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则；剩余 Feature→service 依赖未加入白名单。
+
+验证结果：RSS/Reader 定向组合 `17/17`；Flutter 串行全量 `798` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`：`No issues found`；架构扫描由 `28` 降至 `26` 条既有 Feature→service backlog；格式门禁通过，Rust 未改动。
+
+边界结论：本批完成 RSS 文章获取和 Reader 阅读记录的 application/infrastructure 调用者迁移，剩余 `26` 条 Feature 依赖继续按单边界推进。
