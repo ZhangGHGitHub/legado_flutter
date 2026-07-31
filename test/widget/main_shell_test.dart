@@ -8,12 +8,16 @@ import 'package:legado_flutter/database/dao/source_dao.dart';
 import 'package:legado_flutter/application/lifecycle/app_lifecycle_coordinator.dart';
 import 'package:legado_flutter/application/main/main_shell_startup_port.dart';
 import 'package:legado_flutter/application/mine/my_page_port.dart';
+import 'package:legado_flutter/application/bookshelf/book_group_store_port.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_local_book_port.dart';
 import 'package:legado_flutter/application/preferences/bookshelf_display_prefs_port.dart';
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import '../helpers/fake_reader_font_port.dart';
 import 'package:legado_flutter/application/web_api/web_api_prefs_port.dart';
 import 'package:legado_flutter/application/startup/startup_task_runner.dart';
 import 'package:legado_flutter/domain/crash/crash_report.dart';
+import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/domain/book/book_group.dart';
 import 'package:legado_flutter/domain/ports/public_text_fetch_port.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/infrastructure/content/content_processor_adapter.dart';
@@ -84,6 +88,12 @@ void main() {
           Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
           Provider<WebApiPrefsPort>.value(value: const _FakeWebApiPrefsPort()),
           Provider<MyPagePort>.value(value: const _FakeMyPagePort()),
+          Provider<BookGroupStorePort>.value(
+            value: const _FakeBookGroupStorePort(),
+          ),
+          Provider<BookshelfLocalBookPort>.value(
+            value: const _FakeBookshelfLocalBookPort(),
+          ),
           Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
           ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
           Provider<BookSourceService>(
@@ -154,6 +164,12 @@ void main() {
           Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
           Provider<WebApiPrefsPort>.value(value: const _FakeWebApiPrefsPort()),
           Provider<MyPagePort>.value(value: const _FakeMyPagePort()),
+          Provider<BookGroupStorePort>.value(
+            value: const _FakeBookGroupStorePort(),
+          ),
+          Provider<BookshelfLocalBookPort>.value(
+            value: const _FakeBookshelfLocalBookPort(),
+          ),
           Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
           ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
           Provider<BookSourceService>(
@@ -225,6 +241,12 @@ void main() {
               value: const _FakeWebApiPrefsPort(),
             ),
             Provider<MyPagePort>.value(value: const _FakeMyPagePort()),
+            Provider<BookGroupStorePort>.value(
+              value: const _FakeBookGroupStorePort(),
+            ),
+            Provider<BookshelfLocalBookPort>.value(
+              value: const _FakeBookshelfLocalBookPort(),
+            ),
             Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
             ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
             Provider<BookSourceService>(
@@ -325,6 +347,23 @@ class _FakeMyPagePort implements MyPagePort {
 
   @override
   Future<String> backupLocally() async => 'backup.zip';
+}
+
+class _FakeBookGroupStorePort implements BookGroupStorePort {
+  const _FakeBookGroupStorePort();
+
+  @override
+  List<BookGroup> get cached => const [];
+
+  @override
+  Future<void> syncNamesFromBooks(Iterable<String> names) async {}
+}
+
+class _FakeBookshelfLocalBookPort implements BookshelfLocalBookPort {
+  const _FakeBookshelfLocalBookPort();
+
+  @override
+  Future<Book?> importLocalBook() async => null;
 }
 
 class _FakeMainShellStartupPort implements MainShellStartupPort {

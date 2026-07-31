@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:legado_flutter/application/bookshelf/book_group_store_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_display_port.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_local_book_port.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/domain/book/book.dart' as domain;
+import 'package:legado_flutter/domain/book/book_group.dart';
 import 'package:legado_flutter/features/bookshelf/bookshelf_page.dart';
 import 'package:legado_flutter/features/bookshelf/bookshelf_style2_page.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
@@ -39,8 +42,16 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: ChangeNotifierProvider.value(
-          value: provider,
+        home: MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: provider),
+            Provider<BookGroupStorePort>.value(
+              value: _FakeBookGroupStorePort(),
+            ),
+            Provider<BookshelfLocalBookPort>.value(
+              value: _FakeBookshelfLocalBookPort(),
+            ),
+          ],
           child: BookshelfPage(displayPort: _FakeBookshelfDisplayPort()),
         ),
       ),
@@ -49,4 +60,17 @@ void main() {
 
     expect(find.byType(BookshelfStyle2Page), findsOneWidget);
   });
+}
+
+final class _FakeBookGroupStorePort implements BookGroupStorePort {
+  @override
+  List<BookGroup> get cached => const [];
+
+  @override
+  Future<void> syncNamesFromBooks(Iterable<String> names) async {}
+}
+
+final class _FakeBookshelfLocalBookPort implements BookshelfLocalBookPort {
+  @override
+  Future<domain.Book?> importLocalBook() async => null;
 }

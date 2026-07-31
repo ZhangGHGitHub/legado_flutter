@@ -3,7 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:legado_flutter/application/preferences/bookshelf_display_prefs_port.dart';
+import 'package:legado_flutter/application/bookshelf/book_group_store_port.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_local_book_port.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
+import 'package:legado_flutter/domain/book/book_group.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/features/bookshelf/bookshelf_page.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
@@ -27,6 +31,12 @@ void main() {
             Provider<BookshelfDisplayPrefsPort>.value(
               value: _FakeBookshelfDisplayPrefsPort(),
             ),
+            Provider<BookGroupStorePort>.value(
+              value: _FakeBookGroupStorePort(),
+            ),
+            Provider<BookshelfLocalBookPort>.value(
+              value: _FakeBookshelfLocalBookPort(),
+            ),
           ],
           child: const BookshelfPage(),
         ),
@@ -48,4 +58,17 @@ class _FakeBookshelfDisplayPrefsPort implements BookshelfDisplayPrefsPort {
 
   @override
   Future<bool> savePinned(Iterable<String> ids) async => true;
+}
+
+class _FakeBookGroupStorePort implements BookGroupStorePort {
+  @override
+  List<BookGroup> get cached => const [];
+
+  @override
+  Future<void> syncNamesFromBooks(Iterable<String> names) async {}
+}
+
+class _FakeBookshelfLocalBookPort implements BookshelfLocalBookPort {
+  @override
+  Future<Book?> importLocalBook() async => null;
 }

@@ -5,11 +5,11 @@ import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
+import '../../application/bookshelf/book_group_store_port.dart';
 import '../../application/bookshelf/bookshelf_display_port.dart';
+import '../../application/bookshelf/bookshelf_local_book_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/book_group_store.dart';
-import '../../services/local_book_service.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_group_manage_dialog.dart';
 import '../../widgets/error_view.dart';
@@ -32,12 +32,16 @@ class BookshelfStyle2Page extends StatefulWidget {
     required this.config,
     this.onConfigChanged,
     this.displayPort,
+    this.groupStorePort,
+    this.localBookPort,
   });
 
   final ScrollController? scrollController;
   final BookshelfConfig config;
   final ValueChanged<BookshelfConfig>? onConfigChanged;
   final BookshelfDisplayPort? displayPort;
+  final BookGroupStorePort? groupStorePort;
+  final BookshelfLocalBookPort? localBookPort;
 
   @override
   State<BookshelfStyle2Page> createState() => _BookshelfStyle2PageState();
@@ -48,6 +52,8 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   List<String> _shelfOrder = [];
   late final BookshelfDisplayPort _displayPort;
+  late final BookGroupStorePort _groupStorePort;
+  late final BookshelfLocalBookPort _localBookPort;
 
   @override
   void initState() {
@@ -56,6 +62,10 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
         widget.displayPort ??
         Provider.of<BookshelfDisplayPort?>(context, listen: false) ??
         const InMemoryBookshelfDisplayPort();
+    _groupStorePort =
+        widget.groupStorePort ?? context.read<BookGroupStorePort>();
+    _localBookPort =
+        widget.localBookPort ?? context.read<BookshelfLocalBookPort>();
     _loadOrder();
   }
 
@@ -99,13 +109,13 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
 
   void _addLocalBook() async {
     try {
-      final b = await context.read<BookProvider>().importLocalBook();
+      final b = await _localBookPort.importLocalBook();
       if (b != null && mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('已导入: ${b.name}')));
       }
-    } on LocalBookImportException catch (e) {
+    } on BookshelfLocalBookImportException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.message), backgroundColor: Colors.red),
@@ -195,7 +205,7 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
 
   Future<void> _showGroupManagement() async {
     final books = context.read<BookProvider>().books;
-    await BookGroupStore.syncNamesFromBooks(
+    await _groupStorePort.syncNamesFromBooks(
       books.map((b) => b.group).where((g) => g.isNotEmpty),
     );
     if (!mounted) return;

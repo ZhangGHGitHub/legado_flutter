@@ -240,6 +240,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 本批继续收口书架书单导入/导出和 RemoteBook 远程书籍能力：书架菜单与导入对话框改用 `BookshelfListPort`；RemoteBook 改用 `RemoteArchiveImportPort`、`RemoteBookSortPort` 和 `WebDavPrefsPort`。组合根注册四类 adapter，其中远程 ZIP 导入复用已有 `RemoteArchiveImportService`；保留书单 JSON/URL/文件、剪贴板、远程 ZIP/TXT/EPUB、目录优先排序、WebDAV 配置和错误提示语义。受影响定向 `25/25`，包含 RemoteArchive/Sort 既有回归 `5/5`；Flutter 串行全量 `779` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `57` 降至 `52` 条既有 Feature→service backlog。Rust 未改动，本批不重复运行 Rust 测试；后续按剩余 52 条 Feature 依赖继续单边界推进。
 
+本批继续收口书架样式的分组/本地导入和“我的”页 WebDAV 配置：两种书架样式改用 `BookGroupStorePort`、`BookshelfLocalBookPort`；`WebDavConfigDialog` 改用 `WebDavConfigDialogPort`，复用已提交的 `WebDavPrefsPort` 读取契约。组合根注册本地书导入 adapter 和 WebDAV 配置 adapter；测试宿主补齐新端口 fake。保留分组同步、本地导入、WebDAV 键名/默认值、凭证校验、连接测试、保存和错误提示语义。定向组合回归 `34/34`，`widget_test.dart` `1/1`，MainShell/书架展示宿主回归 `4/4`；Flutter 串行全量 `788` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描保持 `46` 条既有 Feature→service backlog。首轮全量发现的 4 个测试宿主 Provider 缺失已补齐，未削弱断言；Rust 未改动，本批不重复运行 Rust 测试；后续按剩余 46 条 Feature 依赖继续单边界推进。
+
 ### 0.4 重构工作规则
 
 1. 一次只迁移一个边界、一个用例或一条数据链路；完成定向测试并汇报后再进入下一项。

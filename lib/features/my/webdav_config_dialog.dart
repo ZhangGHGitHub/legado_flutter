@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../domain/ports/webdav_repository.dart';
-import '../../services/webdav_prefs.dart';
-import '../../services/webdav_setup_service.dart';
+import '../../application/mine/webdav_config_dialog_port.dart';
 
 /// WebDAV 配置 Dialog — 供「我的」与「远程书籍 → 服务器配置」复用。
 class WebDavConfigDialog extends StatefulWidget {
-  const WebDavConfigDialog({super.key, this.initial});
+  const WebDavConfigDialog({super.key, this.initial, this.port});
 
   final WebDavConfig? initial;
+  final WebDavConfigDialogPort? port;
 
   static Future<WebDavConfig?> show(
     BuildContext context, {
     WebDavConfig? initial,
+    WebDavConfigDialogPort? port,
   }) {
     return showDialog<WebDavConfig>(
       context: context,
-      builder: (_) => WebDavConfigDialog(initial: initial),
+      builder: (_) => WebDavConfigDialog(initial: initial, port: port),
     );
   }
 
@@ -26,6 +26,7 @@ class WebDavConfigDialog extends StatefulWidget {
 }
 
 class _WebDavConfigDialogState extends State<WebDavConfigDialog> {
+  late final WebDavConfigDialogPort _port;
   late final TextEditingController _url;
   late final TextEditingController _account;
   late final TextEditingController _password;
@@ -36,6 +37,7 @@ class _WebDavConfigDialogState extends State<WebDavConfigDialog> {
   @override
   void initState() {
     super.initState();
+    _port = widget.port ?? context.read<WebDavConfigDialogPort>();
     final c = widget.initial;
     _url = TextEditingController(text: c?.url ?? '');
     _account = TextEditingController(text: c?.account ?? '');
@@ -43,7 +45,7 @@ class _WebDavConfigDialogState extends State<WebDavConfigDialog> {
     _dir = TextEditingController(text: c?.dir ?? '/legado');
     _device = TextEditingController(text: c?.device ?? 'Legado Flutter');
     if (c == null) {
-      WebDavPrefs.load().then((loaded) {
+      _port.load().then((loaded) {
         if (!mounted) return;
         _url.text = loaded.url;
         _account.text = loaded.account;
@@ -66,7 +68,6 @@ class _WebDavConfigDialogState extends State<WebDavConfigDialog> {
 
   Future<void> _save() async {
     setState(() => _saving = true);
-    final repository = context.read<WebDavRepository>();
     final config = WebDavConfig(
       url: _url.text.trim(),
       account: _account.text.trim(),
@@ -76,10 +77,10 @@ class _WebDavConfigDialogState extends State<WebDavConfigDialog> {
           ? 'Legado Flutter'
           : _device.text.trim(),
     );
-    await WebDavPrefs.save(config);
+    await _port.save(config);
     if (config.isReady) {
       try {
-        await WebDavSetupService.initialize(config, repository: repository);
+        await _port.initialize(config);
       } catch (e) {
         if (!mounted) return;
         setState(() => _saving = false);

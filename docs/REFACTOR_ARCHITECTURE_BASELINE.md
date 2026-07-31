@@ -3016,3 +3016,17 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。
 
 边界结论：本批完成书架书单和 RemoteBook 的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `52` 条 Feature 依赖继续按单边界推进。
+
+## 155. 2026-07-31：R6 书架样式与 WebDAV 配置端口边界
+
+- 两种书架样式移除 `BookGroupStore`、`LocalBookService` 直接依赖，改用 `BookGroupStorePort` 和 `BookshelfLocalBookPort`；本地导入 adapter 包装 `BookProvider` 的既有导入回调，并保留原异常提示映射。
+- `WebDavConfigDialog` 移除 `WebDavPrefs`、`WebDavSetupService`、`WebDavRepository` 直接依赖，改用 `WebDavConfigDialogPort`；读取契约复用 `WebDavPrefsPort`，保存和连接初始化由 infrastructure adapter 负责。
+- 组合根完成两个新增能力的 Provider 注册；测试宿主补齐端口 fake。未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则；剩余 Feature→service 依赖未加入白名单。
+
+验证结果：
+
+- 定向组合回归 `34/34`，`test/widget_test.dart` `1/1`，MainShell/书架展示宿主回归 `4/4`；Flutter 串行全量 `flutter test --no-pub --concurrency=1 --reporter compact`：`788` 通过、`3` 项既有条件跳过。
+- `dart format` 通过；`flutter analyze --no-pub`：`No issues found`；架构扫描保持 `46` 条既有 Feature→service backlog；`git diff --check` 在文档更新后复核。
+- 首轮全量因 4 个测试宿主缺少 `BookGroupStorePort` 而失败，补齐 fake 后最终全量通过，未放宽断言。Rust 未改动，本批不重复运行 Rust 测试。
+
+边界结论：本批完成书架样式分组/本地导入和 WebDAV 配置的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `46` 条 Feature 依赖继续按单边界推进。

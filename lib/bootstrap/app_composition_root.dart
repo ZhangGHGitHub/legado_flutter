@@ -13,11 +13,12 @@ import '../application/bookshelf/bookshelf_arrange_port.dart';
 import '../application/bookshelf/bookshelf_config_dialog_port.dart';
 import '../application/bookshelf/bookshelf_display_port.dart';
 import '../application/bookshelf/bookshelf_list_port.dart';
+import '../application/bookshelf/bookshelf_local_book_port.dart';
 import '../application/mine/my_page_port.dart';
+import '../application/mine/webdav_config_dialog_port.dart';
 import '../application/main/main_shell_startup_port.dart';
 import '../application/bookshelf/remote_archive_import_port.dart';
 import '../application/bookshelf/remote_book_sort_port.dart';
-import '../application/bookshelf/webdav_prefs_port.dart';
 import '../application/cache/book_cache_export_port.dart';
 import '../application/crash/crash_log_service.dart';
 import '../application/diagnostics/app_diagnostics_monitor.dart';
@@ -87,6 +88,7 @@ import '../infrastructure/bookshelf/bookshelf_arrange_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_config_dialog_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_display_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_list_port_adapter.dart';
+import '../infrastructure/bookshelf/bookshelf_local_book_port_adapter.dart';
 import '../infrastructure/bookshelf/remote_archive_import_port_adapter.dart';
 import '../infrastructure/bookshelf/remote_book_sort_port_adapter.dart';
 import '../infrastructure/bookshelf/shared_preferences_webdav_prefs_port_adapter.dart';
@@ -129,6 +131,7 @@ import '../infrastructure/platform/platform_donate_clipboard.dart';
 import '../infrastructure/platform/platform_clipboard.dart';
 import '../infrastructure/main/main_shell_startup_port_adapter.dart';
 import '../infrastructure/mine/my_page_port_adapter.dart';
+import '../infrastructure/mine/webdav_config_dialog_port_adapter.dart';
 import '../infrastructure/file_system/app_paths_port_adapter.dart';
 import '../infrastructure/reader/read_style_zip_port_adapter.dart';
 import '../infrastructure/source_market/builtin_source_market_port.dart';
@@ -361,6 +364,11 @@ abstract final class AppCompositionRoot {
           ChangeNotifierProvider.value(value: lifecycleCoordinator),
           ChangeNotifierProvider.value(value: AppConfig.instance),
           ChangeNotifierProvider.value(value: bootstrap.bookProvider),
+          Provider<BookshelfLocalBookPort>.value(
+            value: BookshelfLocalBookPortAdapter(
+              () => bootstrap.bookProvider.importLocalBook(),
+            ),
+          ),
           Provider<AppDiagnosticsMonitor>.value(value: diagnosticsMonitor),
           Provider<AppLogPort>(create: (_) => const AppLogPortAdapter()),
           Provider<AiConfigPrefsPort>.value(
@@ -481,6 +489,9 @@ abstract final class AppCompositionRoot {
             create: (_) => const FrbDictRuleQueryPort(),
           ),
           Provider<WebDavRepository>.value(value: webdavRepository),
+          Provider<WebDavConfigDialogPort>.value(
+            value: WebDavConfigDialogPortAdapter(repository: webdavRepository),
+          ),
           Provider<BackupService>.value(value: backupService),
           Provider<MyPagePort>.value(
             value: MyPagePortAdapter(backupService: backupService),
