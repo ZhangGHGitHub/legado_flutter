@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/platform/clipboard_port.dart';
+import 'package:legado_flutter/application/theme/theme_import_port.dart';
 import 'package:legado_flutter/features/settings/theme_config_page.dart';
+import 'package:legado_flutter/infrastructure/theme/theme_import_port_adapter.dart';
+import 'package:legado_flutter/domain/ports/public_text_fetch_port.dart';
 import 'package:legado_flutter/infrastructure/platform/platform_clipboard.dart';
 import 'package:legado_flutter/theme/app_theme.dart';
 import 'package:legado_flutter/theme/color_presets.dart';
@@ -21,6 +24,11 @@ class _FakeClipboard implements ClipboardPort {
   Future<String?> pasteText() async => pastedText;
 }
 
+class _FakePublicTextFetchPort implements PublicTextFetchPort {
+  @override
+  Future<String> fetch(String url, {String userAgent = ''}) async => '{}';
+}
+
 void main() {
   SharedPreferences.setMockInitialValues({});
 
@@ -34,9 +42,12 @@ void main() {
         value: ctrl,
         child: MaterialApp(
           theme: AppTheme.light(preset: ctrl.preset),
-          home: Provider<ClipboardPort>.value(
-            value: clipboard ?? const PlatformClipboard(),
-            child: const Scaffold(body: ThemeConfigPage()),
+          home: Provider<ThemeImportPort>.value(
+            value: ThemeImportPortAdapter(_FakePublicTextFetchPort()),
+            child: Provider<ClipboardPort>.value(
+              value: clipboard ?? const PlatformClipboard(),
+              child: const Scaffold(body: ThemeConfigPage()),
+            ),
           ),
         ),
       ),

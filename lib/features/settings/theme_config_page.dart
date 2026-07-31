@@ -4,9 +4,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../domain/ports/public_text_fetch_port.dart';
 import '../../application/platform/clipboard_port.dart';
-import '../../services/theme_import_service.dart';
+import '../../application/theme/theme_import_port.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/color_presets.dart';
 import '../../widgets/theme_color_editor.dart';
@@ -21,7 +20,6 @@ class ThemeConfigPage extends StatefulWidget {
 }
 
 class _ThemeConfigPageState extends State<ThemeConfigPage> {
-  final _importService = const ThemeImportService();
   final _marketUrlCtrl = TextEditingController();
   final _clipboardCtrl = TextEditingController();
   bool _loadingMarket = false;
@@ -252,13 +250,18 @@ class _ThemeConfigPageState extends State<ThemeConfigPage> {
     );
     if (ok != true || !mounted) return;
 
+    final importer = context.read<ThemeImportPort?>();
+    if (importer == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('主题导入引擎不可用')));
+      return;
+    }
+
     setState(() => _loadingMarket = true);
     try {
-      final config = await _importService.fetchFromUrl(
-        _marketUrlCtrl.text,
-        fetchPort: context.read<PublicTextFetchPort>(),
-      );
-      await _importService.applyTo(ctrl, config);
+      final config = await importer.fetchFromUrl(_marketUrlCtrl.text);
+      await importer.applyTo(ctrl, config);
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -276,9 +279,18 @@ class _ThemeConfigPageState extends State<ThemeConfigPage> {
   }
 
   Future<void> _applyJson(ThemeModeController ctrl, String raw) async {
+    final importer = context.read<ThemeImportPort?>();
+    if (importer == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('主题导入引擎不可用')));
+      }
+      return;
+    }
     try {
-      final config = _importService.parseJson(raw);
-      await _importService.applyTo(ctrl, config);
+      final config = importer.parseJson(raw);
+      await importer.applyTo(ctrl, config);
       if (mounted) {
         ScaffoldMessenger.of(
           context,

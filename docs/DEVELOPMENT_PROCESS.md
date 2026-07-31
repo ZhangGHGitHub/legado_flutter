@@ -285,6 +285,8 @@ Day 2  PR/Issue 模板
 
 2026-07-30 当前 R6 记录：AppLog 页面及书架/书签/笔记写入边界、四轮 Feature 偏好/展示/业务能力端口，以及本轮 AppPaths/Clipboard/SourceDebug、RSS ReaderFont、主题 Clipboard、Sources ReaderFont、Backup AppPaths、ReadRecord Clipboard、Web API Clipboard、SourceEditor Clipboard、DictRule Clipboard、TxtToc Clipboard 和 ContentEdit Clipboard 边界均按“先定向测试、再全量门禁、最后记录”流程完成；本批由主 agent 与四个子 agent 并行完成规则偏好、点击区域、正文搜索、模拟阅读、阅读样式、阅读图片缓存、Web API 配置偏好、TocSheet 笔记读取、BookInfoPage 书源搜索/类型语义、Explore、SourceMarket、ReadRecord、阅读样式 ZIP、ReaderSettings 字体、ReplacePage、ConfigPage 和 CacheBookPage 端口，架构扫描由 `110` 降至 `87` 条既有 Feature→service backlog，未将剩余 Feature 依赖白名单化。四子线定向均通过；ReaderFont fake 接口缺口已修复后受影响宿主 `11/11`；Flutter 全量 `732` 通过、`3` 项既有条件跳过，Rust 核心 `184/184`，analyze 和 `git diff --check` 通过。相关实际命令和结果以 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 与 `docs/REFACTOR_ARCHITECTURE_BASELINE.md` 为准。
 
+2026-07-31 当前 R6 记录：继续按“先定向测试、再全量门禁、最后记录”推进 RSS 阅读/收藏、主题导入和二维码图片解码端口。新增端口由组合根注入，测试宿主显式补齐依赖；Android SVG 集成测试改用图片缓存端口薄适配器，未削弱断言。实际验证为：受影响定向 `19/19`；`flutter test --no-pub --concurrency=1 --reporter compact` 为 `739` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描 `83` 条既有 Feature→service backlog。Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。相关记录见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)

@@ -29,12 +29,15 @@ import '../application/reader/read_style_zip_port.dart';
 import '../application/reader/reader_image_cache_port.dart';
 import '../application/reader/reader_font_port.dart';
 import '../application/replace/replace_preset_port.dart';
+import '../application/qr/qr_code_port.dart';
 import '../application/search/search_history_port.dart';
 import '../application/sources/source_debug_formatter_port.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
 import '../application/rss/rss_read_state_port.dart';
+import '../application/rss/rss_star_prefs_port.dart';
 import '../application/source_market/source_market_port.dart';
 import '../application/startup/startup_task_runner.dart';
+import '../application/theme/theme_import_port.dart';
 import '../application/web_api/repository_web_api_data_port.dart';
 import '../application/web_api/web_api_prefs_port.dart';
 import '../bridge/legado_db_bridge.dart';
@@ -58,6 +61,7 @@ import '../domain/ports/public_text_fetch_port.dart';
 import '../domain/ports/rss_source_import_port.dart';
 import '../domain/ports/note_port.dart';
 import '../domain/ports/reading_record_port.dart';
+import '../domain/ports/rss_port.dart';
 import '../domain/ports/webdav_repository.dart';
 import '../infrastructure/cache/file_chapter_content_cache.dart';
 import '../infrastructure/cache/book_cache_export_port_adapter.dart';
@@ -121,6 +125,9 @@ import '../infrastructure/replace/replace_preset_port_adapter.dart';
 import '../infrastructure/sources/source_debug_formatter_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_search_history_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_rss_read_state_adapter.dart';
+import '../infrastructure/qr/qr_code_port_adapter.dart';
+import '../infrastructure/rss/rss_star_prefs_port_adapter.dart';
+import '../infrastructure/theme/theme_import_port_adapter.dart';
 import '../infrastructure/web_api/dart_io_web_api_port.dart';
 import '../infrastructure/webdav/frb_webdav_repository.dart';
 import '../providers/replace_provider.dart';
@@ -191,6 +198,7 @@ abstract final class AppCompositionRoot {
     final bookRepository = BookDao();
     final sourceRepository = SourceDao();
     final readingRecordPort = FrbReadingRecordPort();
+    final rssPort = FrbRssPort();
     final webApiPort = DartIoWebApiPort(
       dataPort: RepositoryWebApiDataPort(
         bookRepository: bookRepository,
@@ -216,6 +224,7 @@ abstract final class AppCompositionRoot {
       networkEnginePort,
       sourceLoginCookiePort,
       readingRecordPort,
+      rssPort,
     );
     WebApiService.configureWebApiPort(webApiPort);
     TtsService.configureBinaryHttpPort(binaryHttpPort);
@@ -340,6 +349,9 @@ abstract final class AppCompositionRoot {
             value: const SharedPreferencesBookshelfConfigPrefsAdapter(),
           ),
           Provider<RssReadStatePort>.value(value: rssReadStatePort),
+          Provider<RssStarPrefsPort>.value(
+            value: const RssStarPrefsPortAdapter(),
+          ),
           Provider<DownloadChoicePrefsPort>.value(value: downloadChoicePrefs),
           Provider<SearchContentPrefsPort>.value(value: searchContentPrefs),
           Provider<SourceVariablePort>.value(value: sourceVariablePort),
@@ -373,6 +385,11 @@ abstract final class AppCompositionRoot {
           ),
           Provider<NotePort>.value(value: FrbNotePort()),
           Provider<ReadingRecordPort>.value(value: readingRecordPort),
+          Provider<RssPort>.value(value: rssPort),
+          Provider<QrCodePort>.value(value: const QrCodePortAdapter()),
+          Provider<ThemeImportPort>.value(
+            value: ThemeImportPortAdapter(publicTextPort),
+          ),
           Provider<ReplacePresetPort>.value(
             value: const ReplacePresetPortAdapter(),
           ),
@@ -462,6 +479,7 @@ abstract final class AppCompositionRoot {
     FrbNetworkEnginePort networkEnginePort,
     FrbSourceLoginCookiePort sourceLoginCookiePort,
     FrbReadingRecordPort readingRecordPort,
+    FrbRssPort rssPort,
   ) async {
     const appLogPort = AppLogPortAdapter();
     BookmarkService.configureBookmarkPort(FrbBookmarkPort());
@@ -473,7 +491,7 @@ abstract final class AppCompositionRoot {
     NoteService.configureNotePort(FrbNotePort());
     NoteService.configureAppLogPort(appLogPort);
     ReadingRecordService.configureRecordPort(readingRecordPort);
-    RssService.configureRssPort(FrbRssPort());
+    RssService.configureRssPort(rssPort);
     RssSortUrls.configureJsPort(FrbRssSortUrlJsPort());
     SourceLoginService.configureJsPort(const FrbJsEvalPort());
     SourceLoginCookieService.configurePort(sourceLoginCookiePort);

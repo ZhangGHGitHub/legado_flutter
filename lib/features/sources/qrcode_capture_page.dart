@@ -4,8 +4,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:provider/provider.dart';
 
-import '../../services/qr_code_service.dart';
+import '../../application/qr/qr_code_port.dart';
 
 /// 扫码页 — 1:1 对齐 Jingshiro [activity_qrcode_capture.xml] + [QrCodeActivity]。
 ///
@@ -31,8 +32,7 @@ class _QrCodeCapturePageState extends State<QrCodeCapturePage> {
   bool _handling = false;
   bool _cameraFailed = false;
 
-  bool get _useCamera =>
-      QrCodeCapturePage.supportsLiveCamera && !_cameraFailed;
+  bool get _useCamera => QrCodeCapturePage.supportsLiveCamera && !_cameraFailed;
 
   @override
   void initState() {
@@ -56,9 +56,9 @@ class _QrCodeCapturePageState extends State<QrCodeCapturePage> {
     final value = text?.trim();
     if (value == null || value.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('未识别到二维码')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('未识别到二维码')));
       }
       return;
     }
@@ -70,6 +70,7 @@ class _QrCodeCapturePageState extends State<QrCodeCapturePage> {
 
   Future<void> _pickFromGallery() async {
     if (_handling) return;
+    final qrPort = context.read<QrCodePort?>();
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
@@ -83,19 +84,27 @@ class _QrCodeCapturePageState extends State<QrCodeCapturePage> {
       }
       if (bytes == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('无法读取图片')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('无法读取图片')));
         }
         return;
       }
-      final text = await compute(QrCodeService.decodeFromImageBytes, bytes);
+      if (qrPort == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('二维码识别不可用')));
+        }
+        return;
+      }
+      final text = await qrPort.decodeFromImageBytes(bytes);
       await _finishWithResult(text);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('图库识别失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('图库识别失败: $e')));
       }
     }
   }
@@ -152,10 +161,7 @@ class _QrCodeCapturePageState extends State<QrCodeCapturePage> {
         actions: [
           TextButton(
             onPressed: _pickFromGallery,
-            child: Text(
-              '图库',
-              style: TextStyle(color: scheme.onSurface),
-            ),
+            child: Text('图库', style: TextStyle(color: scheme.onSurface)),
           ),
         ],
       ),

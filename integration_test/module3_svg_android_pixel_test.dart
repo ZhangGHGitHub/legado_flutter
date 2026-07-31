@@ -6,10 +6,33 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:legado_flutter/application/reader/reader_image_cache_port.dart';
 import 'package:legado_flutter/features/reader/turn/page_snapshot.dart';
-import 'package:legado_flutter/services/reader_image_cache.dart';
+import 'package:legado_flutter/services/reader_image_cache.dart' as service;
 import 'package:legado_flutter/widgets/reader_inline_image.dart';
 import 'package:path_provider/path_provider.dart';
+
+final class _ReaderImageCachePortAdapter implements ReaderImageCachePort {
+  const _ReaderImageCachePortAdapter(this._cache);
+
+  final service.ReaderImageCache _cache;
+
+  @override
+  Future<Uint8List?> loadBytes(
+    String source, {
+    Map<String, String> headers = const {},
+  }) => _cache.loadBytes(source, headers: headers);
+
+  @override
+  Future<ReaderImageSize?> getSize(
+    String source, {
+    Map<String, String> headers = const {},
+  }) async {
+    final size = await _cache.getSize(source, headers: headers);
+    if (size == null) return null;
+    return ReaderImageSize(width: size.width, height: size.height);
+  }
+}
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -25,15 +48,17 @@ void main() {
 </svg>
 ''';
     final svgBytes = Uint8List.fromList(utf8.encode(svgText));
-    final cache = ReaderImageCache(
-      directory: Directory(
-        '${Directory.systemTemp.path}${Platform.pathSeparator}module3-svg',
+    final cache = _ReaderImageCachePortAdapter(
+      service.ReaderImageCache(
+        directory: Directory(
+          '${Directory.systemTemp.path}${Platform.pathSeparator}module3-svg',
+        ),
+        downloader: (uri, headers) async {
+          expect(uri.toString(), source);
+          expect(headers, isEmpty);
+          return svgBytes;
+        },
       ),
-      downloader: (uri, headers) async {
-        expect(uri.toString(), source);
-        expect(headers, isEmpty);
-        return svgBytes;
-      },
     );
 
     expect(ReaderInlineImage.isSvgBytes(svgBytes), isTrue);

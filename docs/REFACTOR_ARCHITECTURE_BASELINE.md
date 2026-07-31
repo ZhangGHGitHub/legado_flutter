@@ -2915,3 +2915,15 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 架构扫描由 `91` 降至 `87` 条既有 Feature→service backlog；未修改 `legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 
 边界结论：本批完成四个独立 Feature 调用者的第一层 application/infrastructure 收口；ReaderFont 的自定义字体能力已进入端口，剩余 Feature backlog 继续按单边界推进。
+
+## 147. 2026-07-31：R6 RSS、主题与二维码端口边界
+
+- `RssReadPage` 改用 `RssPort`，`RssFavoritesPage` 改用 `RssStarPrefsPort`；`ThemeConfigPage` 改用 `ThemeImportPort`；`QrCodeCapturePage` 改用 `QrCodePort`。组合根注册共享端口，adapter 继续复用既有 RSS、主题导入和二维码服务，保留正文回退、收藏顺序、主题 JSON/URL 校验、图库解码失败和桌面无相机回退行为。
+- 为端口扩展补齐 RSS 收藏图片测试宿主的依赖注入，并为 Android SVG 图片像素集成测试增加 `ReaderImageCachePort` 薄适配器；所有既有断言保持不变。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- RSS、主题和二维码受影响定向测试最终 `19/19`；Flutter 串行全量 `flutter test --no-pub --concurrency=1 --reporter compact` 为 `739` 通过、`3` 项既有条件跳过。
+- `dart format` 通过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `87` 降至 `83` 条既有 Feature→service backlog；`git diff --check` 在文档更新后复核。
+
+边界结论：本批完成 RSS 阅读/收藏、主题导入和二维码图片解码的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `83` 条 Feature 依赖继续按单边界推进。

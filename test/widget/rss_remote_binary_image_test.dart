@@ -7,6 +7,7 @@ import 'package:image/image.dart' as image_lib;
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import '../helpers/fake_reader_font_port.dart';
 import 'package:legado_flutter/application/rss/rss_read_state_port.dart';
+import 'package:legado_flutter/application/rss/rss_star_prefs_port.dart';
 import 'package:legado_flutter/domain/ports/application_binary_http_request_port.dart';
 import 'package:legado_flutter/domain/ports/application_http_request_port.dart';
 import 'package:legado_flutter/domain/ports/rss_port.dart';
@@ -16,6 +17,7 @@ import 'package:legado_flutter/features/rss/rss_articles_page.dart';
 import 'package:legado_flutter/features/rss/rss_favorites_page.dart';
 import 'package:legado_flutter/features/rss/widgets/rss_source_tile.dart';
 import 'package:legado_flutter/services/rss_service.dart';
+import 'package:legado_flutter/infrastructure/rss/rss_star_prefs_port_adapter.dart';
 import 'package:legado_flutter/widgets/remote_binary_image.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -201,7 +203,10 @@ void main() {
         value: port,
         child: Provider<ReaderFontPort>.value(
           value: _FakeReaderFontPort(),
-          child: const MaterialApp(home: RssFavoritesPage()),
+          child: Provider<RssStarPrefsPort>.value(
+            value: const RssStarPrefsPortAdapter(),
+            child: const MaterialApp(home: RssFavoritesPage()),
+          ),
         ),
       ),
     );

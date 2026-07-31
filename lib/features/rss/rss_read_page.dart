@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../domain/rss/rss_article.dart';
+import '../../domain/ports/rss_port.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
-import '../../services/rss_service.dart';
 import '../common/app_webview_page.dart';
 
 /// RSS 阅读 — 对齐 Jingshiro 文章阅读：优先 ruleContent，否则 WebView 打开 link。
@@ -53,7 +54,11 @@ class _RssReadPageState extends State<RssReadPage> {
     }
 
     try {
-      final content = await RssService.getContent(
+      final rssPort = context.read<RssPort?>();
+      if (!(rssPort?.isAvailable ?? false)) {
+        throw StateError('RSS 引擎不可用');
+      }
+      final content = await rssPort!.getContent(
         source: source,
         article: article,
       );

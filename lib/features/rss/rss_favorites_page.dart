@@ -4,8 +4,8 @@ import 'package:provider/provider.dart';
 import '../../domain/ports/application_http_request_port.dart';
 import '../../domain/rss/rss_article.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
+import '../../application/rss/rss_star_prefs_port.dart';
 import '../../providers/rss_provider.dart';
-import '../../services/rss_star_prefs.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/remote_binary_image.dart';
 import 'rss_read_page.dart';
@@ -30,7 +30,8 @@ class _RssFavoritesPageState extends State<RssFavoritesPage> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final items = await RssStarPrefs.loadAll();
+    final port = context.read<RssStarPrefsPort?>();
+    final items = port == null ? <RssArticle>[] : await port.loadAll();
     if (!mounted) return;
     setState(() {
       _items = items;
@@ -62,7 +63,7 @@ class _RssFavoritesPageState extends State<RssFavoritesPage> {
   }
 
   Future<void> _unstar(RssArticle a) async {
-    await RssStarPrefs.remove(a.origin, a.link);
+    await context.read<RssStarPrefsPort?>()?.remove(a.origin, a.link);
     await _load();
   }
 
