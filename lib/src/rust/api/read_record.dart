@@ -5,9 +5,10 @@
 
 import '../api.dart';
 import '../frb_generated.dart';
+import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `i64_to_i32`, `parse_stats_json`
+// These functions are ignored because they are not marked as `pub`: `i64_to_i32`, `map_database_error`, `parse_stats_json`
 
 /// 记录阅读（按书 + 日期累加）
 Future<void> recordReading({

@@ -159,7 +159,7 @@ fn wire__crate__api__db__db_clear_replace_rules_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_clear_replace_rules()?;
                 Ok(output_ok)
             })())
@@ -189,7 +189,7 @@ fn wire__crate__api__db__db_delete_book_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_book_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_delete_book(api_book_id)?;
                 Ok(output_ok)
             })())
@@ -219,7 +219,7 @@ fn wire__crate__api__db__db_delete_replace_rule_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_delete_replace_rule(api_id)?;
                 Ok(output_ok)
             })())
@@ -249,7 +249,7 @@ fn wire__crate__api__db__db_delete_source_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_url = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_delete_source(api_url)?;
                 Ok(output_ok)
             })())
@@ -278,7 +278,7 @@ fn wire__crate__api__db__db_get_books_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_get_books()?;
                 Ok(output_ok)
             })())
@@ -308,7 +308,7 @@ fn wire__crate__api__db__db_get_chapter_content_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_chapter_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_get_chapter_content(api_chapter_id)?;
                 Ok(output_ok)
             })())
@@ -338,7 +338,7 @@ fn wire__crate__api__db__db_get_chapters_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_book_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_get_chapters(api_book_id)?;
                 Ok(output_ok)
             })())
@@ -367,7 +367,7 @@ fn wire__crate__api__db__db_get_replace_rules_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_get_replace_rules()?;
                 Ok(output_ok)
             })())
@@ -397,7 +397,7 @@ fn wire__crate__api__db__db_get_sources_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_enabled_only = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_get_sources(api_enabled_only)?;
                 Ok(output_ok)
             })())
@@ -429,7 +429,7 @@ fn wire__crate__api__db__db_import_legacy_room_database_impl(
             let api_backup_path = <Option<String>>::sse_decode(&mut deserializer);
             let api_replace = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_import_legacy_room_database(
                     api_path,
                     api_backup_path,
@@ -463,7 +463,7 @@ fn wire__crate__api__db__db_init_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_path = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_init(api_path)?;
                 Ok(output_ok)
             })())
@@ -493,7 +493,7 @@ fn wire__crate__api__db__db_insert_book_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_book_json = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_insert_book(api_book_json)?;
                 Ok(output_ok)
             })())
@@ -523,7 +523,7 @@ fn wire__crate__api__db__db_insert_chapters_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_chapters_json = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_insert_chapters(api_chapters_json)?;
                 Ok(output_ok)
             })())
@@ -553,7 +553,7 @@ fn wire__crate__api__db__db_probe_legacy_room_database_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_path = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_probe_legacy_room_database(api_path)?;
                 Ok(output_ok)
             })())
@@ -584,7 +584,7 @@ fn wire__crate__api__db__db_save_chapter_content_impl(
             let api_chapter_id = <String>::sse_decode(&mut deserializer);
             let api_content = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok =
                     crate::api::db::db_save_chapter_content(api_chapter_id, api_content)?;
                 Ok(output_ok)
@@ -614,7 +614,7 @@ fn wire__crate__api__db__db_schema_version_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_schema_version()?;
                 Ok(output_ok)
             })())
@@ -645,7 +645,7 @@ fn wire__crate__api__db__db_toggle_replace_rule_impl(
             let api_id = <String>::sse_decode(&mut deserializer);
             let api_enabled = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_toggle_replace_rule(api_id, api_enabled)?;
                 Ok(output_ok)
             })())
@@ -676,7 +676,7 @@ fn wire__crate__api__db__db_toggle_source_impl(
             let api_url = <String>::sse_decode(&mut deserializer);
             let api_enabled = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_toggle_source(api_url, api_enabled)?;
                 Ok(output_ok)
             })())
@@ -707,7 +707,7 @@ fn wire__crate__api__db__db_update_book_cover_impl(
             let api_book_id = <String>::sse_decode(&mut deserializer);
             let api_cover_url = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_update_book_cover(api_book_id, api_cover_url)?;
                 Ok(output_ok)
             })())
@@ -738,7 +738,7 @@ fn wire__crate__api__db__db_update_book_group_impl(
             let api_book_id = <String>::sse_decode(&mut deserializer);
             let api_group = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_update_book_group(api_book_id, api_group)?;
                 Ok(output_ok)
             })())
@@ -771,7 +771,7 @@ fn wire__crate__api__db__db_update_book_progress_impl(
             let api_chapter = <Option<String>>::sse_decode(&mut deserializer);
             let api_page_index = <i32>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_update_book_progress(
                     api_book_id,
                     api_progress,
@@ -806,7 +806,7 @@ fn wire__crate__api__db__db_upsert_replace_rule_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_rule_json = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_upsert_replace_rule(api_rule_json)?;
                 Ok(output_ok)
             })())
@@ -836,7 +836,7 @@ fn wire__crate__api__db__db_upsert_source_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_source_json = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::db::db_upsert_source(api_source_json)?;
                 Ok(output_ok)
             })())
@@ -869,7 +869,7 @@ fn wire__crate__api__debug_search_impl(
             let api_keyword = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok =
                             crate::api::debug_search(api_source_json, api_keyword).await?;
@@ -945,7 +945,7 @@ fn wire__crate__api__debug_toc_impl(
             let api_book_url = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok =
                             crate::api::debug_toc(api_source_json, api_book_url).await?;
@@ -1279,7 +1279,7 @@ fn wire__crate__api__backup__export_backup_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::backup::export_backup()?;
                 Ok(output_ok)
             })())
@@ -1308,7 +1308,7 @@ fn wire__crate__api__export_detailed_read_records_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::export_detailed_read_records()?;
                 Ok(output_ok)
             })())
@@ -1339,7 +1339,7 @@ fn wire__crate__api__read_record__export_detailed_read_records_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::error::AppError>((move || {
                     let output_ok = crate::api::read_record::export_detailed_read_records()?;
                     Ok(output_ok)
                 })())
@@ -1400,7 +1400,7 @@ fn wire__crate__api__export_reading_records_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_format = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::export_reading_records(api_format)?;
                 Ok(output_ok)
             })())
@@ -1432,7 +1432,7 @@ fn wire__crate__api__read_record__export_reading_records_impl(
             let api_format = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::error::AppError>((move || {
                     let output_ok = crate::api::read_record::export_reading_records(&api_format)?;
                     Ok(output_ok)
                 })())
@@ -1578,7 +1578,7 @@ fn wire__crate__api__get_book_reading_stats_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_book_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::get_book_reading_stats(api_book_id)?;
                 Ok(output_ok)
             })())
@@ -1610,7 +1610,7 @@ fn wire__crate__api__read_record__get_book_reading_stats_impl(
             let api_book_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::error::AppError>((move || {
                     let output_ok = crate::api::read_record::get_book_reading_stats(&api_book_id)?;
                     Ok(output_ok)
                 })())
@@ -1751,7 +1751,7 @@ fn wire__crate__api__get_reading_stats_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_range = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::get_reading_stats(api_range)?;
                 Ok(output_ok)
             })())
@@ -1783,7 +1783,7 @@ fn wire__crate__api__read_record__get_reading_stats_impl(
             let api_range = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::error::AppError>((move || {
                     let output_ok = crate::api::read_record::get_reading_stats(&api_range)?;
                     Ok(output_ok)
                 })())
@@ -2471,7 +2471,7 @@ fn wire__crate__api__record_detailed_read_session_impl(
             let api_end_time = <i64>::sse_decode(&mut deserializer);
             let api_read_iteration = <i64>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::record_detailed_read_session(
                     api_book_name,
                     api_start_time,
@@ -2511,7 +2511,7 @@ fn wire__crate__api__read_record__record_detailed_read_session_impl(
             let api_read_iteration = <i64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::error::AppError>((move || {
                     let output_ok = crate::api::read_record::record_detailed_read_session(
                         &api_book_name,
                         api_start_time,
@@ -2550,7 +2550,7 @@ fn wire__crate__api__record_reading_impl(
             let api_chars = <i32>::sse_decode(&mut deserializer);
             let api_duration_seconds = <i32>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::record_reading(
                     api_book_id,
                     api_book_name,
@@ -2590,7 +2590,7 @@ fn wire__crate__api__read_record__record_reading_impl(
             let api_duration_seconds = <i32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::error::AppError>((move || {
                     let output_ok = crate::api::read_record::record_reading(
                         &api_book_id,
                         &api_book_name,
@@ -2627,7 +2627,7 @@ fn wire__crate__api__backup__restore_backup_impl(
             let api_json = <String>::sse_decode(&mut deserializer);
             let api_replace = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::backup::restore_backup(api_json, api_replace)?;
                 Ok(output_ok)
             })())

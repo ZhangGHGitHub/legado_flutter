@@ -1,5 +1,13 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'book_group.freezed.dart';
+part 'book_group.g.dart';
+
 /// 书架分组领域实体，对齐 Legado `BookGroup` 的持久化字段。
-class BookGroup {
+@Freezed(copyWith: false)
+class BookGroup with _$BookGroup {
+  const BookGroup._();
+
   static const int idRoot = -100;
   static const int idAll = -1;
   static const int idLocal = -2;
@@ -9,25 +17,19 @@ class BookGroup {
   static const int idVideo = -6;
   static const int idError = -11;
 
-  const BookGroup({
-    required this.groupId,
-    required this.groupName,
-    this.cover,
-    this.order = 0,
-    this.enableRefresh = true,
-    this.show = true,
-    this.bookSort = -1,
-    this.onlyUpdateRead = false,
-  });
+  const factory BookGroup({
+    @Default(0) int groupId,
+    @Default('') String groupName,
+    String? cover,
+    @Default(0) int order,
+    @Default(true) bool enableRefresh,
+    @Default(true) bool show,
+    @Default(-1) int bookSort,
+    @Default(false) bool onlyUpdateRead,
+  }) = _BookGroup;
 
-  final int groupId;
-  final String groupName;
-  final String? cover;
-  final int order;
-  final bool enableRefresh;
-  final bool show;
-  final int bookSort;
-  final bool onlyUpdateRead;
+  factory BookGroup.fromJson(Map<String, dynamic> json) =>
+      _$BookGroupFromJson(json);
 
   bool get isSystem => groupId < 0;
   bool get isCustom => groupId > 0;
@@ -55,26 +57,4 @@ class BookGroup {
       onlyUpdateRead: onlyUpdateRead ?? this.onlyUpdateRead,
     );
   }
-
-  factory BookGroup.fromJson(Map<String, dynamic> json) => BookGroup(
-    groupId: (json['groupId'] as num?)?.toInt() ?? 0,
-    groupName: json['groupName'] as String? ?? '',
-    cover: json['cover'] as String?,
-    order: (json['order'] as num?)?.toInt() ?? 0,
-    enableRefresh: json['enableRefresh'] as bool? ?? true,
-    show: json['show'] as bool? ?? true,
-    bookSort: (json['bookSort'] as num?)?.toInt() ?? -1,
-    onlyUpdateRead: json['onlyUpdateRead'] as bool? ?? false,
-  );
-
-  Map<String, dynamic> toJson() => {
-    'groupId': groupId,
-    'groupName': groupName,
-    'cover': cover,
-    'order': order,
-    'enableRefresh': enableRefresh,
-    'show': show,
-    'bookSort': bookSort,
-    'onlyUpdateRead': onlyUpdateRead,
-  };
 }

@@ -1,6 +1,10 @@
-use super::{BookReadingStats, DailyReadingStat, ReadingStats};
+use super::{AppError, BookReadingStats, DailyReadingStat, ReadingStats};
 use crate::db;
 use serde_json::Value;
+
+fn map_database_error<T>(result: Result<T, String>) -> Result<T, AppError> {
+    result.map_err(AppError::Database)
+}
 
 /// 记录阅读（按书 + 日期累加）
 pub fn record_reading(
@@ -8,21 +12,21 @@ pub fn record_reading(
     book_name: &str,
     chars: i32,
     duration_seconds: i32,
-) -> Result<(), String> {
-    db::db_record_reading(
+) -> Result<(), AppError> {
+    map_database_error(db::db_record_reading(
         book_id.to_string(),
         book_name.to_string(),
         chars,
         duration_seconds,
-    )
+    ))
 }
 
 fn i64_to_i32(v: i64) -> i32 {
     v.clamp(i32::MIN as i64, i32::MAX as i64) as i32
 }
 
-fn parse_stats_json(json: &str) -> Result<ReadingStats, String> {
-    let v: Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
+fn parse_stats_json(json: &str) -> Result<ReadingStats, AppError> {
+    let v: Value = serde_json::from_str(json).map_err(|e| AppError::Parse(e.to_string()))?;
     let daily = v
         .get("daily")
         .and_then(|d| d.as_array())
@@ -58,14 +62,14 @@ fn parse_stats_json(json: &str) -> Result<ReadingStats, String> {
 }
 
 /// 阅读统计
-pub fn get_reading_stats(range: &str) -> Result<ReadingStats, String> {
-    let json = db::db_get_reading_stats(range.to_string())?;
+pub fn get_reading_stats(range: &str) -> Result<ReadingStats, AppError> {
+    let json = map_database_error(db::db_get_reading_stats(range.to_string()))?;
     parse_stats_json(&json)
 }
 
 /// 导出阅读记录（csv / json）
-pub fn export_reading_records(format: &str) -> Result<String, String> {
-    db::db_export_reading_records(format.to_string())
+pub fn export_reading_records(format: &str) -> Result<String, AppError> {
+    map_database_error(db::db_export_reading_records(format.to_string()))
 }
 
 /// 写入详细阅读会话（短会话由数据库层过滤并按同书时间间隔合并）
@@ -74,19 +78,24 @@ pub fn record_detailed_read_session(
     start_time: i64,
     end_time: i64,
     read_iteration: i64,
-) -> Result<(), String> {
-    db::db_record_detailed_read_session(book_name.to_string(), start_time, end_time, read_iteration)
+) -> Result<(), AppError> {
+    map_database_error(db::db_record_detailed_read_session(
+        book_name.to_string(),
+        start_time,
+        end_time,
+        read_iteration,
+    ))
 }
 
 /// 导出按书分组的详细阅读会话
-pub fn export_detailed_read_records() -> Result<String, String> {
-    db::db_export_detailed_read_records()
+pub fn export_detailed_read_records() -> Result<String, AppError> {
+    map_database_error(db::db_export_detailed_read_records())
 }
 
 /// 单本书阅读统计
-pub fn get_book_reading_stats(book_id: &str) -> Result<BookReadingStats, String> {
-    let json = db::db_get_book_reading_stats(book_id.to_string())?;
-    let v: Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+pub fn get_book_reading_stats(book_id: &str) -> Result<BookReadingStats, AppError> {
+    let json = map_database_error(db::db_get_book_reading_stats(book_id.to_string()))?;
+    let v: Value = serde_json::from_str(&json).map_err(|e| AppError::Parse(e.to_string()))?;
     Ok(BookReadingStats {
         duration_seconds: i64_to_i32(
             v.get("durationSeconds")
@@ -109,6 +118,24 @@ pub fn get_book_reading_stats(book_id: &str) -> Result<BookReadingStats, String>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn maps_database_errors_without_changing_the_original_text() {
+        let message = "sqlite: database is locked".to_string();
+
+        let error = map_database_error::<()>(Err(message.clone())).expect_err("must fail");
+
+        assert!(matches!(error, AppError::Database(ref value) if value == &message));
+        assert_eq!(error.to_string(), format!("database: {message}"));
+    }
+
+    #[test]
+    fn classifies_invalid_stats_json_as_parse_error() {
+        let error = parse_stats_json("{invalid json").expect_err("must fail");
+
+        assert!(matches!(error, AppError::Parse(_)));
+        assert!(error.to_string().starts_with("parse: "));
+    }
 
     #[test]
     fn parse_stats_json_maps_daily_fields() {

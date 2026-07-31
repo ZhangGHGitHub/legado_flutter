@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
 import '../app.dart';
@@ -8,6 +9,7 @@ import '../application/app_bootstrap.dart';
 import '../application/ai/ai_config_http_port.dart';
 import '../application/ai/ai_config_prefs_port.dart';
 import '../application/book/batch_book_progress_sync_port.dart';
+import '../application/book/book_provider_source_port.dart';
 import '../application/book/local_book_import_port.dart';
 import '../application/annotation/bookmark_editor_port.dart';
 import '../application/annotation/bookplate_overlay_port.dart';
@@ -27,6 +29,7 @@ import '../application/obsidian/obsidian_export_port.dart';
 import '../application/bookshelf/remote_archive_import_port.dart';
 import '../application/bookshelf/remote_book_sort_port.dart';
 import '../application/cache/book_cache_export_port.dart';
+import '../application/core_api_provider.dart';
 import '../application/crash/crash_log_service.dart';
 import '../application/diagnostics/app_diagnostics_monitor.dart';
 import '../application/diagnostics/app_log_port.dart';
@@ -61,6 +64,7 @@ import '../application/reader/reader_font_port.dart';
 import '../application/reader/book_reader_prefs_port.dart';
 import '../application/reader/tts_port.dart';
 import '../application/reader/manga_prefs_port.dart';
+import '../application/real_core_api.dart';
 import '../application/replace/replace_preset_port.dart';
 import '../application/qr/qr_code_port.dart';
 import '../application/search/search_history_port.dart';
@@ -115,6 +119,8 @@ import '../domain/ports/note_port.dart';
 import '../domain/ports/reading_record_port.dart';
 import '../domain/ports/rss_port.dart';
 import '../domain/ports/webdav_repository.dart';
+import '../domain/repositories/book_repository.dart';
+import '../domain/repositories/book_source_repository.dart';
 import '../infrastructure/cache/file_chapter_content_cache.dart';
 import '../infrastructure/ai/ai_config_http_port_adapter.dart';
 import '../infrastructure/ai/shared_preferences_ai_config_prefs_adapter.dart';
@@ -268,6 +274,31 @@ import '../services/web_api_service.dart';
 import '../services/webdav_prefs.dart';
 
 abstract final class AppCompositionRoot {
+  /// Wraps the legacy Provider tree with the stable Rust-backed API boundary.
+  ///
+  /// Keeping this assembly in one function makes the production dependency
+  /// choice explicit and lets contract tests verify it without starting the
+  /// platform/bootstrap sequence.
+  static Widget withCoreApi({
+    required BookRepository bookRepository,
+    required BookSourceRepository sourceRepository,
+    required BookProviderSourcePort bookProviderSourcePort,
+    required Widget child,
+  }) {
+    return riverpod.ProviderScope(
+      overrides: [
+        coreApiProvider.overrideWithValue(
+          RealCoreApi(
+            books: bookRepository,
+            sources: sourceRepository,
+            sourceApi: bookProviderSourcePort,
+          ),
+        ),
+      ],
+      child: child,
+    );
+  }
+
   static Future<void> run({required CrashLogService crashLog}) async {
     final composition = await _compose(crashLog);
     crashLog.updateStartupStage('首屏挂载');
@@ -765,12 +796,17 @@ abstract final class AppCompositionRoot {
             ),
           ),
         ],
-        child: LegadoApp(
-          navigatorKey: navigatorKey,
-          pendingCrashReport: pendingCrashReport,
-          onCrashReportPresented: () async {
-            await crashLog.acknowledgePending();
-          },
+        child: withCoreApi(
+          bookRepository: bookRepository,
+          sourceRepository: sourceRepository,
+          bookProviderSourcePort: bookProviderSourcePort,
+          child: LegadoApp(
+            navigatorKey: navigatorKey,
+            pendingCrashReport: pendingCrashReport,
+            onCrashReportPresented: () async {
+              await crashLog.acknowledgePending();
+            },
+          ),
         ),
       ),
     );

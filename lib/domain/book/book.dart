@@ -1,14 +1,31 @@
+// ignore_for_file: invalid_annotation_target
+
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'book.freezed.dart';
+
 /// Per-book reader settings persisted inside the Book `readConfig` record.
-class BookReadConfig {
-  final bool reverseToc;
-  final Map<String, dynamic> _extra;
+@freezed
+class BookReadConfig with _$BookReadConfig {
+  const BookReadConfig._();
 
-  const BookReadConfig({
-    this.reverseToc = false,
-    Map<String, dynamic> extra = const {},
-  }) : _extra = extra;
+  const factory BookReadConfig({
+    @Default(false) bool reverseToc,
+    @JsonKey(includeFromJson: false, includeToJson: false)
+    @Default(<String, dynamic>{})
+    Map<String, dynamic> extra,
+  }) = _BookReadConfig;
 
-  factory BookReadConfig.fromJson(
+  factory BookReadConfig.fromJson(Map<String, dynamic> json) {
+    final map = Map<String, dynamic>.from(json);
+    final rawReverse = map.remove('reverseToc');
+    return BookReadConfig(
+      reverseToc: rawReverse is bool ? rawReverse : false,
+      extra: Map<String, dynamic>.unmodifiable(map),
+    );
+  }
+
+  factory BookReadConfig.fromLegacyJson(
     dynamic value, {
     bool? legacyTopLevelReverseToc,
   }) {
@@ -19,22 +36,10 @@ class BookReadConfig {
     final reverse = rawReverse is bool
         ? rawReverse
         : legacyTopLevelReverseToc ?? false;
-    return BookReadConfig(
-      reverseToc: reverse,
-      extra: Map<String, dynamic>.unmodifiable(map),
-    );
+    return BookReadConfig.fromJson({...map, 'reverseToc': reverse});
   }
 
-  BookReadConfig copyWith({bool? reverseToc}) {
-    return BookReadConfig(
-      reverseToc: reverseToc ?? this.reverseToc,
-      extra: _extra,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {..._extra, 'reverseToc': reverseToc};
-  }
+  Map<String, dynamic> toJson() => {...extra, 'reverseToc': reverseToc};
 }
 
 /// 书籍领域实体，对应 Legado 的一本书。
@@ -158,7 +163,7 @@ class Book {
       totalChapterNum: (json['totalChapterNum'] as num?)?.toInt() ?? 0,
       durChapterIndex: (json['durChapterIndex'] as num?)?.toInt() ?? 0,
       currentPageIndex: (json['currentPageIndex'] as num?)?.toInt() ?? 0,
-      readConfig: BookReadConfig.fromJson(
+      readConfig: BookReadConfig.fromLegacyJson(
         json['readConfig'],
         legacyTopLevelReverseToc: json['reverseToc'] as bool?,
       ),

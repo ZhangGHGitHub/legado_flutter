@@ -44,3 +44,54 @@ impl AppError {
         Self::Unknown(message)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::AppError;
+
+    #[test]
+    fn classifies_network_and_http_errors() {
+        let message = "HTTP 503: network request failed".to_string();
+
+        let error = AppError::from_legacy(message.clone());
+
+        assert!(matches!(error, AppError::Network(ref value) if value == &message));
+        assert_eq!(
+            error.to_string(),
+            "network: HTTP 503: network request failed"
+        );
+    }
+
+    #[test]
+    fn classifies_parse_and_json_errors() {
+        let message = "invalid JSON response".to_string();
+
+        let error = AppError::from_legacy(message.clone());
+
+        assert!(matches!(error, AppError::Parse(ref value) if value == &message));
+        assert_eq!(error.to_string(), "parse: invalid JSON response");
+    }
+
+    #[test]
+    fn classifies_javascript_and_quickjs_errors() {
+        let message = "QuickJS execution failed".to_string();
+
+        let error = AppError::from_legacy(message.clone());
+
+        assert!(matches!(error, AppError::JsExecution(ref value) if value == &message));
+        assert_eq!(
+            error.to_string(),
+            "javascript execution: QuickJS execution failed"
+        );
+    }
+
+    #[test]
+    fn classifies_unrecognized_text_as_unknown() {
+        let message = "unexpected source failure".to_string();
+
+        let error = AppError::from_legacy(message.clone());
+
+        assert!(matches!(error, AppError::Unknown(ref value) if value == &message));
+        assert_eq!(error.to_string(), "unknown: unexpected source failure");
+    }
+}

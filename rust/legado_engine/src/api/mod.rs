@@ -321,14 +321,18 @@ pub async fn validate_source(
 
 /// 分步调试搜索
 #[frb]
-pub async fn debug_search(source_json: String, keyword: String) -> Result<DebugResult, String> {
-    debug::debug_search(&source_json, &keyword).await
+pub async fn debug_search(source_json: String, keyword: String) -> Result<DebugResult, AppError> {
+    debug::debug_search(&source_json, &keyword)
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// 分步调试目录
 #[frb]
-pub async fn debug_toc(source_json: String, book_url: String) -> Result<DebugResult, String> {
-    debug::debug_toc(&source_json, &book_url).await
+pub async fn debug_toc(source_json: String, book_url: String) -> Result<DebugResult, AppError> {
+    debug::debug_toc(&source_json, &book_url)
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// TXT 分章
@@ -427,19 +431,19 @@ pub fn record_reading(
     book_name: String,
     chars: i32,
     duration_seconds: i32,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     read_record::record_reading(&book_id, &book_name, chars, duration_seconds)
 }
 
 /// 阅读统计（range: week / month / year）
 #[frb(sync)]
-pub fn get_reading_stats(range: String) -> Result<ReadingStats, String> {
+pub fn get_reading_stats(range: String) -> Result<ReadingStats, AppError> {
     read_record::get_reading_stats(&range)
 }
 
 /// 导出阅读记录（csv / json）
 #[frb(sync)]
-pub fn export_reading_records(format: String) -> Result<String, String> {
+pub fn export_reading_records(format: String) -> Result<String, AppError> {
     read_record::export_reading_records(&format)
 }
 
@@ -450,19 +454,19 @@ pub fn record_detailed_read_session(
     start_time: i64,
     end_time: i64,
     read_iteration: i64,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     read_record::record_detailed_read_session(&book_name, start_time, end_time, read_iteration)
 }
 
 /// 导出详细阅读会话
 #[frb(sync)]
-pub fn export_detailed_read_records() -> Result<String, String> {
+pub fn export_detailed_read_records() -> Result<String, AppError> {
     read_record::export_detailed_read_records()
 }
 
 /// 单本书阅读统计（阅读小票）
 #[frb(sync)]
-pub fn get_book_reading_stats(book_id: String) -> Result<BookReadingStats, String> {
+pub fn get_book_reading_stats(book_id: String) -> Result<BookReadingStats, AppError> {
     read_record::get_book_reading_stats(&book_id)
 }
 

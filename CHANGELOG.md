@@ -4,6 +4,9 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/模型与状态样板：在已有 `SearchResultItem` Freezed 镜像基础上，补充 `BookReadConfig`、`BookGroup`、`Chapter` 的 Freezed 定义与兼容映射；新增 `BookshelfNotifier`，覆盖初始、加载、成功、失败、刷新保留旧数据、并发旧结果丢弃和不可变列表，定向 `8` 项通过。Book/BookSource 仍未全部迁移。
+- 架构/FFI 追溯：`debug_search`、`debug_toc` 和 23 个数据库入口已接入 Rust `AppError`，FRB 生成链已恢复并验证；Rust 全量 `192` 项通过，Flutter 串行全量 `894` 项通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构扫描和 `git diff --check` 均通过。运行时曾由过期 debug DLL 暴露 FRB 错误标签不匹配，重建 `rust/target/debug/legado_engine.dll` 后定向/全量恢复通过；生成器的 SDK `3.11.0`/analyzer `3.9.0` 版本提示为非阻塞警告，其它公开 FFI `Result<T, String>` 仍按计划继续迁移。
+- 架构/组合根：生产组合根通过 ProviderScope 注入真实 `RealCoreApi`，复用现有 Book/BookSource Repository 与书源端口；书架页面仍保留 `BookProvider` 单一事实源，未提前切换到 `BookshelfNotifier`，避免刷新、删除和分组命令出现双状态。
 - 架构/统一错误边界：将 `validate_source` FFI 入口迁移到 Rust `AppError`，保留书源校验返回字段和失败语义；同步重新生成 FRB 绑定并更新错误断言。验证：Rust `186` 通过，Flutter 全量 `879` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构扫描和 `git diff --check` 通过。
 - 架构/并行推进：主线将 `explore`、书籍详情、目录、正文和下一章正文 FFI 入口迁移到 Rust `AppError`，同步更新 FRB 生成绑定和既有错误断言；子线新增 `flutter_riverpod` CoreApi Notifier/Provider 样板及 3 项测试，另一子线新增 Rust/Flutter/架构边界 CI。验证：Rust `186` 通过，Flutter 全量 `879` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构扫描和 `git diff --check` 通过。
 - 架构/模型生成：将 `SearchResultItem` 迁移为 `freezed` + `json_serializable` 模型，保留 Rust 搜索字段、Map 映射和现有空值语义；显式加入 `json_annotation` 运行时依赖。验证：生成器成功，全仓 analyze 无问题，Flutter 全量 `876` 通过、`3` 项既有条件跳过。

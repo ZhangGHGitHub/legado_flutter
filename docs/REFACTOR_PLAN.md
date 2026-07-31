@@ -30,6 +30,8 @@
 
 2026-08-01 设计收敛批次：已建立 `CoreApi/MockCoreApi/RealCoreApi` 首批契约，`search/explore/get_book_info/get_toc/get_content/validate_source` 及下一章正文入口已迁移到 Rust `AppError`；`SearchResultItem` 已完成 freezed 镜像样板；新增 Riverpod CoreApi Notifier 样板和 Rust/Flutter/架构检查 CI。验证为 Rust `186`、Flutter `879` 通过，`3` 项既有条件跳过；业务页面仍未整体切换 Riverpod，剩余 FFI 错误边界继续按批次迁移。
 
+2026-08-01 当前追溯补充：工作树继续完成 `BookReadConfig`、`BookGroup`、`Chapter` Freezed/兼容映射、`BookshelfNotifier` 状态样板、`debug_search/debug_toc` 和 23 个数据库入口的 Rust `AppError` 迁移；书架 Notifier 定向 `8` 项、Chapter 定向 `6` 项、组合根定向 `4` 项通过。FRB 生成链已恢复并验证：Rust 全量 `192` 项通过，Flutter 串行全量 `894` 项通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 均通过。运行时验证补建了过期的 `rust/target/debug/legado_engine.dll`，确认生成绑定与动态库协议一致。生成器的 SDK/analyzer 版本提示为非阻塞警告。本条只做追溯记录，不改变既定 Phase 顺序、R1-R6 退出条件或 Room v99 -> Rust v17、正文/目录/分页/章节身份/UTF-16 阅读位置门禁。
+
 ---
 
 ## 0.0 R0 重基线附录（2026-07-27）
