@@ -96,5 +96,8 @@ abstract interface class CoreApi {
 | `fetch_public_text` | `String` | `Network` |
 | `send_application_http_request` | `ApplicationHttpResponseDto` | `Validation`、`Parse`、`Network` |
 | `send_application_binary_http_request` | `ApplicationBinaryHttpResponseDto` | `Validation`、`Network` |
+| `http_fetch` | `String` | `Parse`、`Network` |
+| `set_network_config`、`set_source_cookie`、`clear_source_cookie`、`source_cookie_domain` | `void`/`String` | `Validation` |
+| `clear_engine_cache`、`start_http_request_trace` | `void` | `Unknown` 或 `JsExecution` |
 
 输入校验、文本解码、SSRF、响应大小和传输错误均保留原错误文本；本批不改变请求方法、请求头、Cookie、超时、大小限制或非 2xx 响应行为。

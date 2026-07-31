@@ -337,6 +337,8 @@ Day 2  PR/Issue 模板
 
 2026-08-01 当前 R2/R6 追溯记录：网络文本与二进制 HTTP 的三个公开 FFI 入口统一为 Rust `AppError`，同步更新 FRB 绑定，未改变网络策略、请求体/头、超时、大小限制和非 2xx 响应。新增分类回归后 `cargo test -p legado_engine api::network::tests -- --nocapture` 为 `9/9`；`cargo test -p legado_engine` 为 `199` 通过；Windows FRB HTTP 集成为 `2/2`；Flutter 串行全量为 `894` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 已通过。架构边界和最终 diff 检查随后执行。其余公开 `Result<T, String>` 入口、QuickJS 超时、初始化合并、编码事实源和生产书架 Riverpod 切换保持未完成状态。
 
+2026-08-01 当前 R2 追溯记录：裸 `http_fetch`、网络配置、Cookie 和 HTTP trace 入口统一为 Rust `AppError`，同步更新 FRB 绑定；`cargo test -p legado_engine api:: -- --nocapture` 为 `57/57`，保留网络参数、Cookie 域、限流和 trace 行为。`cargo test -p legado_engine` 为 `202` 通过；Windows FRB HTTP 集成为 `2/2`；Flutter 串行全量为 `894` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界和 `git diff --check` 均通过。QuickJS 超时、统一初始化、编码事实源、书架生产 Riverpod 和其它公开字符串错误入口仍未完成。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)

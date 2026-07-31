@@ -100,7 +100,7 @@ fn wire__crate__api__network__clear_engine_cache_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::network::clear_engine_cache()?;
                 Ok(output_ok)
             })())
@@ -130,7 +130,7 @@ fn wire__crate__api__network__clear_source_cookie_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_source_url = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::network::clear_source_cookie(api_source_url)?;
                 Ok(output_ok)
             })())
@@ -1980,7 +1980,7 @@ fn wire__crate__api__http_fetch_impl(
             let api_concurrent_rate = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok = crate::api::http_fetch(
                             api_url,
@@ -2886,7 +2886,7 @@ fn wire__crate__api__network__set_network_config_impl(
             let api_proxy_password = <String>::sse_decode(&mut deserializer);
             let api_dns_servers = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::network::set_network_config(
                     api_proxy_enabled,
                     api_proxy_type,
@@ -2925,7 +2925,7 @@ fn wire__crate__api__network__set_source_cookie_impl(
             let api_source_url = <String>::sse_decode(&mut deserializer);
             let api_cookie = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::network::set_source_cookie(api_source_url, api_cookie)?;
                 Ok(output_ok)
             })())
@@ -2955,7 +2955,7 @@ fn wire__crate__api__network__source_cookie_domain_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_source_url = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::network::source_cookie_domain(api_source_url)?;
                 Ok(output_ok)
             })())
@@ -2984,7 +2984,7 @@ fn wire__crate__api__network__start_http_request_trace_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::network::start_http_request_trace()?;
                 Ok(output_ok)
             })())

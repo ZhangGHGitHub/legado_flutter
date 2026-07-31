@@ -34,6 +34,8 @@
 
 2026-08-01 网络错误边界批次：将 `fetch_public_text`、应用 HTTP 文本请求和二进制请求的公开 FFI 错误统一为 `AppError`，保留输入校验、文本解码、SSRF、响应大小、请求方法/头体和非 2xx 响应行为；新增网络错误分类回归并重新生成 FRB。Rust 网络定向 `9` 项、Rust 全量 `199` 项、Windows FRB HTTP 集成 `2` 项、Flutter 串行全量 `894` 项通过，`3` 项既有条件跳过；`flutter analyze --no-pub` 已通过。架构扫描和 `git diff --check` 待本批最后执行。其余网络配置/Cookie、裸 HTTP、RSS、JS、笔记和书签入口仍未迁移，不宣称统一错误边界已完成。
 
+2026-08-01 网络错误边界扩展批次：将裸 `http_fetch`、网络配置、Cookie 和 HTTP trace 入口统一为 Rust `AppError`，保持限流、请求参数、Cookie 域规则、trace 行为和错误原文；新增网络/SSRF/字符解码/书源 URL 分类断言。Rust API 定向 `57` 项、Rust 全量 `202` 项、Windows FRB HTTP 集成 `2/2`、Flutter 串行全量 `894` 项通过，`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 均通过。QuickJS 超时、统一初始化、编码事实源和书架生产 Riverpod 切换仍按审查方案排队。
+
 ---
 
 ## 0.0 R0 重基线附录（2026-07-27）

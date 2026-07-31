@@ -639,12 +639,14 @@ pub async fn http_fetch(
     referer: Option<String>,
     source_url: Option<String>,
     concurrent_rate: Option<String>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let source_key = source_url.as_deref().unwrap_or(&url);
     if let Some(rate) = concurrent_rate.as_deref() {
         crate::http::rate_limit::configure(source_key, rate);
     }
-    crate::http::rate_limit::wait_if_needed(source_key).await?;
+    crate::http::rate_limit::wait_if_needed(source_key)
+        .await
+        .map_err(AppError::Network)?;
     crate::http::client::fetch_text(
         &url,
         &method,
@@ -654,4 +656,61 @@ pub async fn http_fetch(
         source_key,
     )
     .await
+    .map_err(map_http_fetch_error)
+}
+
+fn map_http_fetch_error(message: String) -> AppError {
+    if message.starts_with("gzip 解压失败:") || message.starts_with("响应不是 UTF-8:") {
+        AppError::Parse(message)
+    } else {
+        AppError::Network(message)
+    }
+}
+
+#[cfg(test)]
+mod http_fetch_tests {
+    use super::{http_fetch, map_http_fetch_error, AppError};
+
+    #[tokio::test]
+    async fn http_fetch_maps_ssrf_errors_to_network_without_changing_original_text() {
+        let error = http_fetch(
+            "file:///private".to_string(),
+            "GET".to_string(),
+            None,
+            "UTF-8".to_string(),
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            AppError::Network(ref message) if message == "仅允许 http/https 请求"
+        ));
+    }
+
+    #[test]
+    fn maps_http_fetch_network_errors_without_changing_original_text() {
+        for message in [
+            "HTTP 请求失败: 503 Service Unavailable",
+            "主机并发闸损坏: example.com:443",
+            "SSRF blocked: private address",
+        ] {
+            let error = map_http_fetch_error(message.to_string());
+            assert!(matches!(error, AppError::Network(ref value) if value == message));
+        }
+    }
+
+    #[test]
+    fn maps_http_fetch_decode_errors_to_parse_without_changing_original_text() {
+        for message in [
+            "gzip 解压失败: unexpected end of file",
+            "响应不是 UTF-8: invalid byte",
+        ] {
+            let error = map_http_fetch_error(message.to_string());
+            assert!(matches!(error, AppError::Parse(ref value) if value == message));
+        }
+    }
 }

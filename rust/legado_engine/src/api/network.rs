@@ -40,7 +40,7 @@ pub fn set_network_config(
     proxy_username: String,
     proxy_password: String,
     dns_servers: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     network_config::set_network_config(NetworkConfig {
         proxy_enabled,
         proxy_type,
@@ -50,38 +50,39 @@ pub fn set_network_config(
         proxy_password,
         dns_servers,
     })
+    .map_err(AppError::Validation)
 }
 
 /// 清空 HTTP Cookie 与 JS 内存缓存
 #[flutter_rust_bridge::frb(sync)]
-pub fn clear_engine_cache() -> Result<(), String> {
-    client::clear_http_cookies()?;
-    js_engine::reset_cache()?;
+pub fn clear_engine_cache() -> Result<(), AppError> {
+    client::clear_http_cookies().map_err(AppError::Unknown)?;
+    js_engine::reset_cache().map_err(AppError::JsExecution)?;
     Ok(())
 }
 
 /// 用扁平 Cookie 整串替换书源 eTLD+1 Cookie 桶；空串等价于清除。
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_source_cookie(source_url: String, cookie: String) -> Result<(), String> {
-    client::set_source_cookie(&source_url, &cookie)
+pub fn set_source_cookie(source_url: String, cookie: String) -> Result<(), AppError> {
+    client::set_source_cookie(&source_url, &cookie).map_err(AppError::Validation)
 }
 
 /// 清除且仅清除目标书源 eTLD+1 Cookie 桶。
 #[flutter_rust_bridge::frb(sync)]
-pub fn clear_source_cookie(source_url: String) -> Result<(), String> {
-    client::clear_source_cookie(&source_url)
+pub fn clear_source_cookie(source_url: String) -> Result<(), AppError> {
+    client::clear_source_cookie(&source_url).map_err(AppError::Validation)
 }
 
 /// 返回书源 Cookie 桶使用的 eTLD+1；IP 保持自身。
 #[flutter_rust_bridge::frb(sync)]
-pub fn source_cookie_domain(source_url: String) -> Result<String, String> {
-    client::source_cookie_domain(&source_url)
+pub fn source_cookie_domain(source_url: String) -> Result<String, AppError> {
+    client::source_cookie_domain(&source_url).map_err(AppError::Validation)
 }
 
 /// 开启一次 debug HTTP 请求轨迹采集。
 #[flutter_rust_bridge::frb(sync)]
-pub fn start_http_request_trace() -> Result<(), String> {
-    client::start_request_trace()
+pub fn start_http_request_trace() -> Result<(), AppError> {
+    client::start_request_trace().map_err(AppError::Unknown)
 }
 
 /// 停止并取出 debug HTTP 请求轨迹 JSON。
@@ -498,6 +499,10 @@ mod tests {
             source_cookie_domain("http://127.0.0.1:8080/a".to_string()).unwrap(),
             "127.0.0.1"
         );
-        assert!(source_cookie_domain("not-a-url".to_string()).is_err());
+        let error = source_cookie_domain("not-a-url".to_string()).unwrap_err();
+        assert!(matches!(
+            error,
+            AppError::Validation(ref message) if message == "无效的书源 URL"
+        ));
     }
 }
