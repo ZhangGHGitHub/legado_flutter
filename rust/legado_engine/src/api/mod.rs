@@ -313,8 +313,10 @@ pub async fn get_content_with_next_chapter(
 pub async fn validate_source(
     source_json: String,
     keyword: String,
-) -> Result<SourceValidation, String> {
-    validate::validate_source(&source_json, &keyword).await
+) -> Result<SourceValidation, AppError> {
+    validate::validate_source(&source_json, &keyword)
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// 分步调试搜索

@@ -3109,7 +3109,7 @@ fn wire__crate__api__validate_source_impl(
             let api_keyword = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok =
                             crate::api::validate_source(api_source_json, api_keyword).await?;
