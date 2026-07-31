@@ -4,6 +4,8 @@ enum TtsPlaybackStatePort { idle, playing, paused }
 
 enum TtsCapabilityPort { stub, platform, http }
 
+enum TtsSelectionSpeakModePort { selection, continuous }
+
 enum TtsPlayModePort {
   listEndStop('列表播放'),
   singleLoop('单曲循环'),
@@ -35,6 +37,8 @@ abstract interface class TtsPort extends Listenable {
   int get sentenceIndex;
   int get sentenceCount;
   String get currentSentence;
+  int get currentTextOffset;
+  TtsSelectionSpeakModePort get selectionSpeakMode;
   bool get httpTtsConfigured;
   String get httpTtsUrl;
 
@@ -45,6 +49,12 @@ abstract interface class TtsPort extends Listenable {
   void bindText(String text);
   Future<void> togglePlay(String text);
   Future<void> speak(String text);
+  Future<bool> speakSelection(String text);
+  Future<bool> speakFromOffset(String text, int startOffset);
+  Future<void> loadSelectionSpeakMode();
+  void setSelectionSpeakMode(TtsSelectionSpeakModePort mode);
+  void addPlaybackCompletedListener(VoidCallback listener);
+  void removePlaybackCompletedListener(VoidCallback listener);
   Future<void> stop();
   Future<void> seekSentence(int index);
   Future<void> previousSentence();

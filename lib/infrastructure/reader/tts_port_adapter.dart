@@ -65,6 +65,17 @@ final class TtsPortAdapter implements TtsPort {
   String get currentSentence => _service.currentSentence;
 
   @override
+  int get currentTextOffset => _service.currentTextOffset;
+
+  @override
+  TtsSelectionSpeakModePort get selectionSpeakMode =>
+      switch (_service.selectionSpeakMode) {
+        TtsSelectionSpeakMode.selection => TtsSelectionSpeakModePort.selection,
+        TtsSelectionSpeakMode.continuous =>
+          TtsSelectionSpeakModePort.continuous,
+      };
+
+  @override
   bool get httpTtsConfigured => _service.httpTtsConfigured;
 
   @override
@@ -96,6 +107,33 @@ final class TtsPortAdapter implements TtsPort {
 
   @override
   Future<void> speak(String text) => _service.speak(text);
+
+  @override
+  Future<bool> speakSelection(String text) => _service.speakSelection(text);
+
+  @override
+  Future<bool> speakFromOffset(String text, int startOffset) =>
+      _service.speakFromOffset(text, startOffset);
+
+  @override
+  Future<void> loadSelectionSpeakMode() => _service.loadSelectionSpeakMode();
+
+  @override
+  void setSelectionSpeakMode(TtsSelectionSpeakModePort mode) {
+    _service.setSelectionSpeakMode(
+      mode == TtsSelectionSpeakModePort.continuous
+          ? TtsSelectionSpeakMode.continuous
+          : TtsSelectionSpeakMode.selection,
+    );
+  }
+
+  @override
+  void addPlaybackCompletedListener(VoidCallback listener) =>
+      _service.addPlaybackCompletedListener(listener);
+
+  @override
+  void removePlaybackCompletedListener(VoidCallback listener) =>
+      _service.removePlaybackCompletedListener(listener);
 
   @override
   Future<void> stop() => _service.stop();

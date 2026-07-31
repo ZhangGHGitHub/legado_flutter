@@ -15,6 +15,7 @@ import '../../application/reader/simulated_reading_prefs_port.dart';
 import '../../application/reader/read_style_prefs_port.dart';
 import '../../application/reader/reader_image_cache_port.dart';
 import '../../application/reader/reading_session_tracker.dart';
+import '../../application/reader/tts_port.dart';
 import '../../domain/ports/reading_record_port.dart';
 import '../../application/reader/reading_position_mapper.dart';
 import '../../application/reader/book_progress_factory.dart';
@@ -25,7 +26,6 @@ import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/tts_service.dart';
 import '../../utils/chinese_convert.dart';
 import '../../features/book/change_source_page.dart';
 import '../../features/book/toc_sheet.dart';
@@ -106,6 +106,7 @@ class _ReaderPageState extends State<ReaderPage> {
       GlobalKey<ReaderTurnViewState>();
   BookProvider? _bookProvider; // 缓存引用，避免 dispose 时 context.read 崩溃
   late final ReadingRecordPort _readingRecordPort;
+  late final TtsPort _ttsPort;
   final _readingSession = ReadingSessionTracker();
   late final DetailedReadingSessionTracker _detailedReadingSession;
   int _lastCountedChapterIndex = -1;
@@ -196,6 +197,7 @@ class _ReaderPageState extends State<ReaderPage> {
   void initState() {
     super.initState();
     _readingRecordPort = context.read<ReadingRecordPort>();
+    _ttsPort = context.read<TtsPort>();
     _readingSession.start();
     _detailedReadingSession = DetailedReadingSessionTracker(
       bookName: widget.book.name,
@@ -214,10 +216,9 @@ class _ReaderPageState extends State<ReaderPage> {
       _pendingTargetPage = widget.book.currentPageIndex;
     }
     _selectionSpeakContinuously =
-        TtsService.instance.selectionSpeakMode ==
-        TtsSelectionSpeakMode.continuous;
-    TtsService.instance.addListener(_onTtsServiceChanged);
-    TtsService.instance.addPlaybackCompletedListener(_onTtsPlaybackCompleted);
+        _ttsPort.selectionSpeakMode == TtsSelectionSpeakModePort.continuous;
+    _ttsPort.addListener(_onTtsServiceChanged);
+    _ttsPort.addPlaybackCompletedListener(_onTtsPlaybackCompleted);
     unawaited(_loadSelectionSpeakMode());
     _loadContent();
     unawaited(_loadReaderImageCache());
@@ -664,14 +665,12 @@ class _ReaderPageState extends State<ReaderPage> {
     _autoReadTimer?.cancel();
     _batteryTimer?.cancel();
     _screenOffTimer?.cancel();
-    TtsService.instance.removeListener(_onTtsServiceChanged);
-    TtsService.instance.removePlaybackCompletedListener(
-      _onTtsPlaybackCompleted,
-    );
+    _ttsPort.removeListener(_onTtsServiceChanged);
+    _ttsPort.removePlaybackCompletedListener(_onTtsPlaybackCompleted);
     if (_continuousReadActive) {
       _continuousReadActive = false;
       _continuousReadGeneration++;
-      unawaited(TtsService.instance.stop());
+      unawaited(_ttsPort.stop());
     }
     SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.portraitUp,
@@ -758,9 +757,9 @@ class _ReaderPageState extends State<ReaderPage> {
       case ClickZoneAction.prevChapter:
         if (_currentIndex > 0) _goToChapter(_currentIndex - 1);
       case ClickZoneAction.aloudPrevParagraph:
-        unawaited(TtsService.instance.previousSentence());
+        unawaited(_ttsPort.previousSentence());
       case ClickZoneAction.aloudNextParagraph:
-        unawaited(TtsService.instance.nextSentence());
+        unawaited(_ttsPort.nextSentence());
       case ClickZoneAction.addBookmark:
         unawaited(_addBookmark());
       case ClickZoneAction.editContent:
@@ -779,7 +778,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _toggleAloudPauseResume() async {
-    final tts = TtsService.instance;
+    final tts = _ttsPort;
     final text = _pages.isNotEmpty
         ? _pages[_pageIndex.clamp(0, _pages.length - 1)]
         : _content;
@@ -1107,10 +1106,8 @@ class _ReaderPageState extends State<ReaderPage> {
   Future<void> _readSelectedText(String selectedText) async {
     final text = selectedText.trim();
     if (text.isEmpty) return;
-    final started = await TtsService.instance.speakSelection(text);
-    if (!mounted ||
-        started ||
-        TtsService.instance.state != TtsPlaybackState.playing) {
+    final started = await _ttsPort.speakSelection(text);
+    if (!mounted || started || _ttsPort.state != TtsPlaybackStatePort.playing) {
       return;
     }
     ScaffoldMessenger.of(
@@ -1157,20 +1154,19 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _loadSelectionSpeakMode() async {
-    await TtsService.instance.loadSelectionSpeakMode();
+    await _ttsPort.loadSelectionSpeakMode();
     if (!mounted) return;
     setState(() {
       _selectionSpeakContinuously =
-          TtsService.instance.selectionSpeakMode ==
-          TtsSelectionSpeakMode.continuous;
+          _ttsPort.selectionSpeakMode == TtsSelectionSpeakModePort.continuous;
     });
   }
 
   void _setSelectionSpeakMode(bool continuous) {
-    TtsService.instance.setSelectionSpeakMode(
+    _ttsPort.setSelectionSpeakMode(
       continuous
-          ? TtsSelectionSpeakMode.continuous
-          : TtsSelectionSpeakMode.selection,
+          ? TtsSelectionSpeakModePort.continuous
+          : TtsSelectionSpeakModePort.selection,
     );
     if (mounted) {
       setState(() => _selectionSpeakContinuously = continuous);
@@ -1206,25 +1202,24 @@ class _ReaderPageState extends State<ReaderPage> {
     if (source.trim().isEmpty) return;
 
     _cancelContinuousReading();
-    await TtsService.instance.stop();
+    await _ttsPort.stop();
     final generation = ++_continuousReadGeneration;
     _continuousReadActive = true;
     _continuousReadChapterIndex = _currentIndex;
     _continuousReadStartPos = chapterPos.clamp(0, source.length);
     _syncContinuousReadPosition();
 
-    final started = await TtsService.instance.speakFromOffset(
+    final started = await _ttsPort.speakFromOffset(
       source,
       _continuousReadStartPos,
     );
     if (!mounted || generation != _continuousReadGeneration) return;
-    if (!started && TtsService.instance.sentenceCount == 0) {
+    if (!started && _ttsPort.sentenceCount == 0) {
       _finishContinuousReading();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('当前章节没有可朗读的正文')));
-    } else if (!started &&
-        TtsService.instance.capability == TtsCapability.stub) {
+    } else if (!started && _ttsPort.capability == TtsCapabilityPort.stub) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('系统语音引擎不可用，请检查 TTS 权限或语音包')));
@@ -1235,7 +1230,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (!_continuousReadActive) return;
     _continuousReadActive = false;
     _continuousReadGeneration++;
-    unawaited(TtsService.instance.stop());
+    unawaited(_ttsPort.stop());
   }
 
   void _finishContinuousReading() {
@@ -1279,7 +1274,7 @@ class _ReaderPageState extends State<ReaderPage> {
     _continuousReadChapterIndex = nextIndex;
     _continuousReadStartPos = 0;
     _syncContinuousReadPosition();
-    await TtsService.instance.speakFromOffset(source, 0);
+    await _ttsPort.speakFromOffset(source, 0);
   }
 
   void _syncContinuousReadPosition() {
@@ -1288,11 +1283,8 @@ class _ReaderPageState extends State<ReaderPage> {
         _currentIndex != _continuousReadChapterIndex) {
       return;
     }
-    final textOffset =
-        (_continuousReadStartPos + TtsService.instance.currentTextOffset).clamp(
-          0,
-          0x7fffffff,
-        );
+    final textOffset = (_continuousReadStartPos + _ttsPort.currentTextOffset)
+        .clamp(0, 0x7fffffff);
     if (_isHorizontalPaged && _pageSlices.isNotEmpty) {
       var target = _pageSlices.length - 1;
       for (var i = 0; i < _pageSlices.length; i++) {
@@ -3889,7 +3881,7 @@ class _ReaderPageState extends State<ReaderPage> {
     }
 
     if (_settings.volumeKeyTurnPage) {
-      final ttsPlaying = TtsService.instance.state == TtsPlaybackState.playing;
+      final ttsPlaying = _ttsPort.state == TtsPlaybackStatePort.playing;
       if (ttsPlaying && !_settings.volumeKeyPageOnPlay) {
         return KeyEventResult.ignored;
       }

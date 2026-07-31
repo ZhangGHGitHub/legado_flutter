@@ -3086,3 +3086,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：RSS/Reader 定向组合 `17/17`；Flutter 串行全量 `798` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`：`No issues found`；架构扫描由 `28` 降至 `26` 条既有 Feature→service backlog；格式门禁通过，Rust 未改动。
 
 边界结论：本批完成 RSS 文章获取和 Reader 阅读记录的 application/infrastructure 调用者迁移，剩余 `26` 条 Feature 依赖继续按单边界推进。
+
+## 161. 2026-07-31：R6 ReaderPage TTS 端口边界
+
+- 扩展 `TtsPort` 覆盖选区朗读、连续朗读回调、句子位置、选区模式和播放模式能力；`ReaderPage` 移除 `TtsService` 直接依赖，使用组合根注册的 TTS adapter。
+- 保留系统/HTTP TTS、stub、选区朗读、连续朗读、章节切换、句子定位和正文位置语义；未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：TTS/Reader 定向 `29/29`；Flutter 串行全量 `798` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`：`No issues found`；架构扫描由 `26` 降至 `25` 条既有 Feature→service backlog；格式门禁通过，Rust 未改动。
+
+边界结论：本批完成 ReaderPage TTS 的 application/infrastructure 调用者迁移，真实 Android TTS 仍按暂停门禁，剩余 `25` 条 Feature 依赖继续按单边界推进。
