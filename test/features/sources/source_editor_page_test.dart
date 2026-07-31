@@ -5,12 +5,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/platform/clipboard_port.dart';
 import 'package:legado_flutter/application/preferences/code_edit_prefs_port.dart';
 import 'package:legado_flutter/application/qr/qr_code_port.dart';
+import 'package:legado_flutter/application/source_login/source_login_cookie_clear_port.dart';
 import 'package:legado_flutter/domain/ports/code_edit_prefs_store.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/features/sources/source_editor_page.dart';
 import 'package:legado_flutter/services/code_edit_prefs.dart';
 import 'package:legado_flutter/infrastructure/qr/qr_code_port_adapter.dart';
 import 'package:legado_flutter/infrastructure/preferences/shared_preferences_code_edit_prefs.dart';
+import 'package:legado_flutter/infrastructure/source_login/source_login_cookie_clear_port_adapter.dart';
 import 'package:provider/provider.dart';
 
 void main() {
@@ -31,7 +33,10 @@ void main() {
             value: const QrCodePortAdapter(),
             child: Provider<CodeEditPrefsPort>.value(
               value: SharedPreferencesCodeEditPrefs(_FakeCodeEditPrefsStore()),
-              child: SourceEditorPage(source: source),
+              child: Provider<SourceLoginCookieClearPort>.value(
+                value: const SourceLoginCookieClearPortAdapter(),
+                child: SourceEditorPage(source: source),
+              ),
             ),
           ),
         ),

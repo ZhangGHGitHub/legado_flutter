@@ -293,6 +293,8 @@ Day 2  PR/Issue 模板
 
 2026-07-31 当前 R6 记录：继续按“先定向测试、再全量门禁、最后记录”推进 `SourceEditorPage` 代码编辑偏好与会话日志端口。页面改用已有 `CodeEditPrefsPort`，测试宿主注入 fake store adapter，保留自动补全和会话日志语义；定向 `15/15`，Flutter 串行全量 `741` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub` 为 `No issues found`，架构扫描 `80` 条既有 Feature→service backlog。Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。相关记录见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
 
+2026-07-31 当前 R6 记录：继续按“先定向测试、再全量门禁、最后记录”推进 `SourceEditorPage` 书源登录 Cookie 清理端口。新增完整清理用例端口，adapter 保留 SharedPreferences、Rust CookieJar 和 WebView 清理语义；定向 `6/6`，Flutter 串行全量 `742` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub` 为 `No issues found`，架构扫描 `79` 条既有 Feature→service backlog。Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。相关记录见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)

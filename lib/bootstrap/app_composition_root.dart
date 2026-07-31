@@ -31,6 +31,7 @@ import '../application/reader/reader_font_port.dart';
 import '../application/replace/replace_preset_port.dart';
 import '../application/qr/qr_code_port.dart';
 import '../application/search/search_history_port.dart';
+import '../application/source_login/source_login_cookie_clear_port.dart';
 import '../application/sources/source_debug_formatter_port.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
 import '../application/rss/rss_read_state_port.dart';
@@ -123,6 +124,7 @@ import '../infrastructure/reader/reader_font_port_adapter.dart';
 import '../infrastructure/reader/reader_image_cache_port_adapter.dart';
 import '../infrastructure/replace/replace_preset_port_adapter.dart';
 import '../infrastructure/sources/source_debug_formatter_adapter.dart';
+import '../infrastructure/source_login/source_login_cookie_clear_port_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_search_history_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_rss_read_state_adapter.dart';
 import '../infrastructure/qr/qr_code_port_adapter.dart';
@@ -379,6 +381,9 @@ abstract final class AppCompositionRoot {
           ),
           Provider<SourceDebugFormatterPort>.value(
             value: const SourceDebugFormatterAdapter(),
+          ),
+          Provider<SourceLoginCookieClearPort>.value(
+            value: const SourceLoginCookieClearPortAdapter(),
           ),
           Provider<SourceMarketPort>.value(
             value: const BuiltinSourceMarketPort(),

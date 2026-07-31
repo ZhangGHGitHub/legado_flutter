@@ -2963,3 +2963,15 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `dart format` 通过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `81` 降至 `80` 条既有 Feature→service backlog；`git diff --check` 在文档更新后复核。
 
 边界结论：本批完成 SourceEditor 代码编辑偏好与会话日志的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `80` 条 Feature 依赖继续按单边界推进。
+
+## 151. 2026-07-31：R6 SourceEditor 登录 Cookie 清理端口
+
+- 新增 application `SourceLoginCookieClearPort` 与 infrastructure adapter；`SourceEditorPage` 移除对 `services/source_login_cookie_service.dart` 的直接依赖，清理动作继续由既有 service 协调 SharedPreferences Cookie 桶、Rust CookieJar 和 WebView Cookie。
+- 保留清理顺序、Cookie 域名处理、失败提示和清理后会话日志行为；领域 `SourceLoginCookiePort` 仍只负责 Rust CookieJar，不混入持久化/WebView 语义。新增 adapter 回归验证 Cookie 桶清理，未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- Cookie 清理 adapter、既有 SourceLoginCookieService 和 SourceEditor 定向 `6/6`；Flutter 串行全量 `flutter test --no-pub --concurrency=1 --reporter compact`：`742` 通过、`3` 项既有条件跳过。
+- `dart format` 通过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `80` 降至 `79` 条既有 Feature→service backlog；`git diff --check` 在文档更新后复核。
+
+边界结论：本批完成 SourceEditor 登录 Cookie 清理的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `79` 条 Feature 依赖继续按单边界推进。
