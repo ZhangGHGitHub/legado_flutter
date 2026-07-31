@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/platform/clipboard_port.dart';
+import 'package:legado_flutter/application/preferences/code_edit_prefs_port.dart';
 import 'package:legado_flutter/application/qr/qr_code_port.dart';
 import 'package:legado_flutter/domain/ports/code_edit_prefs_store.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/features/sources/source_editor_page.dart';
 import 'package:legado_flutter/services/code_edit_prefs.dart';
 import 'package:legado_flutter/infrastructure/qr/qr_code_port_adapter.dart';
+import 'package:legado_flutter/infrastructure/preferences/shared_preferences_code_edit_prefs.dart';
 import 'package:provider/provider.dart';
 
 void main() {
@@ -27,7 +29,10 @@ void main() {
           value: clipboard,
           child: Provider<QrCodePort>.value(
             value: const QrCodePortAdapter(),
-            child: SourceEditorPage(source: source),
+            child: Provider<CodeEditPrefsPort>.value(
+              value: SharedPreferencesCodeEditPrefs(_FakeCodeEditPrefsStore()),
+              child: SourceEditorPage(source: source),
+            ),
           ),
         ),
       ),

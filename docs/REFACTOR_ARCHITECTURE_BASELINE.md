@@ -2951,3 +2951,15 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `dart format` 通过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `82` 降至 `81` 条既有 Feature→service backlog；`git diff --check` 在文档更新后复核。
 
 边界结论：本批完成 SourceEditor 二维码能力的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `81` 条 Feature 依赖继续按单边界推进。
+
+## 150. 2026-07-31：R6 SourceEditor 代码编辑偏好端口
+
+- `SourceEditorPage` 移除对 `services/code_edit_prefs.dart` 的直接依赖，改用已有 `CodeEditPrefsPort` 读取自动补全、保存自动补全开关和管理会话日志；组合根既有 SharedPreferences adapter 不变，登录 Cookie 等其他 service 依赖保持原边界。
+- 保留代码编辑偏好键名、默认值、日志上限、清理行为和提示文案；测试宿主通过 fake store 组装 application adapter，未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：
+
+- SourceEditor、CodeEdit 偏好 service/application adapter、CodeEdit 页面和 SharedPreferences 运行时定向 `15/15`；Flutter 串行全量 `flutter test --no-pub --concurrency=1 --reporter compact`：`741` 通过、`3` 项既有条件跳过。
+- `dart format` 通过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `81` 降至 `80` 条既有 Feature→service backlog；`git diff --check` 在文档更新后复核。
+
+边界结论：本批完成 SourceEditor 代码编辑偏好与会话日志的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `80` 条 Feature 依赖继续按单边界推进。

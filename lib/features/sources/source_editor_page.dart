@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../application/preferences/source_variable_port.dart';
+import '../../application/preferences/code_edit_prefs_port.dart';
 import '../../application/platform/clipboard_port.dart';
 import '../../application/qr/qr_code_port.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
@@ -15,7 +16,6 @@ import '../../services/source_login_cookie_service.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../code_edit/code_edit_page.dart';
-import '../../services/code_edit_prefs.dart';
 import '../code_edit/keyboard_tool_bar.dart';
 import 'qrcode_capture_page.dart';
 import '../search/search_page.dart';
@@ -121,7 +121,8 @@ class _SourceEditorPageState extends State<SourceEditorPage>
   }
 
   Future<void> _loadAutoComplete() async {
-    final s = await CodeEditPrefs.load();
+    final prefs = context.read<CodeEditPrefsPort>();
+    final s = await prefs.load();
     if (!mounted) return;
     setState(() => _autoComplete = s.autoComplete);
   }
@@ -900,6 +901,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
   }
 
   Future<void> _clearCookie() async {
+    final prefs = context.read<CodeEditPrefsPort>();
     try {
       final sourceUrl = _toBookSource().bookSourceUrl.trim();
       if (sourceUrl.isEmpty) throw StateError('源 URL 不能为空');
@@ -908,7 +910,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('已清除 Cookie')));
-      await CodeEditPrefs.appendLog('清除书源 Cookie');
+      await prefs.appendLog('清除书源 Cookie');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -1027,7 +1029,8 @@ class _SourceEditorPageState extends State<SourceEditorPage>
   }
 
   Future<void> _showLog() async {
-    final logs = await CodeEditPrefs.loadLog();
+    final prefs = context.read<CodeEditPrefsPort>();
+    final logs = await prefs.loadLog();
     if (!mounted) return;
     await showDialog<void>(
       context: context,
@@ -1051,7 +1054,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
           if (logs.isNotEmpty)
             TextButton(
               onPressed: () async {
-                await CodeEditPrefs.clearLog();
+                await prefs.clearLog();
                 if (ctx.mounted) Navigator.pop(ctx);
               },
               child: const Text('清空'),
@@ -1074,8 +1077,9 @@ class _SourceEditorPageState extends State<SourceEditorPage>
       case 'cookie':
         await _clearCookie();
       case 'auto_complete':
+        final prefs = context.read<CodeEditPrefsPort>();
         setState(() => _autoComplete = !_autoComplete);
-        await CodeEditPrefs.saveAutoComplete(_autoComplete);
+        await prefs.saveAutoComplete(_autoComplete);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(_autoComplete ? '已开启自动补全' : '已关闭自动补全')),
