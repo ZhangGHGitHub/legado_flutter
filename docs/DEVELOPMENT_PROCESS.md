@@ -307,6 +307,8 @@ Day 2  PR/Issue 模板
 
 2026-07-31 当前 R6 记录：继续按“先定向测试、再全量门禁、最后记录”推进 Web API 设置、AudioPlay/TTS、其它设置和备份配置的 application/infrastructure 端口化。新增 `WebApiSettingsPort`、`TtsPort`、`OtherSettingsPort`、备份状态端口；组合根注册 adapter，测试宿主补齐端口依赖；TTS 面板与 AudioPlay 共用同一端口，保留播放模式、章节切换、定时、HTTP TTS 和系统 stub 行为。定向组合 `24/24`；Flutter 串行全量 `798` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `41` 降至 `30` 条既有 Feature→service backlog。全仓 analyze 首次因执行时限 `124` 终止，延长时限重跑通过；未削弱断言。Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。
 
+2026-07-31 当前 R6 记录：继续收口 `OtherSettingsCard` 缓存管理边界。新增 `CacheManagementPort` 与 infrastructure adapter，页面改用缓存统计/清理端口，保留统计格式、清理范围和既有 UI 行为。定向 `2/2`；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `30` 降至 `29` 条既有 Feature→service backlog。上一批 Flutter 串行全量为 `798` 通过、`3` 项既有条件跳过，本小批未重复全量；未削弱断言，Rust 未改动。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)

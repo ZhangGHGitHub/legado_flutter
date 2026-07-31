@@ -246,6 +246,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 本批继续收口 Web API 设置、AudioPlay/TTS、其它设置和备份配置边界：页面分别通过 `WebApiSettingsPort`、`TtsPort`、`OtherSettingsPort` 和备份状态端口使用既有服务；`TtsPanel` 与 `AudioPlayPage` 共用 TTS application port，组合根注册 infrastructure adapter，测试宿主显式补齐依赖。保留 Web API 启停/Token、TTS 播放模式/章节切换/定时/HTTP TTS、网络代理/DNS/数据目录/缓存清理、WebDAV 备份恢复和 Room 导入行为。定向组合 `24/24`；Flutter 串行全量 `798` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `41` 降至 `30` 条既有 Feature→service backlog。Rust 未改动，本批不重复运行 Rust 测试；后续按剩余 30 条 Feature 依赖继续单边界推进。
 
+本小批继续收口 `OtherSettingsCard` 缓存管理边界：页面通过 `CacheManagementPort` 读取统计并执行书籍缓存、引擎缓存、备份和全量清理，infrastructure adapter 复用 `CacheService`，不改变统计格式、清理范围、HTTP TTS 或网络设置行为。定向 `2/2`；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `30` 降至 `29` 条既有 Feature→service backlog。上一批 Flutter 串行全量 `798` 通过、`3` 项既有条件跳过，本小批不重复运行全量；后续按剩余 29 条 Feature 依赖继续单边界推进。
+
 ### 0.4 重构工作规则
 
 1. 一次只迁移一个边界、一个用例或一条数据链路；完成定向测试并汇报后再进入下一项。
@@ -256,7 +258,7 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 ### 0.5 当前状态
 
-当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 至 P1-4 现已通过；当前继续按 Feature 应用用例边界收口。架构扫描当前为 `30` 条既有 Feature→service backlog，不能当作例外或 R6 最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
+当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 至 P1-4 现已通过；当前继续按 Feature 应用用例边界收口。架构扫描当前为 `29` 条既有 Feature→service backlog，不能当作例外或 R6 最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
 
 ### 0.6 版本控制与变更追溯状态（2026-07-26）
 

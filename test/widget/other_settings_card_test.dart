@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/settings/cache_management_port.dart';
 import 'package:legado_flutter/application/settings/other_settings_port.dart';
 import 'package:legado_flutter/domain/ports/network_engine_port.dart';
 import 'package:legado_flutter/features/settings/other_settings_card.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
+import 'package:legado_flutter/infrastructure/settings/cache_management_port_adapter.dart';
 import 'package:legado_flutter/services/app_paths.dart';
 import 'package:legado_flutter/services/cache_service.dart';
 import 'package:provider/provider.dart';
@@ -43,8 +45,8 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      Provider<CacheService>.value(
-        value: _cacheService(),
+      Provider<CacheManagementPort>.value(
+        value: CacheManagementPortAdapter(_cacheService()),
         child: Provider<OtherSettingsPort>.value(
           value: const _FakeOtherSettingsPort(),
           child: const MaterialApp(
@@ -81,8 +83,8 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      Provider<CacheService>.value(
-        value: _cacheService(),
+      Provider<CacheManagementPort>.value(
+        value: CacheManagementPortAdapter(_cacheService()),
         child: Provider<OtherSettingsPort>.value(
           value: const _FakeOtherSettingsPort(),
           child: const MaterialApp(

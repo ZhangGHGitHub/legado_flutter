@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/settings/cache_management_port.dart';
 import '../../application/settings/other_settings_port.dart';
 import '../../config/app_config.dart';
-import '../../services/cache_service.dart';
 import '../../theme/legado_tokens.dart';
 
 /// 其它设置 — 代理 / DNS / 缓存 / 数据目录（Phase 4.3）
@@ -15,7 +15,7 @@ class OtherSettingsCard extends StatefulWidget {
 }
 
 class _OtherSettingsCardState extends State<OtherSettingsCard> {
-  late final CacheService _cacheService;
+  late final CacheManagementPort _cachePort;
   late final OtherSettingsPort _settingsPort;
   bool _loading = true;
   bool _proxyEnabled = false;
@@ -26,12 +26,12 @@ class _OtherSettingsCardState extends State<OtherSettingsCard> {
   final _passCtrl = TextEditingController();
   final _dnsCtrl = TextEditingController();
   final _dataDirCtrl = TextEditingController();
-  CacheStats? _stats;
+  CacheStatsView? _stats;
 
   @override
   void initState() {
     super.initState();
-    _cacheService = context.read<CacheService>();
+    _cachePort = context.read<CacheManagementPort>();
     _settingsPort = context.read<OtherSettingsPort>();
     _load();
   }
@@ -51,9 +51,9 @@ class _OtherSettingsCardState extends State<OtherSettingsCard> {
     try {
       final net = await _settingsPort.loadNetwork();
       final dataDir = await _settingsPort.loadDataDir();
-      CacheStats? stats;
+      CacheStatsView? stats;
       try {
-        stats = await _cacheService.loadStats();
+        stats = await _cachePort.loadStats();
       } catch (_) {}
       if (!mounted) return;
       setState(() {
@@ -109,13 +109,13 @@ class _OtherSettingsCardState extends State<OtherSettingsCard> {
   Future<void> _clearCache(String type) async {
     switch (type) {
       case 'book':
-        await _cacheService.clearBookCache();
+        await _cachePort.clearBookCache();
       case 'engine':
-        await _cacheService.clearEngineCache();
+        await _cachePort.clearEngineCache();
       case 'backup':
-        await _cacheService.clearBackups();
+        await _cachePort.clearBackups();
       case 'all':
-        await _cacheService.clearAll();
+        await _cachePort.clearAll();
     }
     await _load();
     if (mounted) {

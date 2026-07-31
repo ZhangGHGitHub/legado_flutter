@@ -3058,3 +3058,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 全仓 analyze 首次因命令时限退出 `124`，在延长时限后通过；期间发现并修复 Web API 异步 `BuildContext` 诊断，未放宽断言。Rust 未改动，本批不重复运行 Rust 测试。
 
 边界结论：本批完成 Web API 设置、AudioPlay/TTS、其它设置和备份配置的 application/infrastructure 调用者迁移，旧 service 继续作为兼容实现入口，剩余 `30` 条 Feature 依赖继续按单边界推进。Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 仍按暂停门禁执行。
+
+## 158. 2026-07-31：R6 OtherSettings 缓存管理端口边界
+
+- `OtherSettingsCard` 移除 `CacheService` 直接依赖，改用 `CacheManagementPort` 读取缓存统计并执行书籍缓存、引擎缓存、备份和全量清理；adapter 复用既有 `CacheService`，保持统计格式、清理范围和错误降级语义。
+- 组合根注册缓存管理 adapter，测试宿主改为注入端口；未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则，剩余 Feature→service 依赖未加入白名单。
+
+验证结果：受影响定向 `2/2`；`flutter analyze --no-pub`：`No issues found`；架构扫描由 `30` 降至 `29` 条既有 Feature→service backlog。上一批 Flutter 串行全量 `798` 通过、`3` 项既有条件跳过，本小批不重复运行全量；Rust 未改动。
+
+边界结论：本小批完成 OtherSettings 缓存管理的 application/infrastructure 调用者迁移，剩余 `29` 条 Feature 依赖继续按单边界推进。
