@@ -297,6 +297,8 @@ Day 2  PR/Issue 模板
 
 2026-07-31 当前 R6 记录：四个子 agent 按不重叠写入范围并行推进 AI 配置、书签页、书架排列和漫画阅读偏好；主线完成组合根接入、书架默认 adapter 边界修正和 owner 验收。子线定向证据 AI `9/9`、书签 `25`、书架 `8/8`、漫画 `11`，owner 合并定向 `16/16`；Flutter 串行全量 `755` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub` 为 `No issues found`，架构扫描 `69` 条既有 Feature→service backlog。Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。相关记录见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
 
+2026-07-31 当前 R6 记录：两条不重叠 agent 线完成书架展示/配置和 MyPage，主线完成 MainShell 启动端口及组合根接入。受影响定向 `20/20`；Flutter 串行全量 `769` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `69` 降至 `57` 条既有 Feature→service backlog。首轮全量发现测试宿主缺少 `MyPagePort`，补齐 fake 后最终门禁通过，未削弱断言。Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。详见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)

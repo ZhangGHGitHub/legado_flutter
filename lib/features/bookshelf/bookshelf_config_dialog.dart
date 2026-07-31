@@ -1,24 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../services/bookshelf_prefs.dart';
+import '../../application/bookshelf/bookshelf_config_dialog_port.dart';
 
 /// 书架布局 Dialog — 对齐 Jingshiro [dialog_bookshelf_config] /
 /// [BaseBookshelfFragment.configBookshelf]。
 class BookshelfConfigDialog extends StatefulWidget {
-  const BookshelfConfigDialog({super.key, required this.initial});
+  const BookshelfConfigDialog({super.key, required this.initial, this.port});
 
   final BookshelfConfig initial;
+  final BookshelfConfigDialogPort? port;
 
   /// 返回保存后的配置；取消为 null。
   static Future<BookshelfConfig?> show(
     BuildContext context, {
     BookshelfConfig? initial,
+    BookshelfConfigDialogPort? port,
   }) async {
-    final cfg = initial ?? await BookshelfPrefs.load();
+    final resolvedPort = port ?? context.read<BookshelfConfigDialogPort>();
+    final cfg = initial ?? await resolvedPort.load();
     if (!context.mounted) return null;
     return showDialog<BookshelfConfig>(
       context: context,
-      builder: (_) => BookshelfConfigDialog(initial: cfg),
+      builder: (_) => BookshelfConfigDialog(initial: cfg, port: resolvedPort),
     );
   }
 
@@ -27,6 +31,7 @@ class BookshelfConfigDialog extends StatefulWidget {
 }
 
 class _BookshelfConfigDialogState extends State<BookshelfConfigDialog> {
+  late final BookshelfConfigDialogPort _port;
   late int _groupStyle;
   late int _layout;
   late int _sort;
@@ -53,6 +58,7 @@ class _BookshelfConfigDialogState extends State<BookshelfConfigDialog> {
   @override
   void initState() {
     super.initState();
+    _port = widget.port ?? context.read<BookshelfConfigDialogPort>();
     final c = widget.initial;
     _groupStyle = c.bookGroupStyle.clamp(0, 1);
     _layout = c.bookshelfLayout.clamp(0, 6);
@@ -80,7 +86,7 @@ class _BookshelfConfigDialogState extends State<BookshelfConfigDialog> {
       bookshelfMargin: _margin.round(),
       bookOrder: widget.initial.bookOrder,
     );
-    await BookshelfPrefs.save(next);
+    await _port.save(next);
     if (!mounted) return;
     Navigator.pop(context, next);
   }

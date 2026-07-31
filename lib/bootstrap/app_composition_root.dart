@@ -10,6 +10,10 @@ import '../application/ai/ai_config_prefs_port.dart';
 import '../application/bookmark/bookmark_page_port.dart';
 import '../application/bookshelf/book_group_store_port.dart';
 import '../application/bookshelf/bookshelf_arrange_port.dart';
+import '../application/bookshelf/bookshelf_config_dialog_port.dart';
+import '../application/bookshelf/bookshelf_display_port.dart';
+import '../application/mine/my_page_port.dart';
+import '../application/main/main_shell_startup_port.dart';
 import '../application/cache/book_cache_export_port.dart';
 import '../application/crash/crash_log_service.dart';
 import '../application/diagnostics/app_diagnostics_monitor.dart';
@@ -76,6 +80,8 @@ import '../infrastructure/ai/shared_preferences_ai_config_prefs_adapter.dart';
 import '../infrastructure/bookmark/bookmark_page_port_adapter.dart';
 import '../infrastructure/bookshelf/book_group_store_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_arrange_port_adapter.dart';
+import '../infrastructure/bookshelf/bookshelf_config_dialog_port_adapter.dart';
+import '../infrastructure/bookshelf/bookshelf_display_port_adapter.dart';
 import '../infrastructure/cache/book_cache_export_port_adapter.dart';
 import '../infrastructure/content/frb_content_processing_port.dart';
 import '../infrastructure/database/frb_backup_port.dart';
@@ -113,6 +119,8 @@ import '../infrastructure/platform/method_channel_source_login_web_cookie_port.d
 import '../infrastructure/platform/platform_crash_metadata_loader.dart';
 import '../infrastructure/platform/platform_donate_clipboard.dart';
 import '../infrastructure/platform/platform_clipboard.dart';
+import '../infrastructure/main/main_shell_startup_port_adapter.dart';
+import '../infrastructure/mine/my_page_port_adapter.dart';
 import '../infrastructure/file_system/app_paths_port_adapter.dart';
 import '../infrastructure/reader/read_style_zip_port_adapter.dart';
 import '../infrastructure/source_market/builtin_source_market_port.dart';
@@ -369,6 +377,12 @@ abstract final class AppCompositionRoot {
           Provider<BookshelfConfigPrefsPort>.value(
             value: const SharedPreferencesBookshelfConfigPrefsAdapter(),
           ),
+          Provider<BookshelfConfigDialogPort>.value(
+            value: const SharedPreferencesBookshelfConfigDialogPortAdapter(),
+          ),
+          Provider<BookshelfDisplayPort>.value(
+            value: const SharedPreferencesBookshelfDisplayPortAdapter(),
+          ),
           Provider<RssReadStatePort>.value(value: rssReadStatePort),
           Provider<RssStarPrefsPort>.value(
             value: const RssStarPrefsPortAdapter(),
@@ -451,6 +465,9 @@ abstract final class AppCompositionRoot {
           ),
           Provider<WebDavRepository>.value(value: webdavRepository),
           Provider<BackupService>.value(value: backupService),
+          Provider<MyPagePort>.value(
+            value: MyPagePortAdapter(backupService: backupService),
+          ),
           Provider<BookProgressSync>.value(value: bookProgressSync),
           Provider<BookmarkSyncService>.value(value: bookmarkSyncService),
           Provider<CacheService>.value(value: cacheService),
@@ -495,6 +512,15 @@ abstract final class AppCompositionRoot {
           ChangeNotifierProvider(
             create: (context) => RssProvider(
               sourceImportPort: context.read<RssSourceImportPort>(),
+            ),
+          ),
+          Provider<MainShellStartupPort>(
+            create: (context) => MainShellStartupPortAdapter(
+              sourceService: context.read<BookSourceService>(),
+              sourceProvider: context.read<SourceProvider>(),
+              rssProvider: context.read<RssProvider>(),
+              replaceProvider: context.read<ReplaceProvider>(),
+              fetchPort: context.read<PublicTextFetchPort>(),
             ),
           ),
         ],

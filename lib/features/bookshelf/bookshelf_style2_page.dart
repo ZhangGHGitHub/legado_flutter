@@ -5,10 +5,10 @@ import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
+import '../../application/bookshelf/bookshelf_display_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../services/book_group_store.dart';
-import '../../services/bookshelf_prefs.dart';
 import '../../services/local_book_service.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_group_manage_dialog.dart';
@@ -31,11 +31,13 @@ class BookshelfStyle2Page extends StatefulWidget {
     this.scrollController,
     required this.config,
     this.onConfigChanged,
+    this.displayPort,
   });
 
   final ScrollController? scrollController;
   final BookshelfConfig config;
   final ValueChanged<BookshelfConfig>? onConfigChanged;
+  final BookshelfDisplayPort? displayPort;
 
   @override
   State<BookshelfStyle2Page> createState() => _BookshelfStyle2PageState();
@@ -45,15 +47,20 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
   String _selectedGroup = '__all__';
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   List<String> _shelfOrder = [];
+  late final BookshelfDisplayPort _displayPort;
 
   @override
   void initState() {
     super.initState();
+    _displayPort =
+        widget.displayPort ??
+        Provider.of<BookshelfDisplayPort?>(context, listen: false) ??
+        const InMemoryBookshelfDisplayPort();
     _loadOrder();
   }
 
   Future<void> _loadOrder() async {
-    final order = await BookshelfPrefs.loadBookOrder();
+    final order = await _displayPort.loadBookOrder();
     if (!mounted) return;
     setState(() => _shelfOrder = order);
   }
@@ -63,7 +70,7 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
     if (_selectedGroup != '__all__') {
       result = result.where((b) => b.group == _selectedGroup).toList();
     }
-    return BookshelfPrefs.sortBooks(
+    return _displayPort.sortBooks(
       result,
       sortMode: widget.config.bookshelfSort,
       orderIds: _shelfOrder,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:legado_flutter/domain/book/book.dart';
-import '../../services/bookshelf_prefs.dart';
+import '../../application/bookshelf/bookshelf_display_port.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/legado_refresh_indicator.dart';

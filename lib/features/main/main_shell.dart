@@ -5,16 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../domain/crash/crash_report.dart';
+import '../../application/main/main_shell_startup_port.dart';
 import '../../application/startup/startup_task_runner.dart';
 import '../../config/app_config.dart';
-import '../../domain/ports/public_text_fetch_port.dart';
+import '../../domain/source_subscription/rule_sub.dart';
 import '../../providers/book_provider.dart';
-import '../../providers/replace_provider.dart';
-import '../../providers/rss_provider.dart';
-import '../../providers/source_provider.dart';
-import '../../services/bookshelf_prefs.dart';
-import '../../services/book_source_service.dart';
-import '../../services/rule_sub_import_service.dart';
 import '../../theme/legado_chrome.dart';
 import '../../widgets/legado_bottom_nav.dart';
 import '../bookshelf/bookshelf_page.dart';
@@ -35,10 +30,12 @@ class MainShell extends StatefulWidget {
     super.key,
     this.pendingCrashReport,
     this.onCrashReportPresented,
+    this.startupPort,
   });
 
   final CrashReport? pendingCrashReport;
   final Future<void> Function()? onCrashReportPresented;
+  final MainShellStartupPort? startupPort;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -51,6 +48,8 @@ class _MainShellState extends State<MainShell> {
   int _lastBookshelfTapMs = 0;
   int _lastExploreTapMs = 0;
   DateTime? _lastBackPress;
+  late final MainShellStartupPort _startupPort;
+  MainShellBookshelfLayout? _bookshelfLayout;
 
   final _bookshelfScrollController = ScrollController();
   final _bookshelfKey = GlobalKey<BookshelfPageState>();
@@ -61,6 +60,7 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+    _startupPort = widget.startupPort ?? context.read<MainShellStartupPort>();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initProviders());
   }
 
@@ -71,47 +71,20 @@ class _MainShellState extends State<MainShell> {
   }
 
   Future<void> _initProviders() async {
-    final sourceProvider = context.read<SourceProvider>();
-    final rssProvider = context.read<RssProvider>();
-    final replaceProvider = context.read<ReplaceProvider>();
     final runner = context.read<StartupTaskRunner>();
 
     await AppConfig.instance.load();
     if (!mounted) return;
-    await BookshelfPrefs.load();
+    _bookshelfLayout = await _startupPort.loadBookshelfLayout();
     if (!mounted) return;
 
-    final rssSources = runner.run('rss.sources.load', rssProvider.loadSources);
-    final replaceRules = runner.run(
-      'replace_rules.load',
-      replaceProvider.loadRules,
-    );
-    final builtInSources = runner.run(
-      'sources.built_in.ensure',
-      sourceProvider.ensureBuiltInSources,
-    );
-    final sources = runner.run('sources.load', () async {
-      final report = await builtInSources;
-      if (report.status != StartupTaskStatus.succeeded) {
-        throw StateError('内置书源任务未完成');
-      }
-      await sourceProvider.loadSources();
-      final error = sourceProvider.loadError;
-      if (error != null) throw StateError(error);
-    });
-    unawaited(
-      runner.run('rule_subscriptions.update', () async {
-        final sourceReport = await sources;
-        final rssReport = await rssSources;
-        if (sourceReport.status != StartupTaskStatus.succeeded ||
-            rssReport.status != StartupTaskStatus.succeeded) {
-          throw StateError('书源或 RSS 加载任务未完成');
-        }
-        await Future<void>.delayed(const Duration(seconds: 1));
-        await _ruleSubsUp();
-      }),
-    );
-    for (final task in [rssSources, replaceRules, sources]) {
+    final startup = _startupPort.startStartupTasks(runner: runner);
+    unawaited(_showRuleSubscriptionImports(startup.ruleSubscriptions));
+    for (final task in [
+      startup.rssSources,
+      startup.replaceRules,
+      startup.sources,
+    ]) {
       unawaited(
         task.then((_) {
           if (mounted) setState(() {});
@@ -141,17 +114,11 @@ class _MainShellState extends State<MainShell> {
     }
   }
 
-  /// 对齐 MainViewModel.ruleSubsUp + RuleUpdate.cacheSource
-  Future<void> _ruleSubsUp() async {
-    if (!mounted) return;
+  Future<void> _showRuleSubscriptionImports(
+    Future<List<RuleSub>> pending,
+  ) async {
     try {
-      final needUi = await RuleSubImportService.checkAutoUpdates(
-        sourceService: context.read<BookSourceService>(),
-        sourceProvider: context.read<SourceProvider>(),
-        rssProvider: context.read<RssProvider>(),
-        replaceProvider: context.read<ReplaceProvider>(),
-        fetchPort: context.read<PublicTextFetchPort>(),
-      );
+      final needUi = await pending;
       if (!mounted || needUi.isEmpty) return;
       for (final sub in needUi) {
         if (!mounted) return;
@@ -343,7 +310,7 @@ class _MainShellState extends State<MainShell> {
             final selectedDest = slots
                 .indexOf(pageIndex)
                 .clamp(0, slots.length - 1);
-            final shelfBadge = BookshelfPrefs.cached.showWaitUpCount
+            final shelfBadge = (_bookshelfLayout?.showWaitUpCount ?? false)
                 ? bookProvider.shelfUpdateActiveCount
                 : 0;
 

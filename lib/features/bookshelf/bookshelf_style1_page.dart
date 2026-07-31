@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
+import '../../application/bookshelf/bookshelf_display_port.dart';
 import '../../application/preferences/bookshelf_display_prefs_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/bookshelf_prefs.dart';
 import '../../services/book_group_store.dart';
 import '../../services/local_book_service.dart';
 import '../../theme/legado_chrome.dart';
@@ -31,11 +31,13 @@ class BookshelfStyle1Page extends StatefulWidget {
     this.scrollController,
     required this.config,
     this.onConfigChanged,
+    this.displayPort,
   });
 
   final ScrollController? scrollController;
   final BookshelfConfig config;
   final ValueChanged<BookshelfConfig>? onConfigChanged;
+  final BookshelfDisplayPort? displayPort;
 
   @override
   State<BookshelfStyle1Page> createState() => _BookshelfStyle1PageState();
@@ -48,10 +50,15 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
   /// UI-7: 置顶书 ID（本地 prefs，不改引擎表结构）
   Set<String> _pinnedIds = {};
   List<String> _shelfOrder = [];
+  late final BookshelfDisplayPort _displayPort;
 
   @override
   void initState() {
     super.initState();
+    _displayPort =
+        widget.displayPort ??
+        Provider.of<BookshelfDisplayPort?>(context, listen: false) ??
+        const InMemoryBookshelfDisplayPort();
     _loadPreferences();
   }
 
@@ -62,7 +69,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
       _showGrouped = displayPrefs.showGrouped;
       _pinnedIds = displayPrefs.pinnedIds;
     });
-    final order = await BookshelfPrefs.loadBookOrder();
+    final order = await _displayPort.loadBookOrder();
     if (!mounted) return;
     setState(() => _shelfOrder = order);
   }
@@ -80,7 +87,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     if (_selectedGroup != '__all__') {
       result = result.where((b) => b.group == _selectedGroup).toList();
     }
-    return BookshelfPrefs.sortBooks(
+    return _displayPort.sortBooks(
       result,
       sortMode: widget.config.bookshelfSort,
       orderIds: _shelfOrder,
@@ -115,7 +122,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
         ),
       ),
     );
-    final order = await BookshelfPrefs.loadBookOrder();
+    final order = await _displayPort.loadBookOrder();
     if (!mounted) return;
     setState(() => _shelfOrder = order);
   }

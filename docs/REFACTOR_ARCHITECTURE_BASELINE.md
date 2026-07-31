@@ -2988,3 +2988,17 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 架构扫描由 `79` 降至 `69` 条既有 Feature→service backlog；剩余依赖未加入白名单，继续按单边界推进。
 
 边界结论：本批完成四个独立 Feature 的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `69` 条 Feature 依赖继续按单边界推进。
+
+## 153. 2026-07-31：R6 书架展示、MainShell 与 MyPage 端口边界
+
+- `BookshelfPage`、`BookshelfStyle1Page`、`BookshelfStyle2Page` 和书架展示组件改用 `BookshelfDisplayPort`；`BookshelfConfigDialog` 改用 `BookshelfConfigDialogPort`。SharedPreferences adapter 继续复用既有书架配置、手动顺序和排序行为。
+- `MainShell` 改用 `MainShellStartupPort`，由组合根在 `SourceProvider`、`ReplaceProvider`、`RssProvider` 之后注入，保持启动任务隔离、规则订阅导入、书架更新角标和默认首页语义。`MyPage` 改用 `MyPagePort`，封装 Web API 状态/启停、本地备份和引擎/数据库就绪状态；测试宿主显式补齐端口 fake。
+- 未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则；剩余 Feature→service 依赖未加入白名单。
+
+验证结果：
+
+- 受影响定向 `20/20`；Flutter 串行全量 `flutter test --no-pub --concurrency=1 --reporter compact`：`769` 通过、`3` 项既有条件跳过。
+- `dart format` 通过；`flutter analyze --no-pub`：`No issues found`；架构扫描由 `69` 降至 `57` 条既有 Feature→service backlog；`git diff --check` 在文档更新后复核。
+- 首轮全量曾因 L4 已落地而 MainShell 测试宿主尚未注册 `MyPagePort` 出现 ProviderNotFound；补齐 fake 后定向和最终全量通过，未放宽断言。Rust 未改动，本批不重复运行 Rust 测试。
+
+边界结论：本批完成书架展示/配置、MainShell 启动和 MyPage 的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `57` 条 Feature 依赖继续按单边界推进。

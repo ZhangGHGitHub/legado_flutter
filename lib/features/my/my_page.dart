@@ -4,11 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/lifecycle/app_lifecycle_coordinator.dart';
-import '../../application/web_api/web_api_prefs_port.dart';
-import '../../services/backup_service.dart';
-import '../../services/database_status_service.dart';
-import '../../services/engine_status_service.dart';
-import '../../services/web_api_service.dart';
+import '../../application/mine/my_page_port.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/legado_list_tile.dart';
 import '../../widgets/quick_action_button.dart';
@@ -76,27 +72,26 @@ class _MyPageState extends State<MyPage> {
   }
 
   Future<void> _loadWebService() async {
-    final config = await context.read<WebApiPrefsPort>().load();
-    final status = WebApiService.currentStatus();
-    final running = config.enabled && (status?.running ?? false);
+    final status = await context.read<MyPagePort>().loadWebService();
     if (!mounted) return;
     setState(() {
-      _webServiceOn = running;
-      _webServiceUrl = running ? (status?.baseUrl ?? '') : '';
+      _webServiceOn = status.isActive;
+      _webServiceUrl = status.isActive ? status.baseUrl : '';
     });
   }
 
   Future<void> _localBackup() async {
     if (_localBackupBusy) return;
-    if (!EngineStatusService.isAvailable || !DatabaseStatusService.isReady) {
+    final port = context.read<MyPagePort>();
+    if (!port.isEngineAvailable || !port.isDatabaseReady) {
       _snack('Rust 引擎或数据库未就绪');
       return;
     }
     setState(() => _localBackupBusy = true);
     try {
-      final file = await context.read<BackupService>().backupToLocalFile();
+      final fileName = await port.backupLocally();
       if (!mounted) return;
-      _snack('本地备份完成：${file.uri.pathSegments.last}');
+      _snack('本地备份完成：$fileName');
     } catch (e) {
       if (mounted) _snack('本地备份失败: $e');
     } finally {
@@ -152,16 +147,19 @@ class _MyPageState extends State<MyPage> {
   }
 
   Future<void> _toggleWebService() async {
-    if (!EngineStatusService.isAvailable || !DatabaseStatusService.isReady) {
+    final port = context.read<MyPagePort>();
+    if (!port.isEngineAvailable || !port.isDatabaseReady) {
       _snack('Rust 引擎或数据库未就绪');
       return;
     }
-    final config = await context.read<WebApiPrefsPort>().load();
-    final next = !config.enabled;
-    final status = await WebApiService.setEnabled(next);
-    await _loadWebService();
+    final status = await port.toggleWebService();
     if (!mounted) return;
-    _snack(next ? 'Web API 已启动 ${status?.baseUrl ?? ''}' : 'Web API 已停止');
+    setState(() {
+      _webServiceOn = status.isActive;
+      _webServiceUrl = status.isActive ? status.baseUrl : '';
+    });
+    if (!mounted) return;
+    _snack(status.enabled ? 'Web API 已启动 ${status.baseUrl}' : 'Web API 已停止');
   }
 
   Future<void> _showWebDavDialog() async {
@@ -219,8 +217,9 @@ class _MyPageState extends State<MyPage> {
   }
 
   void _showAbout() {
-    final engine = EngineStatusService.isAvailable
-        ? 'Rust 引擎 v${EngineStatusService.engineVersion}'
+    final port = context.read<MyPagePort>();
+    final engine = port.isEngineAvailable
+        ? 'Rust 引擎 v${port.engineVersion}'
         : 'Rust 引擎未加载';
     showAboutDialog(
       context: context,

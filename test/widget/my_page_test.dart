@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/lifecycle/app_lifecycle_coordinator.dart';
+import 'package:legado_flutter/application/mine/my_page_port.dart';
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import '../helpers/fake_reader_font_port.dart';
-import 'package:legado_flutter/application/web_api/web_api_prefs_port.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:legado_flutter/features/my/my_page.dart';
@@ -42,7 +42,7 @@ void main() {
           ChangeNotifierProvider.value(value: themeController),
           ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
           Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
-          Provider<WebApiPrefsPort>.value(value: const _FakeWebApiPrefs()),
+          Provider<MyPagePort>.value(value: const _FakeMyPagePort()),
         ],
         child: const MaterialApp(home: MyPage()),
       ),
@@ -55,14 +55,28 @@ void main() {
   });
 }
 
-class _FakeWebApiPrefs implements WebApiPrefsPort {
-  const _FakeWebApiPrefs();
+class _FakeMyPagePort implements MyPagePort {
+  const _FakeMyPagePort();
 
   @override
-  Future<WebApiConfig> load() async => const WebApiConfig();
+  bool get isEngineAvailable => true;
 
   @override
-  Future<void> save(WebApiConfig config) async {}
+  bool get isDatabaseReady => true;
+
+  @override
+  String get engineVersion => 'test';
+
+  @override
+  Future<MyPageWebServiceStatus> loadWebService() async =>
+      const MyPageWebServiceStatus(enabled: false, running: false);
+
+  @override
+  Future<MyPageWebServiceStatus> toggleWebService() async =>
+      const MyPageWebServiceStatus(enabled: true, running: true, baseUrl: '');
+
+  @override
+  Future<String> backupLocally() async => 'backup.zip';
 }
 
 class _FakeReaderFontPort extends FakeReaderFontPort {

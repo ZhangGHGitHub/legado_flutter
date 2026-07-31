@@ -6,6 +6,8 @@ import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/database/dao/replace_rule_dao.dart';
 import 'package:legado_flutter/database/dao/source_dao.dart';
 import 'package:legado_flutter/application/lifecycle/app_lifecycle_coordinator.dart';
+import 'package:legado_flutter/application/main/main_shell_startup_port.dart';
+import 'package:legado_flutter/application/mine/my_page_port.dart';
 import 'package:legado_flutter/application/preferences/bookshelf_display_prefs_port.dart';
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import '../helpers/fake_reader_font_port.dart';
@@ -81,6 +83,7 @@ void main() {
           ),
           Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
           Provider<WebApiPrefsPort>.value(value: const _FakeWebApiPrefsPort()),
+          Provider<MyPagePort>.value(value: const _FakeMyPagePort()),
           Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
           ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
           Provider<BookSourceService>(
@@ -110,7 +113,9 @@ void main() {
             ),
           ),
         ],
-        child: const MaterialApp(home: MainShell()),
+        child: const MaterialApp(
+          home: MainShell(startupPort: _FakeMainShellStartupPort()),
+        ),
       ),
     );
 
@@ -148,6 +153,7 @@ void main() {
           ),
           Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
           Provider<WebApiPrefsPort>.value(value: const _FakeWebApiPrefsPort()),
+          Provider<MyPagePort>.value(value: const _FakeMyPagePort()),
           Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
           ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
           Provider<BookSourceService>(
@@ -177,7 +183,9 @@ void main() {
             ),
           ),
         ],
-        child: const MaterialApp(home: MainShell()),
+        child: const MaterialApp(
+          home: MainShell(startupPort: _FakeMainShellStartupPort()),
+        ),
       ),
     );
 
@@ -216,6 +224,7 @@ void main() {
             Provider<WebApiPrefsPort>.value(
               value: const _FakeWebApiPrefsPort(),
             ),
+            Provider<MyPagePort>.value(value: const _FakeMyPagePort()),
             Provider<StartupTaskRunner>(create: (_) => StartupTaskRunner()),
             ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
             Provider<BookSourceService>(
@@ -249,6 +258,7 @@ void main() {
             home: MainShell(
               pendingCrashReport: _crashReport(),
               onCrashReportPresented: () async => presented += 1,
+              startupPort: const _FakeMainShellStartupPort(),
             ),
           ),
         ),
@@ -291,6 +301,55 @@ class _EmptyPublicTextFetchPort implements PublicTextFetchPort {
 
   @override
   Future<String> fetch(String url, {String userAgent = ''}) async => '[]';
+}
+
+class _FakeMyPagePort implements MyPagePort {
+  const _FakeMyPagePort();
+
+  @override
+  bool get isEngineAvailable => true;
+
+  @override
+  bool get isDatabaseReady => true;
+
+  @override
+  String get engineVersion => 'test';
+
+  @override
+  Future<MyPageWebServiceStatus> loadWebService() async =>
+      const MyPageWebServiceStatus(enabled: false, running: false);
+
+  @override
+  Future<MyPageWebServiceStatus> toggleWebService() async =>
+      const MyPageWebServiceStatus(enabled: true, running: true);
+
+  @override
+  Future<String> backupLocally() async => 'backup.zip';
+}
+
+class _FakeMainShellStartupPort implements MainShellStartupPort {
+  const _FakeMainShellStartupPort();
+
+  @override
+  Future<MainShellBookshelfLayout> loadBookshelfLayout() async =>
+      const MainShellBookshelfLayout();
+
+  @override
+  MainShellStartupTasks startStartupTasks({required StartupTaskRunner runner}) {
+    final report = StartupTaskReport(
+      id: 'test',
+      status: StartupTaskStatus.succeeded,
+      attempt: 1,
+      startedAt: DateTime(2026),
+      finishedAt: DateTime(2026),
+    );
+    return MainShellStartupTasks(
+      rssSources: Future.value(report),
+      replaceRules: Future.value(report),
+      sources: Future.value(report),
+      ruleSubscriptions: Future.value(const []),
+    );
+  }
 }
 
 class _FakeBookshelfDisplayPrefsPort implements BookshelfDisplayPrefsPort {

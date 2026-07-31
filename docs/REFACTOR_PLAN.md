@@ -6,7 +6,7 @@
 > **重构来源与基线：** [Jingshiro/legado](https://github.com/Jingshiro/legado)；UI 1:1 对齐和行为兼容是重构验收子目标，不是独立产品定位。
 > **本地原版基线：** 根目录 `legado-main/` 是只读的原版行为、数据结构、UI 和错误语义核对目录，不是本项目的主源码目录，也不参与 Flutter/Rust 构建。
 > 目标平台：Android / iOS / Windows / macOS / Linux / Web (WASM)  
-> 最后更新：2026-07-30
+> 最后更新：2026-07-31
 > 引擎版本：**v0.5.6** | Rust DB Schema：**v17** | 原版 Room：**v99** | FRB：**2.11.1**
 >
 > 当前暂停项（2026-07-26）：Web 平台/WASM/PWA 构建、Web 平台适配和相关验收；TTS 真实 Android 引擎验收。除这两类门禁外，Android/Windows 重构继续按固定顺序推进。
@@ -235,6 +235,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 本批继续收口 `SourceEditorPage` 书源登录 Cookie 清理边界：新增 `SourceLoginCookieClearPort` 及基础设施 adapter，页面通过完整清理用例处理 SharedPreferences Cookie 桶、Rust CookieJar 和 WebView Cookie；保留清理顺序、域名处理、失败提示和会话日志语义。定向 `6/6`；Flutter 串行全量 `742` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `80` 降至 `79` 条既有 Feature→service backlog。未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 
 本批由四个子 agent 并行收口 AI 配置、书签页、书架排列和漫画阅读偏好边界：`AiConfigDialog` 使用 AI 配置偏好/HTTP port；`BookmarkPage` 使用书签页面 port；`BookshelfArrangePage` 使用排列偏好与分组目录 port；`MangaReaderPage` 使用 `MangaPrefsPort`。主线在组合根注册共享 adapter，并修正书架页面默认 adapter 造成的 Feature→infrastructure 违规。保留 AI 配置/记忆、书签迁移/同步/导入导出、书架分组与排序、漫画偏好键名/默认值/互斥和阅读行为。子线定向证据：AI `9/9`、书签 `25`、书架端口/服务 `8/8`、漫画 `11`；owner 合并定向 `16/16`；Flutter 串行全量 `755` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `79` 降至 `69` 条既有 Feature→service backlog。未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+本批继续收口书架展示、书架配置、MainShell 启动编排和 MyPage 边界：`BookshelfPage`、两种书架样式和书架展示组件改用 `BookshelfDisplayPort`；配置对话框改用 `BookshelfConfigDialogPort`；`MainShell` 改用 `MainShellStartupPort`；`MyPage` 改用 `MyPagePort`。组合根注册共享 adapter，MainShell Provider 按 `SourceProvider`、`ReplaceProvider`、`RssProvider` 依赖顺序注入；测试宿主补齐 `MyPagePort` fake。保留书架配置键名、默认值、排序/手动顺序、启动任务、Web API、备份、引擎/数据库状态和 UI 提示语义。受影响定向 `20/20`；Flutter 串行全量 `769` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `69` 降至 `57` 条既有 Feature→service backlog。首轮全量发现的测试宿主 Provider 缺失已补齐，未削弱断言；Rust 未改动，本批不重复运行 Rust 测试。Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行；后续按剩余 57 条 Feature 依赖继续单边界推进。
 
 ### 0.4 重构工作规则
 
