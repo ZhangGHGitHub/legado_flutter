@@ -5,6 +5,12 @@ fn map_database_error<T>(result: Result<T, String>) -> Result<T, AppError> {
     result.map_err(AppError::Database)
 }
 
+/// 初始化应用数据目录下固定的 `legado.db`。
+#[flutter_rust_bridge::frb(sync)]
+pub fn init(app_dir: String) -> Result<(), AppError> {
+    db::init(&app_dir).map_err(|error| AppError::Database(error.to_string()))
+}
+
 /// 初始化数据库（与 Flutter `legado.db` 同路径）
 #[flutter_rust_bridge::frb(sync)]
 pub fn db_init(path: String) -> Result<(), AppError> {
@@ -138,7 +144,14 @@ pub fn db_clear_replace_rules() -> Result<(), AppError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{map_database_error, AppError};
+    use super::{init, map_database_error, AppError};
+
+    #[test]
+    fn init_maps_invalid_app_directory_to_database_error() {
+        let error = init("  ".to_string()).expect_err("empty app directory must fail");
+
+        assert!(matches!(error, AppError::Database(message) if message.contains("不能为空")));
+    }
 
     #[test]
     fn preserves_database_error_text_and_classification() {

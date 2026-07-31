@@ -5,7 +5,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use thiserror::Error;
 
@@ -14,6 +14,7 @@ pub(crate) mod room_import;
 const SCHEMA_VERSION: i32 = 17;
 
 static DB: OnceCell<Mutex<EngineDb>> = OnceCell::new();
+static DB_INIT_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Error, Debug)]
 pub enum DbError {
@@ -26,13 +27,18 @@ pub enum DbError {
 /// 引擎本地 SQLite
 pub struct EngineDb {
     conn: Connection,
+    path: PathBuf,
 }
 
 impl EngineDb {
     pub fn open(path: &str) -> Result<Self, DbError> {
         let conn = Connection::open(path)?;
+        let normalized_path = normalize_db_path(path);
         Self::init_schema(&conn)?;
-        Ok(Self { conn })
+        Ok(Self {
+            conn,
+            path: normalized_path,
+        })
     }
 
     pub fn open_in_memory() -> Result<Self, DbError> {
@@ -40,9 +46,14 @@ impl EngineDb {
     }
 
     fn init_schema(conn: &Connection) -> Result<(), DbError> {
+        // foreign_keys must be enabled before opening the transaction; SQLite ignores
+        // changes to this pragma while a transaction is active.
+        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+        let transaction = conn.unchecked_transaction()?;
+        let conn = &transaction;
+
         conn.execute_batch(
-            "PRAGMA foreign_keys = ON;
-             CREATE TABLE IF NOT EXISTS books (
+            "CREATE TABLE IF NOT EXISTS books (
                id TEXT PRIMARY KEY,
                name TEXT NOT NULL,
                author TEXT DEFAULT '未知作者',
@@ -159,47 +170,62 @@ impl EngineDb {
             )?;
         }
         if current < 10 {
-            // 已有 v10 CREATE 的新库可能已含该列；重复添加忽略错误
-            let _ = conn.execute(
+            add_column_if_missing(
+                conn,
+                "books",
+                "readIteration",
                 "ALTER TABLE books ADD COLUMN readIteration INTEGER DEFAULT 0",
-                [],
-            );
+            )?;
         }
         if current < 11 {
-            let _ = conn.execute(
+            add_column_if_missing(
+                conn,
+                "books",
+                "simReadEnabled",
                 "ALTER TABLE books ADD COLUMN simReadEnabled INTEGER DEFAULT 0",
-                [],
-            );
-            let _ = conn.execute(
+            )?;
+            add_column_if_missing(
+                conn,
+                "books",
+                "simReadStartDate",
                 "ALTER TABLE books ADD COLUMN simReadStartDate TEXT DEFAULT ''",
-                [],
-            );
-            let _ = conn.execute(
+            )?;
+            add_column_if_missing(
+                conn,
+                "books",
+                "simReadStartChapter",
                 "ALTER TABLE books ADD COLUMN simReadStartChapter INTEGER DEFAULT 0",
-                [],
-            );
-            let _ = conn.execute(
+            )?;
+            add_column_if_missing(
+                conn,
+                "books",
+                "simReadDailyChapters",
                 "ALTER TABLE books ADD COLUMN simReadDailyChapters INTEGER DEFAULT 3",
-                [],
-            );
+            )?;
         }
         if current < 12 {
             // 书架未读角标：总章数 / 当前章索引（旧库 ALTER；新库 CREATE 已含）
-            let _ = conn.execute(
+            add_column_if_missing(
+                conn,
+                "books",
+                "totalChapterNum",
                 "ALTER TABLE books ADD COLUMN totalChapterNum INTEGER DEFAULT 0",
-                [],
-            );
-            let _ = conn.execute(
+            )?;
+            add_column_if_missing(
+                conn,
+                "books",
+                "durChapterIndex",
                 "ALTER TABLE books ADD COLUMN durChapterIndex INTEGER DEFAULT 0",
-                [],
-            );
+            )?;
         }
         if current < 13 {
             // 书签章内字符偏移（对齐 Jingshiro Bookmark.chapterPos）
-            let _ = conn.execute(
+            add_column_if_missing(
+                conn,
+                "notes",
+                "chapter_pos",
                 "ALTER TABLE notes ADD COLUMN chapter_pos INTEGER NOT NULL DEFAULT -1",
-                [],
-            );
+            )?;
         }
         if current < 14 {
             conn.execute_batch(
@@ -235,17 +261,25 @@ impl EngineDb {
         if current < 16 {
             // Per-book reader settings are stored as the same nested JSON
             // object used by the original app's Book.readConfig.
-            let _ = conn.execute(
+            add_column_if_missing(
+                conn,
+                "books",
+                "readConfig",
                 "ALTER TABLE books ADD COLUMN readConfig TEXT DEFAULT '{}'",
-                [],
-            );
+            )?;
         }
         if current < 17 {
-            let _ = conn.execute("ALTER TABLE books ADD COLUMN tocUrl TEXT DEFAULT ''", []);
+            add_column_if_missing(
+                conn,
+                "books",
+                "tocUrl",
+                "ALTER TABLE books ADD COLUMN tocUrl TEXT DEFAULT ''",
+            )?;
         }
         if current < SCHEMA_VERSION {
             conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
         }
+        transaction.commit()?;
         Ok(())
     }
 
@@ -1552,7 +1586,96 @@ fn sqlite_param(value: &Value) -> String {
     }
 }
 
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    alter_sql: &str,
+) -> Result<(), DbError> {
+    let exists: i64 = conn.query_row(
+        &format!("SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = '{column}'"),
+        [],
+        |row| row.get(0),
+    )?;
+    if exists == 0 {
+        conn.execute(alter_sql, [])?;
+    }
+    Ok(())
+}
+
+fn normalize_db_path(path: &str) -> PathBuf {
+    if path == ":memory:" {
+        return PathBuf::from(path);
+    }
+    fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path))
+}
+
+fn app_database_path(app_dir: &str) -> Result<PathBuf, DbError> {
+    let trimmed = app_dir.trim();
+    if trimmed.is_empty() {
+        return Err(DbError::Message("应用数据目录不能为空".into()));
+    }
+
+    let directory = Path::new(trimmed);
+    let metadata = fs::metadata(directory)
+        .map_err(|error| DbError::Message(format!("应用数据目录不可用: {trimmed}: {error}")))?;
+    if !metadata.is_dir() {
+        return Err(DbError::Message(format!(
+            "应用数据路径必须是目录: {trimmed}"
+        )));
+    }
+
+    let directory = fs::canonicalize(directory)
+        .map_err(|error| DbError::Message(format!("应用数据目录无法规范化: {trimmed}: {error}")))?;
+    Ok(directory.join("legado.db"))
+}
+
+fn same_published_database(path: &Path) -> Result<bool, DbError> {
+    let cell = DB
+        .get()
+        .ok_or_else(|| DbError::Message("数据库尚未初始化".into()))?;
+    let guard = cell
+        .lock()
+        .map_err(|_| DbError::Message("数据库锁失败".into()))?;
+    Ok(guard.path == path)
+}
+
+/// 初始化应用数据目录下固定的 `legado.db`，成功完成 schema 后才发布全局实例。
+pub fn init(app_dir: &str) -> Result<(), DbError> {
+    let _init_guard = DB_INIT_LOCK
+        .lock()
+        .map_err(|_| DbError::Message("数据库初始化锁失败".into()))?;
+    let database_path = app_database_path(app_dir)?;
+
+    if DB.get().is_some() {
+        return if same_published_database(&database_path)? {
+            Ok(())
+        } else {
+            Err(DbError::Message("数据库已初始化，禁止切换数据目录".into()))
+        };
+    }
+
+    let path = database_path.to_string_lossy().into_owned();
+    let db = EngineDb::open(&path)?;
+
+    match DB.set(Mutex::new(db)) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            // Another initializer may have won the race while this database was opening.
+            // The failed candidate is dropped and can never replace the published instance.
+            if same_published_database(&database_path)? {
+                Ok(())
+            } else {
+                Err(DbError::Message("数据库已初始化，禁止切换数据目录".into()))
+            }
+        }
+    }
+}
+
 pub fn init_global(path: &str) -> Result<(), DbError> {
+    let _init_guard = DB_INIT_LOCK
+        .lock()
+        .map_err(|_| DbError::Message("数据库初始化锁失败".into()))?;
     let db = EngineDb::open(path)?;
     DB.set(Mutex::new(db))
         .map_err(|_| DbError::Message("数据库已初始化".into()))?;
@@ -1910,6 +2033,128 @@ fn parse_read_config(raw: Option<String>) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_directory(label: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "legado-db-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    #[test]
+    fn init_rejects_empty_and_file_app_paths() {
+        assert!(matches!(
+            init("   "),
+            Err(DbError::Message(message)) if message.contains("不能为空")
+        ));
+
+        let directory = test_directory("invalid-file");
+        let file = directory.join("not-a-directory");
+        fs::write(&file, b"not a directory").unwrap();
+        let file_path = file.to_string_lossy().into_owned();
+        assert!(matches!(
+            init(&file_path),
+            Err(DbError::Message(message)) if message.contains("必须是目录")
+        ));
+    }
+
+    #[test]
+    fn schema_failure_rolls_back_all_ddl_and_version_changes() {
+        let directory = test_directory("rollback");
+        let path = directory.join("legado.db");
+        let path_string = path.to_string_lossy().into_owned();
+
+        {
+            let conn = Connection::open(&path_string).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE notes (id TEXT PRIMARY KEY);
+                 PRAGMA user_version = 7;",
+            )
+            .unwrap();
+        }
+
+        assert!(EngineDb::open(&path_string).is_err());
+
+        let conn = Connection::open(&path_string).unwrap();
+        let version: i32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 7);
+        for table in [
+            "books",
+            "book_sources",
+            "chapters",
+            "replace_rules",
+            "legacy_room_imports",
+            "reading_records",
+        ] {
+            let exists: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                    [table],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(exists, 0, "table {table} must be rolled back");
+        }
+    }
+
+    #[test]
+    fn init_is_idempotent_for_same_directory_and_rejects_switching_directory() {
+        let failed_directory = test_directory("init-failure");
+        let failed_path = failed_directory.join("legado.db");
+        let failed_path_string = failed_path.to_string_lossy().into_owned();
+        let conn = Connection::open(&failed_path_string).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE notes (id TEXT PRIMARY KEY);
+             PRAGMA user_version = 7;",
+        )
+        .unwrap();
+        drop(conn);
+        assert!(init(&failed_directory.to_string_lossy()).is_err());
+        assert!(DB.get().is_none(), "失败初始化不得发布全局实例");
+
+        let first_directory = test_directory("init-first");
+        let first_path = first_directory.to_string_lossy().into_owned();
+        let handles = (0..4)
+            .map(|_| {
+                let path = first_path.clone();
+                std::thread::spawn(move || init(&path))
+            })
+            .collect::<Vec<_>>();
+        for handle in handles {
+            handle
+                .join()
+                .expect("concurrent initialization thread must not panic")
+                .expect("concurrent initialization of one directory must be idempotent");
+        }
+
+        let published_path = DB.get().unwrap().lock().unwrap().path.clone();
+        assert_eq!(
+            published_path,
+            fs::canonicalize(first_directory.join("legado.db")).unwrap()
+        );
+
+        init(&first_path).unwrap();
+
+        let second_directory = test_directory("init-second");
+        let second_path = second_directory.to_string_lossy().into_owned();
+        assert!(matches!(
+            init(&second_path),
+            Err(DbError::Message(message)) if message.contains("禁止切换数据目录")
+        ));
+        assert_eq!(
+            DB.get().unwrap().lock().unwrap().path,
+            published_path,
+            "a rejected path must not replace the published database"
+        );
+    }
 
     #[test]
     fn in_memory_db_schema_and_book_roundtrip() {

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 import '../bridge/legado_engine_bridge.dart';
 import '../services/app_paths.dart';
@@ -33,8 +34,10 @@ class LegadoDbBridge {
 
   static Future<void> _initInternal({String? dbPathOverride}) async {
     try {
-      final path = dbPathOverride ?? await AppPaths.dbPath();
-      rust_db.dbInit(path: path);
+      final appDir = dbPathOverride == null
+          ? (await AppPaths.dataRoot()).path
+          : p.dirname(dbPathOverride);
+      rust_db.init(appDir: appDir);
       _ready = true;
       _initError = null;
       _state = LegadoDbInitState.ready;

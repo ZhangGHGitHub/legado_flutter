@@ -11,7 +11,7 @@
 >
 > 当前暂停项（2026-07-26）：Web 平台/WASM/PWA 构建、Web 平台适配和相关验收；TTS 真实 Android 引擎验收。除这两类门禁外，Android/Windows 重构继续按固定顺序推进。
 
-> **统一设计约束：** [LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md](./LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md) 已于 2026-08-01 固化为目标架构和后续迁移的硬约束。当前 Provider、手写模型、字符串错误、分离初始化和 QuickJS 超时缺口均视为待迁移项；在对应门禁通过前，不得宣称严格设计一致。
+> **统一设计约束：** [LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md](./LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md) 已于 2026-08-01 固化为目标架构和后续迁移的硬约束。当前 Provider、手写模型、字符串错误和宿主级 QuickJS 超时缺口均视为待迁移项；在对应门禁通过前，不得宣称严格设计一致。
 
 ### 0.0.1 设计稿收敛顺序
 
@@ -35,6 +35,8 @@
 2026-08-01 网络错误边界批次：将 `fetch_public_text`、应用 HTTP 文本请求和二进制请求的公开 FFI 错误统一为 `AppError`，保留输入校验、文本解码、SSRF、响应大小、请求方法/头体和非 2xx 响应行为；新增网络错误分类回归并重新生成 FRB。Rust 网络定向 `9` 项、Rust 全量 `199` 项、Windows FRB HTTP 集成 `2` 项、Flutter 串行全量 `894` 项通过，`3` 项既有条件跳过；`flutter analyze --no-pub` 已通过。架构扫描和 `git diff --check` 待本批最后执行。其余网络配置/Cookie、裸 HTTP、RSS、JS、笔记和书签入口仍未迁移，不宣称统一错误边界已完成。
 
 2026-08-01 网络错误边界扩展批次：将裸 `http_fetch`、网络配置、Cookie 和 HTTP trace 入口统一为 Rust `AppError`，保持限流、请求参数、Cookie 域规则、trace 行为和错误原文；新增网络/SSRF/字符解码/书源 URL 分类断言。Rust API 定向 `57` 项、Rust 全量 `202` 项、Windows FRB HTTP 集成 `2/2`、Flutter 串行全量 `894` 项通过，`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 均通过。QuickJS 超时、统一初始化、编码事实源和书架生产 Riverpod 切换仍按审查方案排队。
+
+2026-08-01 QuickJS/数据库初始化追溯补充：`rust/legado_engine/src/rule/js_engine.rs` 统一脚本入口使用 QuickJS Runtime，增加 5 秒纯 QuickJS 执行 interrupt 和 `script/jsLib` 单项 256 KiB 输入上限；定向测试 `29/29` 通过。该 interrupt 只覆盖纯 QuickJS 执行；`java.ajax`、`getStrResponse` 和 WebView 宿主阻塞不在本批保证范围内，不据此宣称完整宿主端到端超时门禁已完成。`rust/legado_engine/src/db/mod.rs` 与 `src/api/db.rs` 增加 `init(app_dir)`：固定使用 `app_dir/legado.db`，空路径/文件路径拒绝，同目录幂等、异目录拒绝，schema 初始化在单事务中执行且失败不发布；初始化锁覆盖首次并发调用；数据库定向测试 `19/19` 通过。FRB 绑定已重新生成，`LegadoDbBridge` 已从旧文件路径入口切换为应用数据目录入口；release DLL 重建后备份服务定向测试 `10/10` 通过。`cargo test -p legado_engine` 为 `208` 项通过，Flutter 串行全量为 `894` 项通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构边界扫描、`cargo fmt -p legado_engine` 和 `git diff --check` 均通过。本条仅记录当前代码与证据，不新增或扩展 R1-12、R2、R6 阶段退出声明。
 
 ---
 

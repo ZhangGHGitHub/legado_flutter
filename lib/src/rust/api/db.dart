@@ -9,6 +9,10 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `map_database_error`
 
+/// 初始化应用数据目录下固定的 `legado.db`。
+void init({required String appDir}) =>
+    LegadoEngine.instance.api.crateApiDbInit(appDir: appDir);
+
 /// 初始化数据库（与 Flutter `legado.db` 同路径）
 void dbInit({required String path}) =>
     LegadoEngine.instance.api.crateApiDbDbInit(path: path);

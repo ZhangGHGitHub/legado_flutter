@@ -3,9 +3,12 @@ use rquickjs::{
     Array, CatchResultExt, CaughtError, Context, Ctx, Exception, Function, Runtime, Value,
 };
 use std::cell::RefCell;
+use std::time::{Duration, Instant};
 
 const STDLIB: &str = include_str!("js_assets/stdlib.js");
 const JSOUP: &str = include_str!("js_assets/jsoup.js");
+const JS_EXECUTION_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_JS_INPUT_BYTES: usize = 256 * 1024;
 
 thread_local! {
     /// 当前 JS 执行的 `baseUrl`，供 `java.ajax` 作 Referer
@@ -46,6 +49,12 @@ fn format_caught_err(prefix: &str, err: CaughtError<'_>) -> String {
         CaughtError::Exception(ex) => {
             let msg = ex.message().unwrap_or_default();
             let stack = ex.stack().unwrap_or_default();
+            if msg.eq_ignore_ascii_case("interrupted") {
+                return format!(
+                    "{prefix}: JS 执行超时（超过 {} 秒）",
+                    JS_EXECUTION_TIMEOUT.as_secs()
+                );
+            }
             if !msg.is_empty() && !stack.is_empty() {
                 format!("{prefix}: {msg}\n{stack}")
             } else if !msg.is_empty() {
@@ -57,6 +66,28 @@ fn format_caught_err(prefix: &str, err: CaughtError<'_>) -> String {
         CaughtError::Value(v) => format!("{prefix}: {v:?}"),
         CaughtError::Error(e) => format!("{prefix}: {e}"),
     }
+}
+
+fn with_js_context<T>(
+    script: &str,
+    js_lib: &str,
+    operation: impl for<'js> FnOnce(Ctx<'js>) -> Result<T, String>,
+) -> Result<T, String> {
+    for (label, value) in [("脚本", script), ("jsLib", js_lib)] {
+        if value.len() > MAX_JS_INPUT_BYTES {
+            return Err(format!(
+                "JS 执行失败: {label}输入超过 {} 字节上限（实际 {} 字节）",
+                MAX_JS_INPUT_BYTES,
+                value.len()
+            ));
+        }
+    }
+
+    let rt = Runtime::new().map_err(|e| format!("JS Runtime 失败: {e}"))?;
+    let deadline = Instant::now() + JS_EXECUTION_TIMEOUT;
+    rt.set_interrupt_handler(Some(Box::new(move || Instant::now() >= deadline)));
+    let ctx = Context::full(&rt).map_err(|e| format!("JS Context 失败: {e}"))?;
+    ctx.with(operation)
 }
 
 fn register_host_apis(ctx: &Ctx<'_>) -> Result<(), String> {
@@ -296,11 +327,9 @@ pub fn reset_cache() -> Result<(), String> {
 
 /// 执行裸 JS 脚本（搜索 @js: / URL 模板用）
 pub fn run_eval_script(script: &str, js_lib: &str, base_url: &str) -> Result<String, String> {
-    let rt = Runtime::new().map_err(|e| format!("JS Runtime 失败: {e}"))?;
-    let ctx = Context::full(&rt).map_err(|e| format!("JS Context 失败: {e}"))?;
-    ctx.with(|ctx| {
+    let script = normalize_rhino_with(script);
+    with_js_context(script.as_ref(), js_lib, |ctx| {
         init_context(&ctx, js_lib, base_url)?;
-        let script = normalize_rhino_with(script);
         let v: Value = ctx
             .eval(script.as_bytes())
             .catch(&ctx)
@@ -403,11 +432,9 @@ fn run_with_result_opts_internal(
     book_url: Option<&str>,
     as_string: bool,
 ) -> Result<String, String> {
-    let rt = Runtime::new().map_err(|e| format!("JS Runtime 失败: {e}"))?;
-    let ctx = Context::full(&rt).map_err(|e| format!("JS Context 失败: {e}"))?;
-    ctx.with(|ctx| {
+    let script = normalize_rhino_with(script);
+    with_js_context(script.as_ref(), js_lib, |ctx| {
         init_context(&ctx, js_lib, base_url)?;
-        let script = normalize_rhino_with(script);
         let escaped = serde_json::to_string(result).unwrap_or_else(|_| "\"\"".to_string());
         let book_url = book_url.unwrap_or(base_url);
         let book_inject = format!(
@@ -978,9 +1005,7 @@ fn run_login_check_script(
         });
     });
 
-    let rt = Runtime::new().map_err(|e| format!("JS Runtime 失败: {e}"))?;
-    let ctx = Context::full(&rt).map_err(|e| format!("JS Context 失败: {e}"))?;
-    let result = ctx.with(|ctx| {
+    let result = with_js_context(script, js_lib, |ctx| {
         init_context(&ctx, js_lib, request_url)?;
         AJAX_SOURCE_JSON.with(|r| *r.borrow_mut() = source_json.to_string());
         AJAX_LOGIN_HEADER.with(|r| *r.borrow_mut() = login_header.clone());
@@ -1234,21 +1259,7 @@ pub fn run_pre_update_js(source: &crate::model::book_source::BookSource, book_ur
     } else {
         book_url
     };
-    let rt = match Runtime::new() {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("[preUpdateJs] Runtime 失败: {e}");
-            return;
-        }
-    };
-    let ctx = match Context::full(&rt) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("[preUpdateJs] Context 失败: {e}");
-            return;
-        }
-    };
-    let result = ctx.with(|ctx| {
+    let result = with_js_context(script, &source.js_lib, |ctx| {
         init_context(&ctx, &source.js_lib, base)?;
         AJAX_SOURCE_JSON.with(|r| *r.borrow_mut() = source.raw_json.clone());
         let book_inject = format!(
@@ -1518,8 +1529,35 @@ mod tests {
 
     #[test]
     fn run_simple_js_transform() {
-        let out = run_with_result("result + '!'", "hello", "", "").unwrap();
+        let out = run_with_result("result + suffix", "hello", "var suffix = '!'", "").unwrap();
         assert_eq!(out, "hello!");
+    }
+
+    #[test]
+    fn quickjs_interrupts_infinite_loop_with_classified_error() {
+        let started = Instant::now();
+        let err = run_eval_script("while (true) {}", "", "").expect_err("无限循环必须被中断");
+        assert!(err.contains("JS 执行失败"), "错误应保留 JS 分类前缀: {err}");
+        assert!(
+            err.contains("超时") || err.contains("interrupted"),
+            "错误应明确表示 QuickJS 被中断: {err}"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "中断不应明显超过 5 秒预算: {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn quickjs_rejects_script_input_over_limit() {
+        let script = "x".repeat(MAX_JS_INPUT_BYTES + 1);
+        let err = run_eval_script(&script, "", "").expect_err("超大脚本必须被拒绝");
+        assert!(err.contains("JS 执行失败"), "错误应保留 JS 分类前缀: {err}");
+        assert!(
+            err.contains("脚本输入超过"),
+            "错误应说明脚本大小门禁: {err}"
+        );
     }
 
     #[test]
