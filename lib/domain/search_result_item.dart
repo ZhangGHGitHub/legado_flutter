@@ -1,20 +1,24 @@
-/// Search result model shared by the Flutter contract and Rust adapter.
-class SearchResultItem {
-  const SearchResultItem({
-    required this.name,
-    required this.author,
-    required this.bookUrl,
-    this.coverUrl = '',
-    this.kind = '',
-    this.note = '',
-  });
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-  final String name;
-  final String author;
-  final String bookUrl;
-  final String coverUrl;
-  final String kind;
-  final String note;
+part 'search_result_item.freezed.dart';
+part 'search_result_item.g.dart';
+
+/// Search result model shared by the Flutter contract and Rust adapter.
+@freezed
+sealed class SearchResultItem with _$SearchResultItem {
+  const factory SearchResultItem({
+    required String name,
+    required String author,
+    required String bookUrl,
+    @Default('') String coverUrl,
+    @Default('') String kind,
+    @Default('') String note,
+  }) = _SearchResultItem;
+
+  const SearchResultItem._();
+
+  factory SearchResultItem.fromJson(Map<String, dynamic> json) =>
+      _$SearchResultItemFromJson(json);
 
   factory SearchResultItem.fromMap(Map<String, String> map) {
     return SearchResultItem(

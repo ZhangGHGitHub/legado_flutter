@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/模型生成：将 `SearchResultItem` 迁移为 `freezed` + `json_serializable` 模型，保留 Rust 搜索字段、Map 映射和现有空值语义；显式加入 `json_annotation` 运行时依赖。验证：生成器成功，全仓 analyze 无问题，Flutter 全量 `876` 通过、`3` 项既有条件跳过。
 - 架构/统一错误边界：新增 Rust `AppError` 枚举并将 `search` FFI API 迁移为结构化错误，重新生成 FRB/Dart `freezed` 错误类型；补齐 `freezed`、`build_runner` 和 `json_serializable` 生成链。验证：Rust `cargo test -p legado_engine` `186` 通过，Flutter 全量 `876` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构扫描和 `git diff --check` 通过。其它 FFI API 的字符串错误仍按批次迁移。
 - 设计治理：完成 Phase 0 第一批资产，新增书架/搜索 `api_contract.md`、原 Android 模块迁移映射和统一设计差距报告；下一步先实现 MockCoreApi/RealCoreApi 契约测试，再迁移生产调用者。未修改正文、目录、分页、章节身份、UTF-16 阅读位置或 `legado-main/`。
 - 设计治理：将《Legado Flutter + Rust 三端通用重构设计》固化为 `docs/LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md`，补充文档索引和主计划中的严格收敛顺序。后续以该设计稿约束 Riverpod/Notifier、freezed 镜像模型、`CoreApi` 契约、统一 `AppError`、QuickJS 5 秒超时、编码探测和 CI；当前缺口保持显式登记，不宣称已全部符合。
