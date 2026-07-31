@@ -65,7 +65,7 @@ async fn empty_content_returns_err_not_placeholder() {
     assert!(result.is_err(), "expected Err, got {result:?}");
     let err = result.err().unwrap();
     assert!(
-        !err.contains("（此章节暂无内容）"),
+        !err.to_string().contains("（此章节暂无内容）"),
         "must not return silent placeholder as success: {err}"
     );
 }

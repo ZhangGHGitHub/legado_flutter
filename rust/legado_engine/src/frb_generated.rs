@@ -1202,7 +1202,7 @@ fn wire__crate__api__explore_impl(
             let api_page = <i32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok =
                             crate::api::explore(api_source_json, api_explore_url, api_page).await?;
@@ -1504,7 +1504,7 @@ fn wire__crate__api__get_book_info_impl(
             let api_book_url = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok =
                             crate::api::get_book_info(api_source_json, api_book_url).await?;
@@ -1644,7 +1644,7 @@ fn wire__crate__api__get_content_impl(
             let api_chapter_url = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok =
                             crate::api::get_content(api_source_json, api_chapter_url).await?;
@@ -1683,7 +1683,7 @@ fn wire__crate__api__get_content_with_next_chapter_impl(
             let api_next_chapter_url = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok = crate::api::get_content_with_next_chapter(
                             api_source_json,
@@ -1900,7 +1900,7 @@ fn wire__crate__api__get_toc_impl(
             let api_book_url = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok = crate::api::get_toc(api_source_json, api_book_url).await?;
                         Ok(output_ok)

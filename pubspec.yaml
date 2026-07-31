@@ -13,6 +13,7 @@ dependencies:
 
   # ── 状态管理 ──
   provider: ^6.1.2
+  flutter_riverpod: ^2.6.1
 
   # ── 本地数据库 ──
   sqlite3: 2.4.6

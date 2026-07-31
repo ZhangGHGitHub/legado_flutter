@@ -263,26 +263,37 @@ pub async fn explore(
     source_json: String,
     explore_url: String,
     page: i32,
-) -> Result<Vec<SearchItem>, String> {
-    explore::explore(&source_json, &explore_url, page).await
+) -> Result<Vec<SearchItem>, AppError> {
+    explore::explore(&source_json, &explore_url, page)
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// 获取书籍详情
 #[frb]
-pub async fn get_book_info(source_json: String, book_url: String) -> Result<BookInfoItem, String> {
-    book_info::get_book_info(&source_json, &book_url).await
+pub async fn get_book_info(
+    source_json: String,
+    book_url: String,
+) -> Result<BookInfoItem, AppError> {
+    book_info::get_book_info(&source_json, &book_url)
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// 获取目录
 #[frb]
-pub async fn get_toc(source_json: String, book_url: String) -> Result<Vec<ChapterItem>, String> {
-    toc::get_toc(&source_json, &book_url).await
+pub async fn get_toc(source_json: String, book_url: String) -> Result<Vec<ChapterItem>, AppError> {
+    toc::get_toc(&source_json, &book_url)
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// 获取章节正文
 #[frb]
-pub async fn get_content(source_json: String, chapter_url: String) -> Result<String, String> {
-    content::get_content(&source_json, &chapter_url).await
+pub async fn get_content(source_json: String, chapter_url: String) -> Result<String, AppError> {
+    content::get_content(&source_json, &chapter_url)
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// 获取章节正文，并在正文下一页指向下一章时停止。
@@ -291,9 +302,10 @@ pub async fn get_content_with_next_chapter(
     source_json: String,
     chapter_url: String,
     next_chapter_url: Option<String>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     content::get_content_with_next_chapter(&source_json, &chapter_url, next_chapter_url.as_deref())
         .await
+        .map_err(AppError::from_legacy)
 }
 
 /// 书源校验（搜索 / 发现 / 目录 / 正文）

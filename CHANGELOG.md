@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/并行推进：主线将 `explore`、书籍详情、目录、正文和下一章正文 FFI 入口迁移到 Rust `AppError`，同步更新 FRB 生成绑定和既有错误断言；子线新增 `flutter_riverpod` CoreApi Notifier/Provider 样板及 3 项测试，另一子线新增 Rust/Flutter/架构边界 CI。验证：Rust `186` 通过，Flutter 全量 `879` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构扫描和 `git diff --check` 通过。
 - 架构/模型生成：将 `SearchResultItem` 迁移为 `freezed` + `json_serializable` 模型，保留 Rust 搜索字段、Map 映射和现有空值语义；显式加入 `json_annotation` 运行时依赖。验证：生成器成功，全仓 analyze 无问题，Flutter 全量 `876` 通过、`3` 项既有条件跳过。
 - 架构/统一错误边界：新增 Rust `AppError` 枚举并将 `search` FFI API 迁移为结构化错误，重新生成 FRB/Dart `freezed` 错误类型；补齐 `freezed`、`build_runner` 和 `json_serializable` 生成链。验证：Rust `cargo test -p legado_engine` `186` 通过，Flutter 全量 `876` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构扫描和 `git diff --check` 通过。其它 FFI API 的字符串错误仍按批次迁移。
 - 设计治理：完成 Phase 0 第一批资产，新增书架/搜索 `api_contract.md`、原 Android 模块迁移映射和统一设计差距报告；下一步先实现 MockCoreApi/RealCoreApi 契约测试，再迁移生产调用者。未修改正文、目录、分页、章节身份、UTF-16 阅读位置或 `legado-main/`。

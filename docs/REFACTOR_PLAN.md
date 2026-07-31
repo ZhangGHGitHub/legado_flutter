@@ -28,6 +28,8 @@
 
 数据库 Room v99 -> Rust v17、正文/目录/分页/章节身份和 UTF-16 阅读位置门禁保持现有优先级，不因上述架构收敛改变行为。
 
+2026-08-01 设计收敛批次：已建立 `CoreApi/MockCoreApi/RealCoreApi` 首批契约，`search/explore/get_book_info/get_toc/get_content` 及下一章正文入口已迁移到 Rust `AppError`；`SearchResultItem` 已完成 freezed 镜像样板；新增 Riverpod CoreApi Notifier 样板和 Rust/Flutter/架构检查 CI。验证为 Rust `186`、Flutter `879` 通过，`3` 项既有条件跳过；业务页面仍未整体切换 Riverpod，剩余 FFI 错误边界继续按批次迁移。
+
 ---
 
 ## 0.0 R0 重基线附录（2026-07-27）
