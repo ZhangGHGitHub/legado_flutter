@@ -303,6 +303,8 @@ Day 2  PR/Issue 模板
 
 2026-07-31 当前 R6 记录：C1/C2 两条不重叠 agent 线完成书架样式分组/本地导入和 WebDAV 配置，主线完成两个 Provider 接入及测试宿主补齐。定向组合回归 `34/34`，`test/widget_test.dart` `1/1`，MainShell/书架展示宿主回归 `4/4`；Flutter 串行全量 `788` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描保持 `46` 条既有 Feature→service backlog。首轮全量发现 4 个测试宿主缺少 `BookGroupStorePort`，补齐 fake 后最终门禁通过，未削弱断言。Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。详见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
 
+2026-07-31 当前 R6 记录：D1/D2 两条不重叠 agent 线完成 Obsidian 导出和 Reader AI Chat，主线完成 Obsidian port 的组合根接入。定向 `8/8`；Flutter 串行全量 `796` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `46` 降至 `41` 条既有 Feature→service backlog。Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。详见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)

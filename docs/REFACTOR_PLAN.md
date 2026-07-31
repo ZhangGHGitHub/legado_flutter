@@ -242,6 +242,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 本批继续收口书架样式的分组/本地导入和“我的”页 WebDAV 配置：两种书架样式改用 `BookGroupStorePort`、`BookshelfLocalBookPort`；`WebDavConfigDialog` 改用 `WebDavConfigDialogPort`，复用已提交的 `WebDavPrefsPort` 读取契约。组合根注册本地书导入 adapter 和 WebDAV 配置 adapter；测试宿主补齐新端口 fake。保留分组同步、本地导入、WebDAV 键名/默认值、凭证校验、连接测试、保存和错误提示语义。定向组合回归 `34/34`，`widget_test.dart` `1/1`，MainShell/书架展示宿主回归 `4/4`；Flutter 串行全量 `788` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描保持 `46` 条既有 Feature→service backlog。首轮全量发现的 4 个测试宿主 Provider 缺失已补齐，未削弱断言；Rust 未改动，本批不重复运行 Rust 测试；后续按剩余 46 条 Feature 依赖继续单边界推进。
 
+本批继续收口 Obsidian 导出和 Reader AI Chat：`ObsidianExportDialog` 改用 `ObsidianExportPort`，组合根复用已有 `NotePort` 与 `ApplicationHttpRequestPort`；`AiChatPage` 改用已有 `AiConfigPrefsPort`，与配置/记忆弹窗共享同一偏好端口。保留 Obsidian 配置键、Markdown 导出、本地文件/REST API、连接测试、AI 配置默认值、请求前置校验、消息和错误提示语义。定向 `8/8`；Flutter 串行全量 `796` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `46` 降至 `41` 条既有 Feature→service backlog。Rust 未改动，本批不重复运行 Rust 测试；后续按剩余 41 条 Feature 依赖继续单边界推进。
+
 ### 0.4 重构工作规则
 
 1. 一次只迁移一个边界、一个用例或一条数据链路；完成定向测试并汇报后再进入下一项。

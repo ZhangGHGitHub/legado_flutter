@@ -1,22 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../services/ai_config_prefs.dart';
+import '../../application/ai/ai_config_prefs_port.dart';
 import '../../widgets/empty_state.dart';
 import '../ai/ai_config_dialog.dart';
 
 /// AI 助手占位 — 对齐 AiChatActivity（配置已落地，对话待接）
 class AiChatPage extends StatefulWidget {
-  const AiChatPage({super.key, this.isStandalone = true});
+  const AiChatPage({super.key, this.isStandalone = true, this.prefsPort});
 
   /// true=从我的页进入；false=从阅读器进入
   final bool isStandalone;
+  final AiConfigPrefsPort? prefsPort;
 
   @override
   State<AiChatPage> createState() => _AiChatPageState();
 }
 
 class _AiChatPageState extends State<AiChatPage> {
-  AiConfigPrefs? _prefs;
+  AiConfigSettings? _prefs;
+
+  AiConfigPrefsPort get _prefsPort =>
+      widget.prefsPort ?? context.read<AiConfigPrefsPort>();
 
   @override
   void initState() {
@@ -25,12 +30,12 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   Future<void> _reload() async {
-    final p = await AiConfigPrefs.load();
+    final p = await _prefsPort.load();
     if (mounted) setState(() => _prefs = p);
   }
 
   Future<void> _openConfig() async {
-    await AiConfigDialog.show(context);
+    await AiConfigDialog.show(context, prefsPort: _prefsPort);
     await _reload();
   }
 
@@ -53,7 +58,7 @@ class _AiChatPageState extends State<AiChatPage> {
             tooltip: '对话记忆',
             icon: const Icon(Icons.history),
             onPressed: () async {
-              await AiMemoryDialog.show(context);
+              await AiMemoryDialog.show(context, prefsPort: _prefsPort);
               await _reload();
             },
           ),

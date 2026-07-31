@@ -17,6 +17,7 @@ import '../application/bookshelf/bookshelf_local_book_port.dart';
 import '../application/mine/my_page_port.dart';
 import '../application/mine/webdav_config_dialog_port.dart';
 import '../application/main/main_shell_startup_port.dart';
+import '../application/obsidian/obsidian_export_port.dart';
 import '../application/bookshelf/remote_archive_import_port.dart';
 import '../application/bookshelf/remote_book_sort_port.dart';
 import '../application/cache/book_cache_export_port.dart';
@@ -132,6 +133,7 @@ import '../infrastructure/platform/platform_clipboard.dart';
 import '../infrastructure/main/main_shell_startup_port_adapter.dart';
 import '../infrastructure/mine/my_page_port_adapter.dart';
 import '../infrastructure/mine/webdav_config_dialog_port_adapter.dart';
+import '../infrastructure/obsidian/obsidian_export_port_adapter.dart';
 import '../infrastructure/file_system/app_paths_port_adapter.dart';
 import '../infrastructure/reader/read_style_zip_port_adapter.dart';
 import '../infrastructure/source_market/builtin_source_market_port.dart';
@@ -478,6 +480,12 @@ abstract final class AppCompositionRoot {
           ),
           Provider<ApplicationBinaryHttpRequestPort>(
             create: (_) => binaryHttpPort,
+          ),
+          Provider<ObsidianExportPort>(
+            create: (context) => ObsidianExportPortAdapter(
+              notePort: context.read<NotePort>(),
+              httpPort: context.read<ApplicationHttpRequestPort>(),
+            ),
           ),
           Provider<BookSourceDebugPort>(
             create: (_) => FrbBookSourceDebugPort(),

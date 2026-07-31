@@ -3030,3 +3030,17 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 首轮全量因 4 个测试宿主缺少 `BookGroupStorePort` 而失败，补齐 fake 后最终全量通过，未放宽断言。Rust 未改动，本批不重复运行 Rust 测试。
 
 边界结论：本批完成书架样式分组/本地导入和 WebDAV 配置的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `46` 条 Feature 依赖继续按单边界推进。
+
+## 156. 2026-07-31：R6 Obsidian 与 Reader AI Chat 端口边界
+
+- `ObsidianExportDialog` 移除四个 Obsidian/笔记 service 直接依赖，改用 `ObsidianExportPort`；adapter 组合既有 `NotePort` 和 `ApplicationHttpRequestPort`，保留配置、Markdown、本地文件、REST API、连接测试和错误行为。
+- `AiChatPage` 移除 `AiConfigPrefs` 直接依赖，复用已有 `AiConfigPrefsPort`，与 AI 配置/记忆弹窗共享偏好端口；保留默认值、请求前置校验、消息状态和提示语义。
+- 组合根注册 `ObsidianExportPort`；未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则；剩余 Feature→service 依赖未加入白名单。
+
+验证结果：
+
+- D1/D2 定向 `8/8`；Flutter 串行全量 `flutter test --no-pub --concurrency=1 --reporter compact`：`796` 通过、`3` 项既有条件跳过。
+- `dart format` 通过；`flutter analyze --no-pub`：`No issues found`；架构扫描由 `46` 降至 `41` 条既有 Feature→service backlog；`git diff --check` 在文档更新后复核。
+- Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。
+
+边界结论：本批完成 Obsidian 导出和 Reader AI Chat 的 application/infrastructure 调用者迁移，保留旧 service 作为兼容实现入口，剩余 `41` 条 Feature 依赖继续按单边界推进。
