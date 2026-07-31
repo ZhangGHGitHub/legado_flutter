@@ -1,5 +1,14 @@
 # Legado Flutter 架构重构基线
 
+## 174. 2026-08-01：`eval_js` 公开 FFI 错误边界
+
+- `eval_js` 从 `Result<String, String>` 改为 `Result<String, AppError>`，脚本异常映射为 `AppError::JsExecution`；成功结果、错误原文、纯 QuickJS 5 秒 interrupt 和 256 KiB 输入上限保持不变。
+- FRB 生成绑定已同步，Rust 增加成功/错误契约测试，Dart 增加结构化错误变体测试；没有向页面或领域层扩散生成类型。
+
+验证记录：Rust `eval_js` 定向 `2/2`、Dart FRB 定向 `2/2`、Rust 全量 `226`、Flutter 全量 `899` 通过，`3` 项既有 Flutter 条件跳过；release 构建、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。
+
+边界结论：本批不覆盖宿主级 QuickJS 阻塞/取消、浏览器宿主、WebView 生命周期或其它公开 `Result<T, String>` 入口，不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
 ## 173. 2026-08-01：公开 FFI 错误边界扩展：本地 EPUB/远程 ZIP 与 RSS
 
 - Rust 公开 `parse_epub`、`parse_remote_archive_book_files` 失败结果统一为 `AppError::Parse`；`get_rss_articles`、`get_rss_content` 统一为 `AppError::Network` 或 `AppError::Parse`。具体解析和分类仍归 Rust engine，FRB 生成文件只作为绑定产物，不向页面扩散。

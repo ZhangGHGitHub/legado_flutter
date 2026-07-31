@@ -1168,7 +1168,7 @@ fn wire__crate__api__eval_js_impl(
             let api_js_lib = <String>::sse_decode(&mut deserializer);
             let api_base_url = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::eval_js(api_script, api_js_lib, api_base_url)?;
                 Ok(output_ok)
             })())

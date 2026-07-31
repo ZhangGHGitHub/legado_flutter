@@ -125,3 +125,11 @@ abstract interface class CoreApi {
 | `get_rss_content` | `String` | `Network`、`Parse` |
 
 EPUB/ZIP 保留解析、大小限制、路径安全、文件筛选和成功结果；RSS 保留请求参数、排序、分页、文章字段和正文解析。所有分类保留 Rust 原始错误文本；Dart FRB 适配层不使用 `AppError.toString()` 作为用户可见消息。此节不表示 RSS CoreApi、浏览器宿主或其它公开 FFI 的错误边界已经全部完成。
+
+## JavaScript 执行错误边界（2026-08-01）
+
+| Rust 入口 | 成功输出 | 错误分类 |
+|---|---|---|
+| `eval_js` | `String` | `JsExecution` |
+
+`eval_js` 保留脚本成功结果、错误原文、纯 QuickJS 5 秒执行中断和 `script/jsLib` 单项 256 KiB 输入上限。该契约不覆盖宿主 `java.ajax`、`getStrResponse`、WebView 阻塞、取消或其它公开字符串错误入口。

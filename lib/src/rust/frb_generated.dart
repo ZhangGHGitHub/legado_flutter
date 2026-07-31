@@ -1490,7 +1490,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiEvalJsConstMeta,
         argValues: [script, jsLib, baseUrl],

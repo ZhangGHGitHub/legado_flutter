@@ -548,8 +548,9 @@ pub fn list_bookmarks(book_id: String) -> Result<Vec<BookmarkDto>, AppError> {
 
 /// 执行裸 JS（登录 UI / loginUrl / 按钮脚本）
 #[frb(sync)]
-pub fn eval_js(script: String, js_lib: String, base_url: String) -> Result<String, String> {
+pub fn eval_js(script: String, js_lib: String, base_url: String) -> Result<String, AppError> {
     crate::rule::js_engine::run_eval_script(&script, &js_lib, &base_url)
+        .map_err(AppError::JsExecution)
 }
 
 /// 预热 Rust 登录头缓存（Dart SharedPreferences → 引擎）
@@ -713,5 +714,34 @@ mod http_fetch_tests {
             let error = map_http_fetch_error(message.to_string());
             assert!(matches!(error, AppError::Parse(ref value) if value == message));
         }
+    }
+}
+
+#[cfg(test)]
+mod eval_js_tests {
+    use super::{eval_js, AppError};
+
+    #[test]
+    fn eval_js_preserves_successful_result() {
+        let result = eval_js("'结果:' + (1 + 1)".into(), String::new(), String::new())
+            .expect("有效脚本必须返回结果");
+
+        assert_eq!(result, "结果:2");
+    }
+
+    #[test]
+    fn eval_js_maps_errors_to_js_execution_without_changing_text() {
+        let error = eval_js(
+            "throw new Error('原始 JS 错误')".into(),
+            String::new(),
+            String::new(),
+        )
+        .expect_err("脚本异常必须通过 AppError 返回");
+
+        assert!(matches!(
+            error,
+            AppError::JsExecution(ref message)
+                if message.contains("JS 执行失败") && message.contains("原始 JS 错误")
+        ));
     }
 }
