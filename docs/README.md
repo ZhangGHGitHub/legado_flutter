@@ -10,6 +10,7 @@
 | 了解项目怎么协作、提交流程 | **[DEVELOPMENT_PROCESS.md](./DEVELOPMENT_PROCESS.md)** |
 | 查看每次开发变更记录 | [CHANGELOG.md](../CHANGELOG.md) |
 | 查看项目重构主计划与阶段进度 | [REFACTOR_PLAN.md](./REFACTOR_PLAN.md) |
+| 查看统一目标架构与强制设计要求 | [LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md](./LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md) |
 | 查看重构前架构基线与依赖边界 | [REFACTOR_ARCHITECTURE_BASELINE.md](./REFACTOR_ARCHITECTURE_BASELINE.md) |
 | 查看 R0 架构残留、工件分类与边界检查 | [R0_REBASELINE.md](./R0_REBASELINE.md) |
 | 查看现有工作树的可追溯提交分组 | [R0_WORKTREE_GROUPS.md](./R0_WORKTREE_GROUPS.md) |
@@ -26,7 +27,8 @@
 
 ```
 战略层（做什么、做到哪了）
-  REFACTOR_PLAN.md          — 引擎 + 功能路线图
+ REFACTOR_PLAN.md          — 引擎 + 功能路线图
+  LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md — 统一目标架构与硬约束
   R0_REBASELINE.md          — 当前架构残留、迁移顺序与静态边界
   archive/UI_REPLICATION_PLAN.md — 历史 UI 功能库存，不是活跃重构主线
 

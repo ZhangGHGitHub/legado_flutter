@@ -6,10 +6,27 @@
 > **重构来源与基线：** [Jingshiro/legado](https://github.com/Jingshiro/legado)；UI 1:1 对齐和行为兼容是重构验收子目标，不是独立产品定位。
 > **本地原版基线：** 根目录 `legado-main/` 是只读的原版行为、数据结构、UI 和错误语义核对目录，不是本项目的主源码目录，也不参与 Flutter/Rust 构建。
 > 目标平台：Android / iOS / Windows / macOS / Linux / Web (WASM)  
-> 最后更新：2026-07-31
+> 最后更新：2026-08-01
 > 引擎版本：**v0.5.6** | Rust DB Schema：**v17** | 原版 Room：**v99** | FRB：**2.11.1**
 >
 > 当前暂停项（2026-07-26）：Web 平台/WASM/PWA 构建、Web 平台适配和相关验收；TTS 真实 Android 引擎验收。除这两类门禁外，Android/Windows 重构继续按固定顺序推进。
+
+> **统一设计约束：** [LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md](./LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md) 已于 2026-08-01 固化为目标架构和后续迁移的硬约束。当前 Provider、手写模型、字符串错误、分离初始化和 QuickJS 超时缺口均视为待迁移项；在对应门禁通过前，不得宣称严格设计一致。
+
+### 0.0.1 设计稿收敛顺序
+
+后续实现按以下顺序推进，每一项必须先补契约和测试，再迁移生产调用者；不得通过放宽断言或跳过测试关闭缺口：
+
+1. Phase 0：补齐原 Android 模块归属映射、Rust API 清单、Android 平台依赖清单和现状差距报告。
+2. Phase 1：建立 `api_contract.md`、`CoreApi`、`MockCoreApi`、`RealCoreApi`，先覆盖书架和搜索。
+3. Phase 2：统一 Rust FFI `AppError`、Dart 错误映射和 `init(app_dir)` 初始化契约。
+4. Phase 3：建立 Rust/Flutter 镜像模型，逐模块引入 `freezed`，保留兼容映射直到调用者完成迁移。
+5. Phase 4：按模块将 Provider/ChangeNotifier 迁移为 Riverpod Notifier，逐批保留行为回归。
+6. Phase 5：为 QuickJS 增加 5 秒执行中断、危险 API 门禁和超时 fixture。
+7. Phase 6：补充 `chardetng` 或等价编码探测、GBK/GB18030 对比 fixture 和统一 Rust 本地书籍解析链。
+8. Phase 7：补齐 Rust/Flutter/Android/Windows CI；其他平台按暂停条件单独验收，不伪造通过。
+
+数据库 Room v99 -> Rust v17、正文/目录/分页/章节身份和 UTF-16 阅读位置门禁保持现有优先级，不因上述架构收敛改变行为。
 
 ---
 
@@ -160,7 +177,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 退出条件：核心用户流程在目标平台构建并通过，UI 与原版对照测试通过，平台差异有明确适配记录。
 
-当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 至 P1-4 横切基础设施任务均已完成，应用用例依赖继续按 Feature 边界收口；本批 Flutter 全量 `732` 通过（`3` 项既有条件跳过）、Rust workspace 核心 `184/184`、analyze 均通过，架构扫描降至 `87` 条 Feature→service backlog。R6 后续继续处理剩余 Feature 依赖、受控 UI/目标平台和发布门禁；真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
+当前进度：R6 功能域目录迁移已完成 `main`、`bookshelf`、`reader`、`book`、`sources`、`rss`、`settings`、`my`、`search`、`cache`、`code_edit`、`explore`、`ai`、`obsidian` 和 `common`；旧 `lib/pages` 下仅保留书架兼容导出。P0-1 至 P1-4 横切基础设施任务均已完成，应用用例依赖继续按 Feature 边界收口；Batch 8 后 Flutter 串行全量 `869` 通过（`3` 项既有条件跳过），analyze、架构扫描和 diff 检查均通过。Batch 9 已完成 `<js>` 兼容证据审查，修复兼容脚本的假绿/离线参数问题，并将 Rust `@JS:`/`@Js:`/`@jS:` 路由及能力判定统一为大小写不敏感；最终 Rust `legado_engine` `186/186`、JS 脚本 Rust `18/18`、Flutter `4/4`、Flutter 全量 `869` 通过，架构扫描和 diff 检查通过。完整宿主 API、真实 FRB 执行链、在线书源和对象返回值语义仍登记为未关闭兼容性 backlog。R6 后续继续处理剩余 Feature 依赖、受控 UI/目标平台和发布门禁；真实 Android TTS、后台音频服务、Web/WASM/PWA、外部 AI 服务及正式/主流 WebDAV 验收继续按暂停/范围外条件处理。
 
 #### 横切基础设施：全局能力与启动可靠性（跨 R1-R6，新增）
 
@@ -268,6 +285,15 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 至 P1-4 现已通过；当前继续按 Feature 应用用例边界收口。架构扫描当前为 `28` 条既有 Feature→service backlog，不能当作例外或 R6 最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
 当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 至 P1-4 现已通过；当前继续按 Feature 应用用例边界收口。架构扫描当前为 `22` 条既有 Feature→service backlog，不能当作例外或 R6 最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
+本轮并行补充完成 Widget 边界收口：书架分组、书签/书票/笔记、源校验/字典/替换预览和底部导航均通过 application/infrastructure port 使用，组合根已接入 W1-W3 Provider；Widget/Feature 扩展扫描不再发现直接 service 依赖，四个 Provider 依赖保留为下一批 backlog。定向与 owner 组合回归通过，Flutter 串行全量 `829` 通过、`3` 项既有条件跳过，analyze、架构脚本和 diff 检查通过。`read_book_async_test.dart` 增加预加载完成等待以消除 Windows 临时目录 teardown 锁竞争，不改变断言或阅读行为。
+本轮继续完成四条 Provider 边界：`ReplaceProvider` 通过 `ReplacePresetPort` 加载四条内置规则，`BookProvider` 使用 application 章节进度迁移策略，`SourceProvider` 使用登录头/校验偏好 ports，`RssProvider` 使用 `RssSourceStorePort` 持久化源列表。组合根显式注入真实 adapter，Provider fallback 仅保留 application 空端口；定向 `42/42`，Flutter 串行全量 `838` 通过、`3` 项既有条件跳过，analyze、架构脚本和 diff 检查通过。扩展扫描仅剩 Provider 的其他 service 依赖，下一批继续按 W4 审查的高风险边界拆分。
+本轮 Batch 5 完成 `SourceProvider` 源分组目录/标签 application 边界，组合根注入真实 adapter；owner 定向 `13/13`，Flutter 串行全量 `842` 通过、`3` 项既有条件跳过，analyze、架构脚本和 diff 检查通过。并行只读审查已为 source validation store、BookProvider 聚合与批量进度同步锁定最小契约和兼容风险；扩展扫描剩余五处 Provider→service 依赖，下一批按无冲突写集逐项迁移。
+本轮 Batch 6 完成 validation store、批量 WebDAV 进度、本地 TXT/EPUB 导入和 SourceProvider 书源门面四条 application 边界；owner 定向分别为 `20/20`、`20/20`、`26/26`、`32/32`，Flutter 串行全量 `864` 通过、`3` 项既有条件跳过，analyze、架构脚本和 diff 检查通过。扩展扫描仅剩 `BookProvider -> BookSourceService`，下一批先按详情/搜索、目录、正文能力拆分契约，保留 ReadBook 配置和正文降级语义。
+本轮 Batch 7 完成 `BookProviderSourcePort` 门面收口，覆盖详情、搜索映射、目录、单章正文和分页正文；`BookProvider`、`AppBootstrap` 与组合根改为 application port，其他 `BookSourceService` 消费者保持不变。owner 定向 `41/41`，Flutter 串行全量 `866` 通过、`3` 项既有条件跳过，analyze、架构脚本和 diff 检查通过，Provider service 扫描为零。R6 Provider 边界 backlog 已完成，下一步按功能域剩余计划推进，不再重复扩大 Provider 写集。
+本轮 Batch 8 完成 MainShell 隐私同意持久化端口化：`PrivacyConsentPort` 复用 `SharedPreferencesRuntime`，保留 key、失败重试、post-frame 提示时机、拒绝退出、同意关闭和崩溃恢复顺序；owner 定向 `14/14`，Flutter 串行全量 `869` 通过、`3` 项既有条件跳过，analyze、架构脚本和 diff 检查通过。Feature/Widget/Provider 扩展扫描清零，下一步按剩余功能域和暂停门禁推进。
+本轮 Batch 9/10 完成 `<js>` 兼容性最小契约收口：Rust `BookSource`、Flutter `SourceLoginService` 和 `JsCompatAnalyzer` 对 `@js:`/`@JS:`/`@Js:`/`@jS:` 统一大小写不敏感，`<js>`/`<Js>` 标签入口和统计保持一致；测试脚本固定离线锁定参数，架构脚本兼容 Windows PowerShell 5。Batch 9 Rust `186/186`、JS 门禁 Rust `18/18`、Flutter `4/4`；Batch 10 owner 定向 `11/11`、Flutter 全量 `873` 通过、`3` 项既有条件跳过，analyze、架构脚本、Rust 格式和 diff 检查通过。完整宿主 API、执行超时/取消、真实 Dart→FRB→Rust 链路、在线书源和对象返回值语义仍是未关闭兼容性 backlog。
+本轮 Batch 11/12 收口 Rust 校验及主请求桥接的登录头/HTTP trace 生命周期：`validateSource` 和搜索、发现、详情、目录、正文均在 `finally` 中按“Rust 操作结束 → 同步登录头 → drain trace”收尾，保留返回值和原始异常；引擎定向与 source debug 集成通过，Flutter 全量 `873` 通过、`3` 项既有条件跳过，analyze、架构脚本和 diff 检查通过。调试搜索、调试目录和裸 HTTP 入口，以及登录头队列先 drain 后持久化的失败重试、空值删除和 Rust `loginCheckJs` 错误响应语义仍按后续独立批次处理。
+本轮 Batch 13 补齐 `debugSearch`、`debugToc`、`httpFetch` 的 bridge finally 收尾；调试请求按同步登录头后 drain trace，裸 HTTP 始终 drain trace且仅在有 source 时同步登录头。owner 定向 `4/4`、Flutter 全量 `873` 通过、`3` 项既有条件跳过，analyze、架构脚本和 diff 检查通过。真实登录头持久化链路、trace 错误路径 fixture、队列 ack/重试和空值删除仍不宣称完成。
 
 ### 0.6 版本控制与变更追溯状态（2026-07-26）
 

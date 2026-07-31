@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../domain/crash/crash_report.dart';
 import '../../application/main/main_shell_startup_port.dart';
+import '../../application/main/privacy_consent_port.dart';
 import '../../application/startup/startup_task_runner.dart';
 import '../../config/app_config.dart';
 import '../../domain/source_subscription/rule_sub.dart';
@@ -16,11 +17,8 @@ import '../bookshelf/bookshelf_page.dart';
 import '../explore/explore_tab_page.dart';
 import '../../features/my/my_page.dart';
 import '../../features/rss/rss_tab_page.dart';
-import '../../application/preferences/shared_preferences_runtime.dart';
 import '../sources/rule_sub_page.dart';
 import 'crash_recovery_prompt.dart';
-
-const _privacyAcceptedKey = 'legado_privacy_accepted';
 
 /// 主框架 — 对齐 Jingshiro [MainActivity](https://github.com/Jingshiro/legado/blob/main/app/src/main/java/io/legado/app/ui/main/MainActivity.kt)
 ///
@@ -49,6 +47,7 @@ class _MainShellState extends State<MainShell> {
   int _lastExploreTapMs = 0;
   DateTime? _lastBackPress;
   late final MainShellStartupPort _startupPort;
+  late final PrivacyConsentPort _privacyPort;
   MainShellBookshelfLayout? _bookshelfLayout;
 
   final _bookshelfScrollController = ScrollController();
@@ -61,6 +60,7 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     _startupPort = widget.startupPort ?? context.read<MainShellStartupPort>();
+    _privacyPort = context.read<PrivacyConsentPort>();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initProviders());
   }
 
@@ -140,8 +140,13 @@ class _MainShellState extends State<MainShell> {
   }
 
   Future<void> _maybeShowPrivacy() async {
-    final prefs = await SharedPreferencesRuntime.getOrNull();
-    if (prefs?.getBool(_privacyAcceptedKey) == true) return;
+    var accepted = false;
+    try {
+      accepted = await _privacyPort.isAccepted();
+    } catch (_) {
+      accepted = false;
+    }
+    if (accepted) return;
     if (!mounted) return;
 
     await showDialog<void>(
@@ -166,7 +171,9 @@ class _MainShellState extends State<MainShell> {
           ),
           FilledButton(
             onPressed: () async {
-              await prefs?.setBool(_privacyAcceptedKey, true);
+              try {
+                await _privacyPort.saveAccepted();
+              } catch (_) {}
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: const Text('同意并继续'),

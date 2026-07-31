@@ -1,6 +1,7 @@
+import '../../application/book/local_book_import_port.dart';
 import '../../application/bookshelf/bookshelf_local_book_port.dart';
 import '../../domain/book/book.dart';
-import '../../services/local_book_service.dart';
+import '../../services/local_book_service.dart' as legacy;
 
 /// 将现有 BookProvider 的本地导入回调接入书架应用端口。
 ///
@@ -15,7 +16,9 @@ final class BookshelfLocalBookPortAdapter implements BookshelfLocalBookPort {
   Future<Book?> importLocalBook() async {
     try {
       return await _import();
-    } on LocalBookImportException catch (error) {
+    } on LocalBookImportPortException catch (error) {
+      throw BookshelfLocalBookImportException(error.message);
+    } on legacy.LocalBookImportException catch (error) {
       throw BookshelfLocalBookImportException(error.message);
     }
   }

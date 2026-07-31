@@ -34,9 +34,10 @@ class JsCompatReport {
 abstract final class JsCompatAnalyzer {
   static JsCompatReport scanJson(String rawJson) {
     final text = rawJson;
-    final atJs =
-        '@js:'.allMatches(text).length + '@Js:'.allMatches(text).length;
-    final jsBlocks = '<js>'.allMatches(text).length;
+    final atJsPattern = RegExp(r'@js:', caseSensitive: false);
+    final atJs = atJsPattern.allMatches(text).length;
+    final jsBlockPattern = RegExp(r'<js>', caseSensitive: false);
+    final jsBlocks = jsBlockPattern.allMatches(text).length;
     final hasJsLib = text.contains('"jsLib"') && !text.contains('"jsLib":""');
     final usesJsoup = text.contains('Packages.org.jsoup');
     final usesAjax = text.contains('java.ajax');
@@ -66,7 +67,7 @@ abstract final class JsCompatAnalyzer {
         continue;
       }
       final segment = _extractJsonKeyBlock(text, key);
-      if (segment.contains('<js>') || segment.contains('@js:')) {
+      if (jsBlockPattern.hasMatch(segment) || atJsPattern.hasMatch(segment)) {
         fields.add(key);
       }
     }

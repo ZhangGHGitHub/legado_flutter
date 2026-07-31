@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../application/rss/rss_login_port.dart';
+import '../../application/rss/rss_source_edit_port.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
-import '../../services/rss_source_edit_port.dart';
-import '../../services/source_login_service.dart';
 import '../../features/sources/source_login_page.dart';
 
 /// 订阅源编辑 — 对齐 Jingshiro RssSourceEditActivity 核心字段。
@@ -157,8 +158,7 @@ class _RssSourceEditPageState extends State<RssSourceEditPage>
     setState(() => _saving = true);
     try {
       final source = _build();
-      final editor =
-          widget.editor ?? RssProviderSourceEditAdapter.fromContext(context);
+      final editor = widget.editor ?? context.read<RssSourceEditPort>();
       await editor.save(source);
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -215,7 +215,7 @@ class _RssSourceEditPageState extends State<RssSourceEditPage>
                 final draft = _build();
                 SourceLoginPage.open(
                   context,
-                  SourceLoginService.bookSourceForRss(draft),
+                  context.read<RssLoginPort>().bookSourceForRss(draft),
                 );
               },
             ),

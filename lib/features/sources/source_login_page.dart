@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/application/source_login/login_row_ui.dart';
+import 'package:legado_flutter/application/source_login/source_login_page_port.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
-import '../../services/source_login_prefs.dart';
-import '../../services/source_login_cookie_service.dart';
-import '../../services/source_login_service.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../common/app_webview_page.dart';
 
@@ -14,8 +13,10 @@ import '../common/app_webview_page.dart';
 /// 支持：静态 JSON loginUi、JS 动态 loginUi、http WebView 登录、JS loginUrl 脚本。
 class SourceLoginPage extends StatefulWidget {
   final BookSource source;
+  @visibleForTesting
+  final SourceLoginPagePort? loginPort;
 
-  const SourceLoginPage({super.key, required this.source});
+  const SourceLoginPage({super.key, required this.source, this.loginPort});
 
   static Future<void> open(BuildContext context, BookSource source) {
     return Navigator.push(
@@ -37,12 +38,14 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
   bool _jsUi = false;
   bool _busy = false;
   String? _status;
+  late final SourceLoginPagePort _loginPort;
 
   BookSource get source => widget.source;
 
   @override
   void initState() {
     super.initState();
+    _loginPort = widget.loginPort ?? context.read<SourceLoginPagePort>();
     _init();
   }
 
@@ -56,19 +59,14 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
 
   Future<void> _init() async {
     setState(() => _loading = true);
-    final saved = await SourceLoginPrefs.load(source.bookSourceUrl);
-    final header =
-        await SourceLoginPrefs.loadHeader(source.bookSourceUrl) ?? '';
+    final saved = await _loginPort.load(source.bookSourceUrl);
+    final header = await _loginPort.loadHeader(source.bookSourceUrl) ?? '';
     final loginUi = source.loginUi;
     _jsUi = LoginRowUi.isJsLoginUi(loginUi);
 
     if (_jsUi) {
       try {
-        final maps = SourceLoginService.evalLoginUi(
-          source,
-          saved,
-          loginHeader: header,
-        );
+        final maps = _loginPort.evalLoginUi(source, saved, loginHeader: header);
         _rows = maps
             .map(LoginRowUi.fromJson)
             .where((e) => e.name.isNotEmpty)
@@ -152,7 +150,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
 
   Future<void> _save({bool snack = true}) async {
     final info = _collect();
-    await SourceLoginPrefs.save(source.bookSourceUrl, info);
+    await _loginPort.save(source.bookSourceUrl, info);
     if (mounted && snack) {
       setState(() => _status = '登录信息已保存');
       ScaffoldMessenger.of(
@@ -162,7 +160,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
   }
 
   Future<void> _clear() async {
-    await SourceLoginPrefs.clear(source.bookSourceUrl);
+    await _loginPort.clear(source.bookSourceUrl);
     for (final c in _textCtrls.values) {
       c.clear();
     }
@@ -181,9 +179,9 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
     }
   }
 
-  Future<void> _handleJsResult(LoginJsResult r) async {
+  Future<void> _handleJsResult(SourceLoginScriptResult r) async {
     if (r.loginInfo.isNotEmpty) {
-      await SourceLoginPrefs.save(source.bookSourceUrl, r.loginInfo);
+      await _loginPort.save(source.bookSourceUrl, r.loginInfo);
       for (final e in r.loginInfo.entries) {
         _values[e.key] = e.value;
         if (_textCtrls.containsKey(e.key)) {
@@ -191,35 +189,39 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
         }
       }
     }
-    await SourceLoginService.applyCommands(
-      r.commands,
-      onShowBrowser: (url, html) async {
-        if (!mounted) return;
-        await _openLoginWebView(url: url, html: html);
-      },
-      onUpLogin: (data) {
-        if (data == null) return;
-        setState(() {
-          data.forEach((k, v) {
-            final s = v?.toString() ?? '';
-            _values[k] = s;
-            if (_textCtrls.containsKey(k)) _textCtrls[k]!.text = s;
-          });
-        });
-      },
-      onReUi: () {
-        _init();
-      },
-      onPutHeader: (h) => SourceLoginPrefs.saveHeader(source.bookSourceUrl, h),
-      onDelHeader: _deleteLoginHeaderAndCookie,
-    );
+    for (final command in r.commands) {
+      switch (command.operation) {
+        case 'copy':
+          await Clipboard.setData(ClipboardData(text: command.text));
+        case 'browser':
+          if (mounted) {
+            await _openLoginWebView(url: command.url, html: command.html);
+          }
+        case 'upLogin':
+          final data = command.data;
+          if (data != null && mounted) {
+            setState(() {
+              data.forEach((k, v) {
+                final value = v?.toString() ?? '';
+                _values[k] = value;
+                if (_textCtrls.containsKey(k)) _textCtrls[k]!.text = value;
+              });
+            });
+          }
+        case 'reUi':
+          _init();
+        case 'putHeader':
+          await _loginPort.saveHeader(source.bookSourceUrl, command.text);
+        case 'delHeader':
+          await _deleteLoginHeaderAndCookie();
+      }
+    }
   }
 
   Future<Map<String, String>> _webViewHeaders() async {
     final headers = Map<String, String>.of(source.customHeaders);
-    final loginHeader =
-        await SourceLoginPrefs.loadHeader(source.bookSourceUrl) ?? '';
-    headers.addAll(SourceLoginPrefs.parseLoginHeader(loginHeader));
+    final loginHeader = await _loginPort.loadHeader(source.bookSourceUrl) ?? '';
+    headers.addAll(_loginPort.parseLoginHeader(loginHeader));
     return headers;
   }
 
@@ -228,7 +230,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
     String html = '',
   }) async {
     Future<void> onCookiesChanged(String pageUrl, String cookie) {
-      return SourceLoginCookieService.capture(
+      return _loginPort.captureCookie(
         sourceUrl: source.bookSourceUrl,
         cookie: cookie,
       );
@@ -256,12 +258,12 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
   }
 
   Future<void> _deleteLoginHeaderAndCookie() async {
-    await SourceLoginPrefs.clearHeader(source.bookSourceUrl);
-    await SourceLoginCookieService.clear(source.bookSourceUrl);
+    await _loginPort.clearHeader(source.bookSourceUrl);
+    await _loginPort.clearCookie(source.bookSourceUrl);
   }
 
   Future<void> _showLoginHeader() async {
-    final h = await SourceLoginPrefs.loadHeader(source.bookSourceUrl);
+    final h = await _loginPort.loadHeader(source.bookSourceUrl);
     if (!mounted) return;
     await showDialog<void>(
       context: context,
@@ -312,7 +314,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
         return;
       }
 
-      if (SourceLoginService.isHttpUrl(url)) {
+      if (_loginPort.isHttpUrl(url)) {
         if (!mounted) return;
         await _openLoginWebView(url: url);
         if (mounted) {
@@ -321,14 +323,9 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
         return;
       }
 
-      if (SourceLoginService.isJsUrl(url)) {
-        final header =
-            await SourceLoginPrefs.loadHeader(source.bookSourceUrl) ?? '';
-        final r = SourceLoginService.evalLoginScript(
-          source,
-          info,
-          loginHeader: header,
-        );
+      if (_loginPort.isJsUrl(url)) {
+        final header = await _loginPort.loadHeader(source.bookSourceUrl) ?? '';
+        final r = _loginPort.evalLoginScript(source, info, loginHeader: header);
         await _handleJsResult(r);
         if (mounted) {
           setState(
@@ -368,9 +365,8 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
     }
     try {
       await _save(snack: false);
-      final header =
-          await SourceLoginPrefs.loadHeader(source.bookSourceUrl) ?? '';
-      final r = SourceLoginService.evalButtonAction(
+      final header = await _loginPort.loadHeader(source.bookSourceUrl) ?? '';
+      final r = _loginPort.evalButtonAction(
         source,
         _collect(),
         action,

@@ -7,7 +7,13 @@ import '../app.dart';
 import '../application/app_bootstrap.dart';
 import '../application/ai/ai_config_http_port.dart';
 import '../application/ai/ai_config_prefs_port.dart';
+import '../application/book/batch_book_progress_sync_port.dart';
+import '../application/book/local_book_import_port.dart';
+import '../application/annotation/bookmark_editor_port.dart';
+import '../application/annotation/bookplate_overlay_port.dart';
+import '../application/annotation/note_editor_port.dart';
 import '../application/bookmark/bookmark_page_port.dart';
+import '../application/bookshelf/book_group_management_port.dart';
 import '../application/bookshelf/book_group_store_port.dart';
 import '../application/bookshelf/bookshelf_arrange_port.dart';
 import '../application/bookshelf/bookshelf_config_dialog_port.dart';
@@ -38,8 +44,17 @@ import '../application/preferences/download_choice_prefs_port.dart';
 import '../application/preferences/search_content_prefs_port.dart';
 import '../application/preferences/source_variable_port.dart';
 import '../application/preferences/txt_toc_rule_prefs_port.dart';
+import '../application/source_rules/check_source_prefs_port.dart';
+import '../application/source_rules/dict_lookup_port.dart';
+import '../application/source_rules/replace_preview_port.dart';
 import '../application/reader/simulated_reading_prefs_port.dart';
 import '../application/reader/read_style_prefs_port.dart';
+import '../application/reader/read_book_config_prefs_port.dart';
+import '../application/reader/reader_session_prefs_port.dart';
+import '../application/reader/reader_selection_port.dart';
+import '../application/reader/reader_content_refetch_port.dart';
+import '../application/reader/reader_bookmark_readiness_port.dart';
+import '../application/reader/reader_progress_sync_port.dart';
 import '../application/reader/read_style_zip_port.dart';
 import '../application/reader/reader_image_cache_port.dart';
 import '../application/reader/reader_font_port.dart';
@@ -50,13 +65,24 @@ import '../application/replace/replace_preset_port.dart';
 import '../application/qr/qr_code_port.dart';
 import '../application/search/search_history_port.dart';
 import '../application/source_login/source_login_cookie_clear_port.dart';
+import '../application/source_login/source_login_page_port.dart';
+import '../application/main/privacy_consent_port.dart';
 import '../application/sources/source_debug_formatter_port.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
 import '../application/rss/rss_read_state_port.dart';
 import '../application/rss/rss_sort_urls_port.dart';
+import '../application/rss/rss_login_port.dart';
+import '../application/rss/rss_source_edit_port.dart';
 import '../application/rss/rss_source_transfer_port.dart';
+import '../application/rss/rss_source_store_port.dart';
+import '../application/source_subscription/rule_sub_prefs_port.dart';
+import '../application/source_subscription/rule_sub_import_port.dart';
+import '../application/source_validation/source_validation_store_port.dart';
 import '../application/rss/rss_star_prefs_port.dart';
 import '../application/source_market/source_market_port.dart';
+import '../application/source_management/source_group_catalog_port.dart';
+import '../application/source_management/source_management_book_source_port.dart';
+import '../application/source_management/source_management_prefs_port.dart';
 import '../application/startup/startup_task_runner.dart';
 import '../application/theme/theme_import_port.dart';
 import '../application/web_api/repository_web_api_data_port.dart';
@@ -92,7 +118,14 @@ import '../domain/ports/webdav_repository.dart';
 import '../infrastructure/cache/file_chapter_content_cache.dart';
 import '../infrastructure/ai/ai_config_http_port_adapter.dart';
 import '../infrastructure/ai/shared_preferences_ai_config_prefs_adapter.dart';
+import '../infrastructure/annotation/bookmark_editor_port_adapter.dart';
+import '../infrastructure/annotation/bookplate_overlay_port_adapter.dart';
+import '../infrastructure/annotation/note_editor_port_adapter.dart';
 import '../infrastructure/bookmark/bookmark_page_port_adapter.dart';
+import '../infrastructure/book/batch_book_progress_sync_port_adapter.dart';
+import '../infrastructure/book/book_provider_source_port_adapter.dart';
+import '../infrastructure/book/local_book_import_port_adapter.dart';
+import '../infrastructure/bookshelf/book_group_management_port_adapter.dart';
 import '../infrastructure/bookshelf/book_group_store_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_arrange_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_config_dialog_port_adapter.dart';
@@ -146,6 +179,9 @@ import '../infrastructure/obsidian/obsidian_export_port_adapter.dart';
 import '../infrastructure/file_system/app_paths_port_adapter.dart';
 import '../infrastructure/reader/read_style_zip_port_adapter.dart';
 import '../infrastructure/source_market/builtin_source_market_port.dart';
+import '../infrastructure/source_management/source_group_catalog_port_adapter.dart';
+import '../infrastructure/source_management/source_management_book_source_port_adapter.dart';
+import '../infrastructure/source_management/source_management_prefs_port_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_code_edit_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_click_action_prefs_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_book_group_prefs.dart';
@@ -160,6 +196,12 @@ import '../infrastructure/preferences/shared_preferences_source_variable_adapter
 import '../infrastructure/preferences/shared_preferences_txt_toc_rule_prefs_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_simulated_reading_prefs.dart';
 import '../infrastructure/preferences/shared_preferences_read_style_prefs_adapter.dart';
+import '../infrastructure/reader/read_book_config_prefs_port_adapter.dart';
+import '../infrastructure/reader/reader_session_prefs_port_adapter.dart';
+import '../infrastructure/reader/reader_selection_port_adapter.dart';
+import '../infrastructure/reader/reader_content_refetch_port_adapter.dart';
+import '../infrastructure/reader/reader_bookmark_readiness_port_adapter.dart';
+import '../infrastructure/reader/reader_progress_sync_port_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_web_api_prefs_adapter.dart';
 import '../infrastructure/reader/reader_font_port_adapter.dart';
 import '../infrastructure/reader/book_reader_prefs_port_adapter.dart';
@@ -169,12 +211,23 @@ import '../infrastructure/reader/reader_image_cache_port_adapter.dart';
 import '../infrastructure/replace/replace_preset_port_adapter.dart';
 import '../infrastructure/sources/source_debug_formatter_adapter.dart';
 import '../infrastructure/source_login/source_login_cookie_clear_port_adapter.dart';
+import '../infrastructure/main/privacy_consent_port_adapter.dart';
+import '../infrastructure/source_login/source_login_page_port_adapter.dart';
+import '../infrastructure/source_rules/check_source_prefs_port_adapter.dart';
+import '../infrastructure/source_rules/dict_lookup_port_adapter.dart';
+import '../infrastructure/source_rules/replace_preview_port_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_search_history_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_rss_read_state_adapter.dart';
 import '../infrastructure/qr/qr_code_port_adapter.dart';
 import '../infrastructure/rss/rss_star_prefs_port_adapter.dart';
 import '../infrastructure/rss/rss_sort_urls_port_adapter.dart';
+import '../infrastructure/rss/rss_login_port_adapter.dart';
+import '../infrastructure/rss/rss_provider_source_edit_adapter.dart';
 import '../infrastructure/rss/rss_source_transfer_port_adapter.dart';
+import '../infrastructure/rss/shared_preferences_rss_source_store_adapter.dart';
+import '../infrastructure/source_subscription/shared_preferences_rule_sub_prefs_adapter.dart';
+import '../infrastructure/source_subscription/rule_sub_import_port_adapter.dart';
+import '../infrastructure/source_validation/source_validation_store_port_adapter.dart';
 import '../infrastructure/theme/theme_import_port_adapter.dart';
 import '../infrastructure/web_api/dart_io_web_api_port.dart';
 import '../infrastructure/settings/web_api_settings_port_adapter.dart';
@@ -233,6 +286,8 @@ abstract final class AppCompositionRoot {
     await SharedPreferencesRuntime.getOrNull();
     reportStartupStage('读取上次崩溃记录');
     final pendingCrashReport = await crashLog.pendingReport();
+    final privacyConsentPort =
+        await SharedPreferencesPrivacyConsentPortAdapter.create();
     reportStartupStage('基础设施组装');
     final navigatorKey = GlobalKey<NavigatorState>();
     final lifecycleCoordinator = AppLifecycleCoordinator();
@@ -303,6 +358,18 @@ abstract final class AppCompositionRoot {
       webdav: webdavRepository,
       store: progressStore,
     );
+    final batchBookProgressSync = BatchBookProgressSyncPortAdapter(
+      progressSync: bookProgressSync,
+    );
+    final localBookImportPort = LocalBookImportPortAdapter(
+      LocalBookService(
+        repository: bookRepository,
+        parser: const FrbLocalBookParserPort(),
+      ),
+    );
+    final bookProviderSourcePort = BookProviderSourcePortAdapter(
+      sourceService: bookSourceService,
+    );
     final bookmarkSyncService = BookmarkSyncService(webdav: webdavRepository);
     final cacheService = CacheService(
       contentCache: contentCache,
@@ -334,15 +401,13 @@ abstract final class AppCompositionRoot {
       contentCache: contentCache,
       contentProcessor: contentProcessor,
       bookSourceService: bookSourceService,
-      localBookService: LocalBookService(
-        repository: bookRepository,
-        parser: const FrbLocalBookParserPort(),
-      ),
+      bookProviderSourcePort: bookProviderSourcePort,
+      localBookImportPort: localBookImportPort,
       legacyRoomImportService: LegacyRoomImportServices.create(
         FrbLegacyRoomImportPort(),
       ),
       backupService: backupService,
-      bookProgressSync: bookProgressSync,
+      bookProgressSync: batchBookProgressSync,
       bookmarkSyncService: bookmarkSyncService,
       cacheService: cacheService,
       webdavRepository: webdavRepository,
@@ -394,6 +459,7 @@ abstract final class AppCompositionRoot {
           Provider<AiConfigPrefsPort>.value(
             value: const SharedPreferencesAiConfigPrefsAdapter(),
           ),
+          Provider<PrivacyConsentPort>.value(value: privacyConsentPort),
           Provider<AiConfigHttpPort>.value(value: aiConfigHttpPort),
           Provider<DonateClipboardPort>.value(
             value: const PlatformDonateClipboard(),
@@ -406,6 +472,9 @@ abstract final class AppCompositionRoot {
           ),
           Provider<DictRulePrefsPort>.value(
             value: const SharedPreferencesDictRulePrefsAdapter(),
+          ),
+          Provider<CheckSourcePrefsPort>.value(
+            value: const CheckSourcePrefsPortAdapter(),
           ),
           Provider<BookshelfDisplayPrefsPort>.value(
             value: bookshelfDisplayPrefs,
@@ -443,6 +512,18 @@ abstract final class AppCompositionRoot {
           ),
           Provider<ReadStylePrefsPort>.value(
             value: const SharedPreferencesReadStylePrefsAdapter(),
+          ),
+          Provider<ReadBookConfigPrefsPort>.value(
+            value: const ReadBookConfigPrefsPortAdapter(),
+          ),
+          Provider<ReaderSessionPrefsPort>.value(
+            value: const ReaderSessionPrefsPortAdapter(),
+          ),
+          Provider<ReaderSelectionPort>.value(
+            value: const ReaderSelectionPortAdapter(),
+          ),
+          Provider<ReaderBookmarkReadinessPort>.value(
+            value: const ReaderBookmarkReadinessPortAdapter(),
           ),
           Provider<ReaderFontPort>.value(value: const ReaderFontPortAdapter()),
           Provider<BookReaderPrefsPort>.value(
@@ -482,10 +563,34 @@ abstract final class AppCompositionRoot {
           Provider<SourceLoginCookieClearPort>.value(
             value: const SourceLoginCookieClearPortAdapter(),
           ),
+          Provider<SourceLoginPagePort>.value(
+            value: const SourceLoginPagePortAdapter(),
+          ),
           Provider<SourceMarketPort>.value(
             value: const BuiltinSourceMarketPort(),
           ),
+          Provider<SourceManagementPrefsPort>.value(
+            value: const SourceManagementPrefsPortAdapter(),
+          ),
+          Provider<SourceGroupCatalogPort>.value(
+            value: const SourceGroupCatalogPortAdapter(),
+          ),
+          Provider<SourceManagementBookSourcePort>.value(
+            value: SourceManagementBookSourcePortAdapter(
+              sourceService: bookSourceService,
+            ),
+          ),
+          Provider<SourceValidationStorePort>.value(
+            value: const SourceValidationStorePortAdapter(),
+          ),
           Provider<NotePort>.value(value: FrbNotePort()),
+          Provider<BookmarkEditorPort>.value(
+            value: const BookmarkEditorPortAdapter(),
+          ),
+          Provider<BookplateOverlayPort>.value(
+            value: const BookplateOverlayPortAdapter(),
+          ),
+          Provider<NoteEditorPort>.value(value: const NoteEditorPortAdapter()),
           Provider<BookmarkPagePort>.value(
             value: BookmarkPagePortAdapter(syncService: bookmarkSyncService),
           ),
@@ -495,14 +600,21 @@ abstract final class AppCompositionRoot {
           Provider<BookGroupStorePort>.value(
             value: const BookGroupStorePortAdapter(),
           ),
+          Provider<BookGroupManagementPort>.value(
+            value: const BookGroupManagementPortAdapter(),
+          ),
           Provider<MangaPrefsPort>.value(value: const MangaPrefsPortAdapter()),
           Provider<ReadingRecordPort>.value(value: readingRecordPort),
           Provider<RssPort>.value(value: rssPort),
           Provider<RssSortUrlsPort>.value(
             value: const RssSortUrlsPortAdapter(),
           ),
+          Provider<RssLoginPort>.value(value: const RssLoginPortAdapter()),
           Provider<RssSourceTransferPort>.value(
             value: const RssSourceTransferPortAdapter(),
+          ),
+          Provider<RuleSubPrefsPort>.value(
+            value: const SharedPreferencesRuleSubPrefsAdapter(),
           ),
           Provider<QrCodePort>.value(value: const QrCodePortAdapter()),
           Provider<ThemeImportPort>.value(
@@ -539,6 +651,15 @@ abstract final class AppCompositionRoot {
           Provider<DictRuleQueryPort>(
             create: (_) => const FrbDictRuleQueryPort(),
           ),
+          Provider<DictLookupPort>(
+            create: (context) => DictLookupPortAdapter(
+              prefs: context.read<DictRulePrefsPort>(),
+              queryPort: context.read<DictRuleQueryPort>(),
+            ),
+          ),
+          Provider<ReplacePreviewPort>.value(
+            value: const ReplacePreviewPortAdapter(),
+          ),
           Provider<WebDavRepository>.value(value: webdavRepository),
           Provider<WebDavConfigDialogPort>.value(
             value: WebDavConfigDialogPortAdapter(repository: webdavRepository),
@@ -548,6 +669,15 @@ abstract final class AppCompositionRoot {
             value: MyPagePortAdapter(backupService: backupService),
           ),
           Provider<BookProgressSync>.value(value: bookProgressSync),
+          Provider<BatchBookProgressSyncPort>.value(
+            value: batchBookProgressSync,
+          ),
+          Provider<LocalBookImportPort>.value(value: localBookImportPort),
+          Provider<ReaderProgressSyncPort>.value(
+            value: ReaderProgressSyncPortAdapter(
+              progressSync: bookProgressSync,
+            ),
+          ),
           Provider<BookmarkSyncService>.value(value: bookmarkSyncService),
           Provider<CacheService>.value(value: cacheService),
           Provider<StartupTaskRunner>.value(value: bootstrap.startupTasks),
@@ -578,22 +708,51 @@ abstract final class AppCompositionRoot {
           Provider<RssSourceImportPort>(
             create: (_) => PublicTextRssSourceImportPort(publicTextPort),
           ),
+          Provider<RssSourceStorePort>.value(
+            value: const SharedPreferencesRssSourceStoreAdapter(),
+          ),
           ChangeNotifierProvider(
             create: (context) => SourceProvider(
               repository: sourceRepository,
               validationPort: context.read<BookSourceValidationPort>(),
-              sourceService: bookSourceService,
+              sourceService: context.read<SourceManagementBookSourcePort>(),
+              loginPort: context.read<SourceLoginPagePort>(),
+              checkSourcePrefsPort: context.read<CheckSourcePrefsPort>(),
+              sourceGroupPort: context.read<SourceGroupCatalogPort>(),
+              validationStorePort: context.read<SourceValidationStorePort>(),
+              builtInSourcesLoader: BookSourceService.loadBuiltInSources,
+            ),
+          ),
+          Provider<ReaderContentRefetchPort>(
+            create: (context) => ReaderContentRefetchPortAdapter(
+              contentSource: context.read<BookSourceService>(),
+              resolveSource: context.read<SourceProvider>().findSourceForBook,
             ),
           ),
           ChangeNotifierProvider(
-            create: (_) => ReplaceProvider(
+            create: (context) => ReplaceProvider(
               repository: ReplaceRuleDao(),
               contentProcessor: contentProcessor,
+              presetPort: context.read<ReplacePresetPort>(),
             ),
           ),
           ChangeNotifierProvider(
             create: (context) => RssProvider(
               sourceImportPort: context.read<RssSourceImportPort>(),
+              sourceStore: context.read<RssSourceStorePort>(),
+            ),
+          ),
+          Provider<RssSourceEditPort>(
+            create: (context) =>
+                RssProviderSourceEditAdapter(context.read<RssProvider>()),
+          ),
+          Provider<RuleSubImportPort>(
+            create: (context) => RuleSubImportPortAdapter(
+              sourceService: context.read<BookSourceService>(),
+              sourceProvider: context.read<SourceProvider>(),
+              rssProvider: context.read<RssProvider>(),
+              replaceProvider: context.read<ReplaceProvider>(),
+              fetchPort: context.read<PublicTextFetchPort>(),
             ),
           ),
           Provider<MainShellStartupPort>(

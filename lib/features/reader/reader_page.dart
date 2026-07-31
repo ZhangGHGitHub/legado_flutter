@@ -13,6 +13,13 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../application/reader/simulated_reading_prefs_port.dart';
 import '../../application/reader/read_style_prefs_port.dart';
+import '../../application/reader/read_book_config_prefs_port.dart';
+import '../../application/reader/reader_font_port.dart';
+import '../../application/reader/reader_session_prefs_port.dart';
+import '../../application/reader/reader_selection_port.dart';
+import '../../application/reader/reader_content_refetch_port.dart';
+import '../../application/reader/reader_bookmark_readiness_port.dart';
+import '../../application/reader/reader_progress_sync_port.dart';
 import '../../application/reader/reader_image_cache_port.dart';
 import '../../application/reader/book_reader_prefs_port.dart';
 import '../../application/reader/reading_session_tracker.dart';
@@ -35,14 +42,6 @@ import '../cache/download_choice_dialog.dart';
 import '../cache/download_helpers.dart';
 import 'ai_chat_page.dart';
 import '../../help/bookmark_hint.dart';
-import '../../services/book_progress_sync.dart';
-import '../../services/bookmark_service.dart';
-import '../../services/book_source_service.dart';
-import '../../services/read_book_config_prefs.dart';
-import '../../services/reader_font_loader.dart';
-import '../../services/reader_session_prefs.dart';
-import '../../services/reader_selection_browser.dart';
-import '../../services/reader_selection_share.dart';
 import 'auto_read_panel.dart';
 import 'click_action_panel.dart';
 import 'click_region_tip_overlay.dart';
@@ -81,6 +80,9 @@ class ReaderPage extends StatefulWidget {
   /// 单本书阅读配置端口；未注入时使用旧存储服务的适配器。
   final BookReaderPrefsPort? prefs;
 
+  /// 全局阅读配置端口；未注入时从组合根读取。
+  final ReadBookConfigPrefsPort? configPrefs;
+
   const ReaderPage({
     super.key,
     required this.book,
@@ -89,6 +91,7 @@ class ReaderPage extends StatefulWidget {
     this.initialPageIndex,
     this.initialChapterPos,
     this.prefs,
+    this.configPrefs,
   });
 
   @override
@@ -111,7 +114,14 @@ class _ReaderPageState extends State<ReaderPage> {
   BookProvider? _bookProvider; // 缓存引用，避免 dispose 时 context.read 崩溃
   late final ReadingRecordPort _readingRecordPort;
   late final TtsPort _ttsPort;
+  late final ReaderFontPort _readerFontPort;
+  late final ReaderSessionPrefsPort _readerSessionPrefs;
+  late final ReaderSelectionPort _readerSelectionPort;
+  late final ReaderContentRefetchPort _contentRefetchPort;
+  late final ReaderBookmarkReadinessPort _bookmarkReadinessPort;
+  late final ReaderProgressSyncPort _progressSyncPort;
   late final BookReaderPrefsPort _bookReaderPrefs;
+  late final ReadBookConfigPrefsPort _configPrefs;
   final _readingSession = ReadingSessionTracker();
   late final DetailedReadingSessionTracker _detailedReadingSession;
   int _lastCountedChapterIndex = -1;
@@ -203,7 +213,15 @@ class _ReaderPageState extends State<ReaderPage> {
     super.initState();
     _readingRecordPort = context.read<ReadingRecordPort>();
     _ttsPort = context.read<TtsPort>();
+    _readerFontPort = context.read<ReaderFontPort>();
+    _readerSessionPrefs = context.read<ReaderSessionPrefsPort>();
+    _readerSelectionPort = context.read<ReaderSelectionPort>();
+    _contentRefetchPort = context.read<ReaderContentRefetchPort>();
+    _bookmarkReadinessPort = context.read<ReaderBookmarkReadinessPort>();
+    _progressSyncPort = context.read<ReaderProgressSyncPort>();
     _bookReaderPrefs = widget.prefs ?? context.read<BookReaderPrefsPort>();
+    _configPrefs =
+        widget.configPrefs ?? context.read<ReadBookConfigPrefsPort>();
     _readingSession.start();
     _detailedReadingSession = DetailedReadingSessionTracker(
       bookName: widget.book.name,
@@ -411,10 +429,10 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _loadReaderSessionPrefs() async {
-    final prefs = await ReaderSessionPrefs.load();
+    final enableReplace = await _readerSessionPrefs.loadEnableReplace();
     if (!mounted) return;
-    setState(() => _enableReplace = prefs.enableReplace);
-    ReadBook.instance.enableReplace = prefs.enableReplace;
+    setState(() => _enableReplace = enableReplace);
+    ReadBook.instance.enableReplace = enableReplace;
   }
 
   Future<void> _loadClickActionPrefs() async {
@@ -485,7 +503,7 @@ class _ReaderPageState extends State<ReaderPage> {
   Future<void> _loadReadStylePrefs() async {
     // 对齐 Jingshiro ReadBookConfig.initConfigs + initShareConfig
     final stylePrefs = context.read<ReadStylePrefsPort>();
-    final saved = await ReadBookConfigPrefs.load();
+    final saved = await _configPrefs.load();
     final share = await stylePrefs.loadShareLayout();
     final overrides = await stylePrefs.loadOverrides();
     final themeName = await stylePrefs.loadThemeName();
@@ -1078,7 +1096,7 @@ class _ReaderPageState extends State<ReaderPage> {
       }
       return;
     }
-    if (!BookmarkService.isReady) {
+    if (!_bookmarkReadinessPort.isReady) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -1102,7 +1120,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   TextStyle _readerTextStyle(Color color) {
-    return ReaderFontLoader.contentTextStyle(
+    return _readerFontPort.contentTextStyle(
       settings: _settings,
       color: color,
       renderedLineHeight: _renderedLineHeight,
@@ -1132,10 +1150,10 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _openSelectedBrowser(String selectedText) async {
-    final uri = readerSelectionBrowserUri(selectedText);
+    final uri = _readerSelectionPort.browserUri(selectedText);
     if (uri == null) return;
-    if (!readerSelectionIsAbsoluteWebUrl(selectedText) &&
-        await tryNativeReaderWebSearch(selectedText)) {
+    if (!_readerSelectionPort.isAbsoluteWebUrl(selectedText) &&
+        await _readerSelectionPort.tryNativeWebSearch(selectedText)) {
       return;
     }
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -1147,10 +1165,10 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _shareSelectedText(String selectedText) async {
-    final text = readerSelectionShareText(selectedText);
+    final text = _readerSelectionPort.shareText(selectedText);
     if (text == null) return;
     try {
-      await Share.share(text, subject: readerSelectionShareSubject);
+      await Share.share(text, subject: _readerSelectionPort.shareSubject);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -1323,15 +1341,15 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   double? get _renderedLineHeight =>
-      ReaderFontLoader.renderedLineHeight(settings: _settings);
+      _readerFontPort.renderedLineHeight(settings: _settings);
 
   TextAlign get _readerTextAlign =>
       _settings.textFullJustify ? TextAlign.justify : TextAlign.start;
 
   Future<void> _ensureReaderFontLoaded() async {
     final family = _settings.fontFamily;
-    if (!ReaderFontLoader.isFontFilePath(family)) return;
-    final loadedFamily = await ReaderFontLoader.ensureLoaded(family);
+    if (!_readerFontPort.isFontFilePath(family)) return;
+    final loadedFamily = await _readerFontPort.ensureLoaded(family);
     if (!mounted || _settings.fontFamily != family || loadedFamily == null) {
       return;
     }
@@ -1883,7 +1901,7 @@ class _ReaderPageState extends State<ReaderPage> {
     if (modeChanged) {
       unawaited(_bookReaderPrefs.setPageAnim(widget.book.id, -1));
     }
-    unawaited(ReadBookConfigPrefs.save(newSettings));
+    unawaited(_configPrefs.save(newSettings));
     final stylePrefs = context.read<ReadStylePrefsPort>();
     unawaited(stylePrefs.saveShareLayout(newSettings.shareLayout));
     unawaited(stylePrefs.saveThemeName(newSettings.themeName));
@@ -2089,7 +2107,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _pullCloudProgress() async {
-    final progressSync = context.read<BookProgressSync>();
+    final progressSync = _progressSyncPort;
     if (!await progressSync.isConfigured()) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -2180,7 +2198,7 @@ class _ReaderPageState extends State<ReaderPage> {
 
   /// 对齐 ReadBook.syncProgress：本地更快则上传，云端更快则询问应用
   Future<void> _syncReadingProgress() async {
-    final progressSync = context.read<BookProgressSync>();
+    final progressSync = _progressSyncPort;
     if (!await progressSync.isConfigured()) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -2256,7 +2274,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _coverCloudProgress() async {
-    final progressSync = context.read<BookProgressSync>();
+    final progressSync = _progressSyncPort;
     if (!await progressSync.isConfigured()) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -2332,8 +2350,6 @@ class _ReaderPageState extends State<ReaderPage> {
       initial = _content;
     }
     if (!mounted) return;
-    final sourceProvider = context.read<SourceProvider>();
-    final bookSourceService = context.read<BookSourceService>();
     await ContentEditDialog.show(
       context,
       bookId: bid,
@@ -2342,11 +2358,9 @@ class _ReaderPageState extends State<ReaderPage> {
       loadRawContent: ({bool reset = false}) async {
         if (reset) {
           await readBook.invalidateChapterCache(chapter.id, bookId: bid);
-          final source = sourceProvider.findSourceForBook(widget.book);
-          if (source == null) return '';
-          final raw = await bookSourceService.getChapterContent(
-            chapter.url,
-            source: source,
+          final raw = await _contentRefetchPort.fetchRawContent(
+            book: widget.book,
+            chapter: chapter,
           );
           if (!ReadBook.shouldSkipCache(raw)) {
             await readBook.writeRawChapterCache(chapter.id, raw, bookId: bid);
@@ -2371,7 +2385,7 @@ class _ReaderPageState extends State<ReaderPage> {
     final next = !_enableReplace;
     setState(() => _enableReplace = next);
     ReadBook.instance.enableReplace = next;
-    await ReaderSessionPrefs(enableReplace: next).save();
+    await _readerSessionPrefs.saveEnableReplace(next);
     final chapter = widget.allChapters[_currentIndex];
     ReadBook.instance.invalidateMemoryCache(chapter.id, bookId: widget.book.id);
     if (!mounted) return;
@@ -2566,7 +2580,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _addBookmark() async {
-    if (!BookmarkService.isReady) {
+    if (!_bookmarkReadinessPort.isReady) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('引擎未就绪，无法添加书签')));

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/features/common/app_webview_page.dart';
 import 'package:legado_flutter/features/sources/source_login_page.dart';
+import 'package:legado_flutter/infrastructure/source_login/source_login_page_port_adapter.dart';
 import 'package:legado_flutter/services/source_login_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -28,7 +29,12 @@ void main() {
       });
 
       await tester.pumpWidget(
-        MaterialApp(home: SourceLoginPage(source: source)),
+        MaterialApp(
+          home: SourceLoginPage(
+            source: source,
+            loginPort: const SourceLoginPagePortAdapter(),
+          ),
+        ),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.text('登录'));

@@ -74,6 +74,13 @@ void main() {
   });
 
   tearDown(() async {
+    for (
+      var i = 0;
+      i < 100 && ReadBook.instance.preloadingKeys.isNotEmpty;
+      i++
+    ) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
     ReadBook.instance.reset();
     if (await tempRoot.exists()) await tempRoot.delete(recursive: true);
   });

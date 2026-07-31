@@ -3,42 +3,57 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:legado_flutter/application/source_login/source_login_page_port.dart';
+import 'package:legado_flutter/application/source_management/source_group_catalog_port.dart';
+import 'package:legado_flutter/application/source_management/source_management_book_source_port.dart';
+import 'package:legado_flutter/application/source_rules/check_source_prefs_port.dart';
 import 'package:legado_flutter/application/source_validation/source_validation_policy.dart';
+import 'package:legado_flutter/application/source_validation/source_validation_store_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/source/source_validation_result.dart';
 import '../domain/repositories/book_source_repository.dart';
 import '../domain/ports/book_source_validation_port.dart';
-import '../services/book_source_service.dart';
-import '../services/check_source_prefs.dart';
-import '../services/source_group_catalog.dart';
-import '../services/source_group_tags.dart';
-import '../services/source_login_prefs.dart';
-import '../services/source_validation_store.dart';
 import 'source_order.dart';
+
+Future<List<BookSource>> _emptyBuiltInSources() async => const [];
 
 /// 书源管理 Provider — 书源 CRUD、搜索
 class SourceProvider extends ChangeNotifier {
   SourceProvider({
     required BookSourceRepository repository,
     required BookSourceValidationPort validationPort,
-    required BookSourceService sourceService,
+    required SourceManagementBookSourcePort sourceService,
+    SourceLoginPagePort? loginPort,
+    CheckSourcePrefsPort? checkSourcePrefsPort,
+    SourceGroupCatalogPort? sourceGroupPort,
+    SourceValidationStorePort? validationStorePort,
     Future<List<BookSource>> Function()? builtInSourcesLoader,
   }) : _repository = repository,
        _validationPort = validationPort,
        _sourceService = sourceService,
-       _builtInSourcesLoader =
-           builtInSourcesLoader ?? BookSourceService.loadBuiltInSources;
+       _loginPort = loginPort ?? const UnavailableSourceLoginPagePort(),
+       _checkSourcePrefs =
+           checkSourcePrefsPort ?? const UnavailableCheckSourcePrefsPort(),
+       _sourceGroupPort =
+           sourceGroupPort ?? const UnavailableSourceGroupCatalogPort(),
+       _validationStorePort =
+           validationStorePort ?? const UnavailableSourceValidationStorePort(),
+       _builtInSourcesLoader = builtInSourcesLoader ?? _emptyBuiltInSources;
 
   final BookSourceRepository _repository;
   final BookSourceValidationPort _validationPort;
   final Future<List<BookSource>> Function() _builtInSourcesLoader;
-  final BookSourceService _sourceService;
+  final SourceManagementBookSourcePort _sourceService;
 
   List<BookSource> _sources = [];
   Map<String, List<Book>> _searchResults = {};
   final Map<String, SourceValidationResult> _validationResults = {};
   final Map<String, String> _validationProgress = {};
+  final SourceLoginPagePort _loginPort;
+  final CheckSourcePrefsPort _checkSourcePrefs;
+  final SourceGroupCatalogPort _sourceGroupPort;
+  final SourceValidationStorePort _validationStorePort;
   bool _isLoading = false;
   bool _isValidating = false;
   String _statusMessage = '';
@@ -73,9 +88,9 @@ class SourceProvider extends ChangeNotifier {
 
   /// 分组筛选/管理用：目录 ∪ 书源已有分组标签（不强制改书源）
   List<String> get knownGroups {
-    final set = SourceGroupCatalog.names.toSet();
+    final set = _sourceGroupPort.names.toSet();
     for (final s in _sources) {
-      for (final tag in splitSourceGroups(s.bookSourceGroup)) {
+      for (final tag in _sourceGroupPort.splitGroups(s.bookSourceGroup)) {
         set.add(tag);
       }
     }
@@ -88,14 +103,14 @@ class SourceProvider extends ChangeNotifier {
     _loadError = null;
     notifyListeners();
     try {
-      await SourceGroupCatalog.load();
+      await _sourceGroupPort.load();
       _sources = await _repository.getAll();
-      await SourceGroupCatalog.mergeFromSources(
+      await _sourceGroupPort.mergeFromSources(
         _sources.map((s) => s.bookSourceGroup),
       );
       _validationResults
         ..clear()
-        ..addAll(await SourceValidationStore.load());
+        ..addAll(await _validationStorePort.load());
       _loadError = null;
     } catch (e) {
       _loadError = '加载书源失败: $e';
@@ -124,12 +139,12 @@ class SourceProvider extends ChangeNotifier {
   /// 重命名分组（目录 + 所有含该标签的书源）
   Future<void> renameGroup(String oldName, String newName) async {
     if (oldName == newName) return;
-    await SourceGroupCatalog.rename(oldName, newName);
+    await _sourceGroupPort.rename(oldName, newName);
     for (final s in _sources) {
-      if (!sourceHasGroupTag(s.bookSourceGroup, oldName)) continue;
+      if (!_sourceGroupPort.hasGroupTag(s.bookSourceGroup, oldName)) continue;
       await _repository.update(
         s.copyWith(
-          bookSourceGroup: renameSourceGroupTag(
+          bookSourceGroup: _sourceGroupPort.renameGroupTag(
             s.bookSourceGroup,
             oldName,
             newName,
@@ -145,19 +160,24 @@ class SourceProvider extends ChangeNotifier {
   Future<bool> addGroup(String group) async {
     final name = group.trim();
     if (name.isEmpty) return false;
-    final added = await SourceGroupCatalog.add(name);
+    final added = await _sourceGroupPort.add(name);
     if (added) notifyListeners();
     return added;
   }
 
   /// 删除分组（目录移除；从各书源去掉该标签，其它标签保留）
   Future<void> deleteGroup(String groupName) async {
-    await SourceGroupCatalog.remove(groupName);
+    await _sourceGroupPort.remove(groupName);
     for (final s in _sources) {
-      if (!sourceHasGroupTag(s.bookSourceGroup, groupName)) continue;
+      if (!_sourceGroupPort.hasGroupTag(s.bookSourceGroup, groupName)) {
+        continue;
+      }
       await _repository.update(
         s.copyWith(
-          bookSourceGroup: removeSourceGroupTag(s.bookSourceGroup, groupName),
+          bookSourceGroup: _sourceGroupPort.removeGroupTag(
+            s.bookSourceGroup,
+            groupName,
+          ),
         ),
       );
     }
@@ -342,7 +362,7 @@ class SourceProvider extends ChangeNotifier {
   Future<void> deleteSource(String sourceUrl) async {
     await _repository.delete(sourceUrl);
     _validationResults.remove(sourceUrl);
-    await SourceValidationStore.remove(sourceUrl);
+    await _validationStorePort.remove(sourceUrl);
     _sources = await _repository.getAll();
     notifyListeners();
   }
@@ -368,7 +388,7 @@ class SourceProvider extends ChangeNotifier {
     for (final url in urls) {
       await _repository.delete(url);
       _validationResults.remove(url);
-      await SourceValidationStore.remove(url);
+      await _validationStorePort.remove(url);
     }
     _sources = await _repository.getAll();
     notifyListeners();
@@ -445,12 +465,12 @@ class SourceProvider extends ChangeNotifier {
     if (urlSet.isEmpty || tag.isEmpty) return;
     for (final s in _sources) {
       if (!urlSet.contains(s.bookSourceUrl)) continue;
-      final next = addSourceGroupTag(s.bookSourceGroup, tag);
+      final next = _sourceGroupPort.addGroupTag(s.bookSourceGroup, tag);
       if (next == s.bookSourceGroup) continue;
       await _repository.update(s.copyWith(bookSourceGroup: next));
     }
     _sources = await _repository.getAll();
-    await SourceGroupCatalog.mergeFromSources([tag]);
+    await _sourceGroupPort.mergeFromSources([tag]);
     notifyListeners();
   }
 
@@ -477,10 +497,13 @@ class SourceProvider extends ChangeNotifier {
     if (urlSet.isEmpty || trimmed.isEmpty) return;
     for (final s in _sources) {
       if (!urlSet.contains(s.bookSourceUrl)) continue;
-      if (!sourceHasGroupTag(s.bookSourceGroup, trimmed)) continue;
+      if (!_sourceGroupPort.hasGroupTag(s.bookSourceGroup, trimmed)) continue;
       await _repository.update(
         s.copyWith(
-          bookSourceGroup: removeSourceGroupTag(s.bookSourceGroup, trimmed),
+          bookSourceGroup: _sourceGroupPort.removeGroupTag(
+            s.bookSourceGroup,
+            trimmed,
+          ),
         ),
       );
     }
@@ -630,8 +653,8 @@ class SourceProvider extends ChangeNotifier {
   /// source request pipeline.
   Future<Map<String, String>> imageHeadersForSource(BookSource source) async {
     final headers = <String, String>{...source.customHeaders};
-    final loginHeader = await SourceLoginPrefs.loadHeader(source.bookSourceUrl);
-    headers.addAll(SourceLoginPrefs.parseLoginHeader(loginHeader ?? ''));
+    final loginHeader = await _loginPort.loadHeader(source.bookSourceUrl);
+    headers.addAll(_loginPort.parseLoginHeader(loginHeader ?? ''));
     return Map.unmodifiable(headers);
   }
 
@@ -659,17 +682,17 @@ class SourceProvider extends ChangeNotifier {
     String query;
     if (keyword?.trim().isNotEmpty == true) {
       query = keyword!.trim();
-      await CheckSourcePrefs.setLastKeyword(query);
+      await _checkSourcePrefs.setLastKeyword(query);
     } else {
-      final lastKw = await CheckSourcePrefs.lastKeyword();
+      final lastKw = await _checkSourcePrefs.lastKeyword();
       query = lastKw.isNotEmpty ? lastKw : fallback;
     }
 
-    final timeoutSec = await CheckSourcePrefs.timeoutSec();
-    final checkSearch = await CheckSourcePrefs.checkSearch();
-    final checkDiscovery = await CheckSourcePrefs.checkDiscovery();
-    final checkToc = await CheckSourcePrefs.checkToc();
-    final checkContent = await CheckSourcePrefs.checkContent();
+    final timeoutSec = await _checkSourcePrefs.timeoutSec();
+    final checkSearch = await _checkSourcePrefs.checkSearch();
+    final checkDiscovery = await _checkSourcePrefs.checkDiscovery();
+    final checkToc = await _checkSourcePrefs.checkToc();
+    final checkContent = await _checkSourcePrefs.checkContent();
 
     final url = source.bookSourceUrl;
     final stages = <String>[
@@ -714,7 +737,7 @@ class SourceProvider extends ChangeNotifier {
         checkContent: checkContent,
       );
       _validationResults[url] = result;
-      await SourceValidationStore.put(url, result);
+      await _validationStorePort.put(url, result);
 
       if (result.searchTimeMs > 0) {
         await _repository.update(

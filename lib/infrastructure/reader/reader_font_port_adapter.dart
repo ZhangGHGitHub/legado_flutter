@@ -1,6 +1,9 @@
 import 'dart:io';
 
+import 'package:flutter/material.dart';
+
 import '../../application/reader/reader_font_port.dart';
+import '../../features/reader/reader_settings.dart';
 import '../../services/reader_font_loader.dart';
 
 final class ReaderFontPortAdapter implements ReaderFontPort {
@@ -43,4 +46,26 @@ final class ReaderFontPortAdapter implements ReaderFontPort {
   @override
   Future<List<File>> listCustomFontFiles() =>
       ReaderFontLoader.listCustomFontFiles();
+
+  @override
+  TextStyle contentTextStyle({
+    required ReaderSettings settings,
+    required Color color,
+    String? resolvedFamily,
+    double? renderedLineHeight,
+  }) => ReaderFontLoader.contentTextStyle(
+    settings: settings,
+    color: color,
+    resolvedFamily: resolvedFamily,
+    renderedLineHeight: renderedLineHeight,
+  );
+
+  @override
+  double? renderedLineHeight({
+    required ReaderSettings settings,
+    String? resolvedFamily,
+  }) => ReaderFontLoader.renderedLineHeight(
+    settings: settings,
+    resolvedFamily: resolvedFamily,
+  );
 }

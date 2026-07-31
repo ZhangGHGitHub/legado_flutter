@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../domain/book_reading_stats.dart';
+import '../application/annotation/bookplate_overlay_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import '../services/bookplate_service.dart';
 
 /// 阅读书票 — 章首/章尾卡片（Phase 4.4）
 class BookplateOverlay extends StatefulWidget {
@@ -14,6 +14,7 @@ class BookplateOverlay extends StatefulWidget {
 
   /// 测试注入：跳过异步加载
   final BookplateData? previewData;
+  final BookplateOverlayPort? port;
 
   const BookplateOverlay({
     super.key,
@@ -23,6 +24,7 @@ class BookplateOverlay extends StatefulWidget {
     required this.textColor,
     this.isHeader = true,
     this.previewData,
+    this.port,
   });
 
   @override
@@ -60,18 +62,17 @@ class _BookplateOverlayState extends State<BookplateOverlay> {
     }
 
     setState(() => _loading = true);
-    BookReadingStats? stats;
-    try {
-      stats = BookplateService.loadBookStats(widget.book.id);
-    } catch (_) {}
+    final port =
+        widget.port ??
+        Provider.of<BookplateOverlayPort?>(context, listen: false) ??
+        const UnavailableBookplateOverlayPort();
 
     if (!mounted) return;
     setState(() {
-      _data = BookplateService.build(
+      _data = port.build(
         book: widget.book,
         currentChapterIndex: widget.currentChapterIndex,
         totalChapters: widget.totalChapters,
-        stats: stats,
       );
       _loading = false;
     });
@@ -118,7 +119,7 @@ class _BookplateOverlayState extends State<BookplateOverlay> {
               _StarRating(rating: data.rating, color: widget.textColor),
               const SizedBox(width: 8),
               Text(
-                '开始 ${BookplateService.formatDateLabel(data.startDate)}',
+                '开始 ${formatBookplateDateLabel(data.startDate)}',
                 style: TextStyle(fontSize: 10, color: muted),
               ),
             ],
@@ -167,7 +168,7 @@ class _BookplateOverlayState extends State<BookplateOverlay> {
               if (data.finishDate != null) ...[
                 const SizedBox(width: 10),
                 Text(
-                  '读完 ${BookplateService.formatDateLabel(data.finishDate)}',
+                  '读完 ${formatBookplateDateLabel(data.finishDate)}',
                   style: TextStyle(fontSize: 10, color: muted),
                 ),
               ],

@@ -1,10 +1,15 @@
 [CmdletBinding()]
 param(
-    [string]$Root = (Resolve-Path (Join-Path $PSScriptRoot '..'))
+    [string]$Root
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($Root)) {
+    $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $Root = (Resolve-Path (Join-Path $scriptRoot '..')).Path
+}
 
 $presentationPatterns = @(
     @{ Name = 'direct infrastructure or generated import'; Regex = '(?im)^\s*import\s+.*(?:bridge/|database/|infrastructure/|src/rust/)' },

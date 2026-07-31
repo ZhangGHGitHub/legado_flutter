@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/repositories/replace_rule_repository.dart';
 import 'package:legado_flutter/domain/content/replace_rule.dart';
 import 'package:legado_flutter/infrastructure/content/content_processor_adapter.dart';
+import 'package:legado_flutter/infrastructure/replace/replace_preset_port_adapter.dart';
 import 'package:legado_flutter/providers/replace_provider.dart';
 
 class _FakeReplaceRuleRepository implements ReplaceRuleRepository {
@@ -56,10 +57,17 @@ void main() {
     final provider = ReplaceProvider(
       repository: repository,
       contentProcessor: ContentProcessorAdapter(),
+      presetPort: const ReplacePresetPortAdapter(),
     );
 
     await provider.loadRules();
     expect(provider.replaceRules, isNotEmpty);
+    expect(provider.replaceRules.map((rule) => rule.id).toList(), [
+      'preset_ad_biquge',
+      'preset_ad_shuwu',
+      'preset_ad_next_page',
+      'preset_fmt_blank_lines',
+    ]);
     expect(repository.rules.length, provider.replaceRules.length);
 
     final rule = ReplaceRule(

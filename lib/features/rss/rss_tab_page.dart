@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/reader/reader_font_port.dart';
+import '../../application/rss/rss_login_port.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../providers/rss_provider.dart';
-import '../../services/source_login_service.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_refresh_indicator.dart';
 import '../../features/my/read_record_page.dart';
@@ -111,7 +111,7 @@ class RssTabPageState extends State<RssTabPage> {
         case 'login':
           await SourceLoginPage.open(
             context,
-            SourceLoginService.bookSourceForRss(source),
+            context.read<RssLoginPort>().bookSourceForRss(source),
           );
         case 'disable':
           await provider.disableSource(source);

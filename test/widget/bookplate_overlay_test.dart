@@ -5,12 +5,7 @@ import 'package:legado_flutter/services/bookplate_service.dart';
 import 'package:legado_flutter/widgets/bookplate_overlay.dart';
 
 void main() {
-  final book = Book(
-    id: 'b1',
-    name: '测试书籍',
-    author: '作者甲',
-    progress: 0.8,
-  );
+  final book = Book(id: 'b1', name: '测试书籍', author: '作者甲', progress: 0.8);
 
   const preview = BookplateData(
     bookName: '测试书籍',
@@ -25,7 +20,9 @@ void main() {
     progress: 0.8,
   );
 
-  testWidgets('BookplateOverlay header shows title and start date', (tester) async {
+  testWidgets('BookplateOverlay header shows title and start date', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -47,7 +44,9 @@ void main() {
     expect(find.textContaining('开始 2026-07-01'), findsOneWidget);
   });
 
-  testWidgets('BookplateOverlay footer shows duration and chapters', (tester) async {
+  testWidgets('BookplateOverlay footer shows duration and chapters', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

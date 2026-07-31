@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import 'package:legado_flutter/features/rss/rss_source_edit_page.dart';
-import 'package:legado_flutter/services/rss_source_edit_port.dart';
+import 'package:legado_flutter/application/rss/rss_source_edit_port.dart';
 
 class _FakeRssSourceEditPort implements RssSourceEditPort {
   RssSource? saved;

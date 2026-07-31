@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/rss/rss_sort_urls_port.dart';
+import '../../application/rss/rss_login_port.dart';
 import '../../domain/ports/application_http_request_port.dart';
 import '../../domain/rss/rss_article.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../application/rss/rss_read_state_port.dart';
 import '../../application/rss/rss_star_prefs_port.dart';
 import '../../domain/ports/rss_port.dart';
-import '../../services/source_login_service.dart';
 import '../../widgets/remote_binary_image.dart';
 import '../../features/sources/source_login_page.dart';
 import 'rss_read_page.dart';
@@ -103,7 +103,7 @@ class _RssArticlesPageState extends State<RssArticlesPage>
               icon: const Icon(Icons.login),
               onPressed: () => SourceLoginPage.open(
                 context,
-                SourceLoginService.bookSourceForRss(source),
+                context.read<RssLoginPort>().bookSourceForRss(source),
               ),
             ),
           IconButton(

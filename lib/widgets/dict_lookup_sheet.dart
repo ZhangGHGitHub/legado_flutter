@@ -7,11 +7,9 @@ import 'package:html/parser.dart' as html_parser;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../application/dictionary/dict_rule_tester.dart';
+import '../application/source_rules/dict_lookup_port.dart';
 import '../domain/ports/application_http_request_port.dart';
-import '../domain/ports/dict_rule_query_port.dart';
 import '../domain/rules/dict_rule.dart';
-import '../services/dict_rule_prefs.dart';
 import 'remote_binary_image.dart';
 
 typedef DictRulesLoader = Future<List<DictRule>> Function();
@@ -22,15 +20,17 @@ typedef DictRuleButtonHandler =
 /// 选中文本词典结果面板，对齐原版 DictDialog 的启用规则和 Tab 行为。
 class DictLookupSheet extends StatefulWidget {
   final String word;
-  final DictRulesLoader loadRules;
-  final DictRuleQuery queryRule;
+  final DictRulesLoader? loadRules;
+  final DictRuleQuery? queryRule;
+  final DictLookupPort? port;
   final DictRuleButtonHandler? onButtonClick;
 
   const DictLookupSheet({
     super.key,
     required this.word,
-    required this.queryRule,
-    this.loadRules = DictRulePrefs.load,
+    this.loadRules,
+    this.queryRule,
+    this.port,
     this.onButtonClick,
   });
 
@@ -40,6 +40,8 @@ class DictLookupSheet extends StatefulWidget {
 
 class _DictLookupSheetState extends State<DictLookupSheet>
     with SingleTickerProviderStateMixin {
+  late final DictRulesLoader _loadRulesFn;
+  late final DictRuleQuery _queryRule;
   List<DictRule> _rules = const [];
   TabController? _tabs;
   bool _loadingRules = true;
@@ -50,13 +52,19 @@ class _DictLookupSheetState extends State<DictLookupSheet>
   @override
   void initState() {
     super.initState();
+    final port =
+        widget.port ??
+        Provider.of<DictLookupPort?>(context, listen: false) ??
+        const UnavailableDictLookupPort();
+    _loadRulesFn = widget.loadRules ?? port.loadRules;
+    _queryRule = widget.queryRule ?? port.queryRule;
     _loadRules();
   }
 
   Future<void> _loadRules() async {
     try {
       final rules =
-          (await widget.loadRules()).where((rule) => rule.enabled).toList()
+          (await _loadRulesFn()).where((rule) => rule.enabled).toList()
             ..sort((a, b) => a.sortNumber.compareTo(b.sortNumber));
       if (!mounted) return;
       if (rules.isEmpty) {
@@ -95,7 +103,7 @@ class _DictLookupSheetState extends State<DictLookupSheet>
     final generation = ++_queryGeneration;
     setState(() => _results[rule.name] = const _DictResult.loading());
     try {
-      final value = await widget.queryRule(rule, widget.word);
+      final value = await _queryRule(rule, widget.word);
       if (!mounted || generation != _queryGeneration) return;
       setState(() => _results[rule.name] = _DictResult.success(value));
     } catch (error) {
@@ -527,8 +535,10 @@ Future<void> showDictLookupSheet(BuildContext context, String word) async {
     isScrollControlled: true,
     useSafeArea: true,
     builder: (_) {
-      final tester = DictRuleTester(context.read<DictRuleQueryPort>());
-      return DictLookupSheet(word: value, queryRule: tester.test);
+      final port =
+          Provider.of<DictLookupPort?>(context, listen: false) ??
+          const UnavailableDictLookupPort();
+      return DictLookupSheet(word: value, port: port);
     },
   );
 }

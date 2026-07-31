@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../application/bookshelf/book_group_management_port.dart';
 import '../domain/book/book_group.dart';
-import '../services/book_group_store.dart';
 import 'book_group_edit_dialog.dart';
 import 'legado_dialog_title_bar.dart';
 
@@ -19,18 +20,24 @@ class BookGroupSelectResult {
 Future<BookGroupSelectResult?> showBookGroupSelectDialog(
   BuildContext context, {
   String? currentGroupName,
+  BookGroupManagementPort? port,
 }) {
+  final resolvedPort = port ?? context.read<BookGroupManagementPort>();
   return showDialog<BookGroupSelectResult>(
     context: context,
     barrierDismissible: false,
-    builder: (_) => _BookGroupSelectDialog(currentGroupName: currentGroupName),
+    builder: (_) => _BookGroupSelectDialog(
+      currentGroupName: currentGroupName,
+      port: resolvedPort,
+    ),
   );
 }
 
 class _BookGroupSelectDialog extends StatefulWidget {
-  const _BookGroupSelectDialog({this.currentGroupName});
+  const _BookGroupSelectDialog({this.currentGroupName, required this.port});
 
   final String? currentGroupName;
+  final BookGroupManagementPort port;
 
   @override
   State<_BookGroupSelectDialog> createState() => _BookGroupSelectDialogState();
@@ -48,7 +55,7 @@ class _BookGroupSelectDialogState extends State<_BookGroupSelectDialog> {
   }
 
   Future<void> _reload() async {
-    final list = await BookGroupStore.loadSelectGroups();
+    final list = await widget.port.loadSelectGroups();
     if (!mounted) return;
     setState(() {
       _groups = list;
@@ -64,7 +71,7 @@ class _BookGroupSelectDialogState extends State<_BookGroupSelectDialog> {
   }
 
   Future<void> _add() async {
-    if (!await BookGroupStore.canAddGroup()) {
+    if (!await widget.port.canAddGroup()) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -72,12 +79,12 @@ class _BookGroupSelectDialogState extends State<_BookGroupSelectDialog> {
       return;
     }
     if (!mounted) return;
-    await showBookGroupEditDialog(context);
+    await showBookGroupEditDialog(context, port: widget.port);
     await _reload();
   }
 
   Future<void> _edit(BookGroup g) async {
-    await showBookGroupEditDialog(context, group: g);
+    await showBookGroupEditDialog(context, group: g, port: widget.port);
     await _reload();
   }
 

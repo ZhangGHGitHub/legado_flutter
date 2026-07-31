@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../application/annotation/note_editor_port.dart';
 import '../domain/annotation/note_snapshot.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import '../services/note_service.dart';
 
 /// 半屏想法编辑器（Phase 4.5）
 Future<bool?> showNoteEditorSheet(
@@ -14,6 +15,7 @@ Future<bool?> showNoteEditorSheet(
   int position = 0,
   int chapterPos = -1,
   NoteSnapshot? existing,
+  NoteEditorPort? port,
 }) {
   return showModalBottomSheet<bool>(
     context: context,
@@ -29,6 +31,7 @@ Future<bool?> showNoteEditorSheet(
           position: position,
           chapterPos: chapterPos,
           existing: existing,
+          port: port,
         ),
       );
     },
@@ -42,6 +45,7 @@ class _NoteEditorSheet extends StatefulWidget {
   final int position;
   final int chapterPos;
   final NoteSnapshot? existing;
+  final NoteEditorPort? port;
 
   const _NoteEditorSheet({
     required this.book,
@@ -50,6 +54,7 @@ class _NoteEditorSheet extends StatefulWidget {
     required this.position,
     required this.chapterPos,
     this.existing,
+    this.port,
   });
 
   @override
@@ -58,11 +63,16 @@ class _NoteEditorSheet extends StatefulWidget {
 
 class _NoteEditorSheetState extends State<_NoteEditorSheet> {
   late final TextEditingController _contentCtrl;
+  late final NoteEditorPort _port;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
+    _port =
+        widget.port ??
+        Provider.of<NoteEditorPort?>(context, listen: false) ??
+        const UnavailableNoteEditorPort();
     _contentCtrl = TextEditingController(
       text: widget.existing?.noteContent ?? '',
     );
@@ -75,7 +85,7 @@ class _NoteEditorSheetState extends State<_NoteEditorSheet> {
   }
 
   Future<void> _save() async {
-    if (!NoteService.isReady) {
+    if (!_port.isAvailable) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -85,7 +95,7 @@ class _NoteEditorSheetState extends State<_NoteEditorSheet> {
     }
     setState(() => _saving = true);
     final id = widget.existing?.id ?? const Uuid().v4();
-    NoteService.save(
+    _port.save(
       id: id,
       bookId: widget.book.id,
       chapterTitle: widget.chapterTitle,

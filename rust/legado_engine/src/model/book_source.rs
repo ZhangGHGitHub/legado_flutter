@@ -182,7 +182,7 @@ impl BookSource {
     }
 
     pub fn needs_dart_js(&self) -> bool {
-        self.raw_json.contains("@js:")
+        field_needs_js(&self.raw_json)
     }
 
     pub fn needs_dart_js_for_search(&self) -> bool {
@@ -246,7 +246,9 @@ impl BookSource {
 /// Rust QuickJS 支持 `<js>...</js>`；`@js:` 是 Legado 的 URL 模板脚本，
 /// 仍交由 Dart 兼容层处理，避免把未实现的变量上下文误当成普通 URL。
 pub fn field_needs_js(s: &str) -> bool {
-    s.contains("@js:")
+    s.as_bytes()
+        .windows(b"@js:".len())
+        .any(|window| window.eq_ignore_ascii_case(b"@js:"))
 }
 
 pub fn field_has_js_block(s: &str) -> bool {
@@ -403,5 +405,26 @@ mod tests {
 
         assert!(source.needs_dart_js_for_toc());
         assert!(!source.needs_dart_js_for_content());
+    }
+
+    #[test]
+    fn at_js_detection_is_ascii_case_insensitive_without_changing_js_block_detection() {
+        assert!(field_needs_js("@JS:result"));
+        assert!(field_needs_js("@Js:result"));
+        assert!(field_needs_js("@jS:result"));
+        assert!(!field_needs_js("<js>result</js>"));
+        assert!(field_has_js_block("<js>result</js>"));
+    }
+
+    #[test]
+    fn raw_json_js_capability_detection_is_case_insensitive() {
+        let source = BookSource::from_json(
+            r#"{
+                "bookSourceUrl":"https://example.com",
+                "searchUrl":"@JS:'https://example.com/search?q=' + key"
+            }"#,
+        )
+        .unwrap();
+        assert!(source.needs_dart_js());
     }
 }

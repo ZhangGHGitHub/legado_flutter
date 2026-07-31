@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
-import '../services/check_source_prefs.dart';
+import '../application/source_rules/check_source_prefs_port.dart';
 
 /// 校验设置 — 对齐 Jingshiro `CheckSourceConfig` / `strings_zh` check_source_*
-Future<void> showCheckSourceConfigDialog(BuildContext context) {
+Future<void> showCheckSourceConfigDialog(
+  BuildContext context, {
+  CheckSourcePrefsPort? prefs,
+}) {
   return showDialog<void>(
     context: context,
-    builder: (_) => const CheckSourceConfigDialog(),
+    builder: (_) => CheckSourceConfigDialog(prefs: prefs),
   );
 }
 
 class CheckSourceConfigDialog extends StatefulWidget {
-  const CheckSourceConfigDialog({super.key});
+  const CheckSourceConfigDialog({super.key, this.prefs});
+
+  final CheckSourcePrefsPort? prefs;
 
   @override
   State<CheckSourceConfigDialog> createState() =>
@@ -24,6 +30,7 @@ class _CheckSourceConfigDialogState extends State<CheckSourceConfigDialog> {
   static const _maxTimeoutSec = 300;
 
   late final TextEditingController _timeoutCtrl;
+  late final CheckSourcePrefsPort _prefs;
   bool _checkSearch = true;
   bool _checkDiscovery = true;
   bool _checkToc = true;
@@ -34,17 +41,21 @@ class _CheckSourceConfigDialogState extends State<CheckSourceConfigDialog> {
   @override
   void initState() {
     super.initState();
+    _prefs =
+        widget.prefs ??
+        Provider.of<CheckSourcePrefsPort?>(context, listen: false) ??
+        const UnavailableCheckSourcePrefsPort();
     _timeoutCtrl = TextEditingController();
     _loadPrefs();
   }
 
   Future<void> _loadPrefs() async {
-    final timeout = await CheckSourcePrefs.timeoutSec();
-    final search = await CheckSourcePrefs.checkSearch();
-    final discovery = await CheckSourcePrefs.checkDiscovery();
-    final toc = await CheckSourcePrefs.checkToc();
-    final content = await CheckSourcePrefs.checkContent();
-    final showDebug = await CheckSourcePrefs.showDebugMessage();
+    final timeout = await _prefs.timeoutSec();
+    final search = await _prefs.checkSearch();
+    final discovery = await _prefs.checkDiscovery();
+    final toc = await _prefs.checkToc();
+    final content = await _prefs.checkContent();
+    final showDebug = await _prefs.showDebugMessage();
     if (!mounted) return;
     setState(() {
       _timeoutCtrl.text = '$timeout';
@@ -73,18 +84,16 @@ class _CheckSourceConfigDialogState extends State<CheckSourceConfigDialog> {
     final timeout = _parseTimeout();
     if (timeout == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('超时请输入 $_minTimeoutSec–$_maxTimeoutSec 之间的整数'),
-        ),
+        SnackBar(content: Text('超时请输入 $_minTimeoutSec–$_maxTimeoutSec 之间的整数')),
       );
       return;
     }
-    await CheckSourcePrefs.setTimeoutSec(timeout);
-    await CheckSourcePrefs.setCheckSearch(_checkSearch);
-    await CheckSourcePrefs.setCheckDiscovery(_checkDiscovery);
-    await CheckSourcePrefs.setCheckToc(_checkToc);
-    await CheckSourcePrefs.setCheckContent(_checkContent);
-    await CheckSourcePrefs.setShowDebugMessage(_showDebugMessage);
+    await _prefs.setTimeoutSec(timeout);
+    await _prefs.setCheckSearch(_checkSearch);
+    await _prefs.setCheckDiscovery(_checkDiscovery);
+    await _prefs.setCheckToc(_checkToc);
+    await _prefs.setCheckContent(_checkContent);
+    await _prefs.setShowDebugMessage(_showDebugMessage);
     if (!mounted) return;
     Navigator.pop(context);
   }
@@ -120,10 +129,7 @@ class _CheckSourceConfigDialogState extends State<CheckSourceConfigDialog> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text(
-                    '校验项目',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                  Text('校验项目', style: Theme.of(context).textTheme.bodySmall),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('搜索'),

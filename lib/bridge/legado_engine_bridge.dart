@@ -114,7 +114,6 @@ class LegadoEngineBridge {
         sourceJson: await _sourceJson(source),
         keyword: keyword,
       );
-      await _syncLoginHeaders();
       return items
           .map(
             (item) => {
@@ -128,6 +127,7 @@ class LegadoEngineBridge {
           )
           .toList();
     } finally {
+      await _syncLoginHeaders();
       _drainHttpRequestTrace('search');
     }
   }
@@ -144,7 +144,6 @@ class LegadoEngineBridge {
         exploreUrl: exploreUrl,
         page: page,
       );
-      await _syncLoginHeaders();
       return items
           .map(
             (item) => {
@@ -158,6 +157,7 @@ class LegadoEngineBridge {
           )
           .toList();
     } finally {
+      await _syncLoginHeaders();
       _drainHttpRequestTrace('explore');
     }
   }
@@ -172,7 +172,6 @@ class LegadoEngineBridge {
         sourceJson: await _sourceJson(source),
         bookUrl: bookUrl,
       );
-      await _syncLoginHeaders();
       return {
         'name': info.name,
         'author': info.author,
@@ -183,6 +182,7 @@ class LegadoEngineBridge {
         'tocUrl': info.tocUrl,
       };
     } finally {
+      await _syncLoginHeaders();
       _drainHttpRequestTrace('bookInfo');
     }
   }
@@ -194,7 +194,6 @@ class LegadoEngineBridge {
         sourceJson: await _sourceJson(source),
         bookUrl: book.sourceUrl,
       );
-      await _syncLoginHeaders();
       return items.asMap().entries.map((entry) {
         final i = entry.key;
         final item = entry.value;
@@ -212,6 +211,7 @@ class LegadoEngineBridge {
         );
       }).toList();
     } finally {
+      await _syncLoginHeaders();
       _drainHttpRequestTrace('toc');
     }
   }
@@ -228,9 +228,9 @@ class LegadoEngineBridge {
         chapterUrl: chapterUrl,
         nextChapterUrl: nextChapterUrl,
       );
-      await _syncLoginHeaders();
       return body;
     } finally {
+      await _syncLoginHeaders();
       _drainHttpRequestTrace('content');
     }
   }
@@ -241,10 +241,15 @@ class LegadoEngineBridge {
   }) async {
     if (!_available) throw StateError('Rust engine not available');
 
-    return rust_api.validateSource(
-      sourceJson: await _sourceJson(source),
-      keyword: keyword,
-    );
+    try {
+      return await rust_api.validateSource(
+        sourceJson: await _sourceJson(source),
+        keyword: keyword,
+      );
+    } finally {
+      await _syncLoginHeaders();
+      _drainHttpRequestTrace('validateSource');
+    }
   }
 
   static List<({String title, String content})> parseTxtChapters(
@@ -314,10 +319,15 @@ class LegadoEngineBridge {
     String keyword,
   ) async {
     if (!_available) throw StateError('Rust engine not available');
-    return rust_api.debugSearch(
-      sourceJson: await _sourceJson(source),
-      keyword: keyword,
-    );
+    try {
+      return await rust_api.debugSearch(
+        sourceJson: await _sourceJson(source),
+        keyword: keyword,
+      );
+    } finally {
+      await _syncLoginHeaders();
+      _drainHttpRequestTrace('debugSearch');
+    }
   }
 
   static Future<rust_api.DebugResult> debugToc(
@@ -325,10 +335,15 @@ class LegadoEngineBridge {
     String bookUrl,
   ) async {
     if (!_available) throw StateError('Rust engine not available');
-    return rust_api.debugToc(
-      sourceJson: await _sourceJson(source),
-      bookUrl: bookUrl,
-    );
+    try {
+      return await rust_api.debugToc(
+        sourceJson: await _sourceJson(source),
+        bookUrl: bookUrl,
+      );
+    } finally {
+      await _syncLoginHeaders();
+      _drainHttpRequestTrace('debugToc');
+    }
   }
 
   static Future<String> httpFetch(
@@ -339,14 +354,19 @@ class LegadoEngineBridge {
     BookSource? source,
   }) async {
     if (!_available) throw StateError('Rust engine not available');
-    return rust_api.httpFetch(
-      url: url,
-      method: method,
-      charset: charset,
-      referer: referer,
-      sourceUrl: source?.bookSourceUrl,
-      concurrentRate: null,
-    );
+    try {
+      return await rust_api.httpFetch(
+        url: url,
+        method: method,
+        charset: charset,
+        referer: referer,
+        sourceUrl: source?.bookSourceUrl,
+        concurrentRate: null,
+      );
+    } finally {
+      if (source != null) await _syncLoginHeaders();
+      _drainHttpRequestTrace('httpFetch');
+    }
   }
 
   static Future<ExternalLibrary> _loadExternalLibrary() async {

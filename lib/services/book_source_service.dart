@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../application/book/book_provider_source_port.dart';
+import '../application/source_management/source_management_book_source_port.dart';
 import '../data/builtin_book_sources.dart';
 import '../domain/ports/book_source_book_info_port.dart';
 import '../domain/ports/book_source_content_port.dart';
@@ -17,7 +19,11 @@ import '../utils/site_busy_guard.dart';
 
 /// 书源服务门面 — 全部书源操作走 Rust 引擎（Phase E-B：无 Dart 回退）
 class BookSourceService
-    implements ReaderContentSourcePort, PaginatedReaderContentSourcePort {
+    implements
+        ReaderContentSourcePort,
+        PaginatedReaderContentSourcePort,
+        SourceManagementBookSourcePort,
+        BookProviderSourcePort {
   BookSourceService({
     required BookSourceSearchPort searchPort,
     required BookSourceBookInfoPort bookInfoPort,
@@ -40,6 +46,7 @@ class BookSourceService
   final PublicTextFetchPort _publicTextPort;
 
   /// 搜索书籍
+  @override
   Future<List<Map<String, String>>> search(
     BookSource source,
     String keyword,
@@ -50,6 +57,7 @@ class BookSourceService
   }
 
   /// 获取章节列表（同 bookUrl 并发请求会合并；源站 DB 繁忙自动退避重试）
+  @override
   Future<List<Chapter>> getChapters(
     Book book, {
     required BookSource source,
@@ -127,6 +135,7 @@ class BookSourceService
   }
 
   /// 书籍详情
+  @override
   Future<Map<String, String>> getBookInfo(
     BookSource source,
     String bookUrl,
@@ -135,6 +144,7 @@ class BookSourceService
   }
 
   /// 搜索结果转 Book 对象
+  @override
   List<Book> resultsToBooks(
     List<Map<String, String>> results,
     String sourceUrl,
@@ -176,6 +186,7 @@ class BookSourceService
   }
 
   /// 从 URL 获取书源 JSON 并解析
+  @override
   Future<List<BookSource>> fetchSourcesFromUrl(String url) async {
     try {
       final rawBody = await _publicTextPort.fetch(url);

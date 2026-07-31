@@ -1,45 +1,33 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import '../application/rss/rss_source_store_port.dart';
 import '../domain/ports/rss_source_import_port.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 
-const _rssSourcesKey = 'legado_rss_sources';
-
 /// RSS 订阅源管理 — 本地持久化（UI 层；规则引擎后续接入）
 class RssProvider extends ChangeNotifier {
-  RssProvider({RssSourceImportPort? sourceImportPort})
-    : _sourceImportPort =
-          sourceImportPort ?? const _UnavailableRssSourceImportPort();
+  RssProvider({
+    RssSourceImportPort? sourceImportPort,
+    RssSourceStorePort? sourceStore,
+  }) : _sourceImportPort =
+           sourceImportPort ?? const _UnavailableRssSourceImportPort(),
+       _sourceStore = sourceStore ?? const UnavailableRssSourceStorePort();
 
   final RssSourceImportPort _sourceImportPort;
+  final RssSourceStorePort _sourceStore;
   List<RssSource> _sources = [];
 
   List<RssSource> get sources => List.unmodifiable(_sources);
 
   Future<void> loadSources() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_rssSourcesKey);
-    if (raw == null || raw.isEmpty) {
-      _sources = [];
-    } else {
-      try {
-        _sources = RssSource.listFromJsonString(raw);
-      } catch (_) {
-        _sources = [];
-      }
-    }
+    _sources = await _sourceStore.load();
     notifyListeners();
   }
 
   Future<void> _persist() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _rssSourcesKey,
-      jsonEncode(_sources.map((s) => s.toJson()).toList()),
-    );
+    await _sourceStore.save(_sources);
     notifyListeners();
   }
 

@@ -2,10 +2,15 @@ import '../../application/replace/replace_preset.dart';
 import '../../application/replace/replace_preset_port.dart';
 import '../../domain/content/replace_rule.dart';
 import '../../services/replace_preset_library.dart' as legacy;
+import '../../services/replace_service.dart' as legacy_service;
 
 /// 将现有替换规则预置库适配到应用端口。
 final class ReplacePresetPortAdapter implements ReplacePresetPort {
   const ReplacePresetPortAdapter();
+
+  @override
+  List<ReplaceRule> builtInRules() =>
+      legacy_service.ReplaceService.builtInRules();
 
   @override
   List<ReplacePreset> get all => legacy.ReplacePresetLibrary.all

@@ -16,6 +16,20 @@ import 'package:legado_flutter/model/read_book.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
+import 'package:legado_flutter/domain/ports/reading_record_port.dart';
+import 'package:legado_flutter/application/reader/tts_port.dart';
+import 'package:legado_flutter/application/reader/book_reader_prefs_port.dart';
+import 'package:legado_flutter/application/reader/read_book_config_prefs_port.dart';
+import 'package:legado_flutter/application/reader/read_style_prefs_port.dart';
+import 'package:legado_flutter/application/reader/reader_bookmark_readiness_port.dart';
+import 'package:legado_flutter/application/reader/reader_content_refetch_port.dart';
+import 'package:legado_flutter/application/reader/reader_font_port.dart';
+import 'package:legado_flutter/application/reader/reader_image_cache_port.dart';
+import 'package:legado_flutter/application/reader/reader_selection_port.dart';
+import 'package:legado_flutter/application/reader/reader_session_prefs_port.dart';
+import 'package:legado_flutter/application/preferences/click_action_prefs_port.dart';
+import 'package:legado_flutter/application/reader/simulated_reading_prefs_port.dart';
+import 'package:legado_flutter/application/reader/reader_progress_sync_port.dart';
 import 'package:legado_flutter/features/reader/reader_page.dart';
 import 'package:legado_flutter/features/reader/reader_settings.dart';
 import 'package:legado_flutter/features/reader/turn/page_direction.dart';
@@ -23,6 +37,21 @@ import 'package:legado_flutter/features/reader/turn/page_snapshot.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/infrastructure/content/frb_content_processing_port.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_book_source_validation_port.dart';
+import 'package:legado_flutter/infrastructure/engine/frb_reading_record_port.dart';
+import 'package:legado_flutter/infrastructure/reader/tts_port_adapter.dart';
+import 'package:legado_flutter/infrastructure/reader/book_reader_prefs_port_adapter.dart';
+import 'package:legado_flutter/infrastructure/reader/read_book_config_prefs_port_adapter.dart';
+import 'package:legado_flutter/infrastructure/preferences/shared_preferences_read_style_prefs_adapter.dart';
+import 'package:legado_flutter/infrastructure/reader/reader_bookmark_readiness_port_adapter.dart';
+import 'package:legado_flutter/infrastructure/reader/reader_content_refetch_port_adapter.dart';
+import 'package:legado_flutter/infrastructure/reader/reader_font_port_adapter.dart';
+import 'package:legado_flutter/infrastructure/reader/reader_image_cache_port_adapter.dart';
+import 'package:legado_flutter/infrastructure/reader/reader_selection_port_adapter.dart';
+import 'package:legado_flutter/infrastructure/reader/reader_session_prefs_port_adapter.dart';
+import 'package:legado_flutter/infrastructure/preferences/shared_preferences_click_action_prefs_adapter.dart';
+import 'package:legado_flutter/infrastructure/preferences/shared_preferences_simulated_reading_prefs.dart';
+import 'package:legado_flutter/infrastructure/network/frb_application_binary_http_request_port.dart';
+import 'package:legado_flutter/services/tts_service.dart';
 import 'package:legado_flutter/features/reader/turn/reader_turn_view.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
@@ -34,6 +63,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../test/helpers/book_source_service_test_factory.dart';
+import 'reader_snapshot_test_ports.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -162,6 +192,49 @@ void main() {
       MultiProvider(
         providers: [
           Provider<BookSourceService>.value(value: sourceService),
+          Provider<ReadingRecordPort>.value(value: FrbReadingRecordPort()),
+          ListenableProvider<TtsPort>.value(
+            value: TtsPortAdapter(TtsService.instance),
+          ),
+          Provider<ReaderFontPort>.value(value: const ReaderFontPortAdapter()),
+          Provider<ReaderSessionPrefsPort>.value(
+            value: const ReaderSessionPrefsPortAdapter(),
+          ),
+          Provider<ReaderSelectionPort>.value(
+            value: const ReaderSelectionPortAdapter(),
+          ),
+          Provider<ReaderContentRefetchPort>.value(
+            value: ReaderContentRefetchPortAdapter(
+              contentSource: sourceService,
+              resolveSource: sourceProvider.findSourceForBook,
+            ),
+          ),
+          Provider<ReaderBookmarkReadinessPort>.value(
+            value: const ReaderBookmarkReadinessPortAdapter(),
+          ),
+          Provider<ReaderProgressSyncPort>.value(
+            value: const NoopReaderProgressSyncPort(),
+          ),
+          Provider<BookReaderPrefsPort>.value(
+            value: const BookReaderPrefsPortAdapter(),
+          ),
+          Provider<ReadBookConfigPrefsPort>.value(
+            value: const ReadBookConfigPrefsPortAdapter(),
+          ),
+          Provider<ReadStylePrefsPort>.value(
+            value: const SharedPreferencesReadStylePrefsAdapter(),
+          ),
+          Provider<ClickActionPrefsPort>.value(
+            value: const SharedPreferencesClickActionPrefsAdapter(),
+          ),
+          Provider<SimulatedReadingPrefsPort>.value(
+            value: const SharedPreferencesSimulatedReadingPrefs(),
+          ),
+          Provider<ReaderImageCachePort>.value(
+            value: ReaderImageCachePortAdapter(
+              const FrbApplicationBinaryHttpRequestPort(),
+            ),
+          ),
           ChangeNotifierProvider.value(value: bookProvider),
           ChangeNotifierProvider.value(value: sourceProvider),
         ],

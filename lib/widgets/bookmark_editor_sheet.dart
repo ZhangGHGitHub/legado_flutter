@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../application/annotation/bookmark_editor_port.dart';
 import '../domain/annotation/bookmark_snapshot.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import '../services/bookmark_service.dart';
 
 /// 对齐原版 BookmarkDialog：确认后才创建或更新书签。
 Future<bool?> showBookmarkEditorSheet(
@@ -14,6 +15,7 @@ Future<bool?> showBookmarkEditorSheet(
   int chapterPos = -1,
   String bookText = '',
   String content = '',
+  BookmarkEditorPort? port,
 }) {
   return showModalBottomSheet<bool>(
     context: context,
@@ -30,6 +32,7 @@ Future<bool?> showBookmarkEditorSheet(
           chapterPos: existing?.chapterPos ?? chapterPos,
           bookText: existing?.bookText ?? bookText,
           content: existing?.content ?? content,
+          port: port,
         ),
       );
     },
@@ -44,6 +47,7 @@ class _BookmarkEditorSheet extends StatefulWidget {
   final int chapterPos;
   final String bookText;
   final String content;
+  final BookmarkEditorPort? port;
 
   const _BookmarkEditorSheet({
     required this.book,
@@ -53,6 +57,7 @@ class _BookmarkEditorSheet extends StatefulWidget {
     required this.chapterPos,
     required this.bookText,
     required this.content,
+    this.port,
   });
 
   @override
@@ -62,11 +67,16 @@ class _BookmarkEditorSheet extends StatefulWidget {
 class _BookmarkEditorSheetState extends State<_BookmarkEditorSheet> {
   late final TextEditingController _bookTextCtrl;
   late final TextEditingController _contentCtrl;
+  late final BookmarkEditorPort _port;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
+    _port =
+        widget.port ??
+        Provider.of<BookmarkEditorPort?>(context, listen: false) ??
+        const UnavailableBookmarkEditorPort();
     _bookTextCtrl = TextEditingController(text: widget.bookText);
     _contentCtrl = TextEditingController(text: widget.content);
   }
@@ -79,7 +89,7 @@ class _BookmarkEditorSheetState extends State<_BookmarkEditorSheet> {
   }
 
   Future<void> _save() async {
-    if (!BookmarkService.isReady) {
+    if (!_port.isAvailable) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -88,7 +98,7 @@ class _BookmarkEditorSheetState extends State<_BookmarkEditorSheet> {
       return;
     }
     setState(() => _saving = true);
-    final time = BookmarkService.save(
+    final time = _port.save(
       time: widget.time,
       bookId: widget.book.id,
       bookName: widget.book.name,

@@ -51,7 +51,7 @@ abstract final class SourceLoginService {
 
   static String extractScript(String raw) {
     final t = raw.trim();
-    if (t.startsWith('@js:')) return t.substring(4).trim();
+    if (_startsWithJsPrefix(t)) return t.substring(4).trim();
     final m = RegExp(
       r'<js>([\s\S]*?)</js>',
       caseSensitive: false,
@@ -66,7 +66,17 @@ abstract final class SourceLoginService {
 
   static bool isJsUrl(String url) {
     final t = url.trim();
-    return t.startsWith('@js:') || t.startsWith('<js>') || t.startsWith('<JS>');
+    return _startsWithJsPrefix(t) ||
+        RegExp(r'^<js>', caseSensitive: false).hasMatch(t);
+  }
+
+  static bool _startsWithJsPrefix(String value) {
+    if (value.length < 4) return false;
+    final prefix = value.substring(0, 4);
+    return prefix.codeUnitAt(0) == 0x40 &&
+        (prefix.codeUnitAt(1) | 0x20) == 0x6a &&
+        (prefix.codeUnitAt(2) | 0x20) == 0x73 &&
+        prefix.codeUnitAt(3) == 0x3a;
   }
 
   /// RSS 登录用临时 BookSource 视图

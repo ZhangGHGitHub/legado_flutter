@@ -7,6 +7,7 @@ import 'package:legado_flutter/database/dao/replace_rule_dao.dart';
 import 'package:legado_flutter/database/dao/source_dao.dart';
 import 'package:legado_flutter/application/lifecycle/app_lifecycle_coordinator.dart';
 import 'package:legado_flutter/application/main/main_shell_startup_port.dart';
+import 'package:legado_flutter/application/main/privacy_consent_port.dart';
 import 'package:legado_flutter/application/mine/my_page_port.dart';
 import 'package:legado_flutter/application/bookshelf/book_group_store_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_local_book_port.dart';
@@ -81,6 +82,9 @@ void main() {
         providers: [
           Provider<PublicTextFetchPort>.value(
             value: const _EmptyPublicTextFetchPort(),
+          ),
+          Provider<PrivacyConsentPort>.value(
+            value: const _FakePrivacyConsentPort(accepted: true),
           ),
           Provider<BookshelfDisplayPrefsPort>.value(
             value: _FakeBookshelfDisplayPrefsPort(),
@@ -158,6 +162,9 @@ void main() {
           Provider<PublicTextFetchPort>.value(
             value: const _EmptyPublicTextFetchPort(),
           ),
+          Provider<PrivacyConsentPort>.value(
+            value: const _FakePrivacyConsentPort(accepted: true),
+          ),
           Provider<BookshelfDisplayPrefsPort>.value(
             value: _FakeBookshelfDisplayPrefsPort(),
           ),
@@ -232,6 +239,9 @@ void main() {
           providers: [
             Provider<PublicTextFetchPort>.value(
               value: const _EmptyPublicTextFetchPort(),
+            ),
+            Provider<PrivacyConsentPort>.value(
+              value: const _FakePrivacyConsentPort(accepted: false),
             ),
             Provider<BookshelfDisplayPrefsPort>.value(
               value: _FakeBookshelfDisplayPrefsPort(),
@@ -389,6 +399,18 @@ class _FakeMainShellStartupPort implements MainShellStartupPort {
       ruleSubscriptions: Future.value(const []),
     );
   }
+}
+
+class _FakePrivacyConsentPort implements PrivacyConsentPort {
+  const _FakePrivacyConsentPort({required this.accepted});
+
+  final bool accepted;
+
+  @override
+  Future<bool> isAccepted() async => accepted;
+
+  @override
+  Future<bool> saveAccepted() async => true;
 }
 
 class _FakeBookshelfDisplayPrefsPort implements BookshelfDisplayPrefsPort {

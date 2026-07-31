@@ -4,6 +4,20 @@ import 'package:legado_flutter/infrastructure/replace/replace_preset_port_adapte
 void main() {
   final port = const ReplacePresetPortAdapter();
 
+  test('内置规则只保留四条并维持 service 的顺序和唯一 id', () {
+    final rules = port.builtInRules();
+
+    expect(rules.map((rule) => rule.id).toList(), [
+      'preset_ad_biquge',
+      'preset_ad_shuwu',
+      'preset_ad_next_page',
+      'preset_fmt_blank_lines',
+    ]);
+    expect(rules, hasLength(4));
+    expect(rules.map((rule) => rule.id).toSet(), hasLength(rules.length));
+    expect(rules.every((rule) => rule.isEnabled), isTrue);
+  });
+
   test('保留预置规则顺序和分组顺序', () {
     final presets = port.all;
     final groups = port.grouped();

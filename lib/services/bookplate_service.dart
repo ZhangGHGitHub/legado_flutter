@@ -1,36 +1,13 @@
 import 'package:flutter/foundation.dart';
 
+import '../application/annotation/bookplate_overlay_port.dart';
 import '../domain/book_reading_stats.dart';
 import '../domain/ports/bookplate_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'reading_record_service.dart';
 
-/// 阅读小票展示数据（Phase 4.4）
-class BookplateData {
-  final String bookName;
-  final String author;
-  final double rating;
-  final String durationLabel;
-  final String charsLabel;
-  final String? startDate;
-  final String? finishDate;
-  final int chaptersRead;
-  final int totalChapters;
-  final double progress;
-
-  const BookplateData({
-    required this.bookName,
-    required this.author,
-    required this.rating,
-    required this.durationLabel,
-    required this.charsLabel,
-    this.startDate,
-    this.finishDate,
-    required this.chaptersRead,
-    required this.totalChapters,
-    required this.progress,
-  });
-}
+export '../application/annotation/bookplate_overlay_port.dart'
+    show BookplateData;
 
 /// 阅读小票数据组装
 abstract final class BookplateService {
@@ -84,7 +61,6 @@ abstract final class BookplateService {
   }
 
   static String formatDateLabel(String? isoDate) {
-    if (isoDate == null || isoDate.isEmpty) return '—';
-    return isoDate;
+    return formatBookplateDateLabel(isoDate);
   }
 }

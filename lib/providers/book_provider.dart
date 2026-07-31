@@ -2,18 +2,17 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import '../application/book/batch_book_progress_sync_port.dart';
+import '../application/book/chapter_progress_migrator.dart';
+import '../application/book/local_book_import_port.dart';
+import '../application/book/book_provider_source_port.dart';
 import '../domain/repositories/book_repository.dart';
 import '../domain/ports/chapter_content_cache_port.dart';
-import '../domain/ports/local_book_parser_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../help/shelf_unread.dart';
 import '../model/read_book.dart';
-import '../services/book_source_service.dart';
-import '../services/book_progress_sync.dart';
-import '../services/chapter_progress_migrator.dart';
-import '../services/local_book_service.dart';
 import '../utils/site_busy_guard.dart';
 
 /// 书架批量更新目录的结果，供 UI 展示完整的成功/失败/跳过统计。
@@ -35,39 +34,17 @@ class ShelfTocUpdateResult {
   final Map<String, String> failures;
 }
 
-class _UnavailableLocalBookParserPort implements LocalBookParserPort {
-  const _UnavailableLocalBookParserPort();
-
-  @override
-  bool get isAvailable => false;
-
-  @override
-  LocalBookEpubSnapshot parseEpub(List<int> data) {
-    throw StateError('本地书籍解析端口不可用');
-  }
-
-  @override
-  List<LocalBookChapterSnapshot> parseTxtChapters(String content) {
-    throw StateError('本地书籍解析端口不可用');
-  }
-}
-
 /// 书籍管理 Provider — 书架、阅读、章节、下载缓存
 class BookProvider extends ChangeNotifier {
   BookProvider({
     required BookRepository repository,
-    required BookSourceService sourceService,
-    LocalBookService? localService,
+    required BookProviderSourcePort sourceService,
+    LocalBookImportPort? localBookPort,
     required ChapterContentCachePort contentCache,
   }) : _repository = repository,
        _sourceService = sourceService,
+       _localBookPort = localBookPort ?? const UnavailableLocalBookImportPort(),
        _contentCache = contentCache {
-    _localService =
-        localService ??
-        LocalBookService(
-          repository: _repository,
-          parser: const _UnavailableLocalBookParserPort(),
-        );
     ReadBook.instance.configure(
       sourceService: _sourceService,
       repository: _repository,
@@ -76,9 +53,9 @@ class BookProvider extends ChangeNotifier {
   }
 
   final BookRepository _repository;
-  final BookSourceService _sourceService;
+  final BookProviderSourcePort _sourceService;
   final ChapterContentCachePort _contentCache;
-  late final LocalBookService _localService;
+  final LocalBookImportPort _localBookPort;
 
   List<Book> _books = [];
   List<Chapter> _currentChapters = [];
@@ -267,7 +244,7 @@ class BookProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      final book = await _localService.importFromFile();
+      final book = await _localBookPort.importFromFile();
       if (book != null) {
         _books = await _repository.getAll();
         await _refreshShelfChapterMetaFor(book.id);
@@ -288,7 +265,7 @@ class BookProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      final book = await _localService.importFromPath(
+      final book = await _localBookPort.importFromPath(
         path,
         displayName: displayName,
       );
@@ -1203,7 +1180,9 @@ class BookProvider extends ChangeNotifier {
   }
 
   /// 批量拉取 WebDAV 进度，并按原版规则只覆盖领先的本地书籍。
-  Future<int> downloadAllBookProgress({required BookProgressSync sync}) async {
+  Future<int> downloadAllBookProgress({
+    required BatchBookProgressSyncPort sync,
+  }) async {
     final books = List<Book>.from(_books);
     return sync.downloadAllBookProgress(
       books: books,

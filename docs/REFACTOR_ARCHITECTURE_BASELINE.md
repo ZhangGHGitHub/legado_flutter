@@ -3105,3 +3105,100 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：三条线定向 `8/8`；Flutter 串行全量 `802` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`：`No issues found`；架构扫描由 `25` 降至 `22` 条既有 Feature→service backlog；格式和 `git diff --check` 通过，Rust 未改动。
 
 边界结论：本批完成 RSS 分类、RSS 源管理传输和 Reader 书籍阅读偏好的 application/infrastructure 调用者迁移，剩余 `22` 条 Feature 依赖继续按单边界推进。
+
+## 163. 2026-07-31：R6 Widget 边界并行收口
+
+- W1 将书架分组编辑、管理和选择对话框迁移到 `BookGroupManagementPort`；W2 将书签编辑、书票和笔记编辑迁移到 annotation application ports；W3 将源校验偏好、字典查询和替换预览 helper 迁移到 source-rule application ports；所有 adapter 复用既有 service/FRB 语义，组合根已完成 Provider 接入。
+- W4 只读审查确认 Widget/Feature 侧无直接 service import；剩余直接依赖集中在 `BookProvider`、`ReplaceProvider`、`RssProvider` 和 `SourceProvider`，未在本批扩大 Provider 写集。
+- W4-W0 将 `legado_bottom_nav.dart` 的字体与 CJK fallback 读取迁移到既有 `ReaderFontPort`，不新增端口、不修改组合根。
+- 未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：W1 `11/11`、W2 `10/10`、W3 `14/14`、W4-W0 `4/4`，owner 组合回归 `33/33`；Flutter 串行全量 `829` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断；架构脚本和 `git diff --check` 通过。`read_book_async_test.dart` teardown 增加预加载完成等待，修复 Windows 临时目录文件锁竞态，不改变断言或阅读行为。
+
+边界结论：本批完成 Widget/Feature 到 application/infrastructure 的直接依赖收口；Provider 依赖继续作为下一批单边界 backlog，真实 Android TTS、Web/WASM/PWA 和正式/主流 WebDAV 继续按暂停门禁执行。
+
+## 164. 2026-07-31：R6 Provider 边界并行收口
+
+- P0 将 `ReplaceProvider` 的内置规则初始化/重置改为 `ReplacePresetPort.builtInRules()`；端口 adapter 仍委托原 `ReplaceService`，只返回四条启动规则，完整预置库导入语义不变。
+- P1 将纯 `ChapterProgressMigrator` 策略移到 `lib/application/book/`，旧 service 保留兼容导出；章节 URL/标题匹配、阅读位置裁剪和迁移边界不变。
+- P2 将 `SourceProvider` 的登录头读取/解析和源校验偏好改为既有 `SourceLoginPagePort`、`CheckSourcePrefsPort`；组合根提供真实 adapter，Provider 只保留 application fallback。
+- P3 新增 `RssSourceStorePort` 和 SharedPreferences adapter，`RssProvider` 不再直接依赖 SharedPreferences；保留 `legado_rss_sources` 键、源 URL 去重、排序和空数据行为。
+- 未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。扩展静态扫描不再发现 Feature/Widget/Provider 对 infrastructure、SharedPreferences 或 Dio 的直接引用；Provider 的剩余 service 依赖仍按下一批风险拆分，不加入白名单。
+
+验证结果：P0 `4/4`、P1 `8/8`、P2 `24/24`、P3 `10/10`，owner 组合 `42/42`；Flutter 串行全量 `838` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断；架构脚本和 `git diff --check` 通过。真实 Android TTS、Web/WASM/PWA 和正式/主流 WebDAV 继续按暂停门禁执行。
+
+边界结论：本批完成 Replace/Book/Source/RSS Provider 的四个低风险应用边界，Provider 剩余 BookSource 聚合、SourceGroup/Validation、批量同步等高风险 service 依赖继续保持未迁移状态。
+
+## 165. 2026-07-31：R6 SourceProvider 源分组边界与 Provider 高风险契约审查
+
+- `SourceProvider` 的分组目录加载/合并/增删改和标签拆分、去重、追加、移除、重命名改用 application `SourceGroupCatalogPort`；infrastructure adapter 继续委托既有 `SourceGroupCatalog` 与 `SourceGroupTags`，保持 SharedPreferences 键、排序和中英文逗号语义。
+- 组合根注册并注入真实 adapter；Provider 默认 fallback 只包含 application 内存标签规则，不直接引用 infrastructure。
+- 三条只读审查确认：validation store 保持 `source_validation_v1` 与损坏数据空映射；BookSource/LocalBook 聚合不能绕过目录/正文与 TXT/EPUB fallback；批量进度同步必须在 apply 成功后才推进 sync time。
+- 未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：owner 定向 `13/13`；Flutter 串行全量 `842` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断；架构脚本通过；扩展扫描剩余五处明确 Provider→service 依赖；`git diff --check` 通过，仅有既有 LF/CRLF 提示。
+
+边界结论：源分组边界已集成到 owner checkout；validation store、BookSource/LocalBook 聚合和批量进度同步仍按审查结果进入后续独立批次，审查结果本身不构成运行时迁移完成声明。
+
+## 166. 2026-08-01：R6 Provider 四项高风险边界收口
+
+- `SourceProvider` 接入 `SourceValidationStorePort` 与 `SourceManagementBookSourcePort`；校验缓存仍保持 `source_validation_v1`、URL 键和损坏数据空映射，书源导入/搜索/结果映射仍由现有 `BookSourceService` 执行。
+- `BookProvider` 的批量 WebDAV 进度改用 `BatchBookProgressSyncPort`，本地文件/路径导入改用 `LocalBookImportPort`；组合根 adapter 保留 `lastModified`、remote-ahead、apply 成功后更新时间戳、50MB、编码、TXT/EPUB fallback 和 Repository 写入语义。
+- 书架本地导入 adapter 同时接受 application 与 legacy 导入异常，避免迁移期间旧测试宿主或兼容 callback 改变用户可见错误消息。
+- 未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。扩展 Provider 扫描由五处降至一处，剩余为 `BookProvider -> BookSourceService` 的高风险聚合边界。
+
+验证结果：四条 owner 定向分别 `20/20`、`20/20`、`26/26`、`32/32`；Flutter 串行全量 `864` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断；架构脚本通过；`git diff --check` 通过，仅有既有 LF/CRLF 提示。
+
+边界结论：Batch 6 四项 Provider application/infrastructure 边界已集成并通过全量门禁；下一批只处理 BookProvider 的 BookSource 聚合拆分，不扩大到正文算法、Reader 内容或 Rust 数据库迁移。
+
+## 167. 2026-08-01：R6 BookProvider 书源聚合边界收口
+
+- 新增 `BookProviderSourcePort` 与 `BookProviderSourcePortAdapter`，覆盖 BookProvider 实际使用的详情、搜索、结果映射、目录、普通正文和分页正文能力；adapter 仅委托现有 `BookSourceService`，不重写源站忙碌重试、TOC URL 补全、映射、分页回退或正文失败语义。
+- `BookProvider`、`AppBootstrap` 和组合根改用 application port；`ReadBook` 继续接收同时满足 `ReaderContentSourcePort` 与 `PaginatedReaderContentSourcePort` 的门面。`Provider<BookSourceService>`、SourceProvider、规则订阅、主壳启动和内容重取链路保持原 concrete service 注入。
+- 未修改 `legado-main/`、Rust、正文算法、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：facade focused `2/2`；owner BookProvider/ReadBook/BookSourceService 定向 `41/41`；Flutter 串行全量 `866` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断；架构脚本通过；Provider service 扩展扫描为零；`git diff --check` 通过，仅有既有 LF/CRLF 提示。
+
+边界结论：R6 Provider 直接 service backlog 已清零。本批只完成调用边界，不宣称 Web/WASM/PWA、真实 Android TTS、正式/主流 WebDAV 或 Rust 数据库迁移门禁完成。
+
+## 168. 2026-08-01：R6 MainShell 隐私协议持久化边界
+
+- 新增 `PrivacyConsentPort` 与 `SharedPreferencesPrivacyConsentPortAdapter`；adapter 复用 `SharedPreferencesRuntime`，保持 `legado_privacy_accepted`、缺失/初始化失败返回未同意、保存失败安全降级，并允许 runtime 后续重试。
+- `MainShell` 移除 `SharedPreferencesRuntime` 直接依赖，隐私读取仍在初始化后的 post-frame prompt 中执行；不改变不可点击遮罩、拒绝退出、同意关闭、mounted 检查或崩溃恢复提示顺序。
+- 组合根注册独立 privacy port；三个 MainShell 测试宿主补充 fake，未并入 `MainShellStartupPort`，未修改 `WelcomePage`、Reader 内容或 Rust。
+
+验证结果：privacy/runtime/MainShell/Welcome 定向 `14/14`；Flutter 串行全量 `869` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断；架构脚本通过；Feature/Widget/Provider 扩展扫描清零；`git diff --check` 通过，仅有既有 LF/CRLF 提示。
+
+边界结论：MainShell 隐私持久化已完成 application/infrastructure 隔离；本批不宣称 Web/WASM/PWA、真实 Android TTS、正式/主流 WebDAV 或 Rust 数据库迁移完成。
+
+## 169. 2026-08-01：R6 Batch 9 `<js>` 兼容证据审查
+
+- 四条只读审查线复核 Rust JS 执行器、原版 Kotlin 宿主变量与规则 schema、Flutter/FRB 桥接以及测试脚本。现有离线 Rust JS `18/18`、Flutter JS `4/4` 通过；7565 在线探测返回 HTTP 400，按既有测试契约作为可选路径跳过，不能作为在线链路验收证据。
+- 测试脚本修复为从 PATH 查找 Cargo/Flutter，Rust 固定 `--locked --offline`，Flutter 固定 `--no-pub`，工具缺失直接失败；`docs/JS_COMPAT.md` 的 Rust 统计更新为 `18` 项，并明确离线门禁与在线探测边界。
+- 原版对照发现 `@js:`/`@JS:` 路由应大小写不敏感，形成最小可复现缺口；普通 JS 宿主变量、完整 `java.*` API、真实 Dart→FRB→Rust 链路、对象返回值转换和完整书源 schema 仍需调用上下文或更大范围设计，暂不以默认占位值关闭。
+- 当前最小实现线仅修改 Rust `BookSource` 的 JS 判定及回归测试；不得修改 `legado-main/`、正文/目录/分页/章节身份/UTF-16 阅读位置或 Web/WASM/PWA/真实 Android TTS 暂停范围。
+
+验证记录：`cargo fmt -p legado_engine`、BookSource 定向 `8/8`、`cargo test -p legado_engine` `186/186`、`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_js_compat.ps1`（Rust `18/18`、Flutter `4/4`）、Flutter 全量 `869` 通过且 `3` 项既有条件跳过、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 均通过。7565 在线探测 HTTP 400 按既有可选契约跳过；Rust 既有 FRB/dead_code 警告保留，未因本批扩大范围。
+
+## 170. 2026-08-01：R6 Batch 10 Flutter JS 入口契约收口
+
+- `SourceLoginService.extractScript`、`isJsUrl` 对 `@js:` 采用 ASCII 大小写不敏感判定，并统一识别 `<js>`/`<Js>`；登录表单脚本提取和 URL 分类不改变已有返回值或端口调用语义。
+- `JsCompatAnalyzer` 对 `@js:` 统计、规则字段归类和 `<js>` 标签计数复用大小写不敏感正则；内置 7565/7497 统计保持原断言，新增混合大小写 fixture。
+- 未修改 `legado-main/`、Rust 引擎、正文/目录/分页/章节身份/UTF-16 阅读位置，也未将完整宿主 API、执行超时/取消、真实 Dart→FRB→Rust 链路、在线书源或对象返回值语义宣称为已完成。
+
+验证记录：Batch 10 owner 定向 `11/11`；Flutter 串行全量 `873` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式检查和 `git diff --check` 通过。JS 兼容脚本上一轮已验证 Rust `18/18`、Flutter `4/4`，在线 7565 HTTP 400 按既有可选契约跳过。
+
+## 171. 2026-08-01：R6 Batch 11/12 登录头与 HTTP trace 收尾
+
+- `LegadoEngineBridge` 的搜索、发现、详情、目录、正文和 `validateSource` 均把登录头同步移入 `finally`，并在同步后 drain 对应 HTTP trace；失败路径也能处理 Rust 已写入的 dirty 登录头，原始业务异常不被收尾操作替换。
+- `validateSource` 新增 `validateSource` trace 收尾；未扩大到 `debugSearch`、`debugToc`、`httpFetch`，这三个入口由后续独立批次处理，避免把统一调试链路和主请求链路混写。
+- 未处理登录头队列先 drain 后持久化的失败重试/ack、空登录头删除、Rust `loginCheckJs` 错误响应重试和校验偏好实际短路；这些均已登记为后续兼容性风险。
+
+验证记录：引擎/source debug owner 定向 `2` 个可运行测试通过、`2` 个在线 smoke 按既有开关跳过；Flutter 串行全量 `873` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。未修改 `legado-main/`、正文/目录/分页/章节身份/UTF-16 阅读位置。
+
+## 172. 2026-08-01：R6 Batch 13 调试与裸 HTTP bridge 收尾
+
+- `debugSearch`、`debugToc` 增加 `finally` 收尾，顺序为同步登录头后 drain trace；`httpFetch` 无论 source 是否存在都 drain trace，传入 source 时执行防御性登录头同步。
+- 保持调试/HTTP 参数、返回值、错误传播和既有 Rust API 不变；未处理登录头持久化 ack/重试、空值删除、真实异常 fixture 和 Rust `loginCheckJs` 错误响应语义。
+
+验证记录：owner 定向 `4/4`，含引擎、source debug 和本地 HTTP port；Flutter 串行全量 `873` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。未修改 `legado-main/`、Rust、正文/目录/分页/章节身份/UTF-16 阅读位置。

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../services/reader_font_loader.dart';
+import '../application/reader/reader_font_port.dart';
 import '../theme/legado_chrome.dart';
 
 /// 主壳底栏一项
@@ -25,6 +26,7 @@ class LegadoBottomNav extends StatelessWidget {
   final ValueChanged<int> onDestinationSelected;
   final List<LegadoBottomNavItem> destinations;
   final double height;
+  final ReaderFontPort? fontPort;
 
   const LegadoBottomNav({
     super.key,
@@ -32,6 +34,7 @@ class LegadoBottomNav extends StatelessWidget {
     required this.onDestinationSelected,
     required this.destinations,
     this.height = 64,
+    this.fontPort,
   });
 
   @override
@@ -44,8 +47,9 @@ class LegadoBottomNav extends StatelessWidget {
     final unselected = theme.brightness == Brightness.light
         ? const Color(0x8A000000)
         : scheme.onSurfaceVariant;
-    final uiFont = ReaderFontLoader.platformSansFamily();
-    final uiFallback = ReaderFontLoader.cjkFallbackFamilies();
+    final readerFontPort = fontPort ?? context.read<ReaderFontPort>();
+    final uiFont = readerFontPort.platformSansFamily();
+    final uiFallback = readerFontPort.cjkFallbackFamilies();
     final scale = height / LegadoChrome.navigationBarHeightBase;
     final iconSize = LegadoChrome.navIconSizeBase * scale;
     final labelSize = LegadoChrome.navLabelFontBase * scale;

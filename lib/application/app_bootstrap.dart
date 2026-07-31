@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'book/batch_book_progress_sync_port.dart';
+import 'book/local_book_import_port.dart';
+import 'book/book_provider_source_port.dart';
 import 'database/legacy_room_import_service.dart';
 import 'startup/startup_task_runner.dart';
 import '../domain/ports/chapter_content_cache_port.dart';
@@ -12,10 +15,8 @@ import '../model/read_book.dart';
 import '../providers/book_provider.dart';
 import '../services/book_source_service.dart';
 import '../services/backup_service.dart';
-import '../services/book_progress_sync.dart';
 import '../services/bookmark_sync_service.dart';
 import '../services/cache_service.dart';
-import '../services/local_book_service.dart';
 import '../services/webdav_prefs.dart';
 import '../services/webdav_setup_service.dart';
 import '../theme/app_theme.dart';
@@ -73,7 +74,7 @@ class AppBootstrapResult {
   final ThemeModeController themeController;
   final LegacyRoomImportService legacyRoomImportService;
   final BackupService backupService;
-  final BookProgressSync bookProgressSync;
+  final BatchBookProgressSyncPort bookProgressSync;
   final BookmarkSyncService bookmarkSyncService;
   final CacheService cacheService;
   final WebDavRepository webdavRepository;
@@ -93,10 +94,11 @@ class AppBootstrap {
     required ChapterContentCachePort contentCache,
     required ContentProcessingPort contentProcessor,
     required BookSourceService bookSourceService,
-    required LocalBookService localBookService,
+    required BookProviderSourcePort bookProviderSourcePort,
+    required LocalBookImportPort localBookImportPort,
     required LegacyRoomImportService legacyRoomImportService,
     required BackupService backupService,
-    required BookProgressSync bookProgressSync,
+    required BatchBookProgressSyncPort bookProgressSync,
     required BookmarkSyncService bookmarkSyncService,
     required CacheService cacheService,
     required WebDavRepository webdavRepository,
@@ -112,7 +114,8 @@ class AppBootstrap {
        _contentCache = contentCache,
        _contentProcessor = contentProcessor,
        _bookSourceService = bookSourceService,
-       _localBookService = localBookService,
+       _bookProviderSourcePort = bookProviderSourcePort,
+       _localBookImportPort = localBookImportPort,
        _legacyRoomImportService = legacyRoomImportService,
        _backupService = backupService,
        _bookProgressSync = bookProgressSync,
@@ -132,10 +135,11 @@ class AppBootstrap {
   final ChapterContentCachePort _contentCache;
   final ContentProcessingPort _contentProcessor;
   final BookSourceService _bookSourceService;
-  final LocalBookService _localBookService;
+  final BookProviderSourcePort _bookProviderSourcePort;
+  final LocalBookImportPort _localBookImportPort;
   final LegacyRoomImportService _legacyRoomImportService;
   final BackupService _backupService;
-  final BookProgressSync _bookProgressSync;
+  final BatchBookProgressSyncPort _bookProgressSync;
   final BookmarkSyncService _bookmarkSyncService;
   final CacheService _cacheService;
   final WebDavRepository _webdavRepository;
@@ -147,15 +151,15 @@ class AppBootstrap {
     await _initializePlatform();
     _reportStartupStage?.call('阅读会话依赖组装');
     ReadBook.instance.configureDependencies(
-      sourceService: _bookSourceService,
+      sourceService: _bookProviderSourcePort,
       repository: _bookRepository,
       contentProcessor: _contentProcessor,
       contentCache: _contentCache,
     );
     final bookProvider = BookProvider(
       repository: _bookRepository,
-      sourceService: _bookSourceService,
-      localService: _localBookService,
+      sourceService: _bookProviderSourcePort,
+      localBookPort: _localBookImportPort,
       contentCache: _contentCache,
     );
     _reportStartupStage?.call('主题配置加载');

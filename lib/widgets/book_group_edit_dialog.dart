@@ -2,10 +2,11 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../application/book/book_group_policy.dart';
+import '../application/bookshelf/book_group_management_port.dart';
 import '../domain/book/book_group.dart';
-import '../services/book_group_store.dart';
 import 'book_cover.dart';
 import 'legado_dialog_title_bar.dart';
 
@@ -13,18 +14,21 @@ import 'legado_dialog_title_bar.dart';
 Future<BookGroup?> showBookGroupEditDialog(
   BuildContext context, {
   BookGroup? group,
+  BookGroupManagementPort? port,
 }) {
+  final resolvedPort = port ?? context.read<BookGroupManagementPort>();
   return showDialog<BookGroup>(
     context: context,
     barrierDismissible: false,
-    builder: (_) => _BookGroupEditDialog(initial: group),
+    builder: (_) => _BookGroupEditDialog(initial: group, port: resolvedPort),
   );
 }
 
 class _BookGroupEditDialog extends StatefulWidget {
-  const _BookGroupEditDialog({this.initial});
+  const _BookGroupEditDialog({this.initial, required this.port});
 
   final BookGroup? initial;
+  final BookGroupManagementPort port;
 
   @override
   State<_BookGroupEditDialog> createState() => _BookGroupEditDialogState();
@@ -103,15 +107,15 @@ class _BookGroupEditDialogState extends State<_BookGroupEditDialog> {
       return;
     }
     if (_isAdd) {
-      if (!await BookGroupStore.canAddGroup()) {
+      if (!await widget.port.canAddGroup()) {
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('分组已达上限(64个)')));
         return;
       }
-      final id = await BookGroupStore.unusedId();
-      final order = (await BookGroupStore.maxOrder()) + 1;
+      final id = await widget.port.unusedId();
+      final order = (await widget.port.maxOrder()) + 1;
       final created = BookGroup(
         groupId: id,
         groupName: name,
@@ -122,7 +126,7 @@ class _BookGroupEditDialogState extends State<_BookGroupEditDialog> {
         order: order,
         show: true,
       );
-      await BookGroupStore.update(created);
+      await widget.port.update(created);
       if (!mounted) return;
       Navigator.pop(context, created);
       return;
@@ -135,7 +139,7 @@ class _BookGroupEditDialogState extends State<_BookGroupEditDialog> {
       enableRefresh: _enableRefresh,
       onlyUpdateRead: _onlyUpdateRead,
     );
-    await BookGroupStore.update(updated);
+    await widget.port.update(updated);
     if (!mounted) return;
     Navigator.pop(context, updated);
   }
@@ -161,7 +165,7 @@ class _BookGroupEditDialogState extends State<_BookGroupEditDialog> {
       ),
     );
     if (ok != true) return;
-    await BookGroupStore.delete(g);
+    await widget.port.delete(g);
     if (!mounted) return;
     Navigator.pop(context, g.copyWith(groupName: ''));
   }

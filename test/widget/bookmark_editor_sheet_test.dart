@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/annotation/bookmark_snapshot.dart';
 import 'package:legado_flutter/domain/ports/bookmark_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/infrastructure/annotation/bookmark_editor_port_adapter.dart';
 import 'package:legado_flutter/services/bookmark_service.dart';
 import 'package:legado_flutter/widgets/bookmark_editor_sheet.dart';
 
@@ -92,6 +93,7 @@ Widget _host(Book book, {BookmarkSnapshot? existing}) {
               chapterIndex: 1,
               chapterPos: 12,
               bookText: '新书签',
+              port: const BookmarkEditorPortAdapter(),
             );
           },
           child: const Text('打开'),

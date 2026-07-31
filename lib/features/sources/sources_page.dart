@@ -6,15 +6,13 @@ import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../application/source_management/source_management_prefs_port.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../providers/source_provider.dart';
-import '../../services/import_url_history_store.dart';
-import '../../services/check_source_prefs.dart';
-import '../../services/source_group_tags.dart';
-import '../../services/source_manage_help_prefs.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/check_source_keyword_dialog.dart';
 import '../../widgets/error_view.dart';
@@ -45,6 +43,7 @@ class SourcesPage extends StatefulWidget {
 }
 
 class _SourcesPageState extends State<SourcesPage> {
+  late final SourceManagementPrefsPort _managementPrefs;
   static const _checkboxLaneWidth = 48.0;
   static const _edgeScrollZone = 48.0;
   static const _edgeScrollStep = 10.0;
@@ -79,28 +78,29 @@ class _SourcesPageState extends State<SourcesPage> {
   @override
   void initState() {
     super.initState();
+    _managementPrefs = context.read<SourceManagementPrefsPort>();
     _loadCheckSourceUiPrefs();
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoShowHelp());
   }
 
   Future<void> _loadCheckSourceUiPrefs() async {
-    final showDebug = await CheckSourcePrefs.showDebugMessage();
+    final showDebug = await _managementPrefs.showDebugMessage();
     if (!mounted) return;
     setState(() => _showDebugMessage = showDebug);
   }
 
   Future<void> _maybeAutoShowHelp() async {
     if (!mounted) return;
-    if (!await SourceManageHelpPrefs.shouldAutoShow()) return;
+    if (!await _managementPrefs.shouldAutoShowHelp()) return;
     if (!mounted) return;
     await SourceManageHelpDialog.show(context);
-    await SourceManageHelpPrefs.markShown();
+    await _managementPrefs.markHelpShown();
   }
 
   Future<void> _showHelp() async {
     if (!mounted) return;
     await SourceManageHelpDialog.show(context);
-    await SourceManageHelpPrefs.markShown();
+    await _managementPrefs.markHelpShown();
   }
 
   @override
@@ -300,7 +300,7 @@ class _SourcesPageState extends State<SourcesPage> {
         if (_filter.startsWith('group:')) {
           final g = _filter.substring(6);
           list = list
-              .where((s) => sourceHasGroupTag(s.bookSourceGroup, g))
+              .where((s) => _managementPrefs.hasGroup(s.bookSourceGroup, g))
               .toList();
         }
     }
@@ -646,7 +646,7 @@ class _SourcesPageState extends State<SourcesPage> {
     final tags = <String>{};
     for (final s in provider.sources) {
       if (!_selected.contains(s.bookSourceUrl)) continue;
-      tags.addAll(splitSourceGroups(s.bookSourceGroup));
+      tags.addAll(_managementPrefs.splitGroups(s.bookSourceGroup));
     }
     if (tags.isEmpty) {
       if (!mounted) return;
@@ -705,7 +705,7 @@ class _SourcesPageState extends State<SourcesPage> {
           .where(
             (s) =>
                 _selected.contains(s.bookSourceUrl) &&
-                sourceHasGroupTag(s.bookSourceGroup, choice),
+                _managementPrefs.hasGroup(s.bookSourceGroup, choice),
           )
           .length;
       await provider.removeGroupTagFromSources(_selected, choice);
@@ -1686,7 +1686,7 @@ class _SourcesPageState extends State<SourcesPage> {
     }
 
     if (showLoading) {
-      await ImportUrlHistoryStore.add(text.trim());
+      await _managementPrefs.addImportUrlHistory(text.trim());
       if (!context.mounted) return;
     }
 
@@ -1784,12 +1784,14 @@ class _ImportUrlDialogState extends State<_ImportUrlDialog> {
   }
 
   Future<void> _loadHistory() async {
-    final list = await ImportUrlHistoryStore.load();
+    final list = await context
+        .read<SourceManagementPrefsPort>()
+        .loadImportUrlHistory();
     if (mounted) setState(() => _history = list);
   }
 
   Future<void> _removeHistory(String url) async {
-    await ImportUrlHistoryStore.remove(url);
+    await context.read<SourceManagementPrefsPort>().removeImportUrlHistory(url);
     await _loadHistory();
   }
 

@@ -5,18 +5,19 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/source_subscription/rule_sub_policy.dart';
-import '../../domain/ports/public_text_fetch_port.dart';
+import '../../application/source_subscription/rule_sub_import_port.dart';
+import '../../application/source_subscription/rule_sub_prefs_port.dart';
 import '../../domain/source_subscription/rule_sub.dart';
 import '../../providers/replace_provider.dart';
 import '../../providers/rss_provider.dart';
 import '../../providers/source_provider.dart';
-import '../../services/rule_sub_import_service.dart';
-import '../../services/rule_sub_prefs.dart';
-import '../../services/book_source_service.dart';
 
 /// 规则订阅 — 对齐 Jingshiro [RuleSubActivity] + `activity_rule_sub.xml`
 class RuleSubPage extends StatefulWidget {
-  const RuleSubPage({super.key});
+  const RuleSubPage({super.key, this.prefsPort});
+
+  @visibleForTesting
+  final RuleSubPrefsPort? prefsPort;
 
   /// 供 MainShell / 自动更新打开导入 UI（对齐 openImportUi）
   static Future<void> openImport(BuildContext context, RuleSub sub) async {
@@ -26,10 +27,8 @@ class RuleSubPage extends StatefulWidget {
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      final fetched = await RuleSubImportService.fetchForImport(
+      final fetched = await context.read<RuleSubImportPort>().fetchForImport(
         sub,
-        sourceService: context.read<BookSourceService>(),
-        fetchPort: context.read<PublicTextFetchPort>(),
       );
       if (!context.mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
@@ -57,17 +56,21 @@ class RuleSubPage extends StatefulWidget {
 }
 
 class _RuleSubPageState extends State<RuleSubPage> {
+  late final RuleSubPrefsPort _prefsPort;
+  late final RuleSubImportPort _importPort;
   List<RuleSub> _subs = [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
+    _prefsPort = widget.prefsPort ?? context.read<RuleSubPrefsPort>();
+    _importPort = context.read<RuleSubImportPort>();
     _load(checkAuto: true);
   }
 
   Future<void> _load({bool checkAuto = false}) async {
-    final list = await RuleSubPrefs.load();
+    final list = await _prefsPort.load();
     if (!mounted) return;
     setState(() {
       _subs = list;
@@ -79,13 +82,7 @@ class _RuleSubPageState extends State<RuleSubPage> {
   }
 
   Future<void> _runDueAutoUpdates({required bool openUi}) async {
-    final needUi = await RuleSubImportService.checkAutoUpdates(
-      sourceService: context.read<BookSourceService>(),
-      sourceProvider: context.read<SourceProvider>(),
-      rssProvider: context.read<RssProvider>(),
-      replaceProvider: context.read<ReplaceProvider>(),
-      fetchPort: context.read<PublicTextFetchPort>(),
-    );
+    final needUi = await _importPort.checkAutoUpdates();
     await _load();
     if (!mounted || !openUi) return;
     for (final sub in needUi) {
@@ -94,7 +91,7 @@ class _RuleSubPageState extends State<RuleSubPage> {
   }
 
   Future<void> _add() async {
-    final order = await RuleSubPrefs.maxOrder() + 1;
+    final order = await _prefsPort.maxOrder() + 1;
     if (!mounted) return;
     await _editSubscription(RuleSubPolicy.create(customOrder: order));
   }
@@ -114,7 +111,7 @@ class _RuleSubPageState extends State<RuleSubPage> {
       return;
     }
 
-    final existing = await RuleSubPrefs.findByUrl(saved.url.trim());
+    final existing = await _prefsPort.findByUrl(saved.url.trim());
     if (existing != null && existing.id != saved.id) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -123,12 +120,12 @@ class _RuleSubPageState extends State<RuleSubPage> {
       return;
     }
 
-    await RuleSubPrefs.upsert(saved.copyWith(url: saved.url.trim()));
+    await _prefsPort.upsert(saved.copyWith(url: saved.url.trim()));
     await _load();
   }
 
   Future<void> _delete(RuleSub sub) async {
-    await RuleSubPrefs.delete(sub);
+    await _prefsPort.delete(sub);
     await _load();
   }
 
@@ -160,7 +157,7 @@ class _RuleSubPageState extends State<RuleSubPage> {
           _subs[i].copyWith(customOrder: i + 1),
       ];
     });
-    await RuleSubPrefs.save(_subs);
+    await _prefsPort.save(_subs);
   }
 
   @override
@@ -527,7 +524,7 @@ class _RuleSubImportDialog extends StatefulWidget {
   const _RuleSubImportDialog({required this.sub, required this.fetched});
 
   final RuleSub sub;
-  final RuleSubFetched fetched;
+  final RuleSubImportResult fetched;
 
   @override
   State<_RuleSubImportDialog> createState() => _RuleSubImportDialogState();
@@ -558,19 +555,19 @@ class _RuleSubImportDialogState extends State<_RuleSubImportDialog> {
     var imported = 0;
 
     switch (widget.fetched.kind) {
-      case RuleSubFetchKind.bookSource:
+      case RuleSubImportKind.bookSource:
         final list = [
           for (final i in indices) widget.fetched.bookSources[i].toJson(),
         ];
         final ok = await sourceProvider.importSources(jsonEncode(list));
         imported = ok ? list.length : 0;
-      case RuleSubFetchKind.rssSource:
+      case RuleSubImportKind.rssSource:
         final list = [
           for (final i in indices) widget.fetched.rssSources[i].toJson(),
         ];
         final ok = await rssProvider.importSources(jsonEncode(list));
         imported = ok ? list.length : 0;
-      case RuleSubFetchKind.replaceRule:
+      case RuleSubImportKind.replaceRule:
         for (final i in indices) {
           final rule = widget.fetched.replaceRules[i];
           final existing = replaceProvider.replaceRules
@@ -600,9 +597,9 @@ class _RuleSubImportDialogState extends State<_RuleSubImportDialog> {
   Widget build(BuildContext context) {
     final labels = widget.fetched.labels;
     final title = switch (widget.fetched.kind) {
-      RuleSubFetchKind.bookSource => '导入书源',
-      RuleSubFetchKind.rssSource => '导入订阅源',
-      RuleSubFetchKind.replaceRule => '导入替换规则',
+      RuleSubImportKind.bookSource => '导入书源',
+      RuleSubImportKind.rssSource => '导入订阅源',
+      RuleSubImportKind.replaceRule => '导入替换规则',
     };
 
     return AlertDialog(
