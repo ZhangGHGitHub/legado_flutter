@@ -158,11 +158,14 @@ void main() {
           value: _FakeReaderFontPort(),
           child: Provider<RssReadStatePort>.value(
             value: _FakeRssReadStatePort(),
-            child: const MaterialApp(
-              home: RssArticlesPage(
-                source: RssSource(
-                  sourceUrl: 'http://localhost:8080/feed',
-                  sourceName: '本地源',
+            child: Provider<RssStarPrefsPort>.value(
+              value: const RssStarPrefsPortAdapter(),
+              child: const MaterialApp(
+                home: RssArticlesPage(
+                  source: RssSource(
+                    sourceUrl: 'http://localhost:8080/feed',
+                    sourceName: '本地源',
+                  ),
                 ),
               ),
             ),

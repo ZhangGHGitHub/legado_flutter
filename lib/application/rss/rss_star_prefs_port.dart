@@ -4,5 +4,7 @@ import '../../domain/rss/rss_article.dart';
 abstract interface class RssStarPrefsPort {
   Future<List<RssArticle>> loadAll();
 
+  Future<bool> toggle(RssArticle article);
+
   Future<void> remove(String origin, String link);
 }

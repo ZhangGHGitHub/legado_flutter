@@ -5,9 +5,9 @@ import '../../domain/ports/application_http_request_port.dart';
 import '../../domain/rss/rss_article.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../application/rss/rss_read_state_port.dart';
+import '../../application/rss/rss_star_prefs_port.dart';
 import '../../services/rss_service.dart';
 import '../../services/rss_sort_urls.dart';
-import '../../services/rss_star_prefs.dart';
 import '../../services/source_login_service.dart';
 import '../../widgets/remote_binary_image.dart';
 import '../../features/sources/source_login_page.dart';
@@ -207,8 +207,9 @@ class _RssArticlesListState extends State<_RssArticlesList>
 
   Future<void> _loadMeta() async {
     final readState = context.read<RssReadStatePort>();
+    final starPrefs = context.read<RssStarPrefsPort>();
     final list = await readState.read(source.sourceUrl);
-    final stars = await RssStarPrefs.loadAll();
+    final stars = await starPrefs.loadAll();
     if (!mounted) return;
     setState(() {
       _readLinks
@@ -229,7 +230,7 @@ class _RssArticlesListState extends State<_RssArticlesList>
   }
 
   Future<void> _toggleStar(RssArticle a) async {
-    final starred = await RssStarPrefs.toggle(a);
+    final starred = await context.read<RssStarPrefsPort>().toggle(a);
     if (!mounted) return;
     setState(() {
       if (starred) {

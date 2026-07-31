@@ -10,6 +10,9 @@ final class RssStarPrefsPortAdapter implements RssStarPrefsPort {
   Future<List<RssArticle>> loadAll() => RssStarPrefs.loadAll();
 
   @override
+  Future<bool> toggle(RssArticle article) => RssStarPrefs.toggle(article);
+
+  @override
   Future<void> remove(String origin, String link) =>
       RssStarPrefs.remove(origin, link);
 }

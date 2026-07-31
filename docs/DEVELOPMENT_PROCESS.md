@@ -287,6 +287,8 @@ Day 2  PR/Issue 模板
 
 2026-07-31 当前 R6 记录：继续按“先定向测试、再全量门禁、最后记录”推进 RSS 阅读/收藏、主题导入和二维码图片解码端口。新增端口由组合根注入，测试宿主显式补齐依赖；Android SVG 集成测试改用图片缓存端口薄适配器，未削弱断言。实际验证为：受影响定向 `19/19`；`flutter test --no-pub --concurrency=1 --reporter compact` 为 `739` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描 `83` 条既有 Feature→service backlog。Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。相关记录见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
 
+2026-07-31 当前 R6 记录：继续按“先定向测试、再全量门禁、最后记录”推进 `RssArticlesPage` 收藏写入端口。`RssStarPrefsPort` 增加 `toggle` 契约，页面和测试宿主改用注入端口，保留既有 SharedPreferences 和 UI 语义；定向 `10/10`，Flutter 串行全量 `740` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub` 为 `No issues found`，架构扫描 `82` 条既有 Feature→service backlog。Rust 未改动，本批不重复运行 Rust 测试；Web/WASM/PWA、正式/主流 WebDAV 和真实 Android TTS 继续按暂停门禁执行。相关记录见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)

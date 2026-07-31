@@ -226,6 +226,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 本批继续收口 RSS 阅读/收藏、主题导入和二维码图片解码边界：`RssReadPage` 使用 `RssPort`，`RssFavoritesPage` 使用 `RssStarPrefsPort`，`ThemeConfigPage` 使用 `ThemeImportPort`，`QrCodeCapturePage` 使用 `QrCodePort`；组合根注册共享端口，infrastructure adapter 复用既有实现，保留 RSS 正文回退、收藏顺序、主题 JSON/URL 校验、图库解码失败和桌面无相机回退语义。同步补齐 RSS 测试宿主端口注入和 Android SVG 集成测试的图片缓存端口适配，未削弱断言。最终定向 `19/19`；Flutter 串行全量 `739` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `87` 降至 `83` 条既有 Feature→service backlog。未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 
+本批继续收口 `RssArticlesPage` 收藏写入边界：`RssStarPrefsPort` 增加 `toggle` 契约，文章列表通过 application port 读取收藏状态并执行收藏/取消收藏；SharedPreferences 键名、文章字段、收藏顺序、返回状态和提示文案保持不变。RSS 测试宿主补齐端口注入并新增 toggle 回归。定向 `10/10`；Flutter 串行全量 `740` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `83` 降至 `82` 条既有 Feature→service backlog。未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
 ### 0.4 重构工作规则
 
 1. 一次只迁移一个边界、一个用例或一条数据链路；完成定向测试并汇报后再进入下一项。
@@ -236,7 +238,7 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 ### 0.5 当前状态
 
-当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 至 P1-4 现已通过；当前继续按 Feature 应用用例边界收口。架构扫描当前为 `83` 条既有 Feature→service backlog，不能当作例外或 R6 最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
+当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 至 P1-4 现已通过；当前继续按 Feature 应用用例边界收口。架构扫描当前为 `82` 条既有 Feature→service backlog，不能当作例外或 R6 最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
 
 ### 0.6 版本控制与变更追溯状态（2026-07-26）
 
