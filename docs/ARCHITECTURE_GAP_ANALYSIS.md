@@ -13,7 +13,7 @@
 | Riverpod/Notifier | `pubspec.yaml` 使用 `provider`；仍有 ChangeNotifier | 不符合 | 逐模块迁移并保持 Widget 回归 |
 | freezed 镜像模型 | domain/model 为手写 Dart 类，无 freezed 生成文件 | 不符合 | 先 Book/Chapter/BookSource，再扩展其它模型 |
 | CoreApi + Mock/Real | 尚无统一抽象；本批新增 `api_contract.md` 草案 | 部分完成 | 书架/搜索 Mock 与 Real 契约测试 |
-| 统一 AppError | Rust FFI 公开 API 大量 `Result<T, String>` | 不符合 | 定义枚举、FRB 映射和 Dart 分类异常 |
+| 统一 AppError | `search` 已使用 Rust `AppError` 并生成 FRB/Dart 类型；其它 FFI 公开 API 仍大量 `Result<T, String>` | 部分完成 | 按书源详情/目录/正文及数据库边界继续迁移 |
 | QuickJS 5 秒超时 | 已接入 QuickJS；未见 interrupt handler/执行预算 | 不符合 | 死循环、超时、取消和资源上限 fixture |
 | 统一 `init(app_dir)` | `init_engine()` 与 `db_init(path)` 分离 | 部分完成 | 统一初始化入口，保持旧入口兼容过渡 |
 | 编码探测 | Rust 使用 `encoding_rs`；本地 TXT 仍有 Dart GBK fallback | 部分完成 | GBK/GB18030 fixture 和 Rust 唯一事实源 |
@@ -28,4 +28,4 @@
 
 ## 当前范围
 
-本报告只固化差距和执行顺序，不在本批直接替换 Provider、模型生成或 FFI 错误类型。下一批从 `api_contract.md` 的书架/搜索 Mock 与 Real adapter 开始。
+本报告只固化差距和执行顺序；`CoreApi` 首批契约和 `search -> AppError` 已完成，下一批继续迁移书源详情/目录/正文错误边界，不改变 Provider 或正文行为。

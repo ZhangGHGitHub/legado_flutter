@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/统一错误边界：新增 Rust `AppError` 枚举并将 `search` FFI API 迁移为结构化错误，重新生成 FRB/Dart `freezed` 错误类型；补齐 `freezed`、`build_runner` 和 `json_serializable` 生成链。验证：Rust `cargo test -p legado_engine` `186` 通过，Flutter 全量 `876` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构扫描和 `git diff --check` 通过。其它 FFI API 的字符串错误仍按批次迁移。
 - 设计治理：完成 Phase 0 第一批资产，新增书架/搜索 `api_contract.md`、原 Android 模块迁移映射和统一设计差距报告；下一步先实现 MockCoreApi/RealCoreApi 契约测试，再迁移生产调用者。未修改正文、目录、分页、章节身份、UTF-16 阅读位置或 `legado-main/`。
 - 设计治理：将《Legado Flutter + Rust 三端通用重构设计》固化为 `docs/LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md`，补充文档索引和主计划中的严格收敛顺序。后续以该设计稿约束 Riverpod/Notifier、freezed 镜像模型、`CoreApi` 契约、统一 `AppError`、QuickJS 5 秒超时、编码探测和 CI；当前缺口保持显式登记，不宣称已全部符合。
 - R6/应用用例依赖：三条并行线收口 RSS 分类排序、RSS 源管理传输和 ReaderPage 书籍阅读偏好。新增 `RssSortUrlsPort`、`RssSourceTransferPort`、`BookReaderPrefsPort` 及基础设施 adapter，组合根统一注入；修正 agent fallback 的 Feature→infrastructure 直连，保留 RSS 分类缓存/刷新、源导入导出、文件/剪贴板、阅读动画和重新分段语义。定向 `8/8`；Flutter 串行全量 `802` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 为 `No issues found`；架构扫描由 `25` 降至 `22` 条既有 Feature→service backlog；`git diff --check` 待本批文档更新后复核。Rust 未改动，真实 Android TTS、Web/WASM/PWA 和正式/主流 WebDAV 继续按暂停门禁执行。

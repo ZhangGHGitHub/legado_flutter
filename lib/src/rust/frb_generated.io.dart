@@ -9,6 +9,7 @@ import 'api/book_info.dart';
 import 'api/db.dart';
 import 'api/debug.dart';
 import 'api/dict.dart';
+import 'api/error.dart';
 import 'api/explore.dart';
 import 'api/local_book.dart';
 import 'api/network.dart';
@@ -49,6 +50,9 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   String dco_decode_String(dynamic raw);
+
+  @protected
+  AppError dco_decode_app_error(dynamic raw);
 
   @protected
   ApplicationBinaryHttpResponseDto
@@ -243,6 +247,9 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
+
+  @protected
+  AppError sse_decode_app_error(SseDeserializer deserializer);
 
   @protected
   ApplicationBinaryHttpResponseDto
@@ -474,6 +481,9 @@ abstract class LegadoEngineApiImplPlatform
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_app_error(AppError self, SseSerializer serializer);
 
   @protected
   void sse_encode_application_binary_http_response_dto(

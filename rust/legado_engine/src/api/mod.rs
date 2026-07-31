@@ -4,6 +4,7 @@ pub mod content;
 pub mod db;
 pub mod debug;
 pub mod dict;
+pub mod error;
 pub mod explore;
 pub mod local_book;
 pub mod network;
@@ -17,6 +18,8 @@ pub mod webdav;
 pub use dict::query_dict_rule;
 
 use flutter_rust_bridge::{frb, DartFnFuture};
+
+pub use error::AppError;
 
 /// FRB 默认初始化（日志等）
 #[frb(init)]
@@ -248,8 +251,10 @@ pub struct BookInfoItem {
 
 /// 搜索书籍
 #[frb]
-pub async fn search(source_json: String, keyword: String) -> Result<Vec<SearchItem>, String> {
-    search::search(&source_json, &keyword).await
+pub async fn search(source_json: String, keyword: String) -> Result<Vec<SearchItem>, AppError> {
+    search::search(&source_json, &keyword)
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// 发现页 / 分类页

@@ -9,6 +9,7 @@ import 'api/book_info.dart';
 import 'api/db.dart';
 import 'api/debug.dart';
 import 'api/dict.dart';
+import 'api/error.dart';
 import 'api/explore.dart';
 import 'api/local_book.dart';
 import 'api/network.dart';
@@ -2842,7 +2843,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_search_item,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiSearchConstMeta,
         argValues: [sourceJson, keyword],
@@ -3786,6 +3787,31 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
   }
 
   @protected
+  AppError dco_decode_app_error(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return AppError_Network(dco_decode_String(raw[1]));
+      case 1:
+        return AppError_Parse(dco_decode_String(raw[1]));
+      case 2:
+        return AppError_Database(dco_decode_String(raw[1]));
+      case 3:
+        return AppError_JsExecution(dco_decode_String(raw[1]));
+      case 4:
+        return AppError_Validation(dco_decode_String(raw[1]));
+      case 5:
+        return AppError_Unsupported(dco_decode_String(raw[1]));
+      case 6:
+        return AppError_Cancelled(dco_decode_String(raw[1]));
+      case 7:
+        return AppError_Unknown(dco_decode_String(raw[1]));
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
   ApplicationBinaryHttpResponseDto
   dco_decode_application_binary_http_response_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -4397,6 +4423,41 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_list_prim_u_8_strict(deserializer);
     return utf8.decoder.convert(inner);
+  }
+
+  @protected
+  AppError sse_decode_app_error(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_field0 = sse_decode_String(deserializer);
+        return AppError_Network(var_field0);
+      case 1:
+        var var_field0 = sse_decode_String(deserializer);
+        return AppError_Parse(var_field0);
+      case 2:
+        var var_field0 = sse_decode_String(deserializer);
+        return AppError_Database(var_field0);
+      case 3:
+        var var_field0 = sse_decode_String(deserializer);
+        return AppError_JsExecution(var_field0);
+      case 4:
+        var var_field0 = sse_decode_String(deserializer);
+        return AppError_Validation(var_field0);
+      case 5:
+        var var_field0 = sse_decode_String(deserializer);
+        return AppError_Unsupported(var_field0);
+      case 6:
+        var var_field0 = sse_decode_String(deserializer);
+        return AppError_Cancelled(var_field0);
+      case 7:
+        var var_field0 = sse_decode_String(deserializer);
+        return AppError_Unknown(var_field0);
+      default:
+        throw UnimplementedError('');
+    }
   }
 
   @protected
@@ -5204,6 +5265,37 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
   void sse_encode_String(String self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
+  }
+
+  @protected
+  void sse_encode_app_error(AppError self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case AppError_Network(field0: final field0):
+        sse_encode_i_32(0, serializer);
+        sse_encode_String(field0, serializer);
+      case AppError_Parse(field0: final field0):
+        sse_encode_i_32(1, serializer);
+        sse_encode_String(field0, serializer);
+      case AppError_Database(field0: final field0):
+        sse_encode_i_32(2, serializer);
+        sse_encode_String(field0, serializer);
+      case AppError_JsExecution(field0: final field0):
+        sse_encode_i_32(3, serializer);
+        sse_encode_String(field0, serializer);
+      case AppError_Validation(field0: final field0):
+        sse_encode_i_32(4, serializer);
+        sse_encode_String(field0, serializer);
+      case AppError_Unsupported(field0: final field0):
+        sse_encode_i_32(5, serializer);
+        sse_encode_String(field0, serializer);
+      case AppError_Cancelled(field0: final field0):
+        sse_encode_i_32(6, serializer);
+        sse_encode_String(field0, serializer);
+      case AppError_Unknown(field0: final field0):
+        sse_encode_i_32(7, serializer);
+        sse_encode_String(field0, serializer);
+    }
   }
 
   @protected
