@@ -47,7 +47,7 @@
 
 2026-08-01 正文处理 FFI 错误边界批次：将同步 `process_content_for_reading` 入口改为 `Result<String, AppError>`，底层正文处理错误统一映射为 `AppError::Parse`，保留成功输出、替换规则、段落缩进、标题合并和重新分段行为；FRB 对应 codec 已同步，新增 Rust `2/2` 与 Dart `2/2` 契约测试。Rust 全量 `228`、Flutter 全量 `903` 通过，另有 `3` 项既有 Flutter 条件跳过，release DLL、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。本批不覆盖浏览器宿主、重复公开 FRB 子模块入口、WebDAV、平台验收、其它公开 `Result<T, String>` 或阶段退出条件，不扩展 R1-12、R2、R3 或 R6 阶段退出声明。
 
-2026-08-01 重复公开 FRB 入口收敛批次：将 `search/explore/toc/debug/validate` 子模块入口标记为 `frb(ignore)` 并降为 `pub(crate)`，根 `api/mod.rs` wrapper 继续作为唯一公开 FRB API；重新生成绑定后移除子模块重复 Dart/Rust wire 导出并删除陈旧子模块 Dart wrapper，保留根入口参数、返回值、`AppError` 分类和内部调用路径。验证：`cargo fmt -p legado_engine`、Rust API 定向 `72/72`、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。本批不改变正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、浏览器宿主、WebDAV、平台验收或阶段退出条件。
+2026-08-01 重复公开 FRB 入口收敛批次：将 `search/explore/toc/debug/validate` 子模块入口标记为 `frb(ignore)` 并降为 `pub(crate)`，根 `api/mod.rs` wrapper 继续作为唯一公开 FRB API；重新生成绑定后移除子模块重复 Dart/Rust wire 导出并删除陈旧子模块 Dart wrapper，保留根入口参数、返回值、`AppError` 分类和内部调用路径。验证：`cargo fmt -p legado_engine`、Rust API 定向 `72/72`、release 构建、`flutter analyze --no-pub`、Flutter 全量 `903` 通过且 `3` 项既有条件跳过，架构边界扫描和 `git diff --check` 通过。本批不改变正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、浏览器宿主、WebDAV、平台验收或阶段退出条件。
 
 ---
 

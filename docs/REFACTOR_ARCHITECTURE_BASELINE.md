@@ -5,7 +5,7 @@
 - `search/explore/toc/debug/validate` 子模块函数降为 `pub(crate)` 并标记 `frb(ignore)`，根 `api/mod.rs` wrapper 保持唯一公开 FRB API。
 - FRB 生成层删除子模块重复 Dart wrapper、`.io` 导入和 Rust wire 分支；根 `search/explore/get_toc/debug_search/debug_toc/validate_source` 的参数、返回值和 `AppError` 分类不变。
 
-验证记录：`cargo fmt -p legado_engine`、`cargo test -p legado_engine api -- --nocapture` 为 `72/72` 通过，`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。
+验证记录：`cargo fmt -p legado_engine`、`cargo test -p legado_engine api -- --nocapture` 为 `72/72` 通过，release 构建、`flutter analyze --no-pub`、Flutter 全量 `903` 通过且 `3` 项既有条件跳过，架构边界扫描和 `git diff --check` 通过。
 
 边界结论：本批只收敛生成公开面，不覆盖浏览器宿主、WebDAV、平台验收或阶段退出，不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 
