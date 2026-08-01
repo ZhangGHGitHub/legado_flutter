@@ -133,3 +133,11 @@ EPUB/ZIP 保留解析、大小限制、路径安全、文件筛选和成功结�
 | `eval_js` | `String` | `JsExecution` |
 
 `eval_js` 保留脚本成功结果、错误原文、纯 QuickJS 5 秒执行中断和 `script/jsLib` 单项 256 KiB 输入上限。该契约不覆盖宿主 `java.ajax`、`getStrResponse`、WebView 阻塞、取消或其它公开字符串错误入口。
+
+## 登录头预热错误边界（2026-08-01）
+
+| Rust 入口 | 成功输出 | 错误分类 |
+|---|---|---|
+| `seed_login_header` | `void` | `AppError` |
+
+`seed_login_header` 保留 source URL/header trim、空值忽略、缓存写入和无 dirty 更新行为。FRB 适配只解码结构化 `AppError`，不改变成功调用参数或登录头存储语义。

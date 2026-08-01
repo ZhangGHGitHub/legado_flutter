@@ -10,6 +10,8 @@
 
 2026-08-01 当前追溯记录：本批将 `eval_js` 同步 FFI 入口映射到 `AppError::JsExecution`，先执行 Rust 定向 `2/2` 和 Dart FRB 定向 `2/2`，再执行 Rust 全量 `226`、release 构建、Flutter 全量 `899`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check`，全部通过。生成绑定保持成功返回和错误原文；QuickJS 既有纯执行 interrupt/输入上限测试继续作为门禁，不据此宣称宿主调用超时或取消已完成。本批只处理公开 FFI 错误边界，不迁移 UI/application 调用者。
 
+2026-08-01 当前追溯记录：本批将 `seed_login_header` 同步 FFI 入口映射到 `AppError`，先执行 Rust 定向 `3/3` 和 Dart FRB 定向 `2/2`，再执行 Rust 全量 `226`、release 构建、Flutter 全量 `901`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check`，全部通过。生成器尝试运行时在 Windows rustfmt 阶段遇到文件映射锁警告并产生无关全量漂移，未纳入；最终按已验证 FRB codec 模式保留三处最小绑定差异。本批只处理公开 FFI 错误边界，不迁移 UI/application 调用者。
+
 2026-07-31 当前 R6 记录：Batch 5 将 `SourceProvider` 的源分组目录 CRUD 与标签规则迁移到 `SourceGroupCatalogPort`，组合根注入 legacy adapter；owner 定向 `13/13`，Flutter 串行全量 `842` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构脚本和 `git diff --check` 通过。三条只读 lane 同时完成 validation store、BookSource/LocalBook 聚合和批量进度同步契约审查；剩余五处 Provider→service 依赖继续按先审查后实现的顺序处理。Rust 未改动，真实 Android TTS、Web/WASM/PWA 和正式/主流 WebDAV 继续暂停。
 
 2026-08-01 当前 R6 记录：Batch 6 四条不重叠 lane 完成 Provider 边界收口。`SourceProvider` 接入 validation store 和 source-management book-source facade；`BookProvider` 接入批量进度与本地导入 ports；组合根统一注入真实 adapter，保留 BookSource/LocalBook/BookProgress legacy 实现语义。owner 定向 `20/20`、`20/20`、`26/26`、`32/32`；首轮全量发现 legacy 本地导入异常兼容分支，补充双异常映射后最终 Flutter 串行全量 `864` 通过、`3` 项既有条件跳过；全仓 analyze、架构脚本、diff 检查通过。扩展 Provider 扫描仅剩 BookProvider 的 BookSourceService 聚合依赖。Rust 未改动，真实 Android TTS、Web/WASM/PWA 和正式/主流 WebDAV 继续暂停。

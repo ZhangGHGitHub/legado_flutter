@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/登录头预热 FFI 错误边界：`seed_login_header` 统一返回 `AppError`，保留 source URL/header trim、空值忽略、缓存写入和无 dirty 更新行为；最终 FRB 只保留三处最小 codec/API 差异。Rust 定向 `3/3`、Rust 全量 `226`、Flutter 定向 `2/2`、Flutter 全量 `901` 通过，另有 `3` 项既有条件跳过；release 构建、analyze、架构扫描和 `git diff --check` 通过。生成器的 Windows 文件映射锁警告未纳入无关全量漂移，浏览器宿主和其它公开字符串错误入口仍未完成。
 - 架构/JavaScript 执行 FFI 错误边界：`eval_js` 统一返回 `AppError::JsExecution`，保留脚本成功结果、错误原文、纯 QuickJS 5 秒 interrupt 和 `script/jsLib` 256 KiB 输入限制；FRB 已重新生成。Rust 定向 `2/2`、Rust 全量 `226`、Flutter 定向 `2/2`、Flutter 全量 `899` 通过，另有 `3` 项既有条件跳过；release 构建、analyze、架构扫描和 `git diff --check` 通过。`java.ajax`、`getStrResponse`、WebView 宿主阻塞、浏览器宿主和其它公开字符串错误入口仍未完成。
 - 架构/本地书籍与 RSS 公开 FFI 错误边界：`parse_epub`、`parse_remote_archive_book_files` 使用 `AppError::Parse`，`get_rss_articles`、`get_rss_content` 使用 `AppError::Network` 或 `AppError::Parse`；保留成功行为、错误原文、解析/大小/路径安全/文件筛选、排序/分页/文章字段/正文解析和既有限制。FRB 已重新生成，Dart 适配层提取 `AppError.field0`，避免错误文本变为 Freezed `toString()`。Rust RSS 定向 `4/4`、Rust 全量 `224`、Flutter 适配器定向 `10/10`、Flutter 全量 `897` 通过，另有 `3` 项既有条件跳过；release 构建、analyze、架构扫描和 `git diff --check` 通过。浏览器宿主、QuickJS 宿主阻塞、其它公开字符串错误和阶段退出条件仍未完成。
 - 架构/公开 FFI 错误边界：将 `get_book_info`、`query_dict_rule`、笔记和书签入口迁移到 Rust `AppError`，保留详情/字典成功结果、数据库 CRUD、Markdown、排序、UTF-16 位置和错误原文；目录/校验内部使用 `AppError::into_legacy` 保持旧错误文本过渡。FRB 已重新生成；Rust 全量 `218`、Flutter 全量 `894` 通过，`3` 项既有条件跳过，`flutter analyze --no-pub`、架构扫描和 `git diff --check` 通过。RSS、EPUB、浏览器宿主及其它公开 `Result<T, String>` 入口仍未迁移，本批不新增 R1-12、R2 或 R6 阶段退出声明。

@@ -1,5 +1,14 @@
 # Legado Flutter 架构重构基线
 
+## 175. 2026-08-01：`seed_login_header` 公开 FFI 错误边界
+
+- `seed_login_header` 从 `Result<(), String>` 改为 `Result<(), AppError>`；source URL/header trim、空值忽略、登录头缓存写入和无 dirty 更新行为保持不变。
+- FRB 对应 codec 与 Rust wrapper 已同步，Rust 增加 `3` 项定向测试，Dart 增加 `2` 项生成 API 错误测试；没有向页面或领域层扩散生成类型。
+
+验证记录：Rust 全量 `226`、Flutter 全量 `901` 通过，`3` 项既有 Flutter 条件跳过；release 构建、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。生成器在 Windows rustfmt 阶段遇到文件映射锁警告，产生的无关全量漂移已排除，source-owned diff 仅保留三处 FRB/API 变更。
+
+边界结论：本批不覆盖浏览器宿主、WebView 生命周期、其它公开 `Result<T, String>` 或平台验收，不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
 ## 174. 2026-08-01：`eval_js` 公开 FFI 错误边界
 
 - `eval_js` 从 `Result<String, String>` 改为 `Result<String, AppError>`，脚本异常映射为 `AppError::JsExecution`；成功结果、错误原文、纯 QuickJS 5 秒 interrupt 和 256 KiB 输入上限保持不变。

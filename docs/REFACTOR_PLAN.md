@@ -43,6 +43,8 @@
 
 2026-08-01 `eval_js` FFI 错误边界批次：将同步 `eval_js` 入口改为 `Result<String, AppError>`，脚本异常统一为 `AppError::JsExecution`，保留成功结果、错误原文、纯 QuickJS 5 秒 interrupt 和 `script/jsLib` 256 KiB 输入门禁；FRB 已重新生成。新增 Rust `eval_js` 成功/错误契约测试和 Dart 生成 API 结构化错误测试；Rust 定向 `2/2`、Rust 全量 `226`、Flutter 定向 `2/2`、Flutter 全量 `899` 通过，另有 `3` 项既有 Flutter 条件跳过，release DLL、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。本批不覆盖 `java.ajax`、`getStrResponse`、WebView 宿主阻塞、浏览器宿主或其它公开 `Result<T, String>`，不扩展 R1-12、R2、R3 或 R6 阶段退出声明。
 
+2026-08-01 登录头预热 FFI 错误边界批次：将同步 `seed_login_header` 入口改为 `Result<(), AppError>`，保留 source URL/header trim、空值忽略、登录头缓存写入和无 dirty 更新行为；FRB 对应 codec 已同步，新增 Rust `3/3` 与 Dart `2/2` 契约测试。Rust 全量 `226`、Flutter 全量 `901` 通过，另有 `3` 项既有 Flutter 条件跳过，release DLL、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。生成器曾因 Windows 文件映射锁在 rustfmt 阶段警告，最终只保留 source-owned 的三处最小绑定差异；浏览器宿主、其它公开 `Result<T, String>` 和阶段退出条件仍未完成，本条不扩展 R1-12、R2、R3 或 R6 阶段退出声明。
+
 ---
 
 ## 0.0 R0 重基线附录（2026-07-27）

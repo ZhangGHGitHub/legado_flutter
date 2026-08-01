@@ -555,7 +555,7 @@ pub fn eval_js(script: String, js_lib: String, base_url: String) -> Result<Strin
 
 /// 预热 Rust 登录头缓存（Dart SharedPreferences → 引擎）
 #[frb(sync)]
-pub fn seed_login_header(source_url: String, header: String) -> Result<(), String> {
+pub fn seed_login_header(source_url: String, header: String) -> Result<(), AppError> {
     crate::http::login_header_store::seed(&source_url, &header);
     Ok(())
 }

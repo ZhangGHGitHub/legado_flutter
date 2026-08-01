@@ -2763,7 +2763,7 @@ fn wire__crate__api__seed_login_header_impl(
             let api_source_url = <String>::sse_decode(&mut deserializer);
             let api_header = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::seed_login_header(api_source_url, api_header)?;
                 Ok(output_ok)
             })())
