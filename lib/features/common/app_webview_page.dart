@@ -20,6 +20,18 @@ class AppWebViewResult {
 abstract final class AppWebViewPageStateTestApi {
   static String htmlFromJavaScriptResult(Object result) =>
       _AppWebViewPageState.htmlFromJavaScriptResult(result);
+
+  static Future<bool> deliverCookieHeaderIfActive({
+    required bool isActive,
+    required String pageUrl,
+    required String cookieHeader,
+    required AppWebViewCookieCallback? onCookiesChanged,
+  }) => _AppWebViewPageState.deliverCookieHeaderIfActive(
+    isActive: isActive,
+    pageUrl: pageUrl,
+    cookieHeader: cookieHeader,
+    onCookiesChanged: onCookiesChanged,
+  );
 }
 
 /// 通用内嵌 WebView — 对齐 Jingshiro WebViewActivity 轻量路径。
@@ -135,6 +147,7 @@ class _AppWebViewPageState extends State<AppWebViewPage> {
   WebViewController? _controller;
   var _loading = true;
   var _completing = false;
+  var _disposed = false;
   String? _lastPageUrl;
   String? _error;
 
@@ -201,22 +214,43 @@ class _AppWebViewPageState extends State<AppWebViewPage> {
   }
 
   void _scheduleCookieSync(String pageUrl) {
-    if (widget.onCookiesChanged == null) return;
-    _cookieSync = _cookieSync.then((_) => _syncCookies(pageUrl));
+    if (widget.onCookiesChanged == null || !_canSyncCookies) return;
+    _cookieSync = _cookieSync.then((_) async {
+      if (!_canSyncCookies) return;
+      await _syncCookies(pageUrl);
+    });
   }
 
   Future<void> _syncCookies(String pageUrl) async {
     final uri = Uri.tryParse(pageUrl);
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) return;
+    if (!_canSyncCookies) return;
     try {
-      final cookies = await _cookieManager!.platform.getCookies(uri);
-      await widget.onCookiesChanged!(
-        pageUrl,
-        AppWebViewPage.cookieHeaderFor(cookies),
+      final manager = _cookieManager;
+      if (manager == null) return;
+      final cookies = await manager.platform.getCookies(uri);
+      await deliverCookieHeaderIfActive(
+        isActive: _canSyncCookies,
+        pageUrl: pageUrl,
+        cookieHeader: AppWebViewPage.cookieHeaderFor(cookies),
+        onCookiesChanged: widget.onCookiesChanged,
       );
     } catch (e) {
       debugPrint('[WebView] Cookie 同步失败: $e');
     }
+  }
+
+  bool get _canSyncCookies => mounted && !_disposed;
+
+  static Future<bool> deliverCookieHeaderIfActive({
+    required bool isActive,
+    required String pageUrl,
+    required String cookieHeader,
+    required AppWebViewCookieCallback? onCookiesChanged,
+  }) async {
+    if (!isActive || onCookiesChanged == null) return false;
+    await onCookiesChanged(pageUrl, cookieHeader);
+    return true;
   }
 
   Future<void> _openExternal() async {
@@ -350,5 +384,11 @@ class _AppWebViewPageState extends State<AppWebViewPage> {
         .replaceAll(RegExp(r'<[^>]+>'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

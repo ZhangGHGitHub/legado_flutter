@@ -28,4 +28,37 @@ void main() {
       '<html>raw</html>',
     );
   });
+
+  test('does not deliver cookie updates after dispose', () async {
+    final delivered = <String>[];
+
+    final skipped =
+        await AppWebViewPageStateTestApi.deliverCookieHeaderIfActive(
+          isActive: false,
+          pageUrl: 'https://example.com',
+          cookieHeader: 'sid=1',
+          onCookiesChanged: (pageUrl, cookie) async {
+            delivered.add('$pageUrl $cookie');
+          },
+        );
+
+    expect(skipped, isFalse);
+    expect(delivered, isEmpty);
+  });
+
+  test('delivers cookie updates while active', () async {
+    final delivered = <String>[];
+
+    final sent = await AppWebViewPageStateTestApi.deliverCookieHeaderIfActive(
+      isActive: true,
+      pageUrl: 'https://example.com',
+      cookieHeader: 'sid=1',
+      onCookiesChanged: (pageUrl, cookie) async {
+        delivered.add('$pageUrl $cookie');
+      },
+    );
+
+    expect(sent, isTrue);
+    expect(delivered, ['https://example.com sid=1']);
+  });
 }

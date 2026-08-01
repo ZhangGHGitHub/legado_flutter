@@ -2179,7 +2179,7 @@ fn wire__crate__api__probe_source_browser_host_impl(
             let api_request = <crate::api::SourceBrowserRequestDto>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::error::AppError>(
                     (move || async move {
                         let output_ok = crate::api::probe_source_browser_host(api_request).await?;
                         Ok(output_ok)
@@ -2687,7 +2687,7 @@ fn wire__crate__api__serve_source_browser_host_impl(
             let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
             let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_host = decode_DartFn_Inputs_source_browser_request_dto_Output_source_browser_response_dto_AnyhowException(<flutter_rust_bridge::DartOpaque>::sse_decode(&mut deserializer));deserializer.end(); move |context| async move {
-                    transform_result_sse::<_, String>((move || async move {
+                    transform_result_sse::<_, crate::api::error::AppError>((move || async move {
                          let output_ok = crate::api::serve_source_browser_host(api_host).await?;   Ok(output_ok)
                     })().await)
                 } })

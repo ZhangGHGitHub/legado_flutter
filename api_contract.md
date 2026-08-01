@@ -145,3 +145,12 @@ EPUB/ZIP 保留解析、大小限制、路径安全、文件筛选和成功结�
 | `seed_login_header` | `void` | `AppError` |
 
 `seed_login_header` 保留 source URL/header trim、空值忽略、缓存写入和无 dirty 更新行为。FRB 适配只解码结构化 `AppError`，不改变成功调用参数或登录头存储语义。
+
+## 浏览器宿主错误边界（2026-08-01）
+
+| Rust 入口 | 成功输出 | 错误分类 |
+|---|---|---|
+| `serve_source_browser_host` | `void` | `Cancelled` / `Unsupported` / `Unknown` |
+| `probe_source_browser_host` | `SourceBrowserResponseDto` | `Cancelled` / `Unsupported` / `Unknown` |
+
+`serve_source_browser_host` 与 `probe_source_browser_host` 公开失败结果统一为 `AppError`：取消类错误映射 `Cancelled`，平台不支持映射 `Unsupported`，宿主停止、锁失败和线程失败映射 `Unknown`，并保留原始错误文本。成功路径仍返回 `SourceBrowserResponseDto(finalUrl, body)`，不改变 `startBrowserAwait` 参数、Dart 回调链、Cookie 同步或 DOM 返回语义。`AppWebViewPage` dispose 后不得继续派发新的 Cookie 回调；完成验证仍需等待 Cookie 队列再抓取页面 HTML。

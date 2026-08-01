@@ -2349,7 +2349,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_source_browser_response_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiProbeSourceBrowserHostConstMeta,
         argValues: [request],
@@ -2880,7 +2880,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_app_error,
         ),
         constMeta: kCrateApiServeSourceBrowserHostConstMeta,
         argValues: [host],

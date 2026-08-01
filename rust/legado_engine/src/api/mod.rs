@@ -65,17 +65,31 @@ pub struct SourceBrowserResponseDto {
 /// 运行可见 WebView 宿主循环。Flutter 启动后保持此 Future，Rust 后台规则线程按请求等待回调。
 pub async fn serve_source_browser_host(
     host: impl Fn(SourceBrowserRequestDto) -> DartFnFuture<anyhow::Result<SourceBrowserResponseDto>>,
-) -> Result<(), String> {
-    crate::browser_host::serve(host).await
+) -> Result<(), AppError> {
+    crate::browser_host::serve(host)
+        .await
+        .map_err(map_source_browser_host_error)
 }
 
 /// FRB 回调契约探针；供桥接测试确认 Dart 回调可在 Rust 异步任务等待期间完成。
 pub async fn probe_source_browser_host(
     request: SourceBrowserRequestDto,
-) -> Result<SourceBrowserResponseDto, String> {
+) -> Result<SourceBrowserResponseDto, AppError> {
     tokio::task::spawn_blocking(move || crate::browser_host::invoke(request))
         .await
-        .map_err(|e| format!("浏览器宿主探针线程失败: {e}"))?
+        .map_err(|e| map_source_browser_host_error(format!("浏览器宿主探针线程失败: {e}")))?
+        .map_err(map_source_browser_host_error)
+}
+
+fn map_source_browser_host_error(message: String) -> AppError {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("cancel") || message.contains("取消") {
+        return AppError::Cancelled(message);
+    }
+    if lower.contains("unsupported") || message.contains("不支持") {
+        return AppError::Unsupported(message);
+    }
+    AppError::Unknown(message)
 }
 
 /// 本地书籍章节（含正文）
@@ -783,6 +797,96 @@ mod process_content_for_reading_tests {
             false,
             Vec::new(),
             None,
+        ));
+    }
+}
+
+#[cfg(test)]
+mod source_browser_host_error_tests {
+    use super::{
+        map_source_browser_host_error, probe_source_browser_host, AppError,
+        SourceBrowserRequestDto, SourceBrowserResponseDto,
+    };
+    use std::collections::HashMap;
+
+    fn request() -> SourceBrowserRequestDto {
+        SourceBrowserRequestDto {
+            source_key: "https://source.example".into(),
+            url: "https://source.example/verify".into(),
+            title: "验证".into(),
+            html: None,
+            headers: HashMap::new(),
+            refetch_after_success: true,
+        }
+    }
+
+    #[test]
+    fn browser_host_errors_preserve_cancelled_and_unknown_text() {
+        let cancelled = map_source_browser_host_error("用户取消验证".to_string());
+        assert!(matches!(
+            cancelled,
+            AppError::Cancelled(ref message) if message == "用户取消验证"
+        ));
+
+        let unsupported = map_source_browser_host_error("当前平台不支持书源网页验证".to_string());
+        assert!(matches!(
+            unsupported,
+            AppError::Unsupported(ref message) if message == "当前平台不支持书源网页验证"
+        ));
+
+        let stopped = map_source_browser_host_error("浏览器宿主已停止".to_string());
+        assert!(matches!(
+            stopped,
+            AppError::Unknown(ref message) if message == "浏览器宿主已停止"
+        ));
+    }
+
+    #[tokio::test]
+    #[serial_test::serial(source_browser_host)]
+    async fn probe_source_browser_host_maps_callback_cancellation() {
+        let _ = crate::browser_host::clear();
+        crate::browser_host::set_test_host(|_| Err("用户取消验证".to_string()));
+
+        let error = probe_source_browser_host(request()).await.unwrap_err();
+
+        assert!(matches!(
+            error,
+            AppError::Cancelled(ref message) if message == "用户取消验证"
+        ));
+        crate::browser_host::clear_test_host();
+        let _ = crate::browser_host::clear();
+    }
+
+    #[tokio::test]
+    #[serial_test::serial(source_browser_host)]
+    async fn probe_source_browser_host_keeps_success_response() {
+        let _ = crate::browser_host::clear();
+        crate::browser_host::set_test_host(|request| {
+            Ok(SourceBrowserResponseDto {
+                final_url: format!("{}/done", request.url.trim_end_matches('/')),
+                body: "ok".to_string(),
+            })
+        });
+
+        let response = probe_source_browser_host(request()).await.unwrap();
+
+        assert_eq!(response.final_url, "https://source.example/verify/done");
+        assert_eq!(response.body, "ok");
+        crate::browser_host::clear_test_host();
+        let _ = crate::browser_host::clear();
+    }
+
+    #[tokio::test]
+    #[serial_test::serial(source_browser_host)]
+    async fn probe_source_browser_host_maps_stopped_host_to_unknown() {
+        crate::browser_host::clear_test_host();
+        crate::browser_host::clear().unwrap();
+
+        let error = probe_source_browser_host(request()).await.unwrap_err();
+
+        assert!(matches!(
+            error,
+            AppError::Unknown(ref message) if message == "浏览器宿主未注册"
         ));
     }
 }

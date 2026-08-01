@@ -1,5 +1,15 @@
 # Legado Flutter 架构重构基线
 
+## 178. 2026-08-01：浏览器宿主错误边界与 WebView 生命周期
+
+- `serve_source_browser_host`、`probe_source_browser_host` 从公开 `Result<_, String>` 迁移为 `Result<_, AppError>`；取消映射 `Cancelled`，平台不支持映射 `Unsupported`，宿主停止、锁失败和线程失败映射 `Unknown`，均保留原错误文本。
+- `browser_host` 在服务 abort/clear 时只清理当前 sender，避免 stale sender 阻塞后续 `startBrowserAwait`；测试宿主覆盖成功、取消、停止和重启。
+- `AppWebViewPage` 在 dispose 后不再派发新的 Cookie 回调；完成验证成功路径仍等待 Cookie 同步、抓取 `document.documentElement.outerHTML` 并返回 finalUrl/body。
+
+验证记录：Rust `browser_host` 定向 `7/7`、Dart 浏览器宿主/WebView 定向 `8/8`、Rust 全量 `234`、Flutter 串行全量 `908` 通过，`3` 项既有 Flutter 条件跳过；release 构建、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。
+
+边界结论：本批不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则，不覆盖 WebDAV、平台验收或阶段退出条件。
+
 ## 177. 2026-08-01：重复公开 FRB 子模块入口收敛
 
 - `search/explore/toc/debug/validate` 子模块函数降为 `pub(crate)` 并标记 `frb(ignore)`，根 `api/mod.rs` wrapper 保持唯一公开 FRB API。
