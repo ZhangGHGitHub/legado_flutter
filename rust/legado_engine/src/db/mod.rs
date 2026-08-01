@@ -359,7 +359,7 @@ impl EngineDb {
             if replace {
                 self.clear_all_for_restore()?;
             }
-            self.restore_backup_json(&mapping.backup_json.to_string(), false)?;
+            self.restore_backup_json_inner(&mapping.backup_json, false)?;
             self.conn.execute(
                 "INSERT INTO legacy_room_imports
                  (fingerprint, room_version, room_identity_hash, raw_snapshot_json, mapped_backup_json)
@@ -1440,6 +1440,24 @@ impl EngineDb {
     pub fn restore_backup_json(&self, raw: &str, replace: bool) -> Result<(), DbError> {
         let v: Value = serde_json::from_str(raw)
             .map_err(|e| DbError::Message(format!("备份 JSON 无效: {e}")))?;
+        self.conn.execute_batch("BEGIN IMMEDIATE")?;
+        let result = self.restore_backup_json_inner(&v, replace);
+        match result {
+            Ok(()) => match self.conn.execute_batch("COMMIT") {
+                Ok(()) => Ok(()),
+                Err(error) => {
+                    let _ = self.conn.execute_batch("ROLLBACK");
+                    Err(DbError::Sqlite(error))
+                }
+            },
+            Err(error) => {
+                let _ = self.conn.execute_batch("ROLLBACK");
+                Err(error)
+            }
+        }
+    }
+
+    fn restore_backup_json_inner(&self, v: &Value, replace: bool) -> Result<(), DbError> {
         if replace {
             self.clear_all_for_restore()?;
         }
@@ -2488,6 +2506,29 @@ mod tests {
         let detailed: Vec<Value> =
             serde_json::from_str(&db2.export_detailed_read_records().unwrap()).unwrap();
         assert_eq!(detailed.len(), 1);
+    }
+
+    #[test]
+    fn restore_backup_rolls_back_existing_rows_when_a_later_row_is_invalid() {
+        let db = EngineDb::open_in_memory().unwrap();
+        db.insert_book_json(
+            r#"{"id":"existing","name":"原有书籍","author":"原作者","bookSourceUrl":"source"}"#,
+        )
+        .unwrap();
+
+        let invalid_backup = r#"{
+            "books": [
+                {"id":"new","name":"先写入的书籍","author":"作者"},
+                {"name":"缺少主键的书籍","author":"作者"}
+            ]
+        }"#;
+        let error = db.restore_backup_json(invalid_backup, true).unwrap_err();
+        assert!(error.to_string().contains("缺少字段 id"));
+
+        let books = db.get_books_json().unwrap();
+        assert_eq!(books.len(), 1);
+        assert!(books[0].contains("原有书籍"));
+        assert!(!books[0].contains("先写入的书籍"));
     }
 
     #[test]

@@ -765,17 +765,13 @@ fn chapter_id_for(book_id: &str, url: &str, index: i64) -> String {
 }
 
 fn read_table_rows(conn: &Connection, table: &str) -> Result<Vec<Value>, DbError> {
+    let column_names = table_columns(conn, table)?;
     let sql = format!(
         "SELECT * FROM {} ORDER BY {}",
         quote_identifier(table),
-        snapshot_order_by(table)
+        snapshot_order_by(table, &column_names)
     );
     let mut stmt = conn.prepare(&sql)?;
-    let column_names = stmt
-        .column_names()
-        .into_iter()
-        .map(str::to_string)
-        .collect::<Vec<_>>();
     let rows = stmt.query_map([], |row| {
         let mut object = Map::new();
         for (index, column) in column_names.iter().enumerate() {
@@ -786,16 +782,20 @@ fn read_table_rows(conn: &Connection, table: &str) -> Result<Vec<Value>, DbError
     rows.collect::<Result<Vec<_>, _>>().map_err(DbError::from)
 }
 
-fn snapshot_order_by(table: &str) -> &'static str {
+fn snapshot_order_by(table: &str, columns: &[String]) -> String {
     match table {
-        "books" => "\"bookUrl\"",
-        "book_sources" => "\"customOrder\", \"bookSourceUrl\"",
-        "chapters" => "\"bookUrl\", \"index\", \"url\"",
-        "bookmarks" => "\"time\"",
-        "readRecord" => "\"deviceId\", \"bookName\"",
-        "detailedReadRecord" => "\"id\"",
-        "replace_rules" => "\"sortOrder\", \"id\"",
-        _ => "rowid",
+        "books" => "\"bookUrl\"".to_string(),
+        "book_sources" => "\"customOrder\", \"bookSourceUrl\"".to_string(),
+        "chapters" => "\"bookUrl\", \"index\", \"url\"".to_string(),
+        "bookmarks" => "\"time\"".to_string(),
+        "readRecord" => "\"deviceId\", \"bookName\"".to_string(),
+        "detailedReadRecord" => "\"id\"".to_string(),
+        "replace_rules" => "\"sortOrder\", \"id\"".to_string(),
+        _ => columns
+            .iter()
+            .map(|column| quote_identifier(column))
+            .collect::<Vec<_>>()
+            .join(", "),
     }
 }
 
@@ -964,6 +964,124 @@ mod tests {
             .warnings
             .iter()
             .any(|warning| warning.contains("book_groups") && warning.contains("verbatim")));
+    }
+
+    #[test]
+    fn archive_only_room_entities_survive_mapping_import_export_and_restore() {
+        let source_path = test_path("archive-only-complete-source");
+        let backup_path = test_path("archive-only-complete-backup");
+        write_room_fixture(&source_path, false);
+        {
+            let conn = Connection::open(&source_path).unwrap();
+            conn.execute(
+                "INSERT INTO book_groups (groupId, groupName) VALUES ('g1', '收藏')",
+                [],
+            )
+            .unwrap();
+        }
+
+        let expected_tables = ROOM_ENTITY_TABLES
+            .iter()
+            .map(|table| (*table).to_string())
+            .collect::<std::collections::BTreeSet<_>>();
+        let snapshot = extract_legacy_room_database(&source_path).unwrap();
+        assert_eq!(
+            snapshot
+                .tables
+                .keys()
+                .cloned()
+                .collect::<std::collections::BTreeSet<_>>(),
+            expected_tables
+        );
+        assert_eq!(snapshot.columns["book_groups"], ["groupId", "groupName"]);
+        assert_eq!(snapshot.tables["book_groups"][0]["groupId"], "g1");
+        assert_eq!(snapshot.tables["book_groups"][0]["groupName"], "收藏");
+
+        let mapping = map_legacy_room_snapshot(&snapshot).unwrap();
+        let represented_tables = mapping
+            .archive_only_tables
+            .iter()
+            .cloned()
+            .chain(CORE_MAPPED_TABLES.iter().map(|table| (*table).to_string()))
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(represented_tables, expected_tables);
+        assert!(mapping
+            .archive_only_tables
+            .contains(&"book_groups".to_string()));
+
+        let db = EngineDb::open_in_memory().unwrap();
+        let report = db
+            .import_legacy_room_database(&source_path, Some(&backup_path), false)
+            .unwrap();
+        let exported = db.export_backup_json().unwrap();
+        let exported_value: Value = serde_json::from_str(&exported).unwrap();
+        let raw_snapshot = exported_value["legacyRoomImports"][0]["rawSnapshotJson"]
+            .as_str()
+            .unwrap();
+        let raw_value: Value = serde_json::from_str(raw_snapshot).unwrap();
+        assert_eq!(
+            raw_value["tables"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .cloned()
+                .collect::<std::collections::BTreeSet<_>>(),
+            expected_tables
+        );
+        assert_eq!(raw_value["tables"]["book_groups"][0]["groupName"], "收藏");
+
+        let restored = EngineDb::open_in_memory().unwrap();
+        restored.restore_backup_json(&exported, true).unwrap();
+        let restored_raw: String = restored
+            .conn
+            .query_row(
+                "SELECT raw_snapshot_json FROM legacy_room_imports WHERE fingerprint=?1",
+                [report.fingerprint.as_str()],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let restored_value: Value = serde_json::from_str(&restored_raw).unwrap();
+        assert_eq!(restored_raw, raw_snapshot);
+        assert_eq!(
+            restored_value["tables"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .cloned()
+                .collect::<std::collections::BTreeSet<_>>(),
+            expected_tables
+        );
+        assert_eq!(
+            restored_value["tables"]["book_groups"][0]["groupName"],
+            "收藏"
+        );
+
+        cleanup_test_paths(&source_path, &backup_path);
+    }
+
+    #[test]
+    fn non_core_room_rows_are_stable_across_insert_order() {
+        let first_path = test_path("stable-order-first");
+        let second_path = test_path("stable-order-second");
+        write_non_core_order_fixture(&first_path, false);
+        write_non_core_order_fixture(&second_path, true);
+
+        let first = extract_legacy_room_database(&first_path).unwrap();
+        let second = extract_legacy_room_database(&second_path).unwrap();
+        let expected_rows = vec![
+            json!({"groupId": "group-a", "groupName": "甲"}),
+            json!({"groupId": "group-b", "groupName": "乙"}),
+        ];
+
+        assert_eq!(first.tables["book_groups"], expected_rows);
+        assert_eq!(first.tables["book_groups"], second.tables["book_groups"]);
+        assert_eq!(
+            snapshot_json(&first).to_string(),
+            snapshot_json(&second).to_string()
+        );
+        assert_eq!(snapshot_fingerprint(&first), snapshot_fingerprint(&second));
+
+        cleanup_test_paths(&first_path, &second_path);
     }
 
     #[test]
@@ -1343,14 +1461,35 @@ mod tests {
         let backup_path = test_path("orphan-backup");
         write_room_fixture(&source_path, true);
         let db = EngineDb::open_in_memory().unwrap();
+        db.insert_book_json(r#"{"id":"existing","name":"原有书籍","author":"原作者"}"#)
+            .unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO legacy_room_imports
+                 (fingerprint, room_version, room_identity_hash, raw_snapshot_json, mapped_backup_json)
+                 VALUES ('existing-fingerprint', 99, 'existing-hash', '{}', '{}')",
+                [],
+            )
+            .unwrap();
 
         let error = db
             .import_legacy_room_database(&source_path, Some(&backup_path), true)
             .unwrap_err();
 
         assert!(error.to_string().contains("FOREIGN KEY"));
-        assert_eq!(db.book_count().unwrap(), 0);
-        assert_eq!(db.legacy_room_import_count().unwrap(), 0);
+        assert_eq!(db.book_count().unwrap(), 1);
+        assert_eq!(db.legacy_room_import_count().unwrap(), 1);
+        assert!(db.get_books_json().unwrap()[0].contains("原有书籍"));
+        let existing_archive: String = db
+            .conn
+            .query_row(
+                "SELECT raw_snapshot_json FROM legacy_room_imports
+                 WHERE fingerprint='existing-fingerprint'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(existing_archive, "{}");
         assert!(std::fs::metadata(&backup_path).is_ok());
 
         cleanup_test_paths(&source_path, &backup_path);
@@ -1387,6 +1526,34 @@ mod tests {
             [],
         )
         .unwrap();
+    }
+
+    fn write_non_core_order_fixture(path: &str, reverse_insert_order: bool) {
+        let conn = Connection::open(path).unwrap();
+        create_minimal_room_schema(&conn, KOTLIN_ROOM_CURRENT_VERSION);
+        if reverse_insert_order {
+            conn.execute(
+                "INSERT INTO book_groups (groupId, groupName) VALUES (?1, ?2)",
+                ["group-b", "乙"],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO book_groups (groupId, groupName) VALUES (?1, ?2)",
+                ["group-a", "甲"],
+            )
+            .unwrap();
+        } else {
+            conn.execute(
+                "INSERT INTO book_groups (groupId, groupName) VALUES (?1, ?2)",
+                ["group-a", "甲"],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO book_groups (groupId, groupName) VALUES (?1, ?2)",
+                ["group-b", "乙"],
+            )
+            .unwrap();
+        }
     }
 
     fn test_path(label: &str) -> String {
