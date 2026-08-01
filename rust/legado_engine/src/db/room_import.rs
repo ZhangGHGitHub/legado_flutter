@@ -959,6 +959,8 @@ mod tests {
             )
             .unwrap();
         }
+        let source_before = std::fs::read(&source_path).unwrap();
+        let source_size_before = std::fs::metadata(&source_path).unwrap().len();
 
         let snapshot_error = extract_legacy_room_database(&source_path).unwrap_err();
         assert!(snapshot_error.to_string().contains("非法 UTF-8"));
@@ -979,6 +981,11 @@ mod tests {
         assert_eq!(fingerprint_count, 0);
         assert!(!std::fs::metadata(&backup_path).is_ok());
         assert!(!std::fs::metadata(format!("{backup_path}.tmp-{}", std::process::id())).is_ok());
+        assert_eq!(
+            std::fs::metadata(&source_path).unwrap().len(),
+            source_size_before
+        );
+        assert_eq!(std::fs::read(&source_path).unwrap(), source_before);
 
         cleanup_test_paths(&source_path, &backup_path);
     }
@@ -1371,6 +1378,8 @@ mod tests {
         let source_path = test_path("source");
         let backup_path = test_path("backup");
         write_room_fixture(&source_path, false);
+        let source_before = std::fs::read(&source_path).unwrap();
+        let source_size_before = std::fs::metadata(&source_path).unwrap().len();
         let db = EngineDb::open_in_memory().unwrap();
         db.insert_book_json(r#"{"id":"existing","name":"保留书","author":"作者"}"#)
             .unwrap();
@@ -1386,6 +1395,11 @@ mod tests {
         assert_eq!(db.book_count().unwrap(), 2);
         assert_eq!(db.legacy_room_import_count().unwrap(), 1);
         assert!(std::fs::metadata(&backup_path).unwrap().len() > 0);
+        assert_eq!(
+            std::fs::metadata(&source_path).unwrap().len(),
+            source_size_before
+        );
+        assert_eq!(std::fs::read(&source_path).unwrap(), source_before);
 
         let raw_snapshot: String = db
             .conn
@@ -1403,6 +1417,11 @@ mod tests {
         assert!(duplicate.skipped_duplicate);
         assert_eq!(db.book_count().unwrap(), 2);
         assert_eq!(db.legacy_room_import_count().unwrap(), 1);
+        assert_eq!(
+            std::fs::metadata(&source_path).unwrap().len(),
+            source_size_before
+        );
+        assert_eq!(std::fs::read(&source_path).unwrap(), source_before);
 
         cleanup_test_paths(&source_path, &backup_path);
     }

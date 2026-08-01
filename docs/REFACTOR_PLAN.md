@@ -129,10 +129,10 @@ test/integration/         设备与平台链路验收
 退出条件：数据模型契约测试通过；本工程 Rust 旧 schema 可读写；章节身份和阅读位置迁移无差异；Kotlin Room v99 数据库探针、字段映射、导入事务、备份/回滚和真实/合成 fixture 回归通过。
 
 当前判定：R1 已重新打开，尚未最终退出。R1-12 当前只按“核心七表业务映射 + 23 个 Room 实体表全量原始归档”描述；本批已补 Kotlin Room v99 版本/identity hash 门禁、备份保护、正冲突、归档恢复、JSON 恢复事务性、既有数据回滚、非核心 fingerprint 稳定性、缺失实体表结构、实体 table-only 和非法 UTF-8 无损边界测试，Room 定向 `21/21`、Rust 全量 `247`、release、Flutter analyze 和 Flutter 全量 `908`（`3` 项既有条件跳过）结果均通过。缺失实体表或 view 冒充实体会在读行前拒绝，非法 UTF-8 不进行 lossy 替换且不产生目标写入。`readRecord` 仍仅登记 warning；非核心表仍为 archive-only，真实非空 `original_legado.db` 证据仍缺失，不能据此宣称 23 张表已全部完成 Rust v17 业务迁移。R1-12 的非核心业务 port、`readRecord` 映射和真实非空数据边界不在本轮擅自决定。R1-12 完成前，不推进新的 R2-R6 实现，也不以历史 R2-R6 记录替代当前退出条件。
-只读 schema 形状审计确认原版 `99.json` 与仓库 `original_legado.db` 的 23/23 个实体表列集合一致，无缺列/额外列；唯一 view 为 `book_sources_part`，但 23 个实体表当前均为空。该审计不替代非空数据迁移证据。
+只读 schema 形状审计确认原版 `99.json` 与仓库 `original_legado.db` 的 23/23 个实体表列集合一致，无缺列/额外列；唯一 view 为 `book_sources_part`。当前七张核心表均为空，`book_groups` 有 7 行，`keyboardAssists` 有 14 行；该审计不替代真实非空核心数据迁移证据。
 最新 owner 门禁补强：`readRecord.lastRead` 已纳入结构探针，四字段仍只保留原始快照；导入前备份写入失败会清理临时路径且不触碰预存在路径。Room 定向 `21/21`、Rust 全量 `248`、release、架构扫描和 `git diff --check` 通过。`readRecord` 设备维度/书名聚合、非核心业务化和文件级 SQLite 备份仍需独立决策或证据。
-归档无损回归已补合法 BLOB 字节数组往返断言；`emulator-5558` 可见但当前 smoke 仍适配空库，真实非空 Room 数据迁移仍是 R1-12 未关闭证据。
-并行回归补齐 `readRecord` 四字段原始归档/恢复和重复 fingerprint 备份 no-op；Room `21/21`、数据库 `23/23`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。真实非空 Android 迁移仍需独立前置和证据。
+归档无损回归已补合法 BLOB 字节数组往返断言，以及成功导入/非法 UTF-8 失败时源库文件字节和大小不变断言；`emulator-5558` 可见但只安装原版包、未安装重构 APK，当前 smoke 不能完成重构版真实非空 Room 数据迁移验收，仍是 R1-12 未关闭证据。
+并行回归补齐 `readRecord` 四字段原始归档/恢复、重复 fingerprint 备份 no-op 和成功/失败源库文件字节级只读断言；Room `21/21`、数据库 `23/23`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。`emulator-5558` 仅安装原版包，未安装重构 APK；真实非空 Android 迁移仍需独立前置和证据。
 
 ##### R1-12：Kotlin Room v99 数据迁移门禁（复核中，部分完成）
 

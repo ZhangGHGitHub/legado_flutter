@@ -796,7 +796,7 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - `flutter analyze --no-pub`：`No issues found!`；Dart/备份页定向测试 `6/6` 通过。
 - `flutter test --no-pub --concurrency=1`：`521` 通过，3 个既有在线测试跳过。
 - 真实 `original_legado.db`：Room v99，identity hash 为
-  `90980f1d0da029cf3254f354b227a2fe`，23 个实体表存在但当前均为空；非空等价 fixture 已覆盖核心字段、
+  `90980f1d0da029cf3254f354b227a2fe`，23 个实体表存在；当前七张核心表均为空，`book_groups` 有 7 行，`keyboardAssists` 有 14 行；非空等价 fixture 已覆盖核心字段、
   阅读位置、规则 JSON、章节身份、详细记录、书签歧义和非核心原始行。
 - Android `emulator-5556` 两阶段 Driver smoke 通过：真实文件导入及导入后写入；强制停止/新进程后读取、
   重复导入幂等、本地备份、清空和恢复。
@@ -815,9 +815,9 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 
 - R1 已重新打开，R1-12 当前只确认 Kotlin Room v99 → Rust v17 的核心七表业务映射与 23 个 Room 实体表全量原始归档，不能表述为 23 张表全部完成 Rust v17 业务迁移。
 - 本批已补 v99 版本/identity hash 门禁、备份保护、正冲突、归档恢复、JSON 恢复事务性、既有数据回滚、非核心 fingerprint 稳定性、缺失实体表结构、实体 table-only 和非法 UTF-8 无损边界测试；Room 定向 `21/21`、Rust 全量 `247`、release、Flutter analyze 和 Flutter 全量 `908`（`3` 项既有条件跳过）通过，但最终 R1-12 仍不据此标记为阶段退出。
-- 只读 schema 形状审计：原版 `99.json` 与仓库 `original_legado.db` 的 23/23 个实体表列集合一致，无缺列/额外列；唯一 view 为 `book_sources_part`，23 个实体表当前均为空。该审计仅证明 schema 形状，不替代非空数据迁移证据。
+- 只读 schema 形状审计：原版 `99.json` 与仓库 `original_legado.db` 的 23/23 个实体表列集合一致，无缺列/额外列；唯一 view 为 `book_sources_part`。当前七张核心表均为空，`book_groups` 有 7 行，`keyboardAssists` 有 14 行。该审计仅证明 schema 形状和当前样本数据分布，不替代真实非空核心数据迁移证据。
 - 最新 owner 门禁补强：`readRecord.lastRead` 已纳入结构探针，四字段仍仅原始归档；导入前备份写入失败会清理临时路径且不删除预存在路径。Room 定向 `21/21`、Rust 全量 `248`、release、架构扫描和 `git diff --check` 通过。设备维度/书名聚合业务化和文件级 SQLite 备份仍未决。
-- 归档无损回归新增合法 BLOB 字节数组经 snapshot、备份 JSON、恢复后的原始快照一致性断言；`emulator-5558` 在线但未提供真实非空 Room 数据，Android smoke 不登记为非空迁移通过。
+- 归档无损回归新增合法 BLOB 字节数组经 snapshot、备份 JSON、恢复后的原始快照一致性断言，以及成功导入/非法 UTF-8 失败时源库文件字节和大小不变断言；`emulator-5558` 在线但只安装原版包、未安装重构 APK，Android smoke 不登记为重构版非空迁移通过。
 - 并行 owner 回归新增 `readRecord` 四字段原始快照/恢复和重复 fingerprint 导入备份 no-op 断言；Room `21/21`、数据库 `23/23`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。真实非空 Android 迁移仍未证实。
 - `readRecord` 仍仅登记 warning；非核心表仍为 archive-only；真实非空 `original_legado.db` 证据仍缺失。非核心业务 port、`readRecord` 映射和真实非空数据补充不在本轮擅自决定范围内。
 - R1-12 复核完成前不推进新的 R2-R6 实现；R2/R6 的历史实现记录不替代当前阶段退出条件。
