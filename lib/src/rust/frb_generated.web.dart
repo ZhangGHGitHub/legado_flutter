@@ -3,7 +3,6 @@
 // ignore_for_file: argument_type_not_assignable
 
 import 'api.dart';
-import 'api/search.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';

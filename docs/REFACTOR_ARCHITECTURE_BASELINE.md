@@ -1,5 +1,14 @@
 # Legado Flutter 架构重构基线
 
+## 177. 2026-08-01：重复公开 FRB 子模块入口收敛
+
+- `search/explore/toc/debug/validate` 子模块函数降为 `pub(crate)` 并标记 `frb(ignore)`，根 `api/mod.rs` wrapper 保持唯一公开 FRB API。
+- FRB 生成层删除子模块重复 Dart wrapper、`.io` 导入和 Rust wire 分支；根 `search/explore/get_toc/debug_search/debug_toc/validate_source` 的参数、返回值和 `AppError` 分类不变。
+
+验证记录：`cargo fmt -p legado_engine`、`cargo test -p legado_engine api -- --nocapture` 为 `72/72` 通过，`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。
+
+边界结论：本批只收敛生成公开面，不覆盖浏览器宿主、WebDAV、平台验收或阶段退出，不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
 ## 176. 2026-08-01：`process_content_for_reading` 公开 FFI 错误边界
 
 - `process_content_for_reading` 从 `Result<String, String>` 改为 `Result<String, AppError>`，底层正文处理错误映射为 `AppError::Parse`；成功输出、替换规则、段落缩进、标题合并和重新分段行为保持不变。

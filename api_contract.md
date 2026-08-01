@@ -18,6 +18,8 @@ AppError = Network | Parse | Database | JsExecution | Validation | Unsupported |
 
 2026-08-01 补充：`process_content_for_reading` 的公开失败结果已收敛为 `AppError::Parse`。正文处理成功输出、替换/缩进/重新分段行为保持不变；Flutter 生成 API 的错误 codec 使用结构化 `AppError`，Dart 适配层不得退回解析 `String`。
 
+2026-08-01 补充：`search/explore/toc/debug/validate` 子模块实现不再作为 FRB 公开 API 生成；根 `api/mod.rs` wrapper 是这些能力的唯一公开契约。调用者必须继续通过根 `lib/src/rust/api.dart` 入口使用结构化 `AppError`，不得恢复对子模块生成 wrapper 或重复 wire 名称的依赖。
+
 ## 模型
 
 ### Book

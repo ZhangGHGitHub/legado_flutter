@@ -13,7 +13,8 @@ use crate::rule::js_engine;
 const TOC_PAGE_CONCURRENCY: usize = 4;
 
 /// 获取目录
-pub async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterItem>, String> {
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) async fn get_toc(source_json: &str, book_url: &str) -> Result<Vec<ChapterItem>, String> {
     let mut source = BookSource::from_json(source_json)?;
     let mut reverse = false;
     let mut list_rule = source.rule_toc_chapter_list.trim().to_string();

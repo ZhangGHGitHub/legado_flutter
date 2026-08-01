@@ -34,7 +34,11 @@ fn pick_book(items: &[SearchItem]) -> Option<SearchItem> {
 }
 
 /// 校验书源：搜索 → 发现（可选）→ 目录 → 正文
-pub async fn validate_source(source_json: &str, keyword: &str) -> Result<SourceValidation, String> {
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) async fn validate_source(
+    source_json: &str,
+    keyword: &str,
+) -> Result<SourceValidation, String> {
     let source = BookSource::from_json(source_json)?;
     let keyword = if keyword.trim().is_empty() {
         "测试"

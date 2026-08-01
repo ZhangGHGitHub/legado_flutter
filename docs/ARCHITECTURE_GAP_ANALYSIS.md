@@ -54,7 +54,14 @@
 
 - `process_content_for_reading` 的公开失败结果统一为 `AppError::Parse`；成功正文输出、替换规则、缩进、标题合并和重新分段行为保持不变。
 - Rust 定向 `2/2`、Dart FRB mock 契约 `2/2`、Rust 全量 `228`、Flutter 全量 `903` 通过，`3` 项既有条件跳过；release 构建、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。
-+ 本批只收敛公开错误契约，不覆盖浏览器宿主、WebView 生命周期、重复公开 FRB 子模块入口、WebDAV、平台验收、阶段退出或其它公开 `Result<T, String>`；不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+- 本批只收敛公开错误契约，不覆盖浏览器宿主、WebView 生命周期、重复公开 FRB 子模块入口、WebDAV、平台验收、阶段退出或其它公开 `Result<T, String>`；不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+## 2026-08-01 重复公开 FRB 子模块入口收敛
+
+- `search/explore/toc/debug/validate` 子模块实现降为 `pub(crate)` 并加 `frb(ignore)`，根 `api/mod.rs` wrapper 继续作为唯一公开 FRB 契约。
+- 重新生成绑定后，`crateApiSearchSearch`、`crateApiExploreExplore`、`crateApiTocGetToc`、`crateApiDebugDebugSearch`、`crateApiDebugDebugToc`、`crateApiValidateValidateSource` 及对应 Rust wire 实现均不再存在；陈旧子模块 Dart wrapper 已删除。
+- 验证：`cargo fmt -p legado_engine`、`cargo test -p legado_engine api -- --nocapture` 为 `72/72` 通过，`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。
+- 本批不改变根 API 参数、返回值、错误分类、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则；浏览器宿主、WebDAV、平台验收和阶段退出仍未覆盖。
 
 ## 2026-08-01 追溯补充
 

@@ -39,7 +39,8 @@ fn search_items_to_debug(items: Vec<super::SearchItem>) -> Vec<DebugItem> {
 }
 
 /// 分步调试搜索
-pub async fn debug_search(source_json: &str, keyword: &str) -> Result<DebugResult, String> {
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) async fn debug_search(source_json: &str, keyword: &str) -> Result<DebugResult, String> {
     let source = BookSource::from_json(source_json)?;
     let mut steps = Vec::new();
 
@@ -258,7 +259,8 @@ pub async fn debug_search(source_json: &str, keyword: &str) -> Result<DebugResul
 }
 
 /// 分步调试目录
-pub async fn debug_toc(source_json: &str, book_url: &str) -> Result<DebugResult, String> {
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) async fn debug_toc(source_json: &str, book_url: &str) -> Result<DebugResult, String> {
     use super::ChapterItem;
 
     let source = BookSource::from_json(source_json)?;

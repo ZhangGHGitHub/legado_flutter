@@ -4,7 +4,8 @@ use crate::model::book_source::BookSource;
 use crate::rule;
 
 /// 发现页 / 分类页
-pub async fn explore(
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) async fn explore(
     source_json: &str,
     explore_url: &str,
     page: i32,

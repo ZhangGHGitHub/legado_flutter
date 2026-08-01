@@ -4,7 +4,8 @@ use crate::model::book_source::BookSource;
 use crate::rule;
 
 /// 执行书源搜索
-pub async fn search(source_json: &str, keyword: &str) -> Result<Vec<SearchItem>, String> {
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) async fn search(source_json: &str, keyword: &str) -> Result<Vec<SearchItem>, String> {
     let source = BookSource::from_json(source_json)?;
     if source.rule_search_url.is_empty() {
         return Ok(vec![]);
