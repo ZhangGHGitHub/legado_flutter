@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/R1-12 Android smoke 门禁补强：导入阶段新增 fingerprint 非空及 `books`、`sources`、`chapters` 正行数断言，空库或无核心映射行不会再被登记为真实非空迁移通过；未改变导入、持久化、重复导入幂等和备份恢复行为。
 - 架构/R1-12 当前状态复核：R1 已重新打开。Kotlin Room v99 → Rust v17 当前只确认核心七表业务映射与 23 个 Room 实体表全量原始归档；本批新增 v99 版本/identity hash 门禁、备份保护、正冲突、归档恢复、JSON 恢复事务性、既有数据回滚、非核心 fingerprint 稳定性、缺失实体表结构、实体 table-only、非法 UTF-8 无损和源库文件字节级只读边界测试，Room 定向 `21/21`、Rust 全量 `249`、release、`flutter analyze --no-pub` 和 Flutter 全量 `908`（`3` 项既有条件跳过）通过。缺失实体表或 view 冒充实体会在读取行前拒绝，非法 UTF-8 不进行 lossy 替换且不会产生目标写入。当前七张核心表为空，`book_groups` 有 7 行，`keyboardAssists` 有 14 行；`readRecord` 仍仅 warning，非核心表仍 archive-only。`emulator-5558` 只安装原版包，未安装重构 APK，真实非空迁移验收无法执行；不把 23 张表写成全部 Rust v17 业务迁移，也不把 R1/R2/R6 历史实现记录写成当前阶段退出。R1-12 复核完成前不推进新的 R2-R6 实现。
 - R1-12 schema 形状审计：只读对照原版 `99.json` 与仓库 `original_legado.db`，23/23 个实体表的列集合均一致，无缺列或额外列；唯一 view 为 `book_sources_part`。当前七张核心表均为空，`book_groups` 有 7 行，`keyboardAssists` 有 14 行；该结果仅证明 schema 形状和当前样本数据分布，不构成真实非空核心数据迁移证据。
 - 架构/R1-12 结构与备份边界补强：`readRecord.lastRead` 纳入最低结构门禁，仍保留 `deviceId/bookName/readTime/lastRead` 原始快照，不写入 Rust v17 业务统计表；导入前备份写入失败时清理临时路径且不触碰预存在路径。Room 定向 `21/21`、Rust 全量 `248`、release、架构扫描和 `git diff --check` 通过。`readRecord` 的设备维度、书名聚合和 `lastRead` 最大值语义仍需产品目标模型后再迁移。

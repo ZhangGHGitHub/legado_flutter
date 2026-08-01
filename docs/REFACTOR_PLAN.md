@@ -133,6 +133,7 @@ test/integration/         设备与平台链路验收
 最新 owner 门禁补强：`readRecord.lastRead` 已纳入结构探针，四字段仍只保留原始快照；导入前备份写入失败会清理临时路径且不触碰预存在路径。Room 定向 `21/21`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。`readRecord` 设备维度/书名聚合、非核心业务化和文件级 SQLite 备份仍需独立决策或证据。
 归档无损回归已补合法 BLOB 字节数组往返断言，以及成功导入/非法 UTF-8 失败时源库文件字节和大小不变断言；`emulator-5558` 可见但只安装原版包、未安装重构 APK，当前 smoke 不能完成重构版真实非空 Room 数据迁移验收，仍是 R1-12 未关闭证据。
 并行回归补齐 `readRecord` 四字段原始归档/恢复、重复 fingerprint 备份 no-op 和成功/失败源库文件字节级只读断言；Room `21/21`、数据库 `23/23`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。`emulator-5558` 仅安装原版包，未安装重构 APK；真实非空 Android 迁移仍需独立前置和证据。
+- Android smoke 导入阶段已补 fingerprint 非空及 `books`、`sources`、`chapters` 正行数前置断言；空库不会被登记为真实非空迁移通过。当前仅完成静态分析和定向 service 回归，因 `emulator-5558` 未安装重构 APK，真实设备 smoke 仍待前置条件满足。
 
 ##### R1-12：Kotlin Room v99 数据迁移门禁（复核中，部分完成）
 

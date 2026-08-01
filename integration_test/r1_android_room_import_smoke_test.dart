@@ -60,7 +60,15 @@ void main() {
         replace: true,
       );
       expect(report.sourceRoomVersion, 99);
+      expect(report.fingerprint, isNotEmpty);
       expect(report.preservedRows.length, greaterThanOrEqualTo(23));
+      for (final table in const ['books', 'sources', 'chapters']) {
+        expect(
+          report.counts[table],
+          greaterThan(0),
+          reason: 'Room 非空迁移前置失败: $table 没有可迁移行',
+        );
+      }
       expect(report.archiveOnlyTables, contains('book_groups'));
       expect(report.backupWritten, isTrue);
       expect(await File(preImportBackupPath).exists(), isTrue);
