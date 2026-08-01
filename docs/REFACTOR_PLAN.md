@@ -128,7 +128,7 @@ test/integration/         设备与平台链路验收
 
 退出条件：数据模型契约测试通过；本工程 Rust 旧 schema 可读写；章节身份和阅读位置迁移无差异；Kotlin Room v99 数据库探针、字段映射、导入事务、备份/回滚和真实/合成 fixture 回归通过。
 
-当前判定：R1 已重新打开，尚未最终退出。R1-12 当前只按“核心七表业务映射 + 23 个 Room 实体表全量原始归档”描述；本批已补 Kotlin Room v99 版本/identity hash 门禁、备份保护、正冲突、归档恢复、JSON 恢复事务性、既有数据回滚、非核心 fingerprint 稳定性、缺失实体表结构和非法 UTF-8 无损边界测试，Room 定向 `20/20`、Rust 全量 `246`、release、Flutter analyze 和 Flutter 全量 `908`（`3` 项既有条件跳过）结果均通过。缺失实体表会在读行前拒绝，非法 UTF-8 不进行 lossy 替换且不产生目标写入。`readRecord` 仍仅登记 warning；非核心表仍为 archive-only，真实非空 `original_legado.db` 证据仍缺失，不能据此宣称 23 张表已全部完成 Rust v17 业务迁移。R1-12 的非核心业务 port、`readRecord` 映射和真实非空数据边界不在本轮擅自决定。R1-12 完成前，不推进新的 R2-R6 实现，也不以历史 R2-R6 记录替代当前退出条件。
+当前判定：R1 已重新打开，尚未最终退出。R1-12 当前只按“核心七表业务映射 + 23 个 Room 实体表全量原始归档”描述；本批已补 Kotlin Room v99 版本/identity hash 门禁、备份保护、正冲突、归档恢复、JSON 恢复事务性、既有数据回滚、非核心 fingerprint 稳定性、缺失实体表结构、实体 table-only 和非法 UTF-8 无损边界测试，Room 定向 `21/21`、Rust 全量 `247`、release、Flutter analyze 和 Flutter 全量 `908`（`3` 项既有条件跳过）结果均通过。缺失实体表或 view 冒充实体会在读行前拒绝，非法 UTF-8 不进行 lossy 替换且不产生目标写入。`readRecord` 仍仅登记 warning；非核心表仍为 archive-only，真实非空 `original_legado.db` 证据仍缺失，不能据此宣称 23 张表已全部完成 Rust v17 业务迁移。R1-12 的非核心业务 port、`readRecord` 映射和真实非空数据边界不在本轮擅自决定。R1-12 完成前，不推进新的 R2-R6 实现，也不以历史 R2-R6 记录替代当前退出条件。
 
 ##### R1-12：Kotlin Room v99 数据迁移门禁（复核中，部分完成）
 

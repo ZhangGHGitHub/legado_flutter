@@ -834,7 +834,7 @@ fn read_room_identity_hash(conn: &Connection) -> Result<Option<String>, DbError>
 
 fn table_exists(conn: &Connection, table: &str) -> Result<bool, DbError> {
     let count: i32 = conn.query_row(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type IN ('table', 'view') AND name = ?1",
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
         [table],
         |row| row.get(0),
     )?;
@@ -924,6 +924,23 @@ mod tests {
         assert!(message.contains("Room v99 数据库缺少实体表"));
         assert!(message.contains("book_groups"));
         assert!(message.contains("servers"));
+    }
+
+    #[test]
+    fn extract_rejects_view_that_uses_a_room_entity_name() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_minimal_room_schema(&conn, KOTLIN_ROOM_CURRENT_VERSION);
+        conn.execute("DROP TABLE book_groups", []).unwrap();
+        conn.execute(
+            "CREATE VIEW book_groups AS SELECT 'g1' AS groupId, '收藏' AS groupName",
+            [],
+        )
+        .unwrap();
+
+        let error = extract_legacy_room_connection(&conn).unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("Room v99 数据库缺少实体表"));
+        assert!(message.contains("book_groups"));
     }
 
     #[test]
