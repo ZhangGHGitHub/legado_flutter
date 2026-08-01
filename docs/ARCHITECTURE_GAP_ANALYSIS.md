@@ -35,10 +35,10 @@
 
 - 当前范围是 Kotlin Room v99 → Rust v17 的核心七表业务映射与 23 表全量原始归档，不是 23 张 Room 表全部 Rust v17 业务迁移。
 - 只读 schema 形状审计对照原版 `legado-main/app/schemas/io.legado.app.data.AppDatabase/99.json` 与仓库 `original_legado.db`：23/23 个实体表列集合一致，无缺列/额外列；唯一 view 为 `book_sources_part`。当前七张核心表均为空，`book_groups` 有 7 行，`keyboardAssists` 有 14 行；该审计不证明真实非空核心数据迁移。
-- 已记录的 v99 版本/identity hash 门禁、备份保护、正冲突、归档恢复、JSON 恢复事务性、既有数据回滚、非核心 fingerprint 稳定性、缺失实体表结构、实体 table-only 和非法 UTF-8 无损边界测试结果为 Room 定向 `21/21`、Rust 全量 `247`、release、Flutter analyze 和 Flutter 全量 `908`（`3` 项既有条件跳过）通过；最终 R1-12 仍不据此标记为阶段退出。
+- 已记录的 v99 版本/identity hash 门禁、备份保护、正冲突、归档恢复、JSON 恢复事务性、既有数据回滚、非核心 fingerprint 稳定性、缺失实体表结构、实体 table-only、非法 UTF-8 无损和源库文件字节级只读边界测试结果为 Room 定向 `21/21`、Rust 全量 `249`、release、Flutter analyze 和 Flutter 全量 `908`（`3` 项既有条件跳过）通过；最终 R1-12 仍不据此标记为阶段退出。
 - `readRecord` 仍仅登记 warning，非核心表仍 archive-only，真实非空 `original_legado.db` 证据仍缺失；这些边界不在本轮擅自做产品决策。
 - R1-12 复核完成前不推进新的 R2-R6 实现，也不把 R1/R2/R6 历史记录写成当前阶段已退出。
-- 最新 owner 门禁：`readRecord.lastRead` 已纳入结构探针，四字段仍仅原始归档；导入前备份写入失败会清理临时路径且保留预存在路径。Room 定向 `21/21`、Rust 全量 `248`、release、架构扫描和 `git diff --check` 通过。设备维度、书名聚合统计和文件级 SQLite 备份仍未形成产品目标契约。
+- 最新 owner 门禁：`readRecord.lastRead` 已纳入结构探针，四字段仍仅原始归档；导入前备份写入失败会清理临时路径且保留预存在路径。Room 定向 `21/21`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。设备维度、书名聚合统计和文件级 SQLite 备份仍未形成产品目标契约。
 - 归档无损回归已覆盖合法 BLOB 的 `rawSnapshotJson` 导出/恢复字节一致性；这不替代真实非空 Room 数据库在 Android 设备上的迁移证据。
 - 最新并行 owner 门禁：`readRecord` 四字段原始归档/恢复、重复 fingerprint 备份 no-op 和成功/失败源库文件字节级只读回归通过；Room `21/21`、数据库 `23/23`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。`emulator-5558` 在线但只安装原版包，未安装重构 APK，未完成真实非空数据库前置。
 
