@@ -34,6 +34,7 @@
 ## 2026-08-01 R1-12 当前状态边界
 
 - 当前范围是 Kotlin Room v99 → Rust v17 的核心七表业务映射与 23 表全量原始归档，不是 23 张 Room 表全部 Rust v17 业务迁移。
+- 只读 schema 形状审计对照原版 `legado-main/app/schemas/io.legado.app.data.AppDatabase/99.json` 与仓库 `original_legado.db`：23/23 个实体表列集合一致，无缺列/额外列；唯一 view 为 `book_sources_part`，23 个实体表当前均为空。该审计不证明非空数据迁移。
 - 已记录的 v99 版本/identity hash 门禁、备份保护、正冲突、归档恢复、JSON 恢复事务性、既有数据回滚、非核心 fingerprint 稳定性、缺失实体表结构、实体 table-only 和非法 UTF-8 无损边界测试结果为 Room 定向 `21/21`、Rust 全量 `247`、release、Flutter analyze 和 Flutter 全量 `908`（`3` 项既有条件跳过）通过；最终 R1-12 仍不据此标记为阶段退出。
 - `readRecord` 仍仅登记 warning，非核心表仍 archive-only，真实非空 `original_legado.db` 证据仍缺失；这些边界不在本轮擅自做产品决策。
 - R1-12 复核完成前不推进新的 R2-R6 实现，也不把 R1/R2/R6 历史记录写成当前阶段已退出。
