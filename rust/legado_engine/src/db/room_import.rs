@@ -105,7 +105,6 @@ const CORE_MAPPED_TABLES: &[&str] = &[
     "book_sources",
     "chapters",
     "bookmarks",
-    "readRecord",
     "detailedReadRecord",
     "replace_rules",
 ];
@@ -324,6 +323,13 @@ pub fn map_legacy_room_snapshot(
     counts.insert(
         "detailedReadRecords".to_string(),
         detailed_read_records.len(),
+    );
+    // readRecord remains outside the Rust statistics model. Keep its raw row
+    // count in the existing report counts so the deferred boundary is
+    // machine-readable alongside archive_only_tables.
+    counts.insert(
+        "readRecord".to_string(),
+        table(snapshot, "readRecord")?.len(),
     );
     counts.insert("replaceRules".to_string(), replace_rules.len());
 
@@ -1202,8 +1208,6 @@ mod tests {
         create_minimal_room_schema(&conn, KOTLIN_ROOM_CURRENT_VERSION);
         conn.execute("ALTER TABLE chapters ADD COLUMN wordCount TEXT", [])
             .unwrap();
-        conn.execute("ALTER TABLE replace_rules ADD COLUMN scope TEXT", [])
-            .unwrap();
         conn.execute(
             r#"INSERT INTO books
              (bookUrl, tocUrl, origin, originName, name, author, coverUrl,
@@ -1408,11 +1412,88 @@ mod tests {
             .get("books")
             .unwrap()
             .contains(&"originName".to_string()));
-        assert!(mapping
-            .unmapped_columns
-            .get("replace_rules")
-            .unwrap()
-            .contains(&"scope".to_string()));
+        let replace_rule_unmapped = mapping.unmapped_columns.get("replace_rules").unwrap();
+        for column in ["sortOrder", "scope", "group"] {
+            assert!(
+                replace_rule_unmapped.contains(&column.to_string()),
+                "expected replace_rules.{column} to remain archive-only"
+            );
+        }
+    }
+
+    #[test]
+    fn read_records_preserve_raw_rows_but_only_detailed_records_map_to_statistics() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_minimal_room_schema(&conn, KOTLIN_ROOM_CURRENT_VERSION);
+        conn.execute(
+            "INSERT INTO books
+             (bookUrl, tocUrl, origin, originName, name, author,
+              durChapterTitle, durChapterIndex, durChapterPos, readConfig)
+             VALUES ('book-1', 'toc', 'source', '源', '统计书', '作者', '第一章', 0, 7, '{}')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO detailedReadRecord
+             (bookName, startTime, endTime, readIteration)
+             VALUES
+                ('统计书', 10, 20, 1),
+                ('统计书', 30, 45, 2),
+                ('另一本书', 50, 60, 3)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO readRecord (deviceId, bookName, readTime, lastRead)
+             VALUES ('device-a', '统计书', 600, 1700000000)",
+            [],
+        )
+        .unwrap();
+
+        let snapshot = extract_legacy_room_connection(&conn).unwrap();
+        let mapping = map_legacy_room_snapshot(&snapshot).unwrap();
+
+        // The archive is the lossless evidence boundary, including the Room id.
+        let raw_detailed = &snapshot.tables["detailedReadRecord"];
+        assert_eq!(raw_detailed.len(), 3);
+        assert_eq!(raw_detailed[0]["id"], json!(1));
+        assert_eq!(raw_detailed[1]["id"], json!(2));
+        assert_eq!(raw_detailed[2]["id"], json!(3));
+        assert_eq!(
+            snapshot.tables["readRecord"],
+            vec![json!({
+                "deviceId": "device-a",
+                "bookName": "统计书",
+                "readTime": 600,
+                "lastRead": 1700000000
+            })]
+        );
+
+        // The established mapping groups detailed sessions by book name and
+        // deliberately leaves aggregate readRecord data unmapped.
+        assert_eq!(
+            mapping.backup_json["detailedReadRecords"],
+            json!([
+                {
+                    "bookName": "另一本书",
+                    "sessions": [{"startTime": 50, "endTime": 60, "readIteration": 3}]
+                },
+                {
+                    "bookName": "统计书",
+                    "sessions": [
+                        {"startTime": 10, "endTime": 20, "readIteration": 1},
+                        {"startTime": 30, "endTime": 45, "readIteration": 2}
+                    ]
+                }
+            ])
+        );
+        assert!(mapping.backup_json["detailedReadRecords"][0]["sessions"][0]
+            .get("id")
+            .is_none());
+        assert_eq!(mapping.backup_json["readingRecords"], json!([]));
+        assert!(mapping.warnings.iter().any(|warning| {
+            warning.contains("readRecord contains aggregate readTime/lastRead")
+        }));
     }
 
     #[test]
@@ -1679,8 +1760,6 @@ mod tests {
         write_room_fixture(&source_path, false);
         {
             let conn = Connection::open(&source_path).unwrap();
-            conn.execute("ALTER TABLE replace_rules ADD COLUMN scope TEXT", [])
-                .unwrap();
             conn.execute(
                 "INSERT INTO replace_rules
                  (name, pattern, replacement, isEnabled, isRegex, sortOrder, scope)
@@ -2074,8 +2153,10 @@ mod tests {
              CREATE TABLE replace_rules (
                id INTEGER PRIMARY KEY AUTOINCREMENT,
                name TEXT NOT NULL,
+               [group] TEXT,
                pattern TEXT NOT NULL,
                replacement TEXT NOT NULL,
+               scope TEXT,
                isEnabled INTEGER NOT NULL DEFAULT 1,
                isRegex INTEGER NOT NULL DEFAULT 1,
                sortOrder INTEGER NOT NULL DEFAULT 0

@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-01
 
+2026-08-02 R1-12 owner 门禁复核：先执行 Rust Room 定向测试 `23/23` 和数据库定向测试 `24/24`，再执行 Rust 全量 `252/252`、Flutter 全量 `912`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check`，全部通过。迁移边界同步明确为：`readRecord` 采用 archive-only 保存并纳入原始计数，继续不写入 Rust 阅读统计业务表；`detailedReadRecord` 原始行及 Room 自增 `id` 保留在 `raw_snapshot_json`，业务映射按书名聚合 sessions 且不保留聚合 session 的 Room 自增 `id`；`replace_rules.sortOrder/scope/group` 仅进入原始归档，不进入当前 Rust v17 替换规则业务映射。该批未修改正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。由于真实原版非空数据库和相关产品语义仍未完全闭合，R1-12 及 R1 继续不退出，也不推进新的 R2-R6 实现。
+
 2026-08-02 当前 R1-12 追溯记录：本批由四条互不重叠 lane 补齐 Room 七张核心表逐字段 golden fixture、Flutter 导入报告字段与设备证据边界审查。owner 门禁为 Rust Room `21/21`、Flutter Room `5/5`、Rust 全量 `249/249`、Flutter 串行全量 `911`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 全部通过。修正 `books.originName` 未进入 Rust v17 业务映射却列入已映射白名单的问题，现明确报告为未映射；不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。当前 `emulator-5558` 不可连接，真实原版非空 Room 数据库仍未取得；`readRecord` 统计语义、详细阅读记录聚合、非核心表业务 port 和文件级 SQLite 备份仍按计划保留为未决边界，R1-12 及 R1 不退出，也不推进新的 R2-R6 实现。
 2026-08-02 R1-12 报告契约补充：Flutter 导入报告重复导入路径新增归档表/告警/未映射列空集合断言，未知 JSON 字段向前兼容断言通过，Room 定向测试 `6/6`。本批仍不改变 Rust 迁移语义或阶段退出条件。
 2026-08-02 R1-12 书源规则落库追溯：本批先补目标 `book_sources` 扁平列断言，再修复 `upsert_source_json` 对嵌套规则的兼容回退；保留已有扁平字段优先级，`rulePageNext` 按扁平/目录/正文顺序回退。新增书源规则、目标表落库和 archive-only 字段断言，Rust Room `22/22`、数据库 `24/24`、Rust 全量 `251/251`、Flutter 全量 `912`（`3` 项既有条件跳过）、analyze、架构扫描和 `git diff --check` 通过。真实原版非空数据库仍缺失，R1-12 不退出。

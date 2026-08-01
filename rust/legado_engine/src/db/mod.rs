@@ -2239,7 +2239,9 @@ mod tests {
                replacement TEXT NOT NULL,
                isEnabled INTEGER NOT NULL DEFAULT 1,
                isRegex INTEGER NOT NULL DEFAULT 1,
-               sortOrder INTEGER NOT NULL DEFAULT 0
+               sortOrder INTEGER NOT NULL DEFAULT 0,
+               scope TEXT NOT NULL DEFAULT '',
+               [group] TEXT NOT NULL DEFAULT ''
              );
              CREATE TABLE searchBooks (bookUrl TEXT);
              CREATE TABLE search_keywords (word TEXT);
@@ -2291,6 +2293,13 @@ mod tests {
                VALUES ('source', '测试书源', '测试组', 1, 3);
              INSERT INTO chapters (url, bookUrl, title, [index], baseUrl, wordCount)
                VALUES ('chapter-1', 'book-1', '第一章', 0, 'https://example.test/', 1234);
+             INSERT INTO readRecord (deviceId, bookName, readTime, lastRead)
+               VALUES ('device-a', '重复导入书', 600, 1700000000);
+             INSERT INTO detailedReadRecord (bookName, startTime, endTime, readIteration)
+               VALUES ('重复导入书', 1000000, 1120001, 1);
+             INSERT INTO replace_rules
+               (name, pattern, replacement, isEnabled, isRegex, sortOrder, scope, [group])
+               VALUES ('净化', '广告', '', 1, 1, 3, 'book-1', '正文');
              PRAGMA user_version = 99;",
         )
         .unwrap();
@@ -2358,6 +2367,10 @@ mod tests {
         assert_eq!(report.counts.get("books"), Some(&1));
         assert_eq!(report.counts.get("sources"), Some(&1));
         assert_eq!(report.counts.get("chapters"), Some(&1));
+        assert_eq!(report.counts.get("readRecord"), Some(&1));
+        assert!(report
+            .archive_only_tables
+            .contains(&"readRecord".to_string()));
 
         let books: Vec<Value> = db
             .get_books_json()
@@ -2396,6 +2409,36 @@ mod tests {
         assert_eq!(sources[0]["bookSourceGroup"], "测试组");
         assert_eq!(sources[0]["enabled"], true);
 
+        let replace_rule: (String, String, String, String, i64, i64) = db
+            .conn
+            .query_row(
+                "SELECT id, name, pattern, replacement, isEnabled, isRegex
+                 FROM replace_rules WHERE name=?1",
+                params!["净化"],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            replace_rule,
+            (
+                "1".to_string(),
+                "净化".to_string(),
+                "广告".to_string(),
+                String::new(),
+                1,
+                1,
+            )
+        );
+
         let raw_snapshot: String = db
             .conn
             .query_row(
@@ -2406,6 +2449,13 @@ mod tests {
             .unwrap();
         let raw_snapshot: Value = serde_json::from_str(&raw_snapshot).unwrap();
         assert_eq!(raw_snapshot["tables"]["chapters"][0]["wordCount"], 1234);
+        assert_eq!(raw_snapshot["tables"]["detailedReadRecord"][0]["id"], 1);
+        assert_eq!(raw_snapshot["tables"]["replace_rules"][0]["sortOrder"], 3);
+        assert_eq!(
+            raw_snapshot["tables"]["replace_rules"][0]["scope"],
+            "book-1"
+        );
+        assert_eq!(raw_snapshot["tables"]["replace_rules"][0]["group"], "正文");
 
         let mapped_backup: String = db
             .conn
@@ -2420,6 +2470,11 @@ mod tests {
         assert_eq!(mapped_backup["chapters"][0]["url"], "chapter-1");
         assert!(mapped_backup["chapters"][0].get("wordCount").is_none());
         assert_eq!(mapped_backup["sources"][0]["bookSourceName"], "测试书源");
+        assert_eq!(mapped_backup["replaceRules"][0]["name"], "净化");
+        assert_eq!(mapped_backup["replaceRules"][0]["isRegex"], true);
+        assert!(mapped_backup["replaceRules"][0].get("sortOrder").is_none());
+        assert!(mapped_backup["replaceRules"][0].get("scope").is_none());
+        assert!(mapped_backup["replaceRules"][0].get("group").is_none());
 
         fs::remove_dir_all(directory).unwrap();
     }

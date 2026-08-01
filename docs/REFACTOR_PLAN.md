@@ -6,7 +6,7 @@
 > **重构来源与基线：** [Jingshiro/legado](https://github.com/Jingshiro/legado)；UI 1:1 对齐和行为兼容是重构验收子目标，不是独立产品定位。
 > **本地原版基线：** 根目录 `legado-main/` 是只读的原版行为、数据结构、UI 和错误语义核对目录，不是本项目的主源码目录，也不参与 Flutter/Rust 构建。
 > 目标平台：Android / iOS / Windows / macOS / Linux / Web (WASM)  
-> 最后更新：2026-08-01
+> 最后更新：2026-08-02
 > 引擎版本：**v0.5.6** | Rust DB Schema：**v17** | 原版 Room：**v99** | FRB：**2.11.1**
 >
 > 当前暂停项（2026-07-26）：Web 平台/WASM/PWA 构建、Web 平台适配和相关验收；TTS 真实 Android 引擎验收。除这两类门禁外，Android/Windows 重构继续按固定顺序推进。
@@ -16,6 +16,7 @@
 2026-08-02 R1-12 追溯补充：Rust Room 七张核心表已补齐逐字段 golden fixture，Flutter 导入报告已覆盖核心表计数、保留行、归档表、告警、未映射列、指纹和重复导入幂等。`books.originName` 现明确列入未映射字段，因为当前 Rust v17 业务映射只在原始快照保留该列。验证：Rust Room `21/21`、Flutter Room `5/5`、Rust 全量 `249/249`、Flutter 全量 `911`（`3` 项既有条件跳过）、analyze、架构扫描和 `git diff --check` 通过。真实原版非空数据库仍缺失，`readRecord`/详细阅读记录语义、非核心表业务化和文件级备份目标仍需后续决策；本条不关闭 R1-12，不推进新的 R2-R6 实现。
 2026-08-02 R1-12 报告契约补充：重复导入报告明确归档表、告警、未映射列为空，未知字段向前兼容；Flutter Room 定向 `6/6` 通过。本条不改变阶段退出条件。
 2026-08-02 R1-12 书源规则落库补充：`upsert_source_json` 对 Room 映射产生的嵌套规则增加扁平业务列回退写入，保留已有扁平字段优先，并覆盖 `rulePageNext` 的目录/正文分页回退。实际目标表断言确认书籍、书源、章节核心字段落库，章节 `wordCount` 继续仅在原始归档中保留。验证：Rust Room `22/22`、数据库 `24/24`、Rust 全量 `251/251`、Flutter 全量 `912`（`3` 项既有跳过）、analyze、架构扫描和 `git diff --check` 通过。本条不关闭 R1-12。
+2026-08-02 R1-12 阅读记录与替换规则归档边界补充：owner 工作树复核通过 Room 定向 `23/23`、数据库定向 `24/24`、Rust 全量 `252/252`、Flutter 全量 `912`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check`。`readRecord` 明确采用 archive-only 保存并纳入导入报告原始计数，继续不写入 Rust v17 阅读统计业务表；`detailedReadRecord` 原始行及 Room 自增 `id` 保留在 `raw_snapshot_json`，业务映射按书名聚合为 sessions，聚合后的 session 不保留 Room 自增 `id`；`replace_rules.sortOrder`、`scope`、`group` 仅保留在原始归档，不进入当前 Rust v17 替换规则业务映射。本批不关闭 R1-12；真实原版非空数据库、`readRecord` 最终产品统计语义、非核心表业务 port 和文件级 SQLite 备份目标仍属于未决边界。
 
 ### 0.0.1 设计稿收敛顺序
 
@@ -164,6 +165,9 @@ test/integration/         设备与平台链路验收
 - 使用真实非空 Room v99 数据库或非空等价 fixture 验证逐字段迁移：非空等价 fixture 已覆盖当前核心映射；真实 `original_legado.db` 仍为空库，真实非空数据证据缺失。
 - 原版 23 个 Room 实体表已纳入快照和报告；非核心表当前采用可恢复的 archive-only 保存，不宣称已有 Rust v17 业务 port。
 - `readRecord` 仍仅登记 warning，是否映射其聚合时间需后续按产品语义决策；Android 真实文件导入等历史 smoke 结果不替代当前 R1-12 复核。
+- `readRecord` 当前明确归入 archive-only，导入报告保留其原始行数并登记 warning，但不写入 Rust v17 `readingRecords` 统计业务表；其设备维度、书名聚合、`readTime/lastRead` 统计语义仍需产品决策。
+- `detailedReadRecord` 的原始行及 Room 自增 `id` 保留在 `raw_snapshot_json`；当前业务映射按书名聚合为 sessions，聚合后的 session 不保留 Room 自增 `id`。该行为是当前迁移边界，不等同于最终产品统计语义确认。
+- `replace_rules.sortOrder`、`scope`、`group` 不进入当前 Rust v17 替换规则业务模型，仅通过原始快照 archive-only 保留。
 
 R1-12 当前判定：核心七表业务映射与 23 表原始归档已实现，新增 v99 门禁和正冲突测试已记录通过；但整体迁移门禁仍在复核中，不能标记 R1-12 或 R1 最终退出。后续非核心表业务模型、`readRecord` 映射和原版真实非空数据补充采集必须另行按计划执行；本轮没有推进新的 R2-R6 实现。
 

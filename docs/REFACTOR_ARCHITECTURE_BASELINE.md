@@ -1,5 +1,13 @@
 # Legado Flutter 架构重构基线
 
+## 181. 2026-08-02：R1-12 阅读记录与替换规则归档边界复核
+
+- owner 工作树完成本批迁移门禁复核：Rust Room 定向 `23/23`、数据库定向 `24/24`、Rust 全量 `252/252`、Flutter 全量 `912` 通过，另有 `3` 项既有 Flutter 条件跳过；`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。
+- `readRecord` 明确归入 archive-only，原始行数纳入导入报告计数，原始字段保留在 `raw_snapshot_json`，当前不写入 Rust v17 阅读统计业务表；warning 继续用于提示该表尚未完成业务化映射。
+- `detailedReadRecord` 的原始行和 Room 自增 `id` 在 `raw_snapshot_json` 中保留；当前业务映射按书名聚合为 sessions，聚合后的 session 不保留 Room 自增 `id`。
+- `replace_rules.sortOrder`、`scope`、`group` 仅通过 archive-only 原始快照保存，不进入当前 Rust v17 替换规则业务模型。
+- 上述分类确保字段可恢复且不擅自扩大领域模型，但不代表相关产品语义已经最终确定。真实原版非空数据库、`readRecord` 统计模型、非核心表业务 port 和文件级 SQLite 备份目标仍未关闭；R1-12 继续复核中。
+
 ## 179. 2026-08-02：R1-12 Room 迁移证据与字段分类复核
 
 - Rust Room 七张核心表新增逐字段 golden fixture，覆盖书籍、书源规则、章节、书签、`readRecord`、详细阅读记录和替换规则；Flutter 导入报告补充计数、保留行、归档表、告警、未映射列、指纹和重复导入幂等断言。
