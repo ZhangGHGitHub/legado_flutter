@@ -818,7 +818,7 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 - 只读 schema 形状审计：原版 `99.json` 与仓库 `original_legado.db` 的 23/23 个实体表列集合一致，无缺列/额外列；唯一 view 为 `book_sources_part`。当前七张核心表均为空，`book_groups` 有 7 行，`keyboardAssists` 有 14 行。该审计仅证明 schema 形状和当前样本数据分布，不替代真实非空核心数据迁移证据。
 - 最新 owner 门禁补强：`readRecord.lastRead` 已纳入结构探针，四字段仍仅原始归档；导入前备份写入失败会清理临时路径且不删除预存在路径。Room 定向 `21/21`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。设备维度/书名聚合业务化和文件级 SQLite 备份仍未决。
 - 归档无损回归新增合法 BLOB 字节数组经 snapshot、备份 JSON、恢复后的原始快照一致性断言，以及成功导入/非法 UTF-8 失败时源库文件字节和大小不变断言；`emulator-5558` 在线但只安装原版包、未安装重构 APK，Android smoke 不登记为重构版非空迁移通过。
-- 并行 owner 回归新增 `readRecord` 四字段原始快照/恢复和重复 fingerprint 导入备份 no-op 断言；Room `21/21`、数据库 `23/23`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。真实非空 Android 迁移仍未证实。
+- 并行 owner 回归新增 `readRecord` 四字段原始快照/恢复和重复 fingerprint 导入备份 no-op 断言；Room `21/21`、数据库 `23/23`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。`emulator-5558` 上 debug 重构 APK 使用临时非空等价 fixture 完成 import/verify 两阶段，关键字段、章节身份、重启、幂等和备份恢复均通过；真实原版非空 Android 数据仍未取得。
 - `readRecord` 仍仅登记 warning；非核心表仍为 archive-only；真实非空 `original_legado.db` 证据仍缺失。非核心业务 port、`readRecord` 映射和真实非空数据补充不在本轮擅自决定范围内。
 - R1-12 复核完成前不推进新的 R2-R6 实现；R2/R6 的历史实现记录不替代当前阶段退出条件。
 

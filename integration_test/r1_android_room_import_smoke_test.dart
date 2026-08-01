@@ -9,6 +9,7 @@ import 'package:legado_flutter/infrastructure/database/frb_backup_port.dart';
 import 'package:legado_flutter/infrastructure/database/frb_legacy_room_import_port.dart';
 import 'package:legado_flutter/infrastructure/webdav/frb_webdav_repository.dart';
 import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/services/backup_service.dart';
 import 'package:legado_flutter/services/legacy_room_import_service_factory.dart';
 import 'package:path/path.dart' as p;
@@ -84,13 +85,41 @@ void main() {
           currentPageIndex: 9,
         ),
       );
-      expect((await database.getBooks()).single.id, 'r1-device-book');
+      final importedBooks = await database.getBooks();
+      expect(importedBooks.any((book) => book.id == 'book-android'), isTrue);
+      expect(importedBooks.any((book) => book.id == 'r1-device-book'), isTrue);
+      final importedBook = importedBooks.firstWhere(
+        (book) => book.id == 'book-android',
+      );
+      expect(importedBook.name, 'Android 迁移测试书');
+      expect(importedBook.author, '测试作者');
+      expect(importedBook.sourceUrl, 'book-android');
+      expect(importedBook.bookSourceUrl, 'https://source.android.test');
+      expect(importedBook.tocUrl, 'https://toc.android.test');
+      expect(importedBook.durChapterIndex, 0);
+      expect(importedBook.currentPageIndex, 17);
+      expect(importedBook.readIteration, 2);
+      expect(importedBook.readConfig.extra['fontSize'], 20);
+
+      final importedChapters = await database.getChapters('book-android');
+      expect(importedChapters, hasLength(1));
+      expect(
+        importedChapters.single.id,
+        Chapter.idFor(
+          bookId: 'book-android',
+          url: 'https://source.android.test/chapter/1',
+          index: 0,
+        ),
+      );
+      expect(importedChapters.single.title, '第一章');
+      expect(importedChapters.single.index, 0);
       return;
     }
 
     expect(_phase, 'verify');
     final persistedBooks = await database.getBooks();
-    expect(persistedBooks.single.id, 'r1-device-book');
+    expect(persistedBooks.any((book) => book.id == 'book-android'), isTrue);
+    expect(persistedBooks.any((book) => book.id == 'r1-device-book'), isTrue);
 
     final duplicate = importService.importDatabase(
       sourcePath: _sourcePath,
@@ -105,6 +134,8 @@ void main() {
     await database.clearAll();
     expect(await database.getBooks(), isEmpty);
     await backupService.restoreFromBytes(backupBytes);
-    expect((await database.getBooks()).single.id, 'r1-device-book');
+    final restoredBooks = await database.getBooks();
+    expect(restoredBooks.any((book) => book.id == 'book-android'), isTrue);
+    expect(restoredBooks.any((book) => book.id == 'r1-device-book'), isTrue);
   });
 }
