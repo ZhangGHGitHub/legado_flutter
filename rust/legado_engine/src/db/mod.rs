@@ -2146,6 +2146,141 @@ mod tests {
         fs::remove_dir_all(directory).unwrap();
     }
 
+    fn write_minimal_room_import_source(path: &Path) {
+        let conn = Connection::open(path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE room_master_table (id INTEGER PRIMARY KEY, identity_hash TEXT);
+             INSERT INTO room_master_table (id, identity_hash)
+               VALUES (42, '90980f1d0da029cf3254f354b227a2fe');
+             CREATE TABLE books (
+               bookUrl TEXT PRIMARY KEY,
+               tocUrl TEXT NOT NULL DEFAULT '',
+               origin TEXT NOT NULL DEFAULT '',
+               originName TEXT NOT NULL DEFAULT '',
+               name TEXT NOT NULL,
+               author TEXT NOT NULL DEFAULT '',
+               durChapterTitle TEXT,
+               durChapterIndex INTEGER NOT NULL DEFAULT 0,
+               durChapterPos INTEGER NOT NULL DEFAULT 0,
+               readConfig TEXT
+             );
+             CREATE TABLE book_sources (
+               bookSourceUrl TEXT PRIMARY KEY,
+               bookSourceName TEXT NOT NULL,
+               bookSourceGroup TEXT,
+               enabled INTEGER NOT NULL DEFAULT 1,
+               customOrder INTEGER NOT NULL DEFAULT 0
+             );
+             CREATE TABLE chapters (
+               url TEXT NOT NULL,
+               bookUrl TEXT NOT NULL,
+               title TEXT NOT NULL,
+               \"index\" INTEGER NOT NULL,
+               baseUrl TEXT NOT NULL DEFAULT '',
+               PRIMARY KEY(url, bookUrl)
+             );
+             CREATE TABLE replace_rules (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               name TEXT NOT NULL,
+               pattern TEXT NOT NULL,
+               replacement TEXT NOT NULL,
+               isEnabled INTEGER NOT NULL DEFAULT 1,
+               isRegex INTEGER NOT NULL DEFAULT 1,
+               sortOrder INTEGER NOT NULL DEFAULT 0
+             );
+             CREATE TABLE searchBooks (bookUrl TEXT);
+             CREATE TABLE search_keywords (word TEXT);
+             CREATE TABLE cookies (url TEXT, cookie TEXT);
+             CREATE TABLE rssSources (sourceUrl TEXT);
+             CREATE TABLE bookmarks (
+               time INTEGER PRIMARY KEY,
+               bookName TEXT NOT NULL,
+               bookAuthor TEXT NOT NULL,
+               chapterIndex INTEGER NOT NULL,
+               chapterPos INTEGER NOT NULL,
+               chapterName TEXT NOT NULL,
+               bookText TEXT NOT NULL DEFAULT '',
+               content TEXT NOT NULL DEFAULT ''
+             );
+             CREATE TABLE rssArticles (origin TEXT);
+             CREATE TABLE rssReadRecords (record TEXT);
+             CREATE TABLE rssStars (origin TEXT);
+             CREATE TABLE txtTocRules (id INTEGER);
+             CREATE TABLE readRecord (
+               deviceId TEXT NOT NULL,
+               bookName TEXT NOT NULL,
+               readTime INTEGER NOT NULL,
+               lastRead INTEGER NOT NULL DEFAULT 0,
+               PRIMARY KEY(deviceId, bookName)
+             );
+             CREATE TABLE detailedReadRecord (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               bookName TEXT NOT NULL,
+               startTime INTEGER NOT NULL,
+               endTime INTEGER NOT NULL,
+               readIteration INTEGER NOT NULL DEFAULT 0
+             );
+             CREATE TABLE httpTTS (id INTEGER);
+             CREATE TABLE caches (key TEXT, value TEXT);
+             CREATE TABLE ruleSubs (id INTEGER);
+             CREATE TABLE dictRules (name TEXT);
+             CREATE TABLE keyboardAssists (type TEXT);
+             CREATE TABLE book_thoughts (id INTEGER);
+             CREATE TABLE servers (id INTEGER);
+             CREATE TABLE book_groups (groupId TEXT, groupName TEXT);
+             INSERT INTO books
+               (bookUrl, tocUrl, origin, originName, name, author,
+                durChapterTitle, durChapterIndex, durChapterPos, readConfig)
+               VALUES ('book-1', 'toc', 'source', '源', '重复导入书', '作者',
+                       '第一章', 0, 7, '{}');
+             PRAGMA user_version = 99;",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn duplicate_import_with_new_backup_path_is_a_true_noop() {
+        let directory = test_directory("duplicate-new-backup");
+        let source_path = directory.join("room.db");
+        let first_backup_path = directory.join("first-backup.json");
+        let second_backup_path = directory.join("second-backup.json");
+        write_minimal_room_import_source(&source_path);
+        let db = EngineDb::open_in_memory().unwrap();
+
+        let first = db
+            .import_legacy_room_database(
+                &source_path.to_string_lossy(),
+                Some(&first_backup_path.to_string_lossy()),
+                false,
+            )
+            .unwrap();
+        assert!(!first.skipped_duplicate);
+        assert!(first.backup_written);
+        let first_database = db.export_backup_json().unwrap();
+        let first_backup = fs::read(&first_backup_path).unwrap();
+
+        let duplicate = db
+            .import_legacy_room_database(
+                &source_path.to_string_lossy(),
+                Some(&second_backup_path.to_string_lossy()),
+                false,
+            )
+            .unwrap();
+
+        assert!(duplicate.skipped_duplicate);
+        assert!(!duplicate.backup_written);
+        assert_eq!(
+            duplicate.backup_path.as_deref(),
+            Some(second_backup_path.to_string_lossy().as_ref())
+        );
+        assert!(!second_backup_path.exists());
+        assert_eq!(db.export_backup_json().unwrap(), first_database);
+        assert_eq!(fs::read(&first_backup_path).unwrap(), first_backup);
+        assert_eq!(db.legacy_room_import_count().unwrap(), 1);
+
+        fs::remove_dir_all(directory).unwrap();
+    }
+
     #[test]
     fn init_is_idempotent_for_same_directory_and_rejects_switching_directory() {
         let failed_directory = test_directory("init-failure");

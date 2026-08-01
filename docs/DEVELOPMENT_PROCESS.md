@@ -7,6 +7,7 @@
 只读 schema 形状审计进一步确认：原版 `99.json` 与仓库 `original_legado.db` 的 23/23 个实体表列集合一致，无缺列/额外列；唯一 view 为 `book_sources_part`，但 23 个实体表当前均为空，因此不构成非空数据迁移证据。
 最新 owner 门禁补强：`readRecord.lastRead` 已纳入结构探针，导入前备份写入失败会清理临时路径且保留预存在路径；Room 定向 `21/21`、Rust 全量 `248`、release、架构扫描和 `git diff --check` 通过。`readRecord` 仍不做业务映射。
 归档链路新增合法 BLOB 字节数组的 snapshot/export/restore 回归；`emulator-5558` 虽在线，现有 Android smoke 仍使用空库适配，不能登记为非空迁移证据。
+并行 owner 回归继续补齐 `readRecord` 四字段只归档和重复 fingerprint 备份 no-op；Room `21/21`、数据库 `23/23`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。
 
 2026-08-01 当前追溯记录：本批将 `serve_source_browser_host`、`probe_source_browser_host` 迁移到 Rust `AppError`，保留成功回调 DTO、`startBrowserAwait` Dart 回调链和错误原文；取消映射 `Cancelled`，不支持平台映射 `Unsupported`，宿主停止/锁失败/线程失败映射 `Unknown`。`browser_host` 增加 abort/clear 生命周期守卫，避免 stale sender；`AppWebViewPage` 在 dispose 后不再派发新的 Cookie 回调，成功完成路径仍等待 Cookie、抓 DOM 并返回 finalUrl/body。验证为 Rust `browser_host` 定向 `7/7`、Dart 浏览器宿主/WebView 定向 `8/8`、Rust 全量 `234`、release 构建、Flutter 串行全量 `908`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 均通过。本批不改变正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、WebDAV、平台验收或阶段退出。
 2026-08-01 当前追溯记录：本批将 `process_content_for_reading` 同步 FFI 入口映射到 `AppError::Parse`，先执行 Rust 定向 `2/2` 和 Dart FRB mock 契约 `2/2`，再执行 Rust 全量 `228`、release 构建、Flutter 全量 `903`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check`，全部通过。正文处理成功输出、替换、缩进、标题合并和重新分段行为保持不变；本批不迁移 UI/application 调用者，不覆盖浏览器宿主、重复公开 FRB 子模块入口、WebDAV、平台验收或阶段退出。

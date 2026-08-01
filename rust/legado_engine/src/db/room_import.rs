@@ -1427,10 +1427,32 @@ mod tests {
                 .unwrap();
         }
 
+        let snapshot = extract_legacy_room_database(&source_path).unwrap();
+        assert_eq!(
+            snapshot.tables["readRecord"][0],
+            json!({
+                "deviceId": "device-a",
+                "bookName": "迁移书",
+                "readTime": 600,
+                "lastRead": 1700000000
+            })
+        );
+        let mapping = map_legacy_room_snapshot(&snapshot).unwrap();
+        assert!(mapping
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("readRecord contains aggregate")));
+        assert_eq!(mapping.backup_json["readingRecords"], json!([]));
+
         let db = EngineDb::open_in_memory().unwrap();
         let report = db
             .import_legacy_room_database(&source_path, Some(&backup_path), false)
             .unwrap();
+        let reading_record_count: i64 = db
+            .conn
+            .query_row("SELECT COUNT(*) FROM reading_records", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(reading_record_count, 0);
         let exported = db.export_backup_json().unwrap();
         let exported_value: Value = serde_json::from_str(&exported).unwrap();
         let legacy = &exported_value["legacyRoomImports"][0];
@@ -1440,10 +1462,15 @@ mod tests {
         let mapped_value: Value = serde_json::from_str(mapped_backup).unwrap();
 
         assert_eq!(
+            raw_value["tables"]["readRecord"][0],
+            snapshot.tables["readRecord"][0]
+        );
+        assert_eq!(
             raw_value["tables"]["chapters"][0]["wordCount"],
             "preserve-me"
         );
         assert_eq!(raw_value["tables"]["replace_rules"][0]["scope"], "book-1");
+        assert_eq!(mapped_value["readingRecords"], json!([]));
         assert_eq!(mapped_value["books"][0]["id"], "book-1");
         assert_eq!(mapped_value["chapters"][0]["bookId"], "book-1");
         assert_eq!(
@@ -1465,6 +1492,16 @@ mod tests {
             .unwrap();
         assert_eq!(restored_raw, raw_snapshot);
         assert_eq!(restored_mapped, mapped_backup);
+        let restored_raw_value: Value = serde_json::from_str(&restored_raw).unwrap();
+        assert_eq!(
+            restored_raw_value["tables"]["readRecord"][0],
+            json!({
+                "deviceId": "device-a",
+                "bookName": "迁移书",
+                "readTime": 600,
+                "lastRead": 1700000000
+            })
+        );
         assert_eq!(restored.book_count().unwrap(), 1);
         let restored_chapter_count: i64 = restored
             .conn
@@ -1615,6 +1652,12 @@ mod tests {
             "INSERT INTO detailedReadRecord
              (bookName, startTime, endTime, readIteration)
              VALUES ('迁移书', 10, 20, 1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO readRecord (deviceId, bookName, readTime, lastRead)
+             VALUES ('device-a', '迁移书', 600, 1700000000)",
             [],
         )
         .unwrap();

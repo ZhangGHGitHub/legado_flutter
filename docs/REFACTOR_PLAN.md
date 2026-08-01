@@ -132,6 +132,7 @@ test/integration/         设备与平台链路验收
 只读 schema 形状审计确认原版 `99.json` 与仓库 `original_legado.db` 的 23/23 个实体表列集合一致，无缺列/额外列；唯一 view 为 `book_sources_part`，但 23 个实体表当前均为空。该审计不替代非空数据迁移证据。
 最新 owner 门禁补强：`readRecord.lastRead` 已纳入结构探针，四字段仍只保留原始快照；导入前备份写入失败会清理临时路径且不触碰预存在路径。Room 定向 `21/21`、Rust 全量 `248`、release、架构扫描和 `git diff --check` 通过。`readRecord` 设备维度/书名聚合、非核心业务化和文件级 SQLite 备份仍需独立决策或证据。
 归档无损回归已补合法 BLOB 字节数组往返断言；`emulator-5558` 可见但当前 smoke 仍适配空库，真实非空 Room 数据迁移仍是 R1-12 未关闭证据。
+并行回归补齐 `readRecord` 四字段原始归档/恢复和重复 fingerprint 备份 no-op；Room `21/21`、数据库 `23/23`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。真实非空 Android 迁移仍需独立前置和证据。
 
 ##### R1-12：Kotlin Room v99 数据迁移门禁（复核中，部分完成）
 
