@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/R1-12 迁移证据继续补强：Rust Room 七张核心表新增逐字段 golden 断言，覆盖书籍、书源规则、章节身份与元数据、书签、`readRecord`、详细阅读记录和替换规则；Flutter 导入报告补充核心表计数、保留行、归档表、告警、未映射列、指纹及重复导入幂等断言。修正 `books.originName` 未进入 Rust v17 业务映射却被报告为已映射的问题，现明确列入 `unmappedColumns`。Rust `21/21`、Flutter Room 定向 `5/5`、Rust 全量 `249/249`、Flutter 全量 `911`（`3` 项既有条件跳过）、analyze、架构扫描和 `git diff --check` 均通过；真实原版非空 Room 数据库、`readRecord` 业务语义、非核心表业务 port 和文件级 SQLite 备份仍未关闭。
 - 架构/R1-12 并行测试补强：Room 成功/失败导入回归同时比较主库、`-wal`、`-shm` 文件状态；Dart 导入报告新增 `counts`、`preservedRows`、`archiveOnlyTables`、`warnings`、`unmappedColumns` 和 fingerprint 全字段解析测试。Rust 定向 `21/21`、Dart 定向 `3/3` 通过。
 - 架构/R1-12 `emulator-5558` Android smoke：debug 重构 APK 已安装到 `com.legado.legado_flutter`；基于原版 Room v99 schema 生成的临时非空等价 fixture（七张核心表各 1 行，user_version/identity hash 一致）完成 import/verify 两阶段。新增设备端断言覆盖书籍字段、`bookUrl -> sourceUrl`、`origin -> bookSourceUrl`、UTF-16 阅读位置语义、`readIteration`、章节 FNV-1a ID、重启读取、重复导入幂等和备份恢复；两阶段均通过。该证据不替代真实原版非空数据库。
 - 架构/R1-12 Android smoke 门禁补强：导入阶段新增 fingerprint 非空及 `books`、`sources`、`chapters` 正行数断言，空库或无核心映射行不会再被登记为真实非空迁移通过；未改变导入、持久化、重复导入幂等和备份恢复行为。

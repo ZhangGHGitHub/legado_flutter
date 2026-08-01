@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-01
 
+2026-08-02 当前 R1-12 追溯记录：本批由四条互不重叠 lane 补齐 Room 七张核心表逐字段 golden fixture、Flutter 导入报告字段与设备证据边界审查。owner 门禁为 Rust Room `21/21`、Flutter Room `5/5`、Rust 全量 `249/249`、Flutter 串行全量 `911`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 全部通过。修正 `books.originName` 未进入 Rust v17 业务映射却列入已映射白名单的问题，现明确报告为未映射；不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。当前 `emulator-5558` 不可连接，真实原版非空 Room 数据库仍未取得；`readRecord` 统计语义、详细阅读记录聚合、非核心表业务 port 和文件级 SQLite 备份仍按计划保留为未决边界，R1-12 及 R1 不退出，也不推进新的 R2-R6 实现。
+
 2026-08-01 当前状态复核：R1 因 Kotlin Room v99 → Rust v17 数据库迁移门禁重新打开。R1-12 当前只确认核心七表业务映射与 23 个 Room 实体表全量原始归档；本批新增 v99 版本/identity hash 门禁、备份保护、正冲突、归档恢复、JSON 恢复事务性、既有数据回滚、非核心 fingerprint 稳定性、缺失实体表结构、实体 table-only、非法 UTF-8 无损和源库文件字节级只读边界测试，Room 定向 `21/21`、Rust 全量 `249`、release、`flutter analyze --no-pub` 和 Flutter 全量 `908`（`3` 项既有条件跳过）通过。缺失实体表或 view 冒充实体会在读行前拒绝，非法 UTF-8 不进行 lossy 替换且不产生目标写入。当前七张核心表为空，`book_groups` 有 7 行，`keyboardAssists` 有 14 行；`readRecord` 仍仅登记 warning，非核心表仍 archive-only。`emulator-5558` 只安装原版包，未安装重构 APK，真实非空迁移验收无法执行；因此不把 23 张表写成全部 Rust v17 业务迁移，也不把 R1/R2/R6 历史实现记录写成当前阶段退出。R1-12 复核完成前不推进新的 R2-R6 实现。
 只读 schema 形状审计进一步确认：原版 `99.json` 与仓库 `original_legado.db` 的 23/23 个实体表列集合一致，无缺列/额外列；唯一 view 为 `book_sources_part`。当前七张核心表均为空，`book_groups` 有 7 行，`keyboardAssists` 有 14 行，因此不构成真实非空核心数据迁移证据。
 最新 owner 门禁补强：`readRecord.lastRead` 已纳入结构探针，导入前备份写入失败会清理临时路径且保留预存在路径；Room 定向 `21/21`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。`readRecord` 仍不做业务映射。

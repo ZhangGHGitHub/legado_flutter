@@ -578,7 +578,6 @@ fn detect_unmapped_columns(snapshot: &LegacyRoomSnapshot) -> BTreeMap<String, Ve
                 "bookUrl",
                 "tocUrl",
                 "origin",
-                "originName",
                 "name",
                 "author",
                 "coverUrl",
@@ -1222,13 +1221,16 @@ mod tests {
         conn.execute(
             r#"INSERT INTO book_sources
              (bookSourceUrl, bookSourceName, bookSourceGroup, bookSourceType,
-              enabled, customOrder, searchUrl, ruleSearch, ruleToc, ruleContent)
+              enabled, customOrder, searchUrl, ruleSearch, ruleBookInfo,
+              ruleToc, ruleContent, ruleExplore)
              VALUES
-             ('https://source.test', '测试源', '分组', 0, 1, 7,
+              ('https://source.test', '测试源', '分组', 0, 1, 7,
               'https://search.test?q={{key}}',
               '{"bookList":"$.list","name":"$.name"}',
+              '{"name":"$.bookName","author":"$.author"}',
               '{"chapterList":"$.toc","chapterName":"$.title"}',
-              '{"content":"$.content"}')"#,
+              '{"content":"$.content"}',
+              '{"bookList":"$.explore","name":"$.exploreName"}')"#,
             [],
         )
         .unwrap();
@@ -1277,30 +1279,120 @@ mod tests {
 
         assert_eq!(mapping.counts["books"], 1);
         assert_eq!(mapping.counts["chapters"], 1);
-        assert_eq!(mapping.backup_json["books"][0]["id"], "book-1");
         assert_eq!(
-            mapping.backup_json["books"][0]["coverUrl"],
-            "https://cover.new"
+            mapping.backup_json["books"],
+            json!([{
+                "id": "book-1",
+                "name": "迁移书",
+                "author": "作者",
+                "coverUrl": "https://cover.new",
+                "type": "online",
+                "progress": 0.2,
+                "currentChapter": "第二章",
+                "lastChapter": "最新章",
+                "totalChapterNum": 10,
+                "durChapterIndex": 1,
+                "currentPageIndex": 42,
+                "isFavorite": true,
+                "sourceUrl": "book-1",
+                "description": "简介新",
+                "bookSourceUrl": "https://source.test",
+                "tocUrl": "https://toc.test",
+                "group": "0",
+                "readIteration": 2,
+                "readConfig": {"reverseToc": true, "fontSize": 20}
+            }])
         );
-        assert_eq!(mapping.backup_json["books"][0]["currentPageIndex"], 42);
-        assert_eq!(mapping.backup_json["books"][0]["durChapterIndex"], 1);
+
+        let mut mapped_source = mapping.backup_json["sources"][0].clone();
+        let raw_source_json = mapped_source
+            .as_object_mut()
+            .unwrap()
+            .remove("rawSourceJson")
+            .unwrap();
         assert_eq!(
-            mapping.backup_json["books"][0]["readConfig"]["reverseToc"],
-            true
+            mapped_source,
+            json!({
+                "bookSourceUrl": "https://source.test",
+                "bookSourceName": "测试源",
+                "bookSourceGroup": "分组",
+                "bookSourceType": "0",
+                "enabled": 1,
+                "customOrder": 7,
+                "searchUrl": "https://search.test?q={{key}}",
+                "ruleSearch": {"bookList": "$.list", "name": "$.name"},
+                "ruleBookInfo": {"name": "$.bookName", "author": "$.author"},
+                "ruleToc": {"chapterList": "$.toc", "chapterName": "$.title"},
+                "ruleContent": {"content": "$.content"},
+                "ruleExplore": {"bookList": "$.explore", "name": "$.exploreName"},
+                "ruleSearchUrl": "https://search.test?q={{key}}"
+            })
+        );
+        let raw_source: Value = serde_json::from_str(raw_source_json.as_str().unwrap()).unwrap();
+        assert_eq!(raw_source["bookSourceType"], "0");
+        assert_eq!(
+            raw_source["ruleSearch"],
+            json!({"bookList": "$.list", "name": "$.name"})
+        );
+
+        assert_eq!(
+            mapping.backup_json["chapters"],
+            json!([{
+                "id": chapter_id_for("book-1", "https://chapter.test/1", 0),
+                "bookId": "book-1",
+                "title": "第一章",
+                "index": 0,
+                "url": "https://chapter.test/1",
+                "isVolume": false,
+                "isVip": true,
+                "isPay": false,
+                "tag": "tag-a",
+                "baseUrl": "https://toc.test",
+                "isDownloaded": false,
+                "content": null
+            }])
         );
         assert_eq!(
-            mapping.backup_json["chapters"][0]["id"],
-            chapter_id_for("book-1", "https://chapter.test/1", 0)
+            mapping.backup_json["bookmarks"],
+            json!([{
+                "time": 100,
+                "bookId": "book-1",
+                "bookName": "迁移书",
+                "bookAuthor": "作者",
+                "chapterIndex": 1,
+                "chapterPos": 42,
+                "chapterName": "第二章",
+                "bookText": "原文",
+                "content": "备注"
+            }])
         );
-        assert_eq!(mapping.backup_json["chapters"][0]["isVip"], true);
-        assert_eq!(mapping.backup_json["bookmarks"][0]["bookId"], "book-1");
         assert_eq!(
-            mapping.backup_json["sources"][0]["ruleSearch"]["bookList"],
-            "$.list"
+            snapshot.tables["readRecord"],
+            vec![json!({
+                "deviceId": "device-a",
+                "bookName": "迁移书",
+                "readTime": 60,
+                "lastRead": 0
+            })]
+        );
+        assert_eq!(mapping.backup_json["readingRecords"], json!([]));
+        assert_eq!(
+            mapping.backup_json["detailedReadRecords"],
+            json!([{
+                "bookName": "迁移书",
+                "sessions": [{"startTime": 10, "endTime": 20, "readIteration": 2}]
+            }])
         );
         assert_eq!(
-            mapping.backup_json["detailedReadRecords"][0]["sessions"][0]["readIteration"],
-            2
+            mapping.backup_json["replaceRules"],
+            json!([{
+                "id": "1",
+                "name": "净化",
+                "pattern": "广告",
+                "replacement": "",
+                "isEnabled": true,
+                "isRegex": true
+            }])
         );
         assert!(mapping
             .warnings
@@ -1311,6 +1403,11 @@ mod tests {
             .get("chapters")
             .unwrap()
             .contains(&"wordCount".to_string()));
+        assert!(mapping
+            .unmapped_columns
+            .get("books")
+            .unwrap()
+            .contains(&"originName".to_string()));
         assert!(mapping
             .unmapped_columns
             .get("replace_rules")

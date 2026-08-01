@@ -31,6 +31,12 @@
 
 本报告只固化差距和执行顺序；CoreApi 首批、Riverpod 样板、CI 门禁、书源主链、数据库入口、HTTP 文本/二进制入口以及 RSS/EPUB/远程 ZIP 的公开 `AppError` 边界已有对应实现证据。R1-12 仍处于核心映射 + 全量归档的复核阶段，R1 重新打开；R2/R6 历史实现记录不替代当前阶段退出条件。下一批继续按顺序迁移其它公开 FFI 错误和 Dart 统一映射，不改变 Provider 页面事实源或正文行为。
 
+## 2026-08-02 R1-12 当前状态边界
+
+- 本批新增 Rust 七张核心表逐字段 golden fixture 和 Flutter 导入报告全字段/重复导入幂等断言；Rust Room `21/21`、Flutter Room `5/5`、Rust 全量 `249/249`、Flutter 全量 `911`（`3` 项既有跳过）、analyze、架构扫描和 `git diff --check` 通过。
+- `books.originName` 当前只保留在原始快照，未进入 Rust v17 业务映射，已从“已映射”白名单移除并登记为未映射字段；这只是报告分类修正，不代表新增领域字段。
+- `emulator-5558` 当前不可连接，真实原版非空 Room 数据库仍缺失。`readRecord`/详细阅读记录语义、非核心表业务 port 和文件级 SQLite 备份目标仍未决，R1-12 不能标记阶段退出。
+
 ## 2026-08-01 R1-12 当前状态边界
 
 - 当前范围是 Kotlin Room v99 → Rust v17 的核心七表业务映射与 23 表全量原始归档，不是 23 张 Room 表全部 Rust v17 业务迁移。

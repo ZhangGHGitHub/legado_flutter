@@ -1,5 +1,13 @@
 # Legado Flutter 架构重构基线
 
+## 179. 2026-08-02：R1-12 Room 迁移证据与字段分类复核
+
+- Rust Room 七张核心表新增逐字段 golden fixture，覆盖书籍、书源规则、章节、书签、`readRecord`、详细阅读记录和替换规则；Flutter 导入报告补充计数、保留行、归档表、告警、未映射列、指纹和重复导入幂等断言。
+- 修正 `books.originName` 的报告分类：当前只进入 `rawSnapshotJson`，不进入 Rust v17 业务映射，因此明确登记为 `unmappedColumns`，不擅自扩展领域模型。
+- 验证记录：Rust Room `21/21`、Flutter Room `5/5`、Rust 全量 `249/249`、Flutter 串行全量 `911` 通过，`3` 项既有 Flutter 条件跳过；`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。
+
+边界结论：当前设备 `emulator-5558` 不可连接，真实原版非空 Room v99 数据库证据仍缺失；`readRecord` 统计语义、详细阅读记录聚合、非核心表业务 port 和文件级 SQLite 备份仍未形成产品契约，R1-12 继续复核中，不推进新的 R2-R6 实现。
+
 ## 178. 2026-08-01：浏览器宿主错误边界与 WebView 生命周期
 
 - `serve_source_browser_host`、`probe_source_browser_host` 从公开 `Result<_, String>` 迁移为 `Result<_, AppError>`；取消映射 `Cancelled`，平台不支持映射 `Unsupported`，宿主停止、锁失败和线程失败映射 `Unknown`，均保留原错误文本。
