@@ -1059,7 +1059,8 @@ mod tests {
         {
             let conn = Connection::open(&source_path).unwrap();
             conn.execute(
-                "INSERT INTO book_groups (groupId, groupName) VALUES ('g1', '收藏')",
+                "INSERT INTO book_groups (groupId, groupName)
+                 VALUES ('g1', CAST(X'00FF10' AS BLOB))",
                 [],
             )
             .unwrap();
@@ -1080,7 +1081,10 @@ mod tests {
         );
         assert_eq!(snapshot.columns["book_groups"], ["groupId", "groupName"]);
         assert_eq!(snapshot.tables["book_groups"][0]["groupId"], "g1");
-        assert_eq!(snapshot.tables["book_groups"][0]["groupName"], "收藏");
+        assert_eq!(
+            snapshot.tables["book_groups"][0]["groupName"],
+            json!({"$blob": [0, 255, 16]})
+        );
 
         let mapping = map_legacy_room_snapshot(&snapshot).unwrap();
         let represented_tables = mapping
@@ -1113,7 +1117,10 @@ mod tests {
                 .collect::<std::collections::BTreeSet<_>>(),
             expected_tables
         );
-        assert_eq!(raw_value["tables"]["book_groups"][0]["groupName"], "收藏");
+        assert_eq!(
+            raw_value["tables"]["book_groups"][0]["groupName"],
+            json!({"$blob": [0, 255, 16]})
+        );
 
         let restored = EngineDb::open_in_memory().unwrap();
         restored.restore_backup_json(&exported, true).unwrap();
@@ -1138,7 +1145,7 @@ mod tests {
         );
         assert_eq!(
             restored_value["tables"]["book_groups"][0]["groupName"],
-            "收藏"
+            json!({"$blob": [0, 255, 16]})
         );
 
         cleanup_test_paths(&source_path, &backup_path);

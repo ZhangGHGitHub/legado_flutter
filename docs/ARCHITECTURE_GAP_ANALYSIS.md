@@ -39,6 +39,7 @@
 - `readRecord` 仍仅登记 warning，非核心表仍 archive-only，真实非空 `original_legado.db` 证据仍缺失；这些边界不在本轮擅自做产品决策。
 - R1-12 复核完成前不推进新的 R2-R6 实现，也不把 R1/R2/R6 历史记录写成当前阶段已退出。
 - 最新 owner 门禁：`readRecord.lastRead` 已纳入结构探针，四字段仍仅原始归档；导入前备份写入失败会清理临时路径且保留预存在路径。Room 定向 `21/21`、Rust 全量 `248`、release、架构扫描和 `git diff --check` 通过。设备维度、书名聚合统计和文件级 SQLite 备份仍未形成产品目标契约。
+- 归档无损回归已覆盖合法 BLOB 的 `rawSnapshotJson` 导出/恢复字节一致性；这不替代真实非空 Room 数据库在 Android 设备上的迁移证据。
 
 ## 2026-08-01 公开 FFI 错误边界扩展
 
