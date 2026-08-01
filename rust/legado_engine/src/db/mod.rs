@@ -1550,8 +1550,10 @@ fn write_import_backup(path: &str, backup_json: &str) -> Result<(), DbError> {
         }
     }
     let temporary = format!("{path}.tmp-{}", std::process::id());
-    fs::write(&temporary, backup_json)
-        .map_err(|error| DbError::Message(format!("写入导入前备份失败: {error}")))?;
+    if let Err(error) = fs::write(&temporary, backup_json) {
+        let _ = fs::remove_file(&temporary);
+        return Err(DbError::Message(format!("写入导入前备份失败: {error}")));
+    }
     if let Err(error) = fs::rename(&temporary, destination) {
         let _ = fs::remove_file(&temporary);
         return Err(DbError::Message(format!("完成导入前备份失败: {error}")));
@@ -2121,6 +2123,27 @@ mod tests {
                 .unwrap();
             assert_eq!(exists, 0, "table {table} must be rolled back");
         }
+    }
+
+    #[test]
+    fn import_backup_write_failure_does_not_remove_preexisting_temp_path() {
+        let directory = test_directory("backup-write-failure");
+        let destination = directory.join("before.json");
+        let temporary = PathBuf::from(format!(
+            "{}.tmp-{}",
+            destination.display(),
+            std::process::id()
+        ));
+        fs::create_dir(&temporary).unwrap();
+
+        let error =
+            write_import_backup(&destination.to_string_lossy(), "{\"books\":[]}").unwrap_err();
+
+        assert!(error.to_string().contains("写入导入前备份失败"));
+        assert!(temporary.is_dir());
+        assert!(!destination.exists());
+        fs::remove_dir_all(&temporary).unwrap();
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

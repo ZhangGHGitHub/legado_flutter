@@ -48,7 +48,10 @@ const REQUIRED_TABLE_COLUMNS: &[(&str, &[&str])] = &[
             "content",
         ],
     ),
-    ("readRecord", &["deviceId", "bookName", "readTime"]),
+    (
+        "readRecord",
+        &["deviceId", "bookName", "readTime", "lastRead"],
+    ),
     (
         "detailedReadRecord",
         &["id", "bookName", "startTime", "endTime", "readIteration"],
@@ -1722,6 +1725,7 @@ mod tests {
                deviceId TEXT NOT NULL,
                bookName TEXT NOT NULL,
                readTime INTEGER NOT NULL,
+               lastRead INTEGER NOT NULL DEFAULT 0,
                PRIMARY KEY(deviceId, bookName)
              );
              CREATE TABLE detailedReadRecord (
