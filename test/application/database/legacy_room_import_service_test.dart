@@ -41,10 +41,12 @@ void main() {
   test('parses all report collections and fingerprint from JSON', () {
     final report = LegacyRoomImportReport.fromJson('''{
       "sourceRoomVersion": 12,
+      "sourceRoomIdentityHash": "room-identity-hash",
       "fingerprint": "room-fingerprint-xyz",
       "replaced": true,
       "skippedDuplicate": false,
       "backupWritten": true,
+      "backupPath": "/backup/pre-import.json",
       "counts": {"books": 4, "chapters": 11},
       "conflictCounts": {"books": 2},
       "preservedRows": {"book_groups": 3, "chapters": 7},
@@ -57,10 +59,12 @@ void main() {
     }''');
 
     expect(report.sourceRoomVersion, 12);
+    expect(report.sourceRoomIdentityHash, 'room-identity-hash');
     expect(report.fingerprint, 'room-fingerprint-xyz');
     expect(report.replaced, isTrue);
     expect(report.skippedDuplicate, isFalse);
     expect(report.backupWritten, isTrue);
+    expect(report.backupPath, '/backup/pre-import.json');
     expect(report.counts, {'books': 4, 'chapters': 11});
     expect(report.conflictCounts, {'books': 2});
     expect(report.preservedRows, {'book_groups': 3, 'chapters': 7});
@@ -75,18 +79,19 @@ void main() {
   test('preserves the Room migration evidence for all mapped core tables', () {
     final report = LegacyRoomImportReport.fromJson('''{
       "sourceRoomVersion": 99,
+      "sourceRoomIdentityHash": "room-v99-identity-hash",
       "fingerprint": "room-v99-core-fixture",
       "replaced": true,
       "skippedDuplicate": false,
       "backupWritten": true,
       "counts": {
         "books": 1,
-        "book_sources": 1,
+        "sources": 1,
         "chapters": 1,
         "bookmarks": 1,
         "readRecord": 1,
-        "detailedReadRecord": 1,
-        "replace_rules": 1
+        "detailedReadRecords": 1,
+        "replaceRules": 1
       },
       "conflictCounts": {},
       "preservedRows": {
@@ -110,18 +115,19 @@ void main() {
     }''');
 
     expect(report.sourceRoomVersion, 99);
+    expect(report.sourceRoomIdentityHash, 'room-v99-identity-hash');
     expect(report.fingerprint, 'room-v99-core-fixture');
     expect(report.replaced, isTrue);
     expect(report.skippedDuplicate, isFalse);
     expect(report.backupWritten, isTrue);
     expect(report.counts, {
       'books': 1,
-      'book_sources': 1,
+      'sources': 1,
       'chapters': 1,
       'bookmarks': 1,
       'readRecord': 1,
-      'detailedReadRecord': 1,
-      'replace_rules': 1,
+      'detailedReadRecords': 1,
+      'replaceRules': 1,
     });
     expect(report.conflictCounts, isEmpty);
     expect(report.preservedRows, {
@@ -148,11 +154,13 @@ void main() {
   test('reports duplicate import without losing backup or source identity', () {
     final port = _FakeLegacyRoomImportPort(
       reportJson: '''{
-        "sourceRoomVersion": 99,
+      "sourceRoomVersion": 99,
+        "sourceRoomIdentityHash": "room-v99-duplicate-identity-hash",
         "fingerprint": "room-v99-duplicate",
         "replaced": false,
         "skippedDuplicate": true,
-        "backupWritten": true,
+        "backupPath": "/backup/pre-import.json",
+        "backupWritten": false,
         "counts": {},
         "conflictCounts": {},
         "preservedRows": {},
@@ -169,10 +177,12 @@ void main() {
     );
 
     expect(report.sourceRoomVersion, 99);
+    expect(report.sourceRoomIdentityHash, 'room-v99-duplicate-identity-hash');
     expect(report.fingerprint, 'room-v99-duplicate');
     expect(report.replaced, isFalse);
     expect(report.skippedDuplicate, isTrue);
-    expect(report.backupWritten, isTrue);
+    expect(report.backupWritten, isFalse);
+    expect(report.backupPath, '/backup/pre-import.json');
     expect(report.hasWarnings, isFalse);
     expect(report.counts, isEmpty);
     expect(report.conflictCounts, isEmpty);
@@ -182,8 +192,10 @@ void main() {
     expect(report.unmappedColumns, isEmpty);
   });
 
-  test('ignores unknown report fields without changing the supported contract', () {
-    final report = LegacyRoomImportReport.fromJson('''{
+  test(
+    'ignores unknown report fields without changing the supported contract',
+    () {
+      final report = LegacyRoomImportReport.fromJson('''{
       "sourceRoomVersion": 99,
       "fingerprint": "room-v99-unknown-field",
       "replaced": false,
@@ -199,19 +211,22 @@ void main() {
       "unknownCollection": ["ignored"]
     }''');
 
-    expect(report.sourceRoomVersion, 99);
-    expect(report.fingerprint, 'room-v99-unknown-field');
-    expect(report.replaced, isFalse);
-    expect(report.skippedDuplicate, isFalse);
-    expect(report.backupWritten, isTrue);
-    expect(report.counts, {'books': 1});
-    expect(report.conflictCounts, isEmpty);
-    expect(report.preservedRows, {'books': 1});
-    expect(report.archiveOnlyTables, isEmpty);
-    expect(report.warnings, isEmpty);
-    expect(report.unmappedColumns, isEmpty);
-    expect(report.hasWarnings, isFalse);
-  });
+      expect(report.sourceRoomVersion, 99);
+      expect(report.sourceRoomIdentityHash, isNull);
+      expect(report.fingerprint, 'room-v99-unknown-field');
+      expect(report.replaced, isFalse);
+      expect(report.skippedDuplicate, isFalse);
+      expect(report.backupWritten, isTrue);
+      expect(report.backupPath, isNull);
+      expect(report.counts, {'books': 1});
+      expect(report.conflictCounts, isEmpty);
+      expect(report.preservedRows, {'books': 1});
+      expect(report.archiveOnlyTables, isEmpty);
+      expect(report.warnings, isEmpty);
+      expect(report.unmappedColumns, isEmpty);
+      expect(report.hasWarnings, isFalse);
+    },
+  );
 
   test('imports through the application port and parses the report', () {
     final port = _FakeLegacyRoomImportPort();

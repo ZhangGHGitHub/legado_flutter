@@ -2480,6 +2480,205 @@ mod tests {
     }
 
     #[test]
+    fn replace_import_replaces_existing_rows_and_backs_up_previous_state() {
+        let directory = test_directory("replace-success");
+        let source_path = directory.join("room.db");
+        let backup_path = directory.join("before-replace.json");
+        write_minimal_room_import_source(&source_path);
+        let db = EngineDb::open_in_memory().unwrap();
+
+        db.insert_book_json(
+            r#"{
+                "id": "old-book",
+                "name": "旧目标书",
+                "author": "旧作者",
+                "bookSourceUrl": "old-source",
+                "tocUrl": "old-toc",
+                "currentPageIndex": 42
+            }"#,
+        )
+        .unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO chapters (id, bookId, title, idx, url)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    "old-chapter",
+                    "old-book",
+                    "旧章节",
+                    0_i64,
+                    "old-chapter-url"
+                ],
+            )
+            .unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO legacy_room_imports
+                 (fingerprint, room_version, room_identity_hash, raw_snapshot_json,
+                  mapped_backup_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    "old-fingerprint",
+                    99_i64,
+                    "old-identity-hash",
+                    "{\"tables\":{\"books\":[{\"bookUrl\":\"old-book\"}]}}",
+                    "{\"books\":[{\"id\":\"old-book\",\"name\":\"旧目标书\"}]}"
+                ],
+            )
+            .unwrap();
+
+        let report = db
+            .import_legacy_room_database(
+                &source_path.to_string_lossy(),
+                Some(&backup_path.to_string_lossy()),
+                true,
+            )
+            .unwrap();
+
+        assert!(report.replaced);
+        assert!(!report.skipped_duplicate);
+        assert!(report.backup_written);
+        assert!(backup_path.is_file());
+
+        let old_book_count: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM books WHERE id=?1",
+                params!["old-book"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(old_book_count, 0);
+        let old_chapter_count: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM chapters WHERE id=?1",
+                params!["old-chapter"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(old_chapter_count, 0);
+
+        let new_book_count: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM books WHERE id=?1",
+                params!["book-1"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(new_book_count, 1);
+        assert_eq!(db.legacy_room_import_count().unwrap(), 1);
+        let new_archive_count: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM legacy_room_imports WHERE fingerprint=?1",
+                params![report.fingerprint],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(new_archive_count, 1);
+        let old_archive_count: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM legacy_room_imports WHERE fingerprint=?1",
+                params!["old-fingerprint"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(old_archive_count, 0);
+
+        let before_replace: Value =
+            serde_json::from_slice(&fs::read(&backup_path).unwrap()).unwrap();
+        assert_eq!(before_replace["books"][0]["id"], "old-book");
+        assert_eq!(before_replace["books"][0]["name"], "旧目标书");
+        assert_eq!(before_replace["chapters"][0]["id"], "old-chapter");
+        assert_eq!(
+            before_replace["legacyRoomImports"][0]["fingerprint"],
+            "old-fingerprint"
+        );
+
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn room_import_filters_short_detailed_sessions_but_preserves_raw_rows() {
+        let directory = test_directory("detailed-session-threshold");
+        let source_path = directory.join("room.db");
+        let backup_path = directory.join("backup.json");
+        write_minimal_room_import_source(&source_path);
+
+        let source = Connection::open(&source_path).unwrap();
+        source
+            .execute(
+                "INSERT INTO detailedReadRecord
+                 (bookName, startTime, endTime, readIteration)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params!["重复导入书", 1_500_000_i64, 1_599_999_i64, 2_i64],
+            )
+            .unwrap();
+        source
+            .execute(
+                "INSERT INTO detailedReadRecord
+                 (bookName, startTime, endTime, readIteration)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params!["重复导入书", 2_000_000_i64, 2_120_000_i64, 3_i64],
+            )
+            .unwrap();
+        drop(source);
+
+        let db = EngineDb::open_in_memory().unwrap();
+        let report = db
+            .import_legacy_room_database(
+                &source_path.to_string_lossy(),
+                Some(&backup_path.to_string_lossy()),
+                false,
+            )
+            .unwrap();
+
+        let business_count: i64 = db
+            .conn
+            .query_row("SELECT COUNT(*) FROM detailed_read_records", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(business_count, 1);
+
+        let exported: Value =
+            serde_json::from_str(&db.export_detailed_read_records().unwrap()).unwrap();
+        assert_eq!(exported.as_array().unwrap().len(), 1);
+        assert_eq!(exported[0]["bookName"], "重复导入书");
+        assert_eq!(exported[0]["sessions"].as_array().unwrap().len(), 1);
+        assert_eq!(exported[0]["sessions"][0]["startTime"], 1_000_000);
+        assert_eq!(exported[0]["sessions"][0]["endTime"], 1_120_001);
+
+        let raw_snapshot: String = db
+            .conn
+            .query_row(
+                "SELECT raw_snapshot_json FROM legacy_room_imports WHERE fingerprint=?1",
+                params![report.fingerprint],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let raw_snapshot: Value = serde_json::from_str(&raw_snapshot).unwrap();
+        let raw_rows = raw_snapshot["tables"]["detailedReadRecord"]
+            .as_array()
+            .unwrap();
+        assert_eq!(raw_rows.len(), 3);
+        assert_eq!(raw_rows[0]["id"], 1);
+        assert_eq!(raw_rows[0]["startTime"], 1_000_000);
+        assert_eq!(raw_rows[0]["endTime"], 1_120_001);
+        assert_eq!(raw_rows[1]["id"], 2);
+        assert_eq!(raw_rows[1]["startTime"], 1_500_000);
+        assert_eq!(raw_rows[1]["endTime"], 1_599_999);
+        assert_eq!(raw_rows[2]["id"], 3);
+        assert_eq!(raw_rows[2]["startTime"], 2_000_000);
+        assert_eq!(raw_rows[2]["endTime"], 2_120_000);
+
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn init_is_idempotent_for_same_directory_and_rejects_switching_directory() {
         let failed_directory = test_directory("init-failure");
         let failed_path = failed_directory.join("legado.db");

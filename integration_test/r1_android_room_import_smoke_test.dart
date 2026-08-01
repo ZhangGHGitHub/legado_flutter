@@ -22,6 +22,52 @@ const _sourcePath = String.fromEnvironment(
       '/data/user/0/com.legado.legado_flutter/files/r1/original_legado.db',
 );
 
+const _roomV99EntityTables = <String>{
+  'books',
+  'book_groups',
+  'book_sources',
+  'chapters',
+  'replace_rules',
+  'searchBooks',
+  'search_keywords',
+  'cookies',
+  'rssSources',
+  'bookmarks',
+  'rssArticles',
+  'rssReadRecords',
+  'rssStars',
+  'txtTocRules',
+  'readRecord',
+  'detailedReadRecord',
+  'httpTTS',
+  'caches',
+  'ruleSubs',
+  'dictRules',
+  'keyboardAssists',
+  'book_thoughts',
+  'servers',
+};
+
+const _roomV99ArchiveOnlyTables = <String>{
+  'book_groups',
+  'searchBooks',
+  'search_keywords',
+  'cookies',
+  'rssSources',
+  'rssArticles',
+  'rssReadRecords',
+  'rssStars',
+  'txtTocRules',
+  'readRecord',
+  'httpTTS',
+  'caches',
+  'ruleSubs',
+  'dictRules',
+  'keyboardAssists',
+  'book_thoughts',
+  'servers',
+};
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -62,7 +108,21 @@ void main() {
       );
       expect(report.sourceRoomVersion, 99);
       expect(report.fingerprint, isNotEmpty);
-      expect(report.preservedRows.length, greaterThanOrEqualTo(23));
+      expect(
+        report.preservedRows.keys.toSet(),
+        _roomV99EntityTables,
+        reason: 'Room v99 实体表集合必须完整且不能包含未知表',
+      );
+      expect(report.preservedRows, hasLength(_roomV99EntityTables.length));
+      for (final table in _roomV99EntityTables) {
+        final rowCount = report.preservedRows[table];
+        expect(rowCount, isNotNull, reason: 'Room v99 实体表缺少逐表行数: $table');
+        expect(
+          rowCount,
+          greaterThanOrEqualTo(0),
+          reason: 'Room v99 实体表行数不能为负数: $table',
+        );
+      }
       for (final table in const ['books', 'sources', 'chapters']) {
         expect(
           report.counts[table],
@@ -70,7 +130,15 @@ void main() {
           reason: 'Room 非空迁移前置失败: $table 没有可迁移行',
         );
       }
-      expect(report.archiveOnlyTables, contains('book_groups'));
+      expect(
+        report.archiveOnlyTables.toSet(),
+        _roomV99ArchiveOnlyTables,
+        reason: 'Room v99 archive-only 表集合必须与迁移边界一致',
+      );
+      expect(
+        report.archiveOnlyTables,
+        hasLength(_roomV99ArchiveOnlyTables.length),
+      );
       expect(report.backupWritten, isTrue);
       expect(await File(preImportBackupPath).exists(), isTrue);
 

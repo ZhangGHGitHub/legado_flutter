@@ -999,6 +999,45 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_and_import_preserve_uncheckpointed_wal_source_byte_for_byte() {
+        let source_path = test_path("wal-source");
+        let backup_path = test_path("wal-backup");
+        let source_conn = write_wal_room_fixture(&source_path);
+
+        // SQLite may initialize WAL read marks in -shm on the first read-only
+        // open. Establish that normal read-only baseline before byte checks.
+        let warmed_snapshot = extract_legacy_room_database(&source_path).unwrap();
+        assert_eq!(warmed_snapshot.tables["books"][0]["bookUrl"], "book-1");
+        let source_before = std::fs::read(&source_path).unwrap();
+        let sidecars_before = source_sidecar_states(&source_path);
+        let wal_before = sidecars_before[0].1.as_ref().unwrap();
+        assert!(
+            wal_before.len() > 32,
+            "WAL must contain an uncheckpointed frame"
+        );
+        assert!(sidecars_before[1].1.is_some(), "WAL mode must create SHM");
+
+        let snapshot = extract_legacy_room_database(&source_path).unwrap();
+        assert_eq!(snapshot.tables["books"][0]["bookUrl"], "book-1");
+        assert_eq!(std::fs::read(&source_path).unwrap(), source_before);
+        assert_eq!(source_sidecar_states(&source_path), sidecars_before);
+
+        let db = EngineDb::open_in_memory().unwrap();
+        let report = db
+            .import_legacy_room_database(&source_path, Some(&backup_path), false)
+            .unwrap();
+        assert!(!report.skipped_duplicate);
+        assert_eq!(db.book_count().unwrap(), 1);
+        assert_eq!(std::fs::read(&source_path).unwrap(), source_before);
+        assert_eq!(source_sidecar_states(&source_path), sidecars_before);
+
+        drop(source_conn);
+        cleanup_test_paths(&source_path, &backup_path);
+        let _ = std::fs::remove_file(format!("{source_path}-wal"));
+        let _ = std::fs::remove_file(format!("{source_path}-shm"));
+    }
+
+    #[test]
     fn snapshot_extracts_core_rows_in_stable_order_without_writes() {
         let conn = Connection::open_in_memory().unwrap();
         create_minimal_room_schema(&conn, KOTLIN_ROOM_CURRENT_VERSION);
@@ -1468,6 +1507,10 @@ mod tests {
                 "lastRead": 1700000000
             })]
         );
+        assert!(mapping
+            .archive_only_tables
+            .contains(&"readRecord".to_string()));
+        assert_eq!(mapping.counts.get("readRecord"), Some(&1));
 
         // The established mapping groups detailed sessions by book name and
         // deliberately leaves aggregate readRecord data unmapped.
@@ -2005,6 +2048,25 @@ mod tests {
             [],
         )
         .unwrap();
+    }
+
+    fn write_wal_room_fixture(path: &str) -> Connection {
+        let conn = Connection::open(path).unwrap();
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL;
+             PRAGMA wal_autocheckpoint=0;",
+        )
+        .unwrap();
+        create_minimal_room_schema(&conn, KOTLIN_ROOM_CURRENT_VERSION);
+        conn.execute(
+            "INSERT INTO books
+             (bookUrl, tocUrl, origin, originName, name, author,
+              durChapterTitle, durChapterIndex, durChapterPos, readConfig)
+             VALUES ('book-1', 'toc', 'source', '源', '迁移书', '作者', '第一章', 0, 7, '{}')",
+            [],
+        )
+        .unwrap();
+        conn
     }
 
     fn write_non_core_order_fixture(path: &str, reverse_insert_order: bool) {

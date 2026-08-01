@@ -1,5 +1,15 @@
 # Legado Flutter 架构重构基线
 
+## 182. 2026-08-02：R1-12 导入报告与事务边界复核
+
+- Dart `LegacyRoomImportReport` 补齐 `sourceRoomIdentityHash`、`backupPath`，旧报告 JSON 缺少字段时保持兼容；测试按 Rust 实际输出键 `sources`、`detailedReadRecords`、`replaceRules` 校验，重复导入明确 `backupWritten=false`。
+- Android smoke 增加 Room v99 23 张实体表精确集合、逐表行数和 archive-only 集合断言；本批设备不可用，未宣称设备 smoke 通过。
+- Rust 增加未 checkpoint WAL/SHM 源库主文件及侧文件字节不变回归、`replace=true` 成功替换和导入前备份内容回归；详细阅读记录短会话过滤与 raw snapshot 保留继续由测试固定。
+
+验证记录：Flutter 报告定向 `6/6`、Rust Room `24/24`、数据库 `26/26`、Rust 全量 `255/255`、Flutter 全量 `912`（`3` 项既有 Flutter 条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。
+
+边界结论：Android smoke 因 `adb devices -l` 为空、`127.0.0.1:5558/5559` 被拒绝而未执行；真实原版非空 Room 数据库、`readRecord`/详细阅读记录产品语义、非核心表 Rust v17 业务 port 和文件级 SQLite 备份目标仍未关闭，R1-12 继续复核中。
+
 ## 181. 2026-08-02：R1-12 阅读记录与替换规则归档边界复核
 
 - owner 工作树完成本批迁移门禁复核：Rust Room 定向 `23/23`、数据库定向 `24/24`、Rust 全量 `252/252`、Flutter 全量 `912` 通过，另有 `3` 项既有 Flutter 条件跳过；`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。

@@ -14,6 +14,8 @@ class LegacyRoomImportReport {
     required this.warnings,
     required this.unmappedColumns,
     this.archiveOnlyTables = const [],
+    this.sourceRoomIdentityHash,
+    this.backupPath,
   });
 
   factory LegacyRoomImportReport.fromJson(String raw) {
@@ -23,10 +25,12 @@ class LegacyRoomImportReport {
     }
     return LegacyRoomImportReport(
       sourceRoomVersion: _int(value['sourceRoomVersion']),
+      sourceRoomIdentityHash: _nullableString(value['sourceRoomIdentityHash']),
       fingerprint: _string(value['fingerprint']),
       replaced: value['replaced'] == true,
       skippedDuplicate: value['skippedDuplicate'] == true,
       backupWritten: value['backupWritten'] == true,
+      backupPath: _nullableString(value['backupPath']),
       counts: _intMap(value['counts']),
       conflictCounts: _intMap(value['conflictCounts']),
       preservedRows: _intMap(value['preservedRows']),
@@ -37,10 +41,12 @@ class LegacyRoomImportReport {
   }
 
   final int sourceRoomVersion;
+  final String? sourceRoomIdentityHash;
   final String fingerprint;
   final bool replaced;
   final bool skippedDuplicate;
   final bool backupWritten;
+  final String? backupPath;
   final Map<String, int> counts;
   final Map<String, int> conflictCounts;
   final Map<String, int> preservedRows;
@@ -54,6 +60,8 @@ class LegacyRoomImportReport {
 int _int(Object? value) => value is num ? value.toInt() : 0;
 
 String _string(Object? value) => value is String ? value : '';
+
+String? _nullableString(Object? value) => value is String ? value : null;
 
 List<String> _stringList(Object? value) {
   if (value is! List) return const [];

@@ -17,6 +17,7 @@
 2026-08-02 R1-12 报告契约补充：重复导入报告明确归档表、告警、未映射列为空，未知字段向前兼容；Flutter Room 定向 `6/6` 通过。本条不改变阶段退出条件。
 2026-08-02 R1-12 书源规则落库补充：`upsert_source_json` 对 Room 映射产生的嵌套规则增加扁平业务列回退写入，保留已有扁平字段优先，并覆盖 `rulePageNext` 的目录/正文分页回退。实际目标表断言确认书籍、书源、章节核心字段落库，章节 `wordCount` 继续仅在原始归档中保留。验证：Rust Room `22/22`、数据库 `24/24`、Rust 全量 `251/251`、Flutter 全量 `912`（`3` 项既有跳过）、analyze、架构扫描和 `git diff --check` 通过。本条不关闭 R1-12。
 2026-08-02 R1-12 阅读记录与替换规则归档边界补充：owner 工作树复核通过 Room 定向 `23/23`、数据库定向 `24/24`、Rust 全量 `252/252`、Flutter 全量 `912`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check`。`readRecord` 明确采用 archive-only 保存并纳入导入报告原始计数，继续不写入 Rust v17 阅读统计业务表；`detailedReadRecord` 原始行及 Room 自增 `id` 保留在 `raw_snapshot_json`，业务映射按书名聚合为 sessions，聚合后的 session 不保留 Room 自增 `id`；`replace_rules.sortOrder`、`scope`、`group` 仅保留在原始归档，不进入当前 Rust v17 替换规则业务映射。本批不关闭 R1-12；真实原版非空数据库、`readRecord` 最终产品统计语义、非核心表业务 port 和文件级 SQLite 备份目标仍属于未决边界。
+2026-08-02 R1-12 导入报告与事务边界补充：Flutter 报告模型补齐 `sourceRoomIdentityHash`、`backupPath`，统一计数键为 Rust 实际输出的 `sources`、`detailedReadRecords`、`replaceRules`，重复导入 `backupWritten=false`；Android smoke 增加 23 张实体表精确集合、逐表行数和 archive-only 集合校验；Rust 增加未 checkpoint WAL/SHM 字节只读、`replace=true` 成功替换及导入前备份内容回归。验证：Flutter 报告定向 `6/6`、Rust Room `24/24`、数据库 `26/26`、Rust 全量 `255/255`、Flutter 全量 `912`（`3` 项既有条件跳过）、analyze、架构边界扫描和 `git diff --check` 通过。Android smoke 因设备不可用未执行；真实原版非空数据库、阅读统计产品语义、非核心表业务化和文件级 SQLite 备份目标仍未关闭，本条不关闭 R1-12。
 
 ### 0.0.1 设计稿收敛顺序
 
@@ -168,6 +169,7 @@ test/integration/         设备与平台链路验收
 - `readRecord` 当前明确归入 archive-only，导入报告保留其原始行数并登记 warning，但不写入 Rust v17 `readingRecords` 统计业务表；其设备维度、书名聚合、`readTime/lastRead` 统计语义仍需产品决策。
 - `detailedReadRecord` 的原始行及 Room 自增 `id` 保留在 `raw_snapshot_json`；当前业务映射按书名聚合为 sessions，聚合后的 session 不保留 Room 自增 `id`。该行为是当前迁移边界，不等同于最终产品统计语义确认。
 - `replace_rules.sortOrder`、`scope`、`group` 不进入当前 Rust v17 替换规则业务模型，仅通过原始快照 archive-only 保留。
+- 导入报告已保留 Rust 输出的 `sourceRoomIdentityHash` 与 `backupPath`；Flutter 计数键按 Rust 契约使用 `sources`、`detailedReadRecords`、`replaceRules`，重复 fingerprint 导入的 `backupWritten` 必须为 false。
 
 R1-12 当前判定：核心七表业务映射与 23 表原始归档已实现，新增 v99 门禁和正冲突测试已记录通过；但整体迁移门禁仍在复核中，不能标记 R1-12 或 R1 最终退出。后续非核心表业务模型、`readRecord` 映射和原版真实非空数据补充采集必须另行按计划执行；本轮没有推进新的 R2-R6 实现。
 
