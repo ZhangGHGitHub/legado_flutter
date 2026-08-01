@@ -814,7 +814,7 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 ## 25.10 R1-12：当前复核状态
 
 - R1 已重新打开，R1-12 当前只确认 Kotlin Room v99 → Rust v17 的核心七表业务映射与 23 个 Room 实体表全量原始归档，不能表述为 23 张表全部完成 Rust v17 业务迁移。
-- 本批已补 v99 版本/identity hash 门禁、备份保护、正冲突、归档恢复、JSON 恢复事务性、既有数据回滚和非核心 fingerprint 稳定性测试；Room 定向 `18/18`、Rust 全量 `244`、release、Flutter analyze 和 Flutter 全量 `908`（`3` 项既有条件跳过）通过，但最终 R1-12 仍不据此标记为阶段退出。
+- 本批已补 v99 版本/identity hash 门禁、备份保护、正冲突、归档恢复、JSON 恢复事务性、既有数据回滚、非核心 fingerprint 稳定性、缺失实体表结构和非法 UTF-8 无损边界测试；Room 定向 `20/20`、Rust 全量 `246`、release、Flutter analyze 和 Flutter 全量 `908`（`3` 项既有条件跳过）通过，但最终 R1-12 仍不据此标记为阶段退出。
 - `readRecord` 仍仅登记 warning；非核心表仍为 archive-only；真实非空 `original_legado.db` 证据仍缺失。非核心业务 port、`readRecord` 映射和真实非空数据补充不在本轮擅自决定范围内。
 - R1-12 复核完成前不推进新的 R2-R6 实现；R2/R6 的历史实现记录不替代当前阶段退出条件。
 

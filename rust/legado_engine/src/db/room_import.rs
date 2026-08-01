@@ -772,14 +772,22 @@ fn read_table_rows(conn: &Connection, table: &str) -> Result<Vec<Value>, DbError
         snapshot_order_by(table, &column_names)
     );
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map([], |row| {
+    let mut rows = stmt.query([])?;
+    let mut values = Vec::new();
+    while let Some(row) = rows.next()? {
         let mut object = Map::new();
         for (index, column) in column_names.iter().enumerate() {
-            object.insert(column.clone(), sqlite_value_to_json(row.get_ref(index)?));
+            let value = sqlite_value_to_json(row.get_ref(index)?).map_err(|error| match error {
+                DbError::Message(message) => {
+                    DbError::Message(format!("Room 表 {table} 列 {column}: {message}"))
+                }
+                error => error,
+            })?;
+            object.insert(column.clone(), value);
         }
-        Ok(Value::Object(object))
-    })?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(DbError::from)
+        values.push(Value::Object(object));
+    }
+    Ok(values)
 }
 
 fn snapshot_order_by(table: &str, columns: &[String]) -> String {
@@ -799,13 +807,15 @@ fn snapshot_order_by(table: &str, columns: &[String]) -> String {
     }
 }
 
-fn sqlite_value_to_json(value: ValueRef<'_>) -> Value {
+fn sqlite_value_to_json(value: ValueRef<'_>) -> Result<Value, DbError> {
     match value {
-        ValueRef::Null => Value::Null,
-        ValueRef::Integer(value) => json!(value),
-        ValueRef::Real(value) => json!(value),
-        ValueRef::Text(value) => Value::String(String::from_utf8_lossy(value).into_owned()),
-        ValueRef::Blob(value) => json!({"$blob": value}),
+        ValueRef::Null => Ok(Value::Null),
+        ValueRef::Integer(value) => Ok(json!(value)),
+        ValueRef::Real(value) => Ok(json!(value)),
+        ValueRef::Text(value) => std::str::from_utf8(value)
+            .map(|value| Value::String(value.to_string()))
+            .map_err(|_| DbError::Message("SQLite TEXT 包含非法 UTF-8，无法无损归档".to_string())),
+        ValueRef::Blob(value) => Ok(json!({"$blob": value})),
     }
 }
 
@@ -896,6 +906,61 @@ mod tests {
         assert!(!probe.has_required_core_shape());
         assert!(probe.missing_tables.contains(&"books".to_string()));
         assert!(probe.missing_tables.contains(&"book_sources".to_string()));
+    }
+
+    #[test]
+    fn extract_rejects_missing_room_entity_tables_after_core_shape_passes() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_minimal_room_schema(&conn, KOTLIN_ROOM_CURRENT_VERSION);
+        conn.execute("DROP TABLE book_groups", []).unwrap();
+        conn.execute("DROP TABLE servers", []).unwrap();
+
+        let probe = probe_legacy_room_connection(&conn).unwrap();
+        assert!(probe.has_required_core_shape());
+        assert!(probe.missing_tables.is_empty());
+
+        let error = extract_legacy_room_connection(&conn).unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("Room v99 数据库缺少实体表"));
+        assert!(message.contains("book_groups"));
+        assert!(message.contains("servers"));
+    }
+
+    #[test]
+    fn invalid_utf8_text_rejects_snapshot_and_import_without_writes() {
+        let source_path = test_path("invalid-utf8-source");
+        let backup_path = test_path("invalid-utf8-backup");
+        write_room_fixture(&source_path, false);
+        {
+            let conn = Connection::open(&source_path).unwrap();
+            conn.execute(
+                "UPDATE books SET name=CAST(X'80' AS TEXT) WHERE bookUrl='book-1'",
+                [],
+            )
+            .unwrap();
+        }
+
+        let snapshot_error = extract_legacy_room_database(&source_path).unwrap_err();
+        assert!(snapshot_error.to_string().contains("非法 UTF-8"));
+
+        let db = EngineDb::open_in_memory().unwrap();
+        let import_error = db
+            .import_legacy_room_database(&source_path, Some(&backup_path), false)
+            .unwrap_err();
+        assert!(import_error.to_string().contains("非法 UTF-8"));
+        assert_eq!(db.book_count().unwrap(), 0);
+        assert_eq!(db.legacy_room_import_count().unwrap(), 0);
+        let fingerprint_count: i64 = db
+            .conn
+            .query_row("SELECT COUNT(*) FROM legacy_room_imports", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(fingerprint_count, 0);
+        assert!(!std::fs::metadata(&backup_path).is_ok());
+        assert!(!std::fs::metadata(format!("{backup_path}.tmp-{}", std::process::id())).is_ok());
+
+        cleanup_test_paths(&source_path, &backup_path);
     }
 
     #[test]
