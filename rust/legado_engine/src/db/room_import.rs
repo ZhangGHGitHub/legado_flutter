@@ -1198,6 +1198,81 @@ mod tests {
     }
 
     #[test]
+    fn import_backup_round_trip_preserves_raw_room_snapshot() {
+        let source_path = test_path("round-trip-source");
+        let backup_path = test_path("round-trip-backup");
+        write_room_fixture(&source_path, false);
+        {
+            let conn = Connection::open(&source_path).unwrap();
+            conn.execute("ALTER TABLE replace_rules ADD COLUMN scope TEXT", [])
+                .unwrap();
+            conn.execute(
+                "INSERT INTO replace_rules
+                 (name, pattern, replacement, isEnabled, isRegex, sortOrder, scope)
+                 VALUES ('净化', '广告', '', 1, 1, 3, 'book-1')",
+                [],
+            )
+            .unwrap();
+            conn.execute("UPDATE detailedReadRecord SET endTime=200000", [])
+                .unwrap();
+        }
+
+        let db = EngineDb::open_in_memory().unwrap();
+        let report = db
+            .import_legacy_room_database(&source_path, Some(&backup_path), false)
+            .unwrap();
+        let exported = db.export_backup_json().unwrap();
+        let exported_value: Value = serde_json::from_str(&exported).unwrap();
+        let legacy = &exported_value["legacyRoomImports"][0];
+        let raw_snapshot = legacy["rawSnapshotJson"].as_str().unwrap();
+        let mapped_backup = legacy["mappedBackupJson"].as_str().unwrap();
+        let raw_value: Value = serde_json::from_str(raw_snapshot).unwrap();
+        let mapped_value: Value = serde_json::from_str(mapped_backup).unwrap();
+
+        assert_eq!(
+            raw_value["tables"]["chapters"][0]["wordCount"],
+            "preserve-me"
+        );
+        assert_eq!(raw_value["tables"]["replace_rules"][0]["scope"], "book-1");
+        assert_eq!(mapped_value["books"][0]["id"], "book-1");
+        assert_eq!(mapped_value["chapters"][0]["bookId"], "book-1");
+        assert_eq!(
+            mapped_value["detailedReadRecords"][0]["sessions"][0]["readIteration"],
+            1
+        );
+
+        let restored = EngineDb::open_in_memory().unwrap();
+        restored.restore_backup_json(&exported, true).unwrap();
+
+        let (restored_raw, restored_mapped): (String, String) = restored
+            .conn
+            .query_row(
+                "SELECT raw_snapshot_json, mapped_backup_json
+                 FROM legacy_room_imports WHERE fingerprint=?1",
+                [report.fingerprint.as_str()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(restored_raw, raw_snapshot);
+        assert_eq!(restored_mapped, mapped_backup);
+        assert_eq!(restored.book_count().unwrap(), 1);
+        let restored_chapter_count: i64 = restored
+            .conn
+            .query_row("SELECT COUNT(*) FROM chapters", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(restored_chapter_count, 1);
+        let restored_detailed_record_count: i64 = restored
+            .conn
+            .query_row("SELECT COUNT(*) FROM detailed_read_records", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(restored_detailed_record_count, 1);
+
+        cleanup_test_paths(&source_path, &backup_path);
+    }
+
+    #[test]
     fn import_requires_backup_path_for_first_import_without_writing_target() {
         let source_path = test_path("missing-backup-source");
         let backup_path = test_path("missing-backup");

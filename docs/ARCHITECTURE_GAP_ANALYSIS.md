@@ -14,7 +14,7 @@
 | freezed 镜像模型 | `SearchResultItem`、`BookReadConfig`、`BookGroup`、`Chapter` 已引入 Freezed 定义和兼容映射，生成链已通过；Book/BookSource 仍未全部迁移 | 部分完成 | 继续扩展 Book/BookSource，并保持旧 JSON 契约 |
 | CoreApi + Mock/Real | 书架/搜索 CoreApi、MockCoreApi、RealCoreApi 和契约测试已建立；生产组合根通过 ProviderScope 注入 RealCoreApi | 基本完成首批 | 先补书架命令契约，再迁移页面单一事实源 |
 | 统一 AppError | 根 `api/mod.rs` 的 `search/explore/get_book_info/get_toc/get_content/get_content_with_next_chapter/validate_source/debug_search/debug_toc`、`query_dict_rule`、笔记/书签入口、23 个 `db_*` 入口、HTTP 文本/二进制入口、`http_fetch`、网络配置/Cookie/trace、RSS 文章/正文、EPUB、远程 ZIP、`eval_js`、`seed_login_header`、`process_content_for_reading`、`serve_source_browser_host` 和 `probe_source_browser_host` 入口已改为 Rust `AppError`；子模块重复 FRB 导出已收敛，其它公开 FFI 仍有 `Result<T, String>` | 部分完成 | 继续迁移其它公开 FFI 错误和 Dart 统一映射 |
-| Kotlin Room v99 → Rust v17 数据迁移 | 已建立只读 v99 探针、核心七表业务映射和 23 个 Room 实体表全量原始归档；本批新增 v99 版本、identity hash 强制门禁与正冲突测试，已记录 Room 定向 `13/13` 通过。`readRecord` 仍仅 warning，非核心表仍 archive-only，真实非空 `original_legado.db` 证据缺失 | 复核中/部分完成 | 先完成当前 R1-12 门禁复核，再决定非核心业务 port、`readRecord` 映射和真实非空数据补充；不得写成 23 张表全部 Rust v17 业务迁移 |
+| Kotlin Room v99 → Rust v17 数据迁移 | 已建立只读 v99 探针、核心七表业务映射和 23 个 Room 实体表全量原始归档；本批新增 v99 版本/identity hash 门禁、备份保护、正冲突和归档恢复测试，Room 定向 `16/16` 通过。`readRecord` 仍仅 warning，非核心表仍 archive-only，真实非空 `original_legado.db` 证据缺失 | 复核中/部分完成 | 先完成当前 R1-12 门禁复核，再决定非核心业务 port、`readRecord` 映射和真实非空数据补充；不得写成 23 张表全部 Rust v17 业务迁移 |
 | QuickJS 5 秒超时 | 已接入统一 QuickJS Runtime interrupt，纯脚本执行预算为 5 秒；脚本和 `jsLib` 输入上限均为 256 KiB；定向测试 29/29、Rust 全量 208 项通过。`java.ajax`、`getStrResponse` 和 WebView 宿主同步阻塞不受本批 interrupt 中断 | 部分完成 | 单独补齐宿主调用超时、取消和资源上限边界，不宣称本批已覆盖宿主阻塞 |
 | 统一 `init(app_dir)` | `init(app_dir)` 固定使用 `app_dir/legado.db`，schema 初始化在单事务中执行，失败不发布；同目录幂等且首次并发调用受初始化锁保护。FRB 已重新生成，生产 `LegadoDbBridge` 传入应用数据目录；数据库定向 19/19、备份桥接 10/10、Flutter 全量 894 项通过且有 3 项既有跳过 | 基本完成首批 | 继续补齐历史 schema 异常版本覆盖并保持旧入口兼容过渡；不宣称 R1-12/R2/R6 阶段退出 |
 | 编码探测 | Rust 使用 `encoding_rs`；本地 TXT 仍有 Dart GBK fallback | 部分完成 | GBK/GB18030 fixture 和 Rust 唯一事实源 |
@@ -34,7 +34,7 @@
 ## 2026-08-01 R1-12 当前状态边界
 
 - 当前范围是 Kotlin Room v99 → Rust v17 的核心七表业务映射与 23 表全量原始归档，不是 23 张 Room 表全部 Rust v17 业务迁移。
-- 已记录的 v99 版本、identity hash 强制门禁与正冲突测试结果为 Room 定向 `13/13`、Rust 全量、release、Flutter analyze 和 Flutter 全量 `908`（`3` 项既有条件跳过）通过；最终本轮结果仍由父 agent 复核。
+- 已记录的 v99 版本/identity hash 门禁、备份保护、正冲突和归档恢复测试结果为 Room 定向 `16/16`、Rust 全量、release、Flutter analyze 和 Flutter 全量 `908`（`3` 项既有条件跳过）通过；最终 R1-12 仍不据此标记为阶段退出。
 - `readRecord` 仍仅登记 warning，非核心表仍 archive-only，真实非空 `original_legado.db` 证据仍缺失；这些边界不在本轮擅自做产品决策。
 - R1-12 复核完成前不推进新的 R2-R6 实现，也不把 R1/R2/R6 历史记录写成当前阶段已退出。
 
