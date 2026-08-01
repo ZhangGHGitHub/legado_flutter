@@ -128,9 +128,9 @@ test/integration/         设备与平台链路验收
 
 退出条件：数据模型契约测试通过；本工程 Rust 旧 schema 可读写；章节身份和阅读位置迁移无差异；Kotlin Room v99 数据库探针、字段映射、导入事务、备份/回滚和真实/合成 fixture 回归通过。
 
-当前判定：R1 已最终退出。R1-12 的 Kotlin Room v99 数据库迁移门禁已通过：探针、核心字段映射、全部 23 个 Room 实体表的原始快照、archive-only 非核心表保存、事务式导入、导入前备份、失败回滚、指纹幂等、冲突统计、FRB/Dart application、备份页入口和 Android 两阶段设备验收均已完成。真实 `original_legado.db` 已确认 v99，但其实体表当前为空；非空等价 fixture 已覆盖字段映射和非核心数据归档。非核心表尚未建立产品业务 port，但不会在迁移中丢失，作为后续独立产品语义工作，不阻塞 R1-12 门禁。扩展边界复核后的默认适配器、组合根、阅读配置、叶子领域模型、Book/Chapter、BookSource/RssSource、阅读进度、登录 UI DTO 和书源校验结果归属均已收敛；旧 `lib/models` 文件全部为兼容导出，`lib/model/read_book.dart` 仅保留阅读会话对象。最终合并定向回归 `46/46`，Flutter 串行全量 `578` 通过、`3` 项按既有条件跳过，Rust `legado_engine` 全量和 Android Room 两阶段 Driver smoke 通过。静态检查中的 domain/model 纯度与核心具体基础设施违规为 `0`；剩余 `146` 条 Feature 偏好/服务依赖是后续 R2/R6 阶段 backlog，不回写为 R1 例外。
+当前判定：R1 已重新打开，尚未最终退出。R1-12 当前只按“核心七表业务映射 + 23 个 Room 实体表全量原始归档”描述；本批已补 Kotlin Room v99 版本与 identity hash 强制门禁和正冲突测试，已记录的 Room 定向 `13/13`、Rust 全量、release、Flutter analyze 和 Flutter 全量 `908`（`3` 项既有条件跳过）结果均通过，但最终本轮门禁仍由父 agent 复核。`readRecord` 仍仅登记 warning；非核心表仍为 archive-only，真实非空 `original_legado.db` 证据仍缺失，不能据此宣称 23 张表已全部完成 Rust v17 业务迁移。R1-12 的非核心业务 port、`readRecord` 映射和真实非空数据边界不在本轮擅自决定。R1-12 完成前，不推进新的 R2-R6 实现，也不以历史 R2-R6 记录替代当前退出条件。
 
-##### R1-12：Kotlin Room v99 数据迁移门禁（已通过）
+##### R1-12：Kotlin Room v99 数据迁移门禁（复核中，部分完成）
 
 目标：支持从原版 Android Kotlin Room 数据库文件安全迁移到 Rust schema，而不是只支持本工程旧 Rust schema。
 
@@ -149,14 +149,13 @@ test/integration/         设备与平台链路验收
 - FRB 2.11.1 绑定、Dart application port/service 和备份页导入入口已接入；页面只调用 application service。
 - 定向测试覆盖 v99 探针、字段映射、章节身份、详细阅读记录、书签歧义、全部实体表快照、原始字段保留、备份、回滚和重复导入；Android smoke 覆盖真实文件导入、导入后写入、重启后读取、重复导入幂等和备份恢复。
 
-边界说明（不阻塞 R1-12 退出）：
+边界说明（当前仍未关闭）：
 
-- 使用真实非空 Room v99 数据库或非空等价 fixture 验证逐字段迁移：非空等价 fixture 已通过；真实 `original_legado.db` 仍为空库，但已完成真实文件读取验收。
-- 原版 23 个 Room 实体表均已纳入快照和报告；非核心表当前采用可恢复的 archive-only 保存，不宣称已有 Rust v17 业务 port。
-- Android 设备已完成真实文件导入、重启后继续读取、重复导入幂等和再次备份/恢复验收。
+- 使用真实非空 Room v99 数据库或非空等价 fixture 验证逐字段迁移：非空等价 fixture 已覆盖当前核心映射；真实 `original_legado.db` 仍为空库，真实非空数据证据缺失。
+- 原版 23 个 Room 实体表已纳入快照和报告；非核心表当前采用可恢复的 archive-only 保存，不宣称已有 Rust v17 业务 port。
+- `readRecord` 仍仅登记 warning，是否映射其聚合时间需后续按产品语义决策；Android 真实文件导入等历史 smoke 结果不替代当前 R1-12 复核。
 
-R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非核心表业务模型、原版真实非空数据补充采集和 R2-R6
-阶段推进必须另行按计划执行；本轮没有推进新的 R2-R6 实现。
+R1-12 当前判定：核心七表业务映射与 23 表原始归档已实现，新增 v99 门禁和正冲突测试已记录通过；但整体迁移门禁仍在复核中，不能标记 R1-12 或 R1 最终退出。后续非核心表业务模型、`readRecord` 映射和原版真实非空数据补充采集必须另行按计划执行；本轮没有推进新的 R2-R6 实现。
 
 #### R2：书源引擎与 FRB 适配边界
 
@@ -164,7 +163,7 @@ R1-12 退出判定：已满足当前计划的数据库迁移门禁。后续非�
 
 当前进度：R2-1 至 R2-7 已完成。核心书源请求和规则调试页面已经通过领域端口调用，FRB 生成类型仅保留在 `lib/infrastructure/engine` 与既有底层兼容桥中。R0 扩展复核后已移除 Rust HTTP 无效证书绕过，书源、规则订阅、书单 URL、RSS 订阅源 URL 和主题 URL 文本抓取均已收敛到统一 Rust HTTP 文本端口；RSS 与主题入口保留各自的 URL trim、SSRF 拒绝和错误契约。字典查询也已移除 Dio 和占位结果，改由 Rust 执行 AnalyzeUrl 与 showRule，当前覆盖 GET/POST、headers/body/charset、`data:`、HTML/JSON/JS、Jsoup 可变 DOM，以及内置规则使用的 `JavaImporter`、Jayway `JsonPath`、`java.base64Encode`、`java.hexDecodeToString` 和 `with(aly)` 包装。当前五条内置字典规则已由离线 fixture 覆盖，百度普通释义和成语分支均已验证。AI 配置与 Obsidian REST API 也已移除 Dio，统一通过 application HTTP port 和 Rust 客户端；AI 固定公网 SSRF 策略，Obsidian 固定允许 localhost/LAN 的本地网络策略，二者共享默认 TLS、逐跳重定向检查、超时和响应大小门禁。统一二进制 HTTP port 已建立，正文图片缓存、阅读样式 ZIP、HTTP TTS 以及书源、漫画、封面、RSS、字典结果等页面远程图片均已迁入；生产代码中的 `Image.network/NetworkImage`、生产/测试 Dio import、pubspec 声明及 lockfile 条目均已清零。书源登录 WebView 已按当前页面读取 Cookie，并按 source key/eTLD+1 持久化到 Rust 网络会话，搜索、详情、目录和正文可跨请求域复用；`enabledCookieJar` 的发送前实际域覆盖、条件式响应保存，以及 source/login/URL option 优先级均已按原版代码路径覆盖测试。Android/iOS/macOS 已通过定域平台端口删除 source host/eTLD+1 WebView Cookie，不使用全局清空；iOS/macOS 真机构建待对应平台执行。`java.startBrowserAwait` 已通过长期 FRB Dart callback 服务接入可见 WebView，支持原版 2/3/4 参数、UTF-16 64 KiB URL 门禁、默认重新抓取、HTML/最终 URL/DOM 返回、Cookie 同步、取消与错误恢复；QuickJS 在专用阻塞线程等待后继续同一脚本上下文。
 
-当前判定：R2 已最终退出。书源入口、统一网络/Cookie、规则 fixture、JS 兼容、错误恢复、FRB 适配和可见 WebView 宿主门禁均通过；架构扫描没有新增违规。后台 `java.webView*`、文件/压缩及其它未命中的第三方 JS API 继续作为兼容性 backlog，不回写为 R2 已完整支持全部原版宿主 API。
+当前不宣称 R2 已最终退出。书源入口、统一网络/Cookie、规则 fixture、JS 兼容、错误恢复、FRB 适配和可见 WebView 宿主已有历史实现证据；后台 `java.webView*`、文件/压缩及其它未命中的第三方 JS API 仍是兼容性 backlog，且 R1-12 未完成前不得以这些历史记录推进新的 R2 实现。
 
 退出条件：所有书源入口通过统一用例，规则 fixture、JS 兼容和错误恢复测试通过，页面不再直接调用生成绑定。
 
@@ -306,8 +305,7 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 ### 0.5 当前状态
 
-当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 至 P1-4 现已通过；当前继续按 Feature 应用用例边界收口。架构扫描当前为 `28` 条既有 Feature→service backlog，不能当作例外或 R6 最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
-当前已完成 **R0 架构盘点与行为基线**、**R1（含 Room v99 迁移）**、**R2 书源/网络边界**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**。R6 功能域迁移、analyze 与 Android/Windows 构建已有历史证据，横切基础设施 P0-1 至 P1-4 现已通过；当前继续按 Feature 应用用例边界收口。架构扫描当前为 `22` 条既有 Feature→service backlog，不能当作例外或 R6 最终退出。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
+当前已完成 **R0 架构盘点与行为基线**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**；R1 因 Kotlin Room v99 → Rust v17 迁移门禁重新打开，当前只确认核心七表映射与 23 表原始归档，不能标记 R1 最终退出。R2 书源/网络边界与 R6 功能域迁移已有历史实现证据，但当前不据此宣称 R2/R6 阶段退出；R6 应用用例边界仍继续收口。横切基础设施 P0-1 至 P1-4 的历史证据继续保留，架构扫描中的 Feature→service backlog 不得当作例外或完成声明。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
 本轮并行补充完成 Widget 边界收口：书架分组、书签/书票/笔记、源校验/字典/替换预览和底部导航均通过 application/infrastructure port 使用，组合根已接入 W1-W3 Provider；Widget/Feature 扩展扫描不再发现直接 service 依赖，四个 Provider 依赖保留为下一批 backlog。定向与 owner 组合回归通过，Flutter 串行全量 `829` 通过、`3` 项既有条件跳过，analyze、架构脚本和 diff 检查通过。`read_book_async_test.dart` 增加预加载完成等待以消除 Windows 临时目录 teardown 锁竞争，不改变断言或阅读行为。
 本轮继续完成四条 Provider 边界：`ReplaceProvider` 通过 `ReplacePresetPort` 加载四条内置规则，`BookProvider` 使用 application 章节进度迁移策略，`SourceProvider` 使用登录头/校验偏好 ports，`RssProvider` 使用 `RssSourceStorePort` 持久化源列表。组合根显式注入真实 adapter，Provider fallback 仅保留 application 空端口；定向 `42/42`，Flutter 串行全量 `838` 通过、`3` 项既有条件跳过，analyze、架构脚本和 diff 检查通过。扩展扫描仅剩 Provider 的其他 service 依赖，下一批继续按 W4 审查的高风险边界拆分。
 本轮 Batch 5 完成 `SourceProvider` 源分组目录/标签 application 边界，组合根注入真实 adapter；owner 定向 `13/13`，Flutter 串行全量 `842` 通过、`3` 项既有条件跳过，analyze、架构脚本和 diff 检查通过。并行只读审查已为 source validation store、BookProvider 聚合与批量进度同步锁定最小契约和兼容风险；扩展扫描剩余五处 Provider→service 依赖，下一批按无冲突写集逐项迁移。

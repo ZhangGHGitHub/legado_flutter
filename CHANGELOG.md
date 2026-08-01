@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/R1-12 当前状态复核：R1 已重新打开。Kotlin Room v99 → Rust v17 当前只确认核心七表业务映射与 23 个 Room 实体表全量原始归档；本批新增 v99 版本、identity hash 强制门禁与正冲突测试，已记录 Room 定向 `13/13`、Rust 全量、release、`flutter analyze --no-pub` 和 Flutter 全量 `908`（`3` 项既有条件跳过）通过，但最终本轮门禁仍由父 agent 复核。`readRecord` 仍仅 warning，非核心表仍 archive-only，真实非空 `original_legado.db` 证据仍缺失；不把 23 张表写成全部 Rust v17 业务迁移，也不把 R1/R2/R6 历史实现记录写成当前阶段退出。R1-12 复核完成前不推进新的 R2-R6 实现。
 - 架构/浏览器宿主错误边界与 WebView 生命周期：`serve_source_browser_host`、`probe_source_browser_host` 统一返回 `AppError`，取消映射 `Cancelled`，不支持平台映射 `Unsupported`，宿主停止/锁失败/线程失败保留原文并映射 `Unknown`；浏览器宿主 abort/clear 后不留下 stale sender，重启后使用新宿主。`AppWebViewPage` 在 dispose 后不再派发新的 Cookie 回调，同时保留完成验证时等待 Cookie 同步、抓取 DOM、返回 finalUrl/body 的成功路径。验证：Rust `browser_host` 定向 `7/7`、Dart 浏览器宿主/WebView 定向 `8/8`、Rust 全量 `234`、Flutter 串行全量 `908` 通过，另有 `3` 项既有条件跳过；release 构建、`flutter analyze --no-pub`、架构扫描和 `git diff --check` 通过。本批不改变正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、WebDAV、平台验收或阶段退出条件。
 - 架构/重复公开 FRB 入口收敛：将 `search/explore/toc/debug/validate` 子模块实现降为 `pub(crate)` 并标记 `frb(ignore)`，保留根 `api/mod.rs` wrapper 作为唯一公开 FRB 契约；生成绑定移除子模块重复 Dart/Rust wire 导出，并删除陈旧子模块 Dart wrapper，不改变根 API 参数、返回值、`AppError` 分类、正文、目录顺序、分页、章节身份或 UTF-16 阅读位置。验证：`cargo fmt -p legado_engine`、Rust 全量 `228`、release 构建、`flutter analyze --no-pub`、Flutter 全量 `903` 通过且 `3` 项既有条件跳过，架构扫描和 `git diff --check` 通过。本批不覆盖浏览器宿主、WebDAV、平台验收或阶段退出条件。
 - 架构/正文处理 FFI 错误边界：`process_content_for_reading` 统一返回 `AppError::Parse`，保留成功输出、替换规则、段落缩进、标题合并和重新分段行为；FRB codec 已同步为结构化错误，新增 Rust 与 Dart mock 契约测试覆盖成功转发和 Parse 原文保留。Rust 定向 `2/2`、Dart 定向 `2/2`、Rust 全量 `228`、Flutter 全量 `903` 通过，另有 `3` 项既有条件跳过；release 构建、`flutter analyze --no-pub`、架构扫描和 `git diff --check` 通过。本批不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则，也不覆盖浏览器宿主、重复公开 FRB 子模块入口、WebDAV、平台验收或阶段退出条件。
@@ -80,7 +81,7 @@ All notable changes to this project are recorded in this file.
 
 - R3：完成阅读会话、正文处理、缓存和远端书籍 ZIP 的阶段退出门禁。阅读位置按当前页起始 UTF-16 章内位置保存；全局/书源替换、标题去重、重新分段和多行正则统一到 Rust，生产阅读、全文搜索、替换预览共用 `ContentProcessingPort`；正文下一页支持串行/并行规则顺序、循环终止、下一章边界和 100 页显式上限。文件/DB 缓存生命周期、桌面 59 项分页/断行/选区/像素门禁及 Android 4 项真实 ReaderPage/SVG 门禁通过。远端书籍 ZIP 由 Rust 负责格式识别、路径安全、50MB 输入/解压总量和损坏包错误，Flutter 仅写入 Rust 返回的安全文件；固定 FRB `2.11.1` 生成并移除陈旧重复正文出口。Rust workspace 核心 `185/185`、正文/ZIP 真实 Windows FRB `5/5`、Flutter 串行全量 `641` 通过（`3` 项既有跳过）、analyze、Android debug APK、`git diff --check` 均通过；架构 backlog 保持 `146`，无新增违规。
 
-- R2：完成 `java.startBrowserAwait` 可见 WebView 宿主并通过阶段退出门禁。QuickJS 在专用阻塞线程保持同一脚本上下文，Rust 通过长期 FRB Dart callback 服务串行请求 Flutter 导航；支持原版 2/3/4 参数、默认 `refetchAfterSuccess=true`、UTF-16 64 KiB URL 门禁、URL/HTML 两种加载、最终页面 Cookie 同步、DOM 返回、重新抓取和重定向最终 URL。组合根持有 `navigatorKey`，Feature 仅依赖纯 Dart port，取消或宿主错误保留原响应。固定 FRB `2.11.1` 生成与真实 callback 往返通过；Rust 核心 `166/166`、JS compatibility `18/18`、离线规则 fixture `4/4`、Flutter 全量 `629` 通过（`3` 项既有跳过）、analyze、Android debug APK 和三个 Rust ABI 构建通过。架构扫描保持既有 `146` 条 backlog，无新增违规；iOS/macOS 因 Windows 环境未执行 Xcode 构建。
+- R2 历史阶段记录：曾完成 `java.startBrowserAwait` 可见 WebView 宿主实现并记录对应验证结果。该历史记录不作为当前 R2 最终退出判定；后台 `java.webView*`、文件/压缩及其它第三方宿主 API 仍保留在兼容性 backlog，且 R1-12 复核完成前不得推进新的 R2 实现。
 
 - R2：补齐书源 Cookie 的平台 WebView 定域清除。新增独立平台端口和 `legado_flutter/source_login_cookies` MethodChannel，Rust 通过固定 FRB `2.11.1` 返回 Public Suffix eTLD+1；Android 对 source host/eTLD+1 的 Cookie 逐个写过期值并 flush，iOS/macOS 通过 WK CookieStore 只删除精确目标域，均不调用全局清空。持久/Rust 清除不因平台尽力删除失败而回滚。Rust 核心 `163/163`、Flutter 定向 `5/5`、真实 FRB domain/set/clear 往返、analyze、Flutter 串行全量 `625`（`3` 项既有跳过）和 Android debug APK 构建通过；iOS/macOS 因本机无 Xcode 仅完成静态 API 校验。
 
@@ -108,7 +109,7 @@ All notable changes to this project are recorded in this file.
 
 - R2：RSS 订阅源 URL 导入移除 Dart `HttpClient` 实现，改由 application adapter 复用统一 `PublicTextFetchPort`/Rust HTTP；保留 URL trim、私有地址拒绝和可空失败契约。RSS 导入定向回归 `6/6`、全仓 analyze 和架构脚本 fixture 通过，真实架构扫描仍为既有 `146` 条后续 backlog。
 
-- R1：完成领域模型归属收尾。`BookProgress` 迁入纯 domain，带时钟的 `fromBook` 创建移入 application factory，WebDAV JSON 字段、UTF-16 章内位置和冲突比较不变；登录行 UI DTO 迁入 application，书源校验结果迁入 domain，默认校验词策略迁入 application，旧 `lib/models` 路径仅保留兼容导出。合并定向回归 `46/46`，Flutter 串行全量 `578` 通过（`3` 项按既有条件跳过），Rust `legado_engine` 全量通过，Android Room v99 两阶段 Driver smoke 再次通过；R1 最终退出，既有 `146` 条 Feature 偏好/服务依赖继续按 R2/R6 处理。
+- R1 历史阶段记录：曾完成领域模型归属收尾。`BookProgress` 迁入纯 domain，带时钟的 `fromBook` 创建移入 application factory，WebDAV JSON 字段、UTF-16 章内位置和冲突比较不变；登录行 UI DTO 迁入 application，书源校验结果迁入 domain，默认校验词策略迁入 application，旧 `lib/models` 路径仅保留兼容导出。合并定向回归 `46/46`，Flutter 串行全量 `578` 通过（`3` 项按既有条件跳过），Rust `legado_engine` 全量通过，Android Room v99 两阶段 Driver smoke 曾通过；当前 R1 因 R1-12 重新打开，不据此宣称最终退出。
 
 - R1：`BookSource` 与 `RssSource` 迁入纯 domain，旧路径仅兼容导出；保留静态 JSON API，确保嵌套规则、`rawSourceJson`、未知字段、header/login/jsLib、RSS raw 与 engine JSON 往返不变。关键源模型/仓储/端口/RuleSub/RSS 回归 `30/30`，全仓 analyze 通过。
 
@@ -135,7 +136,7 @@ All notable changes to this project are recorded in this file.
 - R1-9：`BookProvider` 改为要求书籍仓储和章节缓存端口，启动层显式组装原 adapter；串行 Flutter 全量回归 `519` 通过、`3` 个既有在线 smoke 跳过。
 - R1-10：`SourceProvider` 改为要求书源仓储，根组合层显式创建 DAO；内置源启动/失败策略与校验 fake 回归通过，串行 Flutter 全量 `519` 通过、`3` 个既有在线 smoke 跳过。
 - R1-11：`SourceProvider` 改为要求书源校验 port，根组合层创建 FRB adapter；当前工程 Rust 旧 schema、章节身份与阅读位置退出证据已复核。原版 Room 当前为 v99，Kotlin Room 数据库文件导入此前仍未实现，未表述为已支持。
-- R1-12：完成并通过 Kotlin Room v99 → Rust v17 数据库迁移门禁：只读探针、23 个 Room 实体表稳定快照、核心字段映射、UTF-16 FNV-1a 章节身份、书签歧义报警、archive-only 原始字段保存、单事务写入、导入前备份、失败回滚、指纹幂等、冲突统计、FRB/Dart application port/service 和备份页入口。`cargo test -p legado_engine db::room_import::tests -- --nocapture` 为 `10/10` 通过，Rust 全量为 `127` 个测试通过；`flutter analyze --no-pub` 通过，Flutter 全量为 `521` 通过、3 个既有在线测试跳过。真实 `original_legado.db` 为 Room v99 但为空库，非空等价 fixture 和 Android 两阶段真实文件/重启/备份恢复 smoke 已通过。非核心表仍为 archive-only，尚未建立产品业务 port，但迁移不丢失其原始数据。
+- R1-12 历史阶段记录：曾记录 Kotlin Room v99 → Rust v17 的只读探针、核心映射、23 表稳定快照、archive-only 保存、事务/备份/回滚/幂等和 FRB/Dart 入口；该记录不等于 23 张表全部完成 Rust v17 业务迁移。当前 R1-12 只确认核心七表业务映射 + 23 表全量原始归档；`readRecord` 仍仅 warning，非核心表仍 archive-only，真实非空 `original_legado.db` 证据仍缺失。本批新增 v99 版本、identity hash 强制门禁与正冲突测试，已记录 Room 定向 `13/13` 通过，最终本轮门禁仍由父 agent 复核。
 - R5：补充本地 Android 备份恢复和失败策略 smoke，验证书籍/书源 ZIP 恢复以及损坏备份、缺字段和 404 失败时本地数据不被破坏。
 - R5：本地 R5-A/R5-B/备份恢复 Android 合并门禁全部通过；真实外部 WebDAV 仍因缺少凭证保持阻塞。
 - R5：调整验收条件：本地自建 WebDAV 通过即可完成开发退出门禁；发布前仍必须使用正式或主流 WebDAV 服务完成真实验收。

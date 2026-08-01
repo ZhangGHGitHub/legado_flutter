@@ -772,9 +772,9 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
 因此，25.8 仅记录 2026-07-28 的初始探针状态；其后续结果由 25.9 的最终退出记录取代，
 不能单独作为当前 R1-12 判定。
 
-## 25.9 R1-12：Kotlin Room v99 数据库迁移门禁退出（2026-07-29）
+## 25.9 R1-12：Kotlin Room v99 数据库迁移门禁历史记录（当前状态已复核）
 
-本节修订 25.8 的初始探针记录，记录最终实现和退出证据。实现位于
+本节保留 2026-07-29 的阶段性实现与验证记录，不作为当前 R1-12 或 R1 最终退出判定。实现位于
 ` rust/legado_engine/src/db/room_import.rs`，原版 `legado-main/` 仍只读。
 
 实现范围：
@@ -808,8 +808,15 @@ R1 的第一项代码迁移应从 `DatabaseHelper` 的接口化开始，但必�
   `adb shell am force-stop com.legado.legado_flutter`；
   再以 `R1_ROOM_PHASE=verify` 执行同一 Driver 命令。
 
-退出结论：R1-12 数据库迁移门禁通过。非核心表产品业务 port 和真实非空原版数据的补充采集属于后续独立
-工作；本轮没有推进新的 R2-R6 实现，也没有修改正文、目录、分页、章节身份或断行规则。
+历史结论：当时记录为 R1-12 数据库迁移门禁通过；该结论已被当前复核覆盖。非核心表产品业务 port、`readRecord`
+映射和真实非空原版数据的补充采集仍未关闭；本轮没有推进新的 R2-R6 实现，也没有修改正文、目录、分页、章节身份或断行规则。
+
+## 25.10 R1-12：当前复核状态
+
+- R1 已重新打开，R1-12 当前只确认 Kotlin Room v99 → Rust v17 的核心七表业务映射与 23 个 Room 实体表全量原始归档，不能表述为 23 张表全部完成 Rust v17 业务迁移。
+- 本批已补 v99 版本、identity hash 强制门禁与正冲突测试；已记录的 Room 定向 `13/13`、Rust 全量、release、Flutter analyze 和 Flutter 全量 `908`（`3` 项既有条件跳过）通过，但最终本轮门禁仍由父 agent 复核。
+- `readRecord` 仍仅登记 warning；非核心表仍为 archive-only；真实非空 `original_legado.db` 证据仍缺失。非核心业务 port、`readRecord` 映射和真实非空数据补充不在本轮擅自决定范围内。
+- R1-12 复核完成前不推进新的 R2-R6 实现；R2/R6 的历史实现记录不替代当前阶段退出条件。
 
 ## 26. R3-1：阅读会话正文处理与章节文件缓存端口化
 
@@ -2187,7 +2194,7 @@ Flutter 对照结果：
 
 边界结论：书源与 RSS 源模型归属完成；阅读进度模型是 R1 模型归属的最后一批。
 
-## 103. 2026-07-29：R1 阅读进度与模型归属最终退出
+## 103. 2026-07-29：R1 阅读进度与模型归属历史记录（当前状态已复核）
 
 迁移范围：
 
@@ -2212,9 +2219,9 @@ Flutter 对照结果：
   直接业务 service `132` 条；domain/model 纯度与核心具体基础设施违规均为 `0`。
 - `git diff --check` 在提交前最终执行；未修改 `legado-main/`、正文、目录、分页、章节身份或断行规则。
 
-边界结论：R1 的领域模型、数据访问、Room v99 迁移、默认适配器和组合根退出条件均已满足，R1
-最终退出。后续按固定顺序进入 R2；`146` 条 Feature backlog 和全局启动可靠性 P0/P1 任务继续保留，
-不得描述为已完成或以白名单消除。
+历史边界结论：本节记录当时对领域模型、数据访问、默认适配器和组合根的阶段判断；当前 R1 因 Kotlin Room
+v99 → Rust v17 迁移门禁重新打开，不能据本节宣称 R1 最终退出。`146` 条 Feature backlog 和全局启动可靠性
+P0/P1 任务继续保留，不得描述为已完成或以白名单消除。
 
 ## 104. 2026-07-29：R2 RSS 订阅源统一文本网络端口
 
@@ -2499,7 +2506,7 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 边界结论：书源 Cookie 捕获、持久化、请求优先级、响应保存和定域清除均已闭环。R2 剩余实现项为
 规则宿主 `java.startBrowserAwait` 的真实 WebView 能力及其退出门禁。
 
-## 117. 2026-07-29：R2 `java.startBrowserAwait` 可见 WebView 宿主与最终退出
+## 117. 2026-07-29：R2 `java.startBrowserAwait` 可见 WebView 宿主历史记录（当前状态已复核）
 
 - 对照只读原版 `JsExtensions.kt`、`SourceVerificationHelp.kt`、`WebViewActivity.kt` 和
   `WebViewModel.kt`：实现 2/3/4 参数重载、默认 `refetchAfterSuccess=true`、按 UTF-16 计算的
@@ -2528,9 +2535,9 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 架构扫描按设计以非零退出并保持既有 `146` 条 backlog：SharedPreferences `14`、Feature
   业务 service `132`；核心层、domain/model 和展示层直连基础设施均为 `0`，本批无新增违规。
 
-边界结论：R2 的统一书源入口、网络/TLS、Cookie、规则 fixture、JS 兼容、错误恢复、FRB 适配和
-可见 WebView 宿主退出条件均已满足，R2 最终退出。后台 `java.webView*`、文件/压缩及其它第三方
-宿主 API 继续保留在兼容性 backlog，不宣称完整覆盖原版 `JsExtensions`。
+历史边界结论：本节记录当时对 R2 统一书源入口、网络/TLS、Cookie、规则 fixture、JS 兼容、错误恢复、FRB
+适配和可见 WebView 宿主的阶段判断；当前不据本节宣称 R2 最终退出。后台 `java.webView*`、文件/压缩及其它
+第三方宿主 API 继续保留在兼容性 backlog；且 R1-12 复核完成前不得推进新的 R2 实现。
 
 ## 118. 2026-07-29：R3 阅读正文、缓存与远端 ZIP 最终退出
 

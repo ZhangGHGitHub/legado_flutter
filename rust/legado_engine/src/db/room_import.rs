@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 
 /// Current Room database version from the read-only Kotlin baseline.
 pub const KOTLIN_ROOM_CURRENT_VERSION: i32 = 99;
+pub const KOTLIN_ROOM_IDENTITY_HASH: &str = "90980f1d0da029cf3254f354b227a2fe";
 
 const REQUIRED_TABLE_COLUMNS: &[(&str, &[&str])] = &[
     (
@@ -167,6 +168,15 @@ impl LegacyRoomProbe {
     }
 }
 
+pub fn validate_kotlin_room_version(user_version: i32) -> Result<(), DbError> {
+    if user_version != KOTLIN_ROOM_CURRENT_VERSION {
+        return Err(DbError::Message(format!(
+            "不支持的 Kotlin Room 数据库版本: v{user_version}，仅支持 v{KOTLIN_ROOM_CURRENT_VERSION}"
+        )));
+    }
+    Ok(())
+}
+
 /// Read-only probe for an original Kotlin Room database.
 ///
 /// This deliberately does not import or modify data. It only establishes whether
@@ -228,6 +238,13 @@ pub fn extract_legacy_room_connection(conn: &Connection) -> Result<LegacyRoomSna
         return Err(DbError::Message(format!(
             "旧 Room 数据库缺少迁移所需结构: tables={:?}, columns={:?}",
             probe.missing_tables, probe.missing_columns
+        )));
+    }
+    validate_kotlin_room_version(probe.user_version)?;
+    if probe.room_identity_hash.as_deref() != Some(KOTLIN_ROOM_IDENTITY_HASH) {
+        return Err(DbError::Message(format!(
+            "不支持的 Kotlin Room identity hash: {:?}，期望 {KOTLIN_ROOM_IDENTITY_HASH}",
+            probe.room_identity_hash
         )));
     }
 
@@ -837,7 +854,10 @@ mod tests {
         let probe = probe_legacy_room_connection(&conn).unwrap();
 
         assert_eq!(probe.user_version, KOTLIN_ROOM_CURRENT_VERSION);
-        assert_eq!(probe.room_identity_hash.as_deref(), Some("fixture-hash"));
+        assert_eq!(
+            probe.room_identity_hash.as_deref(),
+            Some(KOTLIN_ROOM_IDENTITY_HASH)
+        );
         assert!(probe.has_required_core_shape());
         assert!(!probe.needs_kotlin_room_migration());
     }
@@ -903,7 +923,10 @@ mod tests {
         let snapshot = extract_legacy_room_connection(&conn).unwrap();
 
         assert_eq!(snapshot.user_version, KOTLIN_ROOM_CURRENT_VERSION);
-        assert_eq!(snapshot.room_identity_hash.as_deref(), Some("fixture-hash"));
+        assert_eq!(
+            snapshot.room_identity_hash.as_deref(),
+            Some(KOTLIN_ROOM_IDENTITY_HASH)
+        );
         assert_eq!(snapshot.tables["books"][0]["bookUrl"], "book-a");
         assert_eq!(snapshot.tables["chapters"][0]["url"], "chapter-1");
         assert_eq!(snapshot.tables["chapters"][1]["url"], "chapter-2");
@@ -1108,6 +1131,32 @@ mod tests {
     }
 
     #[test]
+    fn import_rejects_non_v99_room_database() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_minimal_room_schema(&conn, KOTLIN_ROOM_CURRENT_VERSION - 1);
+
+        let error = extract_legacy_room_connection(&conn).unwrap_err();
+
+        assert!(error.to_string().contains("仅支持 v99"));
+    }
+
+    #[test]
+    fn import_rejects_mismatched_room_identity_hash() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_minimal_room_schema(&conn, KOTLIN_ROOM_CURRENT_VERSION);
+        conn.execute(
+            "UPDATE room_master_table SET identity_hash='wrong-hash' WHERE id=42",
+            [],
+        )
+        .unwrap();
+
+        let error = extract_legacy_room_connection(&conn).unwrap_err();
+
+        assert!(error.to_string().contains("identity hash"));
+        assert!(error.to_string().contains(KOTLIN_ROOM_IDENTITY_HASH));
+    }
+
+    #[test]
     fn import_is_transactional_preserves_raw_rows_and_skips_duplicate_merge() {
         let source_path = test_path("source");
         let backup_path = test_path("backup");
@@ -1145,6 +1194,24 @@ mod tests {
         assert_eq!(db.book_count().unwrap(), 2);
         assert_eq!(db.legacy_room_import_count().unwrap(), 1);
 
+        cleanup_test_paths(&source_path, &backup_path);
+    }
+
+    #[test]
+    fn import_reports_positive_conflicts_for_existing_mapped_rows() {
+        let source_path = test_path("conflict-source");
+        let backup_path = test_path("conflict-backup");
+        write_room_fixture(&source_path, false);
+        let db = EngineDb::open_in_memory().unwrap();
+        db.insert_book_json(r#"{"id":"book-1","name":"目标旧书","author":"作者"}"#)
+            .unwrap();
+
+        let report = db
+            .import_legacy_room_database(&source_path, Some(&backup_path), false)
+            .unwrap();
+
+        assert_eq!(report.conflict_counts.get("books"), Some(&1));
+        assert_eq!(db.book_count().unwrap(), 1);
         cleanup_test_paths(&source_path, &backup_path);
     }
 
@@ -1222,7 +1289,7 @@ mod tests {
     fn create_minimal_room_schema(conn: &Connection, user_version: i32) {
         conn.execute_batch(
             "CREATE TABLE room_master_table (id INTEGER PRIMARY KEY, identity_hash TEXT);
-             INSERT INTO room_master_table (id, identity_hash) VALUES (42, 'fixture-hash');
+             INSERT INTO room_master_table (id, identity_hash) VALUES (42, '90980f1d0da029cf3254f354b227a2fe');
              CREATE TABLE books (
                bookUrl TEXT PRIMARY KEY,
                tocUrl TEXT NOT NULL DEFAULT '',
