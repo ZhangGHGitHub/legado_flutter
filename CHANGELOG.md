@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/R1-12 书源规则落库补强：`upsert_source_json` 现在在保留 `rawSourceJson` 的同时，将嵌套 `ruleSearch`、`ruleBookInfo`、`ruleToc`、`ruleContent` 规则按“已有扁平字段优先、嵌套字段回退”写入 Rust v17 已有业务列；`rulePageNext` 支持扁平字段、目录分页和正文分页的确定性回退。新增书源规则扁平列断言、书籍/章节/书源实际落库断言，并明确章节 `wordCount` 仅保留在 Room 原始归档。Rust Room `22/22`、数据库 `24/24`、Rust 全量 `251/251`、Flutter 全量 `912`（`3` 项既有条件跳过）、analyze、架构扫描和 `git diff --check` 均通过；真实原版非空数据库、阅读统计语义、非核心表业务化和文件级备份目标仍未关闭。
 - 架构/R1-12 Dart 报告契约补强：重复导入报告新增 `archiveOnlyTables`、`warnings`、`unmappedColumns` 空集合断言，并验证未知字段可向前兼容且不改变已支持字段。Flutter Room 定向测试 `6/6` 通过。
 - 架构/R1-12 迁移证据继续补强：Rust Room 七张核心表新增逐字段 golden 断言，覆盖书籍、书源规则、章节身份与元数据、书签、`readRecord`、详细阅读记录和替换规则；Flutter 导入报告补充核心表计数、保留行、归档表、告警、未映射列、指纹及重复导入幂等断言。修正 `books.originName` 未进入 Rust v17 业务映射却被报告为已映射的问题，现明确列入 `unmappedColumns`。Rust `21/21`、Flutter Room 定向 `5/5`、Rust 全量 `249/249`、Flutter 全量 `911`（`3` 项既有条件跳过）、analyze、架构扫描和 `git diff --check` 均通过；真实原版非空 Room 数据库、`readRecord` 业务语义、非核心表业务 port 和文件级 SQLite 备份仍未关闭。
 - 架构/R1-12 并行测试补强：Room 成功/失败导入回归同时比较主库、`-wal`、`-shm` 文件状态；Dart 导入报告新增 `counts`、`preservedRows`、`archiveOnlyTables`、`warnings`、`unmappedColumns` 和 fingerprint 全字段解析测试。Rust 定向 `21/21`、Dart 定向 `3/3` 通过。

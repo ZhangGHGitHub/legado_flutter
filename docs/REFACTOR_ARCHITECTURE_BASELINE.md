@@ -10,6 +10,14 @@
 
 补充验证：Flutter 导入报告对重复导入空集合和未知 JSON 字段向前兼容的定向测试为 `6/6`，未改变迁移生产逻辑。
 
+## 180. 2026-08-02：Room 书源规则与目标表落库边界
+
+- `upsert_source_json` 对嵌套 `ruleSearch`、`ruleBookInfo`、`ruleToc`、`ruleContent` 增加扁平业务列回退，扁平字段存在时保持其优先级；`rulePageNext` 按扁平字段、目录分页、正文分页顺序选择。
+- Rust 测试覆盖 Room 规则映射到目标业务列的实际查询，以及 books/book_sources/chapters 的实际落库；章节 `wordCount` 明确只在 `legacy_room_imports.raw_snapshot_json` 保留，不宣称进入 Rust v17 章节模型。
+- 验证记录：Rust Room `22/22`、数据库 `24/24`、Rust 全量 `251/251`、Flutter 全量 `912` 通过，`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。
+
+边界结论：本批不扩展章节、替换规则或书籍附加字段模型；真实原版非空 Room 数据库、`readRecord`/详细阅读记录语义、非核心表业务 port 和文件级 SQLite 备份仍未形成关闭条件。
+
 ## 178. 2026-08-01：浏览器宿主错误边界与 WebView 生命周期
 
 - `serve_source_browser_host`、`probe_source_browser_host` 从公开 `Result<_, String>` 迁移为 `Result<_, AppError>`；取消映射 `Cancelled`，平台不支持映射 `Unsupported`，宿主停止、锁失败和线程失败映射 `Unknown`，均保留原错误文本。

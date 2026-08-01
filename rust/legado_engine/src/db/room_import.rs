@@ -1416,6 +1416,149 @@ mod tests {
     }
 
     #[test]
+    fn mapped_source_rules_round_trip_through_engine_source_json_api() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_minimal_room_schema(&conn, KOTLIN_ROOM_CURRENT_VERSION);
+        conn.execute(
+            r#"INSERT INTO book_sources
+             (bookSourceUrl, bookSourceName, bookSourceGroup, bookSourceType,
+              enabled, customOrder, searchUrl, ruleSearch, ruleBookInfo,
+              ruleToc, ruleContent, ruleExplore)
+             VALUES
+             ('https://round-trip.test', '往返书源', '测试组', 0, 1, 11,
+              'https://round-trip.test/search?q={{key}}',
+              '{"bookList":"$.books","name":"$.name","author":"$.author"}',
+              '{"name":"$.bookName","author":"$.bookAuthor","intro":"$.intro"}',
+              '{"chapterList":"$.chapters","chapterName":"$.title","chapterUrl":"$.url"}',
+              '{"content":"$.content","nextContentUrl":"$.next"}',
+              '{"bookList":"$.exploreBooks","name":"$.exploreName"}')"#,
+            [],
+        )
+        .unwrap();
+
+        let snapshot = extract_legacy_room_connection(&conn).unwrap();
+        let mapping = map_legacy_room_snapshot(&snapshot).unwrap();
+        let mapped_source = mapping.backup_json["sources"][0].clone();
+        let raw_source_json = mapped_source["rawSourceJson"].as_str().unwrap();
+        let raw_source: Value = serde_json::from_str(raw_source_json).unwrap();
+
+        assert_eq!(
+            mapped_source["ruleSearch"],
+            json!({
+                "bookList": "$.books",
+                "name": "$.name",
+                "author": "$.author"
+            })
+        );
+        assert_eq!(
+            raw_source["ruleBookInfo"],
+            json!({
+                "name": "$.bookName",
+                "author": "$.bookAuthor",
+                "intro": "$.intro"
+            })
+        );
+
+        let db = EngineDb::open_in_memory().unwrap();
+        db.upsert_source_json(&mapped_source.to_string()).unwrap();
+
+        let flat_rules: (
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+        ) = db
+            .conn
+            .query_row(
+                "SELECT ruleSearchUrl, ruleSearchList, ruleSearchName,
+                            ruleSearchAuthor, ruleBookName, ruleBookAuthor,
+                            ruleChapterList, ruleChapterName, ruleChapterUrl,
+                            ruleContent
+                     FROM book_sources WHERE bookSourceUrl=?1",
+                ["https://round-trip.test"],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                        row.get(7)?,
+                        row.get(8)?,
+                        row.get(9)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            flat_rules,
+            (
+                "https://round-trip.test/search?q={{key}}".to_string(),
+                "$.books".to_string(),
+                "$.name".to_string(),
+                "$.author".to_string(),
+                "$.bookName".to_string(),
+                "$.bookAuthor".to_string(),
+                "$.chapters".to_string(),
+                "$.title".to_string(),
+                "$.url".to_string(),
+                "$.content".to_string(),
+            )
+        );
+        let page_next: String = db
+            .conn
+            .query_row(
+                "SELECT rulePageNext FROM book_sources WHERE bookSourceUrl=?1",
+                ["https://round-trip.test"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(page_next, "$.next");
+
+        let returned = db.get_sources_json(false).unwrap();
+        assert_eq!(returned.len(), 1);
+        let returned_source: Value = serde_json::from_str(&returned[0]).unwrap();
+
+        assert_eq!(
+            returned_source["bookSourceUrl"],
+            mapped_source["bookSourceUrl"]
+        );
+        assert_eq!(
+            returned_source["bookSourceName"],
+            mapped_source["bookSourceName"]
+        );
+        assert_eq!(
+            returned_source["bookSourceGroup"],
+            mapped_source["bookSourceGroup"]
+        );
+        assert_eq!(
+            returned_source["ruleSearchUrl"],
+            mapped_source["ruleSearchUrl"]
+        );
+        assert_eq!(returned_source["ruleSearch"], mapped_source["ruleSearch"]);
+        assert_eq!(
+            returned_source["ruleBookInfo"],
+            mapped_source["ruleBookInfo"]
+        );
+        assert_eq!(returned_source["ruleToc"], mapped_source["ruleToc"]);
+        assert_eq!(returned_source["ruleContent"], mapped_source["ruleContent"]);
+        assert_eq!(returned_source["ruleExplore"], mapped_source["ruleExplore"]);
+        assert_eq!(returned_source["enabled"], json!(true));
+
+        let mut expected_returned_source = raw_source;
+        expected_returned_source["enabled"] = json!(true);
+        assert_eq!(returned_source, expected_returned_source);
+    }
+
+    #[test]
     fn mapping_warns_and_keeps_bookmark_unbound_when_book_identity_is_ambiguous() {
         let conn = Connection::open_in_memory().unwrap();
         create_minimal_room_schema(&conn, KOTLIN_ROOM_CURRENT_VERSION);

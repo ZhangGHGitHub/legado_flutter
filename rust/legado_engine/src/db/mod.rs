@@ -576,6 +576,45 @@ impl EngineDb {
         let v: Value = serde_json::from_str(source_json)
             .map_err(|e| DbError::Message(format!("书源 JSON 无效: {e}")))?;
         let url = str_field(&v, "bookSourceUrl")?;
+        let rule_search_list = nested_or_flat_str(&v, "ruleSearch", "bookList", "ruleSearchList");
+        let rule_search_name = nested_or_flat_str(&v, "ruleSearch", "name", "ruleSearchName");
+        let rule_search_author = nested_or_flat_str(&v, "ruleSearch", "author", "ruleSearchAuthor");
+        let rule_search_cover_url =
+            nested_or_flat_str(&v, "ruleSearch", "coverUrl", "ruleSearchCoverUrl");
+        let rule_search_kind = nested_or_flat_str(&v, "ruleSearch", "kind", "ruleSearchKind");
+        let rule_search_note = nested_or_flat_str(&v, "ruleSearch", "note", "ruleSearchNote");
+        let rule_book_url_pattern =
+            nested_or_flat_str(&v, "ruleBookInfo", "bookUrl", "ruleBookUrlPattern");
+        let rule_book_name = nested_or_flat_str(&v, "ruleBookInfo", "name", "ruleBookName");
+        let rule_book_author = nested_or_flat_str(&v, "ruleBookInfo", "author", "ruleBookAuthor");
+        let rule_book_cover_url =
+            nested_or_flat_str(&v, "ruleBookInfo", "coverUrl", "ruleBookCoverUrl");
+        let rule_book_kind = nested_or_flat_str(&v, "ruleBookInfo", "kind", "ruleBookKind");
+        let rule_book_note = nested_or_flat_str(&v, "ruleBookInfo", "intro", "ruleBookNote");
+        let rule_book_last_chapter =
+            nested_or_flat_str(&v, "ruleBookInfo", "lastChapter", "ruleBookLastChapter");
+        let rule_chapter_list = nested_or_flat_str(&v, "ruleToc", "chapterList", "ruleChapterList");
+        let rule_chapter_name = nested_or_flat_str(&v, "ruleToc", "chapterName", "ruleChapterName");
+        let rule_chapter_url = nested_or_flat_str(&v, "ruleToc", "chapterUrl", "ruleChapterUrl");
+        let rule_chapter_url_is_full =
+            nested_or_flat_str(&v, "ruleToc", "chapterUrlIsFull", "ruleChapterUrlIsFull");
+        let rule_page_next = {
+            let flat = str_field(&v, "rulePageNext").unwrap_or_default();
+            if !flat.is_empty() {
+                flat
+            } else {
+                let toc = nested_or_flat_str(&v, "ruleToc", "nextTocUrl", "");
+                if !toc.is_empty() {
+                    toc
+                } else {
+                    nested_or_flat_str(&v, "ruleContent", "nextContentUrl", "")
+                }
+            }
+        };
+        let rule_content = nested_or_flat_str(&v, "ruleContent", "content", "ruleContent");
+        let rule_content_remove =
+            nested_or_flat_str(&v, "ruleContent", "removeHtml", "ruleContentRemove");
+        let rule_page_url = nested_or_flat_str(&v, "ruleContent", "nextPageUrl", "rulePageUrl");
         self.conn.execute(
             "INSERT INTO book_sources (
                bookSourceUrl, bookSourceName, enabled, bookSourceType, bookSourceGroup,
@@ -598,28 +637,28 @@ impl EngineDb {
                 str_field(&v, "bookSourceType").unwrap_or_else(|_| "0".into()),
                 str_field(&v, "bookSourceGroup").unwrap_or_default(),
                 str_field(&v, "ruleSearchUrl").unwrap_or_default(),
-                str_field(&v, "ruleSearchList").unwrap_or_default(),
-                str_field(&v, "ruleSearchName").unwrap_or_default(),
-                str_field(&v, "ruleSearchAuthor").unwrap_or_default(),
-                str_field(&v, "ruleSearchCoverUrl").unwrap_or_default(),
-                str_field(&v, "ruleSearchKind").unwrap_or_default(),
-                str_field(&v, "ruleSearchNote").unwrap_or_default(),
-                str_field(&v, "ruleBookUrlPattern").unwrap_or_default(),
-                str_field(&v, "ruleBookName").unwrap_or_default(),
-                str_field(&v, "ruleBookAuthor").unwrap_or_default(),
-                str_field(&v, "ruleBookCoverUrl").unwrap_or_default(),
-                str_field(&v, "ruleBookKind").unwrap_or_default(),
-                str_field(&v, "ruleBookNote").unwrap_or_default(),
-                str_field(&v, "ruleBookLastChapter").unwrap_or_default(),
-                str_field(&v, "ruleChapterList").unwrap_or_default(),
-                str_field(&v, "ruleChapterName").unwrap_or_default(),
-                str_field(&v, "ruleChapterUrl").unwrap_or_default(),
-                str_field(&v, "ruleChapterUrlIsFull").unwrap_or_default(),
-                str_field(&v, "ruleContentUrl").unwrap_or_default(),
-                str_field(&v, "ruleContent").unwrap_or_default(),
-                str_field(&v, "ruleContentRemove").unwrap_or_default(),
-                str_field(&v, "rulePageUrl").unwrap_or_default(),
-                str_field(&v, "rulePageNext").unwrap_or_default(),
+                rule_search_list,
+                rule_search_name,
+                rule_search_author,
+                rule_search_cover_url,
+                rule_search_kind,
+                rule_search_note,
+                rule_book_url_pattern,
+                rule_book_name,
+                rule_book_author,
+                rule_book_cover_url,
+                rule_book_kind,
+                rule_book_note,
+                rule_book_last_chapter,
+                rule_chapter_list,
+                rule_chapter_name,
+                rule_chapter_url,
+                rule_chapter_url_is_full,
+                nested_or_flat_str(&v, "ruleContent", "url", "ruleContentUrl"),
+                rule_content,
+                rule_content_remove,
+                rule_page_url,
+                rule_page_next,
                 str_field(&v, "rawSourceJson").unwrap_or(source_json.to_string()),
             ],
         )?;
@@ -1974,6 +2013,19 @@ fn bool_field(v: &Value, key: &str) -> bool {
         .unwrap_or_else(|| v.get(key).and_then(|x| x.as_i64()).unwrap_or(1) == 1)
 }
 
+fn nested_or_flat_str(v: &Value, outer: &str, inner: &str, flat: &str) -> String {
+    if let Some(value) = v.get(flat).and_then(Value::as_str) {
+        if !value.is_empty() {
+            return value.to_string();
+        }
+    }
+    v.get(outer)
+        .and_then(|value| value.get(inner))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string()
+}
+
 /// 将 DB 行合并为书源 JSON：`rawSourceJson` 保留规则，但 `enabled` 等以列为准。
 fn source_row_to_json(row: &rusqlite::Row<'_>) -> Result<String, rusqlite::Error> {
     let raw: String = row.get(0)?;
@@ -2177,6 +2229,7 @@ mod tests {
                title TEXT NOT NULL,
                \"index\" INTEGER NOT NULL,
                baseUrl TEXT NOT NULL DEFAULT '',
+               wordCount INTEGER NOT NULL DEFAULT 0,
                PRIMARY KEY(url, bookUrl)
              );
              CREATE TABLE replace_rules (
@@ -2233,6 +2286,11 @@ mod tests {
                 durChapterTitle, durChapterIndex, durChapterPos, readConfig)
                VALUES ('book-1', 'toc', 'source', '源', '重复导入书', '作者',
                        '第一章', 0, 7, '{}');
+             INSERT INTO book_sources
+               (bookSourceUrl, bookSourceName, bookSourceGroup, enabled, customOrder)
+               VALUES ('source', '测试书源', '测试组', 1, 3);
+             INSERT INTO chapters (url, bookUrl, title, [index], baseUrl, wordCount)
+               VALUES ('chapter-1', 'book-1', '第一章', 0, 'https://example.test/', 1234);
              PRAGMA user_version = 99;",
         )
         .unwrap();
@@ -2277,6 +2335,91 @@ mod tests {
         assert_eq!(db.export_backup_json().unwrap(), first_database);
         assert_eq!(fs::read(&first_backup_path).unwrap(), first_backup);
         assert_eq!(db.legacy_room_import_count().unwrap(), 1);
+
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn room_import_persists_mapped_rows_and_keeps_archive_only_fields() {
+        let directory = test_directory("persistence-boundary");
+        let source_path = directory.join("room.db");
+        let backup_path = directory.join("backup.json");
+        write_minimal_room_import_source(&source_path);
+        let db = EngineDb::open_in_memory().unwrap();
+
+        let report = db
+            .import_legacy_room_database(
+                &source_path.to_string_lossy(),
+                Some(&backup_path.to_string_lossy()),
+                false,
+            )
+            .unwrap();
+
+        assert_eq!(report.counts.get("books"), Some(&1));
+        assert_eq!(report.counts.get("sources"), Some(&1));
+        assert_eq!(report.counts.get("chapters"), Some(&1));
+
+        let books: Vec<Value> = db
+            .get_books_json()
+            .unwrap()
+            .into_iter()
+            .map(|raw| serde_json::from_str(&raw).unwrap())
+            .collect();
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0]["id"], "book-1");
+        assert_eq!(books[0]["bookSourceUrl"], "source");
+        assert_eq!(books[0]["tocUrl"], "toc");
+        assert_eq!(books[0]["currentPageIndex"], 7);
+
+        let chapters: Vec<Value> = db
+            .get_chapters_json("book-1")
+            .unwrap()
+            .into_iter()
+            .map(|raw| serde_json::from_str(&raw).unwrap())
+            .collect();
+        assert_eq!(chapters.len(), 1);
+        assert_eq!(chapters[0]["bookId"], "book-1");
+        assert_eq!(chapters[0]["title"], "第一章");
+        assert_eq!(chapters[0]["index"], 0);
+        assert_eq!(chapters[0]["url"], "chapter-1");
+        assert!(chapters[0].get("wordCount").is_none());
+
+        let sources: Vec<Value> = db
+            .get_sources_json(false)
+            .unwrap()
+            .into_iter()
+            .map(|raw| serde_json::from_str(&raw).unwrap())
+            .collect();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0]["bookSourceUrl"], "source");
+        assert_eq!(sources[0]["bookSourceName"], "测试书源");
+        assert_eq!(sources[0]["bookSourceGroup"], "测试组");
+        assert_eq!(sources[0]["enabled"], true);
+
+        let raw_snapshot: String = db
+            .conn
+            .query_row(
+                "SELECT raw_snapshot_json FROM legacy_room_imports WHERE fingerprint=?1",
+                params![report.fingerprint],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let raw_snapshot: Value = serde_json::from_str(&raw_snapshot).unwrap();
+        assert_eq!(raw_snapshot["tables"]["chapters"][0]["wordCount"], 1234);
+
+        let mapped_backup: String = db
+            .conn
+            .query_row(
+                "SELECT mapped_backup_json FROM legacy_room_imports WHERE fingerprint=?1",
+                params![report.fingerprint],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let mapped_backup: Value = serde_json::from_str(&mapped_backup).unwrap();
+        assert_eq!(mapped_backup["books"][0]["currentPageIndex"], 7);
+        assert_eq!(mapped_backup["chapters"][0]["url"], "chapter-1");
+        assert!(mapped_backup["chapters"][0].get("wordCount").is_none());
+        assert_eq!(mapped_backup["sources"][0]["bookSourceName"], "测试书源");
 
         fs::remove_dir_all(directory).unwrap();
     }
