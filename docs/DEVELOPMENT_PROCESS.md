@@ -3,7 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-01
 
-2026-08-01 当前追溯记录：本批将 `process_content_for_reading` 同步 FFI 入口映射到 `AppError::Parse`，先执行 Rust 定向 `2/2` 和 Dart FRB mock 契约 `2/2`，再执行 Rust 全量 `228`、release 构建、Flutter 全量 `903`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check`，全部通过。正文处理成功输出、替换、缩进、标题合并和重新分段行为保持不变；本批不迁移 UI/application 调用者，不覆盖浏览器宿主或重复公开 FRB 子模块入口。
+2026-08-01 当前追溯记录：本批将 `process_content_for_reading` 同步 FFI 入口映射到 `AppError::Parse`，先执行 Rust 定向 `2/2` 和 Dart FRB mock 契约 `2/2`，再执行 Rust 全量 `228`、release 构建、Flutter 全量 `903`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check`，全部通过。正文处理成功输出、替换、缩进、标题合并和重新分段行为保持不变；本批不迁移 UI/application 调用者，不覆盖浏览器宿主、重复公开 FRB 子模块入口、WebDAV、平台验收或阶段退出。
+2026-08-01 当前追溯记录：本批将 `search/explore/toc/debug/validate` 子模块实现标记为 `frb(ignore)` 并降为 `pub(crate)`，根 `api/mod.rs` wrapper 作为唯一公开 FRB 契约；重新生成绑定后移除重复子模块导出，必须通过 Rust/Flutter/架构/diff 门禁后才能提交。本批不改变正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、浏览器宿主或 WebDAV。
 2026-08-01 当前追溯记录：本批按“先完成实现、再执行定向门禁、最后记录边界”推进 QuickJS 执行预算和 Rust 数据库初始化契约。`cargo fmt -p legado_engine` 通过；QuickJS 定向 `29/29`、数据库定向 `19/19` 通过。QuickJS 5 秒 interrupt 仅覆盖纯 QuickJS 执行，`java.ajax`、`getStrResponse` 和 WebView 宿主阻塞不在本批保证范围；`init(app_dir)` 固定 `app_dir/legado.db`、事务初始化失败不发布，初始化锁覆盖首次并发调用，并已覆盖同目录幂等/异目录拒绝。FRB 已重新生成，`LegadoDbBridge` 已切换到应用数据目录入口；release DLL 重建后备份服务定向测试 `10/10` 通过，`flutter analyze --no-pub` 无诊断。最终 Rust 全量 `208` 项通过，Flutter 串行全量 `894` 项通过、`3` 项既有条件跳过，架构边界扫描和 `git diff --check` 均通过；本条不把定向证据扩展为 R1-12、R2 或 R6 阶段退出证据。
 2026-08-01 当前追溯记录：本批将 `get_book_info`、`query_dict_rule`、笔记和书签公开 FFI 入口迁移到 Rust `AppError`，保留成功结果与既有错误原文/位置语义；目录/校验内部以 `into_legacy` 维持过渡链。FRB 已重新生成，Rust 全量 `218` 项、Flutter 串行全量 `894` 项通过，`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 均通过。RSS、EPUB、浏览器宿主及其它公开 `Result<T, String>` 入口仍按顺序排队，本条不扩展 R1-12、R2 或 R6 阶段退出证据。
 

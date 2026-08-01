@@ -13,7 +13,7 @@
 | Riverpod/Notifier | 已加入 `flutter_riverpod`；CoreApi 有首个 Notifier 样板，`BookshelfNotifier` 已覆盖加载、失败、刷新和并发旧结果丢弃；业务页面仍使用 Provider | 部分完成 | 逐模块迁移并保持 Widget 回归 |
 | freezed 镜像模型 | `SearchResultItem`、`BookReadConfig`、`BookGroup`、`Chapter` 已引入 Freezed 定义和兼容映射，生成链已通过；Book/BookSource 仍未全部迁移 | 部分完成 | 继续扩展 Book/BookSource，并保持旧 JSON 契约 |
 | CoreApi + Mock/Real | 书架/搜索 CoreApi、MockCoreApi、RealCoreApi 和契约测试已建立；生产组合根通过 ProviderScope 注入 RealCoreApi | 基本完成首批 | 先补书架命令契约，再迁移页面单一事实源 |
-| 统一 AppError | `search/explore/get_book_info/get_toc/get_content/get_content_with_next_chapter/validate_source/debug_search/debug_toc`、`query_dict_rule`、笔记/书签入口、23 个 `db_*` 入口、HTTP 文本/二进制入口、`http_fetch`、网络配置/Cookie/trace、RSS 文章/正文、EPUB、远程 ZIP、`eval_js`、`seed_login_header` 和 `process_content_for_reading` 入口已改为 Rust `AppError`；浏览器宿主和其它公开 FFI 仍有 `Result<T, String>` | 部分完成 | 继续迁移其它公开 FFI 错误和 Dart 统一映射 |
+| 统一 AppError | 根 `api/mod.rs` 的 `search/explore/get_book_info/get_toc/get_content/get_content_with_next_chapter/validate_source/debug_search/debug_toc`、`query_dict_rule`、笔记/书签入口、23 个 `db_*` 入口、HTTP 文本/二进制入口、`http_fetch`、网络配置/Cookie/trace、RSS 文章/正文、EPUB、远程 ZIP、`eval_js`、`seed_login_header` 和 `process_content_for_reading` 入口已改为 Rust `AppError`；子模块重复 FRB 导出已收敛，浏览器宿主和其它公开 FFI 仍有 `Result<T, String>` | 部分完成 | 继续迁移其它公开 FFI 错误和 Dart 统一映射 |
 | QuickJS 5 秒超时 | 已接入统一 QuickJS Runtime interrupt，纯脚本执行预算为 5 秒；脚本和 `jsLib` 输入上限均为 256 KiB；定向测试 29/29、Rust 全量 208 项通过。`java.ajax`、`getStrResponse` 和 WebView 宿主同步阻塞不受本批 interrupt 中断 | 部分完成 | 单独补齐宿主调用超时、取消和资源上限边界，不宣称本批已覆盖宿主阻塞 |
 | 统一 `init(app_dir)` | `init(app_dir)` 固定使用 `app_dir/legado.db`，schema 初始化在单事务中执行，失败不发布；同目录幂等且首次并发调用受初始化锁保护。FRB 已重新生成，生产 `LegadoDbBridge` 传入应用数据目录；数据库定向 19/19、备份桥接 10/10、Flutter 全量 894 项通过且有 3 项既有跳过 | 基本完成首批 | 继续补齐历史 schema 异常版本覆盖并保持旧入口兼容过渡；不宣称 R1-12/R2/R6 阶段退出 |
 | 编码探测 | Rust 使用 `encoding_rs`；本地 TXT 仍有 Dart GBK fallback | 部分完成 | GBK/GB18030 fixture 和 Rust 唯一事实源 |
@@ -54,7 +54,7 @@
 
 - `process_content_for_reading` 的公开失败结果统一为 `AppError::Parse`；成功正文输出、替换规则、缩进、标题合并和重新分段行为保持不变。
 - Rust 定向 `2/2`、Dart FRB mock 契约 `2/2`、Rust 全量 `228`、Flutter 全量 `903` 通过，`3` 项既有条件跳过；release 构建、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。
-- 本批只收敛公开错误契约，不覆盖浏览器宿主、WebView 生命周期、重复公开 FRB 子模块入口或其它公开 `Result<T, String>`；不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
++ 本批只收敛公开错误契约，不覆盖浏览器宿主、WebView 生命周期、重复公开 FRB 子模块入口、WebDAV、平台验收、阶段退出或其它公开 `Result<T, String>`；不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 
 ## 2026-08-01 追溯补充
 
