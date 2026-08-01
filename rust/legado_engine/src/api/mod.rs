@@ -391,7 +391,7 @@ pub fn process_content_for_reading(
     re_segment: bool,
     rules: Vec<ContentReplaceRuleDto>,
     source_rules: Option<ContentProcessingSourceRulesDto>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     crate::content_processing::process_for_reading(crate::content_processing::ReadingProcessInput {
         raw,
         chapter_title,
@@ -406,6 +406,7 @@ pub fn process_content_for_reading(
             content_replace_to: r.content_replace_to,
         }),
     })
+    .map_err(AppError::Parse)
 }
 
 fn to_content_rules(
@@ -742,6 +743,46 @@ mod eval_js_tests {
             error,
             AppError::JsExecution(ref message)
                 if message.contains("JS 执行失败") && message.contains("原始 JS 错误")
+        ));
+    }
+}
+
+#[cfg(test)]
+mod process_content_for_reading_tests {
+    use super::{process_content_for_reading, AppError};
+
+    #[test]
+    fn process_content_for_reading_preserves_successful_result() {
+        let result = process_content_for_reading(
+            "  第一段  \n\n第二段".into(),
+            "标题".into(),
+            "书名".into(),
+            false,
+            false,
+            "  ".into(),
+            false,
+            Vec::new(),
+            None,
+        )
+        .expect("正文处理应保持成功输出");
+
+        assert_eq!(result, "  第一段\n  第二段");
+    }
+
+    #[test]
+    fn process_content_for_reading_exposes_structured_error_type() {
+        fn assert_error_type(_: Result<String, AppError>) {}
+
+        assert_error_type(process_content_for_reading(
+            String::new(),
+            String::new(),
+            String::new(),
+            false,
+            false,
+            String::new(),
+            false,
+            Vec::new(),
+            None,
         ));
     }
 }

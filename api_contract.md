@@ -14,7 +14,9 @@ AppError = Network | Parse | Database | JsExecution | Validation | Unsupported |
 
 当前已迁移的 Rust FFI 入口使用结构化 `AppError`；尚未迁移的入口仍可能返回 `String`，由后续批次逐条收敛。Real adapter 必须集中负责过渡期错误映射，页面不得自行解析错误文本。
 
-已完成的首批错误边界包括书源主链、调试入口、数据库入口、阅读记录/备份入口、书籍详情/字典入口、笔记/书签入口，以及统一 HTTP 文本和二进制请求入口。错误原文保留在对应 `AppError` 变体中；未迁移入口仍按后续批次处理。
+已完成的首批错误边界包括书源主链、调试入口、数据库入口、阅读记录/备份入口、书籍详情/字典入口、笔记/书签入口、正文处理入口，以及统一 HTTP 文本和二进制请求入口。错误原文保留在对应 `AppError` 变体中；未迁移入口仍按后续批次处理。
+
+2026-08-01 补充：`process_content_for_reading` 的公开失败结果已收敛为 `AppError::Parse`。正文处理成功输出、替换/缩进/重新分段行为保持不变；Flutter 生成 API 的错误 codec 使用结构化 `AppError`，Dart 适配层不得退回解析 `String`。
 
 ## 模型
 

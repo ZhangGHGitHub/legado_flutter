@@ -2420,7 +2420,7 @@ fn wire__crate__api__process_content_for_reading_impl(
                     &mut deserializer,
                 );
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::process_content_for_reading(
                     api_raw,
                     api_chapter_title,

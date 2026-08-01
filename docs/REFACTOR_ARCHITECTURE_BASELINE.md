@@ -1,5 +1,14 @@
 # Legado Flutter 架构重构基线
 
+## 176. 2026-08-01：`process_content_for_reading` 公开 FFI 错误边界
+
+- `process_content_for_reading` 从 `Result<String, String>` 改为 `Result<String, AppError>`，底层正文处理错误映射为 `AppError::Parse`；成功输出、替换规则、段落缩进、标题合并和重新分段行为保持不变。
+- FRB 对应错误 codec 已同步为 `AppError`，Rust 增加 `2` 项定向契约，Dart 增加 `2` 项 mock 生成 API 契约；没有向页面或领域层扩散生成类型。
+
+验证记录：Rust `process_content_for_reading` 定向 `2/2`、Dart FRB mock 定向 `2/2`、Rust 全量 `228`、Flutter 全量 `903` 通过，`3` 项既有 Flutter 条件跳过；release 构建、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。
+
+边界结论：本批不覆盖浏览器宿主、重复公开 FRB 子模块入口、其它公开 `Result<T, String>` 或平台验收，不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
 ## 175. 2026-08-01：`seed_login_header` 公开 FFI 错误边界
 
 - `seed_login_header` 从 `Result<(), String>` 改为 `Result<(), AppError>`；source URL/header trim、空值忽略、登录头缓存写入和无 dirty 更新行为保持不变。
