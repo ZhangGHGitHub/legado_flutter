@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -67,6 +68,18 @@ const _roomV99ArchiveOnlyTables = <String>{
   'book_thoughts',
   'servers',
 };
+
+int _legacyRoomImportCount(String rawBackupJson) {
+  final value = jsonDecode(rawBackupJson);
+  if (value is! Map<String, dynamic>) {
+    throw const FormatException('Rust 备份不是数据库 JSON 对象');
+  }
+  final imports = value['legacyRoomImports'];
+  if (imports is! List) {
+    throw const FormatException('Rust 备份缺少 legacyRoomImports 数组');
+  }
+  return imports.length;
+}
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -189,12 +202,35 @@ void main() {
     expect(persistedBooks.any((book) => book.id == 'book-android'), isTrue);
     expect(persistedBooks.any((book) => book.id == 'r1-device-book'), isTrue);
 
+    final duplicateBackupPath = p.join(
+      documents.path,
+      'r1-room-gate-duplicate.json',
+    );
+    final duplicateBackupFile = File(duplicateBackupPath);
+    if (await duplicateBackupFile.exists()) await duplicateBackupFile.delete();
+    final booksBeforeDuplicate = await database.getBooks();
+    final archivesBeforeDuplicate = _legacyRoomImportCount(
+      FrbBackupPort().exportBackup(),
+    );
     final duplicate = importService.importDatabase(
       sourcePath: _sourcePath,
-      backupPath: preImportBackupPath,
+      backupPath: duplicateBackupPath,
       replace: false,
     );
     expect(duplicate.skippedDuplicate, isTrue);
+    expect(duplicate.backupWritten, isFalse);
+    expect(duplicate.backupPath, duplicateBackupPath);
+    expect(await duplicateBackupFile.exists(), isFalse);
+    expect(
+      (await database.getBooks()).length,
+      booksBeforeDuplicate.length,
+      reason: '重复 Room 导入不得增加目标业务书籍数',
+    );
+    expect(
+      _legacyRoomImportCount(FrbBackupPort().exportBackup()),
+      archivesBeforeDuplicate,
+      reason: '重复 Room 导入不得增加 legacyRoomImports 归档数',
+    );
 
     final backupFile = await backupService.backupToLocalFile();
     final backupBytes = await backupFile.readAsBytes();

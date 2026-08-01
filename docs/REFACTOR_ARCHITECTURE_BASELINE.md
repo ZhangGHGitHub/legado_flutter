@@ -1,5 +1,15 @@
 # Legado Flutter 架构重构基线
 
+## 183. 2026-08-02：R1-12 报告失败契约与回滚证据复核
+
+- `LegacyRoomImportReport` 对 Rust 输出的必需字段执行严格缺失/类型校验，损坏报告不再静默归零；`sourceRoomIdentityHash`、`backupPath` 缺失仍兼容，未知字段仍向前兼容。
+- Android smoke 的重复导入路径断言 `backupWritten=false`、请求的重复备份文件不创建，且目标书籍数和 `legacyRoomImports` 归档数不增加；设备不可用时不宣称 smoke 通过。
+- Rust 失败回滚测试解析导入前 JSON 备份，确认原有书籍、原有归档 fingerprint 及 raw snapshot 内容保留。
+
+验证记录：报告定向 `10/10`、Rust Room `24/24`、Rust 全量 `255/255`、Flutter 全量 `912`（`3` 项既有 Flutter 条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。
+
+边界结论：严格报告解析只覆盖当前唯一 FRB Rust 报告来源；真实原版非空数据库、阅读统计产品语义、非核心表 Rust v17 业务 port 和文件级 SQLite 备份目标仍未关闭，R1-12 继续复核中。
+
 ## 182. 2026-08-02：R1-12 导入报告与事务边界复核
 
 - Dart `LegacyRoomImportReport` 补齐 `sourceRoomIdentityHash`、`backupPath`，旧报告 JSON 缺少字段时保持兼容；测试按 Rust 实际输出键 `sources`、`detailedReadRecords`、`replaceRules` 校验，重复导入明确 `backupWritten=false`。

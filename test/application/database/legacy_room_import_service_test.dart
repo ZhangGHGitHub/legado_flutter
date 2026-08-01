@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/ports/legacy_room_import_port.dart';
 import 'package:legado_flutter/domain/remote/legacy_room_import_report.dart';
@@ -227,6 +229,131 @@ void main() {
       expect(report.hasWarnings, isFalse);
     },
   );
+
+  test('accepts omitted optional identity and backup fields', () {
+    final report = LegacyRoomImportReport.fromJson('''{
+      "sourceRoomVersion": 99,
+      "fingerprint": "room-v99-optional-fields",
+      "replaced": false,
+      "skippedDuplicate": false,
+      "backupWritten": false,
+      "counts": {},
+      "conflictCounts": {},
+      "preservedRows": {},
+      "archiveOnlyTables": [],
+      "warnings": [],
+      "unmappedColumns": {}
+    }''');
+
+    expect(report.sourceRoomIdentityHash, isNull);
+    expect(report.backupPath, isNull);
+  });
+
+  test('rejects missing required report fields', () {
+    const requiredFields = [
+      'sourceRoomVersion',
+      'fingerprint',
+      'replaced',
+      'skippedDuplicate',
+      'backupWritten',
+      'counts',
+      'conflictCounts',
+      'preservedRows',
+      'archiveOnlyTables',
+      'warnings',
+      'unmappedColumns',
+    ];
+    const completeReport = <String, Object>{
+      'sourceRoomVersion': 99,
+      'fingerprint': 'room-v99-required-fields',
+      'replaced': false,
+      'skippedDuplicate': false,
+      'backupWritten': false,
+      'counts': <String, int>{},
+      'conflictCounts': <String, int>{},
+      'preservedRows': <String, int>{},
+      'archiveOnlyTables': <String>[],
+      'warnings': <String>[],
+      'unmappedColumns': <String, List<String>>{},
+    };
+
+    for (final field in requiredFields) {
+      final report = Map<String, Object>.from(completeReport)..remove(field);
+      expect(
+        () => LegacyRoomImportReport.fromJson(jsonEncode(report)),
+        throwsFormatException,
+        reason: '字段 $field 缺失时必须失败',
+      );
+    }
+  });
+
+  test('rejects invalid required report field types', () {
+    const validReport = <String, Object>{
+      'sourceRoomVersion': 99,
+      'fingerprint': 'room-v99-invalid-types',
+      'replaced': false,
+      'skippedDuplicate': false,
+      'backupWritten': false,
+      'counts': <String, int>{'books': 1},
+      'conflictCounts': <String, int>{},
+      'preservedRows': <String, int>{},
+      'archiveOnlyTables': <String>[],
+      'warnings': <String>[],
+      'unmappedColumns': <String, List<String>>{},
+    };
+    final invalidValues = <String, Object>{
+      'sourceRoomVersion': '99',
+      'fingerprint': 99,
+      'replaced': 'false',
+      'skippedDuplicate': 0,
+      'backupWritten': 'false',
+      'counts': [],
+      'conflictCounts': {'books': '1'},
+      'preservedRows': {'books': 1.0},
+      'archiveOnlyTables': [1],
+      'warnings': [null],
+      'unmappedColumns': {'books': 'originName'},
+    };
+
+    for (final entry in invalidValues.entries) {
+      final report = Map<String, Object>.from(validReport)
+        ..[entry.key] = entry.value;
+      expect(
+        () => LegacyRoomImportReport.fromJson(jsonEncode(report)),
+        throwsFormatException,
+        reason: '字段 ${entry.key} 类型错误时必须失败',
+      );
+    }
+  });
+
+  test('rejects invalid types for present optional report fields', () {
+    const validReport = <String, Object>{
+      'sourceRoomVersion': 99,
+      'fingerprint': 'room-v99-invalid-optional-types',
+      'replaced': false,
+      'skippedDuplicate': false,
+      'backupWritten': false,
+      'counts': <String, int>{},
+      'conflictCounts': <String, int>{},
+      'preservedRows': <String, int>{},
+      'archiveOnlyTables': <String>[],
+      'warnings': <String>[],
+      'unmappedColumns': <String, List<String>>{},
+    };
+
+    for (final entry in <String, Object>{
+      'sourceRoomIdentityHash': 99,
+      'backupPath': false,
+    }.entries) {
+      final report = Map<String, Object>.from(validReport)
+        ..[entry.key] = entry.value;
+      expect(
+        () => LegacyRoomImportReport.fromJson(jsonEncode(report)),
+        throwsFormatException,
+        reason: '可选字段 ${entry.key} 存在但类型错误时必须失败',
+      );
+    }
+  });
 
   test('imports through the application port and parses the report', () {
     final port = _FakeLegacyRoomImportPort();

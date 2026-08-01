@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-01
 
+2026-08-02 R1-12 报告失败契约与回滚证据复核：`LegacyRoomImportReport` 对 Rust 报告必需字段执行严格缺失/类型校验，保留可选 identity hash/备份路径兼容和未知字段兼容；Android smoke 增加重复导入不写新备份、目标业务数据与归档数量不增加断言；Rust 失败回滚测试解析导入前备份并确认原有书籍、原有归档和归档内容均保留。owner 门禁：Flutter 报告定向 `10/10`、Rust Room `24/24`、Rust 全量 `255/255`、Flutter 全量 `912`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。Android smoke 因设备不可用未执行；R1-12 继续不退出，也不推进新的 R2-R6 实现。
+
 2026-08-02 R1-12 导入报告与事务边界复核：在前一批 owner 门禁基础上，先完成 Flutter 报告定向 `6/6`、Rust Room `24/24`、数据库 `26/26`，再完成 Rust 全量 `255/255`、Flutter 全量 `912`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check`。报告契约补齐 Room identity hash/备份路径，统一 Rust 实际计数键，并明确重复导入不重复写入备份；Android smoke 增加 23 表精确集合断言；Rust 增加 WAL/SHM 字节只读、`replace=true` 成功替换/旧状态备份和详细记录阈值回归。Android smoke 因 `emulator-5558`/`5559` 不可连接未执行，真实原版非空数据库仍缺失；R1-12 继续不退出，也不推进新的 R2-R6 实现。
 
 2026-08-02 R1-12 owner 门禁复核：先执行 Rust Room 定向测试 `23/23` 和数据库定向测试 `24/24`，再执行 Rust 全量 `252/252`、Flutter 全量 `912`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check`，全部通过。迁移边界同步明确为：`readRecord` 采用 archive-only 保存并纳入原始计数，继续不写入 Rust 阅读统计业务表；`detailedReadRecord` 原始行及 Room 自增 `id` 保留在 `raw_snapshot_json`，业务映射按书名聚合 sessions 且不保留聚合 session 的 Room 自增 `id`；`replace_rules.sortOrder/scope/group` 仅进入原始归档，不进入当前 Rust v17 替换规则业务映射。该批未修改正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。由于真实原版非空数据库和相关产品语义仍未完全闭合，R1-12 及 R1 继续不退出，也不推进新的 R2-R6 实现。

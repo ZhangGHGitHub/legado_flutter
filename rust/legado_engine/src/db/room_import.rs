@@ -2007,6 +2007,18 @@ mod tests {
             .unwrap();
         assert_eq!(existing_archive, "{}");
         assert!(std::fs::metadata(&backup_path).is_ok());
+        let before_failure: Value =
+            serde_json::from_slice(&std::fs::read(&backup_path).unwrap()).unwrap();
+        assert_eq!(before_failure["books"][0]["id"], "existing");
+        assert_eq!(before_failure["books"][0]["name"], "原有书籍");
+        assert_eq!(
+            before_failure["legacyRoomImports"][0]["fingerprint"],
+            "existing-fingerprint"
+        );
+        assert_eq!(
+            before_failure["legacyRoomImports"][0]["rawSnapshotJson"],
+            "{}"
+        );
 
         cleanup_test_paths(&source_path, &backup_path);
     }
