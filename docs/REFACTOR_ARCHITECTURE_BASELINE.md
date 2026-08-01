@@ -8,6 +8,8 @@
 
 边界结论：当前设备 `emulator-5558` 不可连接，真实原版非空 Room v99 数据库证据仍缺失；`readRecord` 统计语义、详细阅读记录聚合、非核心表业务 port 和文件级 SQLite 备份仍未形成产品契约，R1-12 继续复核中，不推进新的 R2-R6 实现。
 
+补充验证：Flutter 导入报告对重复导入空集合和未知 JSON 字段向前兼容的定向测试为 `6/6`，未改变迁移生产逻辑。
+
 ## 178. 2026-08-01：浏览器宿主错误边界与 WebView 生命周期
 
 - `serve_source_browser_host`、`probe_source_browser_host` 从公开 `Result<_, String>` 迁移为 `Result<_, AppError>`；取消映射 `Cancelled`，平台不支持映射 `Unsupported`，宿主停止、锁失败和线程失败映射 `Unknown`，均保留原错误文本。

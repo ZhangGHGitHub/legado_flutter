@@ -14,6 +14,7 @@
 > **统一设计约束：** [LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md](./LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md) 已于 2026-08-01 固化为目标架构和后续迁移的硬约束。当前 Provider、手写模型、字符串错误和宿主级 QuickJS 超时缺口均视为待迁移项；在对应门禁通过前，不得宣称严格设计一致。
 
 2026-08-02 R1-12 追溯补充：Rust Room 七张核心表已补齐逐字段 golden fixture，Flutter 导入报告已覆盖核心表计数、保留行、归档表、告警、未映射列、指纹和重复导入幂等。`books.originName` 现明确列入未映射字段，因为当前 Rust v17 业务映射只在原始快照保留该列。验证：Rust Room `21/21`、Flutter Room `5/5`、Rust 全量 `249/249`、Flutter 全量 `911`（`3` 项既有条件跳过）、analyze、架构扫描和 `git diff --check` 通过。真实原版非空数据库仍缺失，`readRecord`/详细阅读记录语义、非核心表业务化和文件级备份目标仍需后续决策；本条不关闭 R1-12，不推进新的 R2-R6 实现。
+2026-08-02 R1-12 报告契约补充：重复导入报告明确归档表、告警、未映射列为空，未知字段向前兼容；Flutter Room 定向 `6/6` 通过。本条不改变阶段退出条件。
 
 ### 0.0.1 设计稿收敛顺序
 

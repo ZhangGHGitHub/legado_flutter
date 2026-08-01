@@ -177,6 +177,40 @@ void main() {
     expect(report.counts, isEmpty);
     expect(report.conflictCounts, isEmpty);
     expect(report.preservedRows, isEmpty);
+    expect(report.archiveOnlyTables, isEmpty);
+    expect(report.warnings, isEmpty);
+    expect(report.unmappedColumns, isEmpty);
+  });
+
+  test('ignores unknown report fields without changing the supported contract', () {
+    final report = LegacyRoomImportReport.fromJson('''{
+      "sourceRoomVersion": 99,
+      "fingerprint": "room-v99-unknown-field",
+      "replaced": false,
+      "skippedDuplicate": false,
+      "backupWritten": true,
+      "counts": {"books": 1},
+      "conflictCounts": {},
+      "preservedRows": {"books": 1},
+      "archiveOnlyTables": [],
+      "warnings": [],
+      "unmappedColumns": {},
+      "futureReportField": {"unsupported": true},
+      "unknownCollection": ["ignored"]
+    }''');
+
+    expect(report.sourceRoomVersion, 99);
+    expect(report.fingerprint, 'room-v99-unknown-field');
+    expect(report.replaced, isFalse);
+    expect(report.skippedDuplicate, isFalse);
+    expect(report.backupWritten, isTrue);
+    expect(report.counts, {'books': 1});
+    expect(report.conflictCounts, isEmpty);
+    expect(report.preservedRows, {'books': 1});
+    expect(report.archiveOnlyTables, isEmpty);
+    expect(report.warnings, isEmpty);
+    expect(report.unmappedColumns, isEmpty);
+    expect(report.hasWarnings, isFalse);
   });
 
   test('imports through the application port and parses the report', () {
