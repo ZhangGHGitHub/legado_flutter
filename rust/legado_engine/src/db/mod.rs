@@ -2661,4 +2661,94 @@ mod tests {
         assert!(rows[0].contains("\"chapterPos\":99"));
         assert!(rows[0].contains("\"content\":\"书签备注\""));
     }
+
+    #[test]
+    fn import_reports_conflicts_for_each_mapped_identity() {
+        let db = EngineDb::open_in_memory().unwrap();
+        let backup = json!({
+            "books": [{
+                "id": "book-1",
+                "name": "冲突书",
+                "author": "作者",
+                "bookSourceUrl": "source-1"
+            }],
+            "sources": [{
+                "bookSourceUrl": "source-1",
+                "bookSourceName": "冲突书源"
+            }],
+            "chapters": [{
+                "id": "chapter-1",
+                "bookId": "book-1",
+                "title": "第一章",
+                "index": 0,
+                "url": "chapter-1"
+            }],
+            "replaceRules": [{
+                "id": "rule-1",
+                "name": "规则",
+                "pattern": "旧",
+                "replacement": "新",
+                "isEnabled": true,
+                "isRegex": false
+            }],
+            "bookmarks": [{
+                "time": 100,
+                "bookId": "book-1",
+                "bookName": "冲突书",
+                "bookAuthor": "作者",
+                "chapterIndex": 0,
+                "chapterPos": 10,
+                "chapterName": "第一章",
+                "bookText": "片段",
+                "content": "备注"
+            }],
+            "readingRecords": [{
+                "bookId": "book-1",
+                "bookName": "冲突书",
+                "date": "2026-08-01",
+                "readChars": 10,
+                "durationSeconds": 2
+            }],
+            "detailedReadRecords": [{
+                "bookName": "冲突书",
+                "sessions": [{
+                    "startTime": 1_000_000,
+                    "endTime": 1_120_001,
+                    "readIteration": 1
+                }]
+            }]
+        });
+
+        // 先导入一遍，建立与待导入数据相同的五类主键。
+        db.restore_backup_json(&backup.to_string(), true).unwrap();
+        let conflicts = import_conflict_counts(&db.conn, &backup).unwrap();
+        assert_eq!(conflicts.get("books"), Some(&1));
+        assert_eq!(conflicts.get("sources"), Some(&1));
+        assert_eq!(conflicts.get("chapters"), Some(&1));
+        assert_eq!(conflicts.get("replaceRules"), Some(&1));
+        assert_eq!(conflicts.get("bookmarks"), Some(&1));
+        assert!(!conflicts.contains_key("readingRecords"));
+        assert!(!conflicts.contains_key("detailedReadRecords"));
+
+        // 再次恢复必须成功，且每个映射实体仍只有一行。
+        db.restore_backup_json(&backup.to_string(), false).unwrap();
+        for (table, expected) in [
+            ("books", 1_i64),
+            ("book_sources", 1_i64),
+            ("chapters", 1_i64),
+            ("replace_rules", 1_i64),
+            ("bookmarks", 1_i64),
+            ("reading_records", 1_i64),
+            // 详细阅读会话不参与主键冲突统计，重复恢复按现有语义追加。
+            ("detailed_read_records", 2_i64),
+        ] {
+            let actual: i64 = db
+                .conn
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            assert_eq!(actual, expected, "unexpected row count in {table}");
+        }
+    }
 }

@@ -1198,6 +1198,53 @@ mod tests {
     }
 
     #[test]
+    fn import_requires_backup_path_for_first_import_without_writing_target() {
+        let source_path = test_path("missing-backup-source");
+        let backup_path = test_path("missing-backup");
+        write_room_fixture(&source_path, false);
+        let db = EngineDb::open_in_memory().unwrap();
+
+        let error = db
+            .import_legacy_room_database(&source_path, None, false)
+            .unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("首次 Room 导入必须提供导入前备份路径"));
+        assert_eq!(db.book_count().unwrap(), 0);
+        assert_eq!(db.legacy_room_import_count().unwrap(), 0);
+        assert!(!std::fs::metadata(&backup_path).is_ok());
+        assert!(!std::fs::metadata(format!("{backup_path}.tmp-{}", std::process::id())).is_ok());
+
+        cleanup_test_paths(&source_path, &backup_path);
+    }
+
+    #[test]
+    fn import_refuses_existing_backup_path_without_writing_target() {
+        let source_path = test_path("existing-backup-source");
+        let backup_path = test_path("existing-backup");
+        let original_backup = "existing-backup-content";
+        write_room_fixture(&source_path, false);
+        std::fs::write(&backup_path, original_backup).unwrap();
+        let db = EngineDb::open_in_memory().unwrap();
+
+        let error = db
+            .import_legacy_room_database(&source_path, Some(&backup_path), false)
+            .unwrap_err();
+
+        assert!(error.to_string().contains("导入前备份路径已存在"));
+        assert_eq!(db.book_count().unwrap(), 0);
+        assert_eq!(db.legacy_room_import_count().unwrap(), 0);
+        assert_eq!(
+            std::fs::read_to_string(&backup_path).unwrap(),
+            original_backup
+        );
+        assert!(!std::fs::metadata(format!("{backup_path}.tmp-{}", std::process::id())).is_ok());
+
+        cleanup_test_paths(&source_path, &backup_path);
+    }
+
+    #[test]
     fn import_reports_positive_conflicts_for_existing_mapped_rows() {
         let source_path = test_path("conflict-source");
         let backup_path = test_path("conflict-backup");
