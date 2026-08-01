@@ -961,9 +961,11 @@ mod tests {
         }
         let source_before = std::fs::read(&source_path).unwrap();
         let source_size_before = std::fs::metadata(&source_path).unwrap().len();
+        let sidecars_before = source_sidecar_states(&source_path);
 
         let snapshot_error = extract_legacy_room_database(&source_path).unwrap_err();
         assert!(snapshot_error.to_string().contains("非法 UTF-8"));
+        assert_eq!(source_sidecar_states(&source_path), sidecars_before);
 
         let db = EngineDb::open_in_memory().unwrap();
         let import_error = db
@@ -986,6 +988,7 @@ mod tests {
             source_size_before
         );
         assert_eq!(std::fs::read(&source_path).unwrap(), source_before);
+        assert_eq!(source_sidecar_states(&source_path), sidecars_before);
 
         cleanup_test_paths(&source_path, &backup_path);
     }
@@ -1380,6 +1383,7 @@ mod tests {
         write_room_fixture(&source_path, false);
         let source_before = std::fs::read(&source_path).unwrap();
         let source_size_before = std::fs::metadata(&source_path).unwrap().len();
+        let sidecars_before = source_sidecar_states(&source_path);
         let db = EngineDb::open_in_memory().unwrap();
         db.insert_book_json(r#"{"id":"existing","name":"保留书","author":"作者"}"#)
             .unwrap();
@@ -1400,6 +1404,7 @@ mod tests {
             source_size_before
         );
         assert_eq!(std::fs::read(&source_path).unwrap(), source_before);
+        assert_eq!(source_sidecar_states(&source_path), sidecars_before);
 
         let raw_snapshot: String = db
             .conn
@@ -1422,6 +1427,7 @@ mod tests {
             source_size_before
         );
         assert_eq!(std::fs::read(&source_path).unwrap(), source_before);
+        assert_eq!(source_sidecar_states(&source_path), sidecars_before);
 
         cleanup_test_paths(&source_path, &backup_path);
     }
@@ -1727,6 +1733,27 @@ mod tests {
     fn cleanup_test_paths(source_path: &str, backup_path: &str) {
         let _ = std::fs::remove_file(source_path);
         let _ = std::fs::remove_file(backup_path);
+    }
+
+    fn source_sidecar_states(source_path: &str) -> [(String, Option<Vec<u8>>); 2] {
+        [
+            (
+                format!("{source_path}-wal"),
+                sidecar_state(&format!("{source_path}-wal")),
+            ),
+            (
+                format!("{source_path}-shm"),
+                sidecar_state(&format!("{source_path}-shm")),
+            ),
+        ]
+    }
+
+    fn sidecar_state(path: &str) -> Option<Vec<u8>> {
+        match std::fs::read(path) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => panic!("failed to read SQLite sidecar {path}: {error}"),
+        }
     }
 
     fn create_minimal_room_schema(conn: &Connection, user_version: i32) {
