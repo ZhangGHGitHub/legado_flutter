@@ -1,22 +1,22 @@
-/// 云端阅读进度，对齐原版 `BookProgress` 的持久化字段。
-class BookProgress {
-  final String name;
-  final String author;
-  final int durChapterIndex;
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-  /// UTF-16 章内位置，与原版和阅读位置迁移契约一致。
-  final int durChapterPos;
-  final int durChapterTime;
-  final String? durChapterTitle;
+part 'book_progress.freezed.dart';
 
-  const BookProgress({
-    required this.name,
-    required this.author,
-    required this.durChapterIndex,
-    required this.durChapterPos,
-    required this.durChapterTime,
-    this.durChapterTitle,
-  });
+/// 云端阅读进度，对齐原版 BookProgress 的持久化字段。
+@freezed
+class BookProgress with _$BookProgress {
+  const BookProgress._();
+
+  const factory BookProgress({
+    required String name,
+    required String author,
+    required int durChapterIndex,
+
+    /// UTF-16 章内位置，与原版和阅读位置迁移契约一致。
+    required int durChapterPos,
+    required int durChapterTime,
+    String? durChapterTitle,
+  }) = _BookProgress;
 
   factory BookProgress.fromJson(Map<String, dynamic> json) {
     return BookProgress(

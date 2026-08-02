@@ -1,42 +1,21 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'txt_toc_rule.freezed.dart';
+
 /// TXT 目录解析规则领域实体，对齐 Legado `TxtTocRule`。
-class TxtTocRule {
-  const TxtTocRule({
-    required this.id,
-    required this.name,
-    required this.rule,
-    this.replacement = '',
-    this.example,
-    this.serialNumber = -1,
-    this.enable = true,
-  });
+@Freezed(equal: false, fromJson: false, toJson: false)
+class TxtTocRule with _$TxtTocRule {
+  const TxtTocRule._();
 
-  final int id;
-  final String name;
-  final String rule;
-  final String replacement;
-  final String? example;
-  final int serialNumber;
-  final bool enable;
-
-  TxtTocRule copyWith({
-    int? id,
-    String? name,
-    String? rule,
-    String? replacement,
+  const factory TxtTocRule({
+    required int id,
+    required String name,
+    required String rule,
+    @Default('') String replacement,
     String? example,
-    int? serialNumber,
-    bool? enable,
-  }) {
-    return TxtTocRule(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      rule: rule ?? this.rule,
-      replacement: replacement ?? this.replacement,
-      example: example ?? this.example,
-      serialNumber: serialNumber ?? this.serialNumber,
-      enable: enable ?? this.enable,
-    );
-  }
+    @Default(-1) int serialNumber,
+    @Default(true) bool enable,
+  }) = _TxtTocRule;
 
   factory TxtTocRule.fromJson(Map<String, dynamic> json, {int fallbackId = 0}) {
     return TxtTocRule(

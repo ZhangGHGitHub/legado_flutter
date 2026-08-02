@@ -1,4 +1,8 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
 import '../diagnostics/diagnostic_record.dart';
+
+part 'crash_report.freezed.dart';
 
 enum CrashOrigin {
   flutterFramework('flutter_framework'),
@@ -35,24 +39,45 @@ class CrashRuntimeMetadata {
   final String platformVersion;
   final String appVersion;
   final String engineVersion;
+
+  CrashRuntimeMetadata copyWith({
+    String? platform,
+    String? platformVersion,
+    String? appVersion,
+    String? engineVersion,
+  }) => CrashRuntimeMetadata(
+    platform: platform ?? this.platform,
+    platformVersion: platformVersion ?? this.platformVersion,
+    appVersion: appVersion ?? this.appVersion,
+    engineVersion: engineVersion ?? this.engineVersion,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CrashRuntimeMetadata &&
+          other.platform == platform &&
+          other.platformVersion == platformVersion &&
+          other.appVersion == appVersion &&
+          other.engineVersion == engineVersion;
+
+  @override
+  int get hashCode =>
+      Object.hash(platform, platformVersion, appVersion, engineVersion);
 }
 
-class CrashReport {
-  const CrashReport({
-    required this.occurredAt,
-    required this.origin,
-    required this.startupStage,
-    required this.error,
-    required this.stackTrace,
-    required this.metadata,
-  });
+@freezed
+class CrashReport with _$CrashReport {
+  const factory CrashReport({
+    required DateTime occurredAt,
+    required CrashOrigin origin,
+    required String startupStage,
+    required String error,
+    required String stackTrace,
+    required CrashRuntimeMetadata metadata,
+  }) = _CrashReport;
 
-  final DateTime occurredAt;
-  final CrashOrigin origin;
-  final String startupStage;
-  final String error;
-  final String stackTrace;
-  final CrashRuntimeMetadata metadata;
+  const CrashReport._();
 
   String get displayText => DiagnosticRecord(
     time: occurredAt,

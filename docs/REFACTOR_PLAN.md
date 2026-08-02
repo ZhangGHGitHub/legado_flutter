@@ -41,6 +41,7 @@
 2026-08-02 R1-12 当前 owner 汇总：Room 定向 `29/29`、Rust 全量 `262/262`、Flutter 导入/备份定向 `17/17`、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 全部通过；真实 Android 非空数据库证据已由 `emulator-5556` 完成。根据已确认的产品决策，六张核心表导入后直接可用，`readRecord` 和非核心表无损 archive-only 保存，导入前备份沿用 JSON 逻辑备份。R1-12 按该边界完成，不将 archive-only 表宣称为 Rust v17 业务表；后续可按计划进入下一阶段。
 
 2026-08-02 Phase 3/5 并行架构批次：ReadStyleConfig、BookmarkSnapshot、NoteSnapshot 改为 Freezed 值对象，保持现有 JSON 默认值、构造参数、copyWith 和主题导入行为；init_engine 公开 FFI 错误边界统一为 AppError，保持调用签名与错误原文；QuickJS java.ajax 宿主请求增加独立客户端、5 秒 deadline、future 取消和连接回收，并以独立 Tokio Runtime 的慢响应 fixture 验证 Windows 连接关闭。验证：Rust 全量 268/268、Flutter 全量 934（3 项既有条件跳过）、flutter analyze --no-pub、架构边界检查和 git diff --check 通过。未覆盖 getStrResponse、WebView 宿主同步阻塞、业务页面整体 Riverpod 迁移、编码统一及暂停中的 Web/WASM/PWA、真实 Android TTS；不改变 Room 导入、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+2026-08-02 Phase 3 领域模型并行收敛：`WebApiStatus`、`WebDavEntry`、`BookProgress`、`ThemeTypography`、`RssArticle`、`RssSource`、`DictRule`、`TxtTocRule`、`CrashReport` 和 `DiagnosticRecord` 改为 Freezed 值对象，保留原有构造参数、JSON 字段、默认值、兼容解析、规则身份和 `copyWith`；阅读进度继续保持 UTF-16 章内位置比较语义。`CrashRuntimeMetadata`、`DiagnosticRuntimeInfo` 因必须保留 `const ...unavailable()` 构造，继续使用手写不可变值对象并补齐值语义。owner 合并定向测试 `23/23`、Flutter 全量 `955`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过；`build_runner --delete-conflicting-outputs` 成功。未改变 Rust/R1-12 数据库迁移、正文、目录、分页、章节身份、第 3 条断行规则、真实 Android TTS 或暂停中的 Web/WASM/PWA。
 
 ### 0.0.1 设计稿收敛顺序
 

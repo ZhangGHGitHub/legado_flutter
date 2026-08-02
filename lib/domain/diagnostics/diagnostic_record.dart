@@ -1,3 +1,7 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'diagnostic_record.freezed.dart';
+
 enum DiagnosticSeverity {
   info('I'),
   warning('W'),
@@ -34,27 +38,72 @@ class DiagnosticRuntimeInfo {
   final String platformVersion;
   final String appVersion;
   final String engineVersion;
+
+  DiagnosticRuntimeInfo copyWith({
+    String? platform,
+    String? platformVersion,
+    String? appVersion,
+    String? engineVersion,
+  }) => DiagnosticRuntimeInfo(
+    platform: platform ?? this.platform,
+    platformVersion: platformVersion ?? this.platformVersion,
+    appVersion: appVersion ?? this.appVersion,
+    engineVersion: engineVersion ?? this.engineVersion,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DiagnosticRuntimeInfo &&
+          other.platform == platform &&
+          other.platformVersion == platformVersion &&
+          other.appVersion == appVersion &&
+          other.engineVersion == engineVersion;
+
+  @override
+  int get hashCode =>
+      Object.hash(platform, platformVersion, appVersion, engineVersion);
 }
 
-class DiagnosticRecord {
-  DiagnosticRecord({
-    required this.time,
-    required this.severity,
+@freezed
+class DiagnosticRecord with _$DiagnosticRecord {
+  const DiagnosticRecord._();
+
+  factory DiagnosticRecord({
+    required DateTime time,
+    required DiagnosticSeverity severity,
     required String message,
-    this.category = 'app',
-    this.source,
+    String category = 'app',
+    String? source,
     Map<String, String> metadata = const {},
     String? error,
     String? stackTrace,
-    this.runtime = const DiagnosticRuntimeInfo.unavailable(),
-  }) : message = sanitize(message, maxLength: maxMessageLength),
-       error = error == null
-           ? null
-           : sanitize(error, maxLength: maxErrorLength),
-       stackTrace = stackTrace == null
-           ? null
-           : sanitize(stackTrace, maxLength: maxStackLength),
-       metadata = _sanitizeMetadata(metadata);
+    DiagnosticRuntimeInfo runtime = const DiagnosticRuntimeInfo.unavailable(),
+  }) => DiagnosticRecord._create(
+    time: time,
+    severity: severity,
+    message: sanitize(message, maxLength: maxMessageLength),
+    category: category,
+    source: source,
+    metadata: _sanitizeMetadata(metadata),
+    error: error == null ? null : sanitize(error, maxLength: maxErrorLength),
+    stackTrace: stackTrace == null
+        ? null
+        : sanitize(stackTrace, maxLength: maxStackLength),
+    runtime: runtime,
+  );
+
+  factory DiagnosticRecord._create({
+    required DateTime time,
+    required DiagnosticSeverity severity,
+    required String message,
+    required String category,
+    String? source,
+    required Map<String, String> metadata,
+    String? error,
+    String? stackTrace,
+    required DiagnosticRuntimeInfo runtime,
+  }) = _DiagnosticRecord;
 
   static const maxEntries = 100;
   static const maxPersistedBytes = 64 * 1024;
@@ -63,16 +112,6 @@ class DiagnosticRecord {
   static const maxErrorLength = 4096;
   static const maxStackLength = 32 * 1024;
   static const maxMetadataValueLength = 512;
-
-  final DateTime time;
-  final DiagnosticSeverity severity;
-  final String category;
-  final String? source;
-  final String message;
-  final Map<String, String> metadata;
-  final String? error;
-  final String? stackTrace;
-  final DiagnosticRuntimeInfo runtime;
 
   String get line {
     final t =

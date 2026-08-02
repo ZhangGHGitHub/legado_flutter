@@ -1,18 +1,16 @@
-/// Domain representation of a WebDAV directory entry.
-class WebDavEntry {
-  const WebDavEntry({
-    required this.name,
-    required this.path,
-    required this.isDir,
-    required this.size,
-    required this.lastModified,
-    this.etag,
-  });
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-  final String name;
-  final String path;
-  final bool isDir;
-  final int size;
-  final int lastModified;
-  final String? etag;
+part 'webdav_entry.freezed.dart';
+
+/// Domain representation of a WebDAV directory entry.
+@freezed
+class WebDavEntry with _$WebDavEntry {
+  const factory WebDavEntry({
+    required String name,
+    required String path,
+    required bool isDir,
+    required int size,
+    required int lastModified,
+    String? etag,
+  }) = _WebDavEntry;
 }

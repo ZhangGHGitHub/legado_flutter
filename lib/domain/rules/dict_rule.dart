@@ -1,34 +1,19 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'dict_rule.freezed.dart';
+
 /// 字典规则领域实体，对齐 Legado `DictRule`。
-class DictRule {
-  const DictRule({
-    required this.name,
-    this.urlRule = '',
-    this.showRule = '',
-    this.enabled = true,
-    this.sortNumber = 0,
-  });
+@Freezed(equal: false, fromJson: false, toJson: false)
+class DictRule with _$DictRule {
+  const DictRule._();
 
-  final String name;
-  final String urlRule;
-  final String showRule;
-  final bool enabled;
-  final int sortNumber;
-
-  DictRule copyWith({
-    String? name,
-    String? urlRule,
-    String? showRule,
-    bool? enabled,
-    int? sortNumber,
-  }) {
-    return DictRule(
-      name: name ?? this.name,
-      urlRule: urlRule ?? this.urlRule,
-      showRule: showRule ?? this.showRule,
-      enabled: enabled ?? this.enabled,
-      sortNumber: sortNumber ?? this.sortNumber,
-    );
-  }
+  const factory DictRule({
+    required String name,
+    @Default('') String urlRule,
+    @Default('') String showRule,
+    @Default(true) bool enabled,
+    @Default(0) int sortNumber,
+  }) = _DictRule;
 
   factory DictRule.fromJson(Map<String, dynamic> json) => DictRule(
     name: json['name'] as String? ?? '',

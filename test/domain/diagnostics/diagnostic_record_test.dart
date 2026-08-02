@@ -2,6 +2,43 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/domain/diagnostics/diagnostic_record.dart';
 
 void main() {
+  test('keeps runtime defaults and provides value semantics', () {
+    const runtime = DiagnosticRuntimeInfo.unavailable();
+
+    expect(runtime.platform, 'unknown');
+    expect(runtime.platformVersion, 'unknown');
+    expect(runtime.appVersion, 'unknown');
+    expect(runtime.engineVersion, 'unavailable');
+    expect(
+      runtime.copyWith(engineVersion: '0.5.6'),
+      const DiagnosticRuntimeInfo(
+        platform: 'unknown',
+        platformVersion: 'unknown',
+        appVersion: 'unknown',
+        engineVersion: '0.5.6',
+      ),
+    );
+  });
+
+  test('provides value semantics without changing sanitized fields', () {
+    final record = DiagnosticRecord(
+      time: DateTime(2026, 7, 30, 12, 34, 56),
+      severity: DiagnosticSeverity.warning,
+      message: 'token=secret',
+      metadata: const {'key': 'value'},
+    );
+
+    expect(record.message, 'token=<redacted>');
+    expect(
+      record.copyWith(severity: DiagnosticSeverity.error),
+      record.copyWith(severity: DiagnosticSeverity.error),
+    );
+    expect(
+      record.copyWith(severity: DiagnosticSeverity.error).message,
+      'token=<redacted>',
+    );
+  });
+
   test('sanitizes sensitive values and keeps UTF-16 truncation safe', () {
     final value = DiagnosticRecord.sanitize(
       'token=abc123 password:secret Authorization: Bearer bearer-secret',

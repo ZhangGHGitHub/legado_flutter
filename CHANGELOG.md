@@ -5,6 +5,7 @@ All notable changes to this project are recorded in this file.
 ## [Unreleased]
 
 - 架构/Phase 3/5 并行批次：ReadStyleConfig、BookmarkSnapshot、NoteSnapshot 改为 Freezed 值对象，保留 JSON 默认值、构造参数、copyWith 和主题导入行为；init_engine 公开 FFI 错误统一为 AppError，FRB 生成绑定同步更新；QuickJS java.ajax 使用独立客户端和 5 秒 deadline，超时取消请求 future 并回收连接。新增模型、FFI 和 Windows 慢响应连接回归；Rust 全量 268/268、Flutter 全量 934（3 项既有条件跳过）、flutter analyze --no-pub 通过。getStrResponse、WebView 宿主阻塞、Riverpod 生产页面、编码统一和暂停平台仍未完成；不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+- 架构/Phase 3 领域模型并行收敛：WebApiStatus、WebDavEntry、BookProgress、ThemeTypography、RssArticle、RssSource、DictRule、TxtTocRule、CrashReport 和 DiagnosticRecord 改为 Freezed，保留原有 JSON、默认值、兼容解析、规则身份和 UTF-16 阅读位置语义；CrashRuntimeMetadata、DiagnosticRuntimeInfo 保留 `const ...unavailable()` 兼容构造并补齐值语义。owner 定向 `23/23`、Flutter 全量 `955`（3 项既有条件跳过）、build_runner、flutter analyze、架构边界检查和 git diff --check 通过。本批不改变 Rust/R1-12、正文、目录、分页、章节身份、第 3 条断行规则、真实 Android TTS 或暂停中的 Web/WASM/PWA。
 
 - 架构/Phase 3 阅读统计模型：`BookReadingStats`、`ReadingStats`、`DailyReadingStat` 改为 Freezed；新增值语义契约，`BookReadingStats.readingDays` 默认 `0` 并由 FRB 书票适配器原样转发 Rust 值。定向 `12/12`、Flutter 全量 `925`（`3` 项既有条件跳过）通过；不改变统计查询、页面计算或正文行为。
 - 架构/Phase 3 替换规则模型：`ReplaceRule` 改为 Freezed 值对象，保留旧 JSON 默认值、构造参数与 `toJson` 输出，新增值相等和 `copyWith` 契约测试。替换规则定向 `11/11`、Flutter 全量 `923`（`3` 项既有条件跳过）通过；不改变替换规则匹配、正文净化、断行、第 3 条断行规则或 Rust FFI。

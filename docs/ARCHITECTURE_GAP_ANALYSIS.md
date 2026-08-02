@@ -11,7 +11,7 @@
 |---|---|---|---|
 | UI 不直连基础设施 | 架构边界脚本通过；Feature/Widget/Provider 直接基础设施扫描为 0 | 基本符合 | 增加 Notifier 和业务编排检查 |
 | Riverpod/Notifier | 已加入 `flutter_riverpod`；CoreApi 有首个 Notifier 样板，`BookshelfNotifier` 已覆盖加载、失败、刷新和并发旧结果丢弃；业务页面仍使用 Provider | 部分完成 | 逐模块迁移并保持 Widget 回归 |
-| freezed/serde 镜像模型 | Flutter `SearchResultItem`、`BookReadConfig`、`BookGroup`、`Chapter`、`Book`、`BookSource`、`ReplaceRule`、阅读统计模型已引入 Freezed；Rust `BookDto` 已用于书籍数据库查询的 camelCase serde 输出，`BookSourceDto` 保留 raw JSON，`BookReadingStats.readingDays` 已透传。既有 `db_get_books` 仍输出 `Vec<String>`，未扩大 FRB 生成面；其余手写模型和 typed FFI 联调仍未完成 | 部分完成 | 继续补齐其余 Rust 模型、按兼容门禁评估 typed FFI |
+| freezed/serde 镜像模型 | Flutter `SearchResultItem`、`BookReadConfig`、`BookGroup`、`Chapter`、`Book`、`BookSource`、`ReplaceRule`、阅读统计模型，以及本批 `WebApiStatus`、`WebDavEntry`、`BookProgress`、`ThemeTypography`、RSS、规则、崩溃和诊断模型已引入 Freezed；运行时元数据保留兼容的手写不可变值对象。Rust `BookDto` 已用于书籍数据库查询的 camelCase serde 输出，`BookSourceDto` 保留 raw JSON，`BookReadingStats.readingDays` 已透传。既有 `db_get_books` 仍输出 `Vec<String>`，未扩大 FRB 生成面；其余手写模型和 typed FFI 联调仍未完成 | 部分完成 | 继续补齐其余 Rust 模型、按兼容门禁评估 typed FFI |
 | CoreApi + Mock/Real | 书架/搜索 CoreApi、MockCoreApi、RealCoreApi 和契约测试已建立；生产组合根通过 ProviderScope 注入 RealCoreApi | 基本完成首批 | 先补书架命令契约，再迁移页面单一事实源 |
 | 统一 AppError | 根 `api/mod.rs` 的 `search/explore/get_book_info/get_toc/get_content/get_content_with_next_chapter/validate_source/debug_search/debug_toc`、`query_dict_rule`、笔记/书签入口、23 个 `db_*` 入口、HTTP 文本/二进制入口、`http_fetch`、网络配置/Cookie/trace、RSS 文章/正文、EPUB、远程 ZIP、`eval_js`、`seed_login_header`、`process_content_for_reading`、`serve_source_browser_host` 和 `probe_source_browser_host` 入口已改为 Rust `AppError`；子模块重复 FRB 导出已收敛，其它公开 FFI 仍有 `Result<T, String>` | 部分完成 | 继续迁移其它公开 FFI 错误和 Dart 统一映射 |
 | Kotlin Room v99 → Rust v17 数据迁移 | 已完成 v99/identity hash 探针、六张核心业务表映射、`readRecord` archive-only 保存、23 张 Room 实体表原始归档、事务/JSON 备份/回滚/幂等和真实 Android 非空数据库 smoke；Room 定向 `29/29`、Rust 全量 `262/262`、Flutter 导入定向 `17/17`、analyze、架构边界和 diff 检查均通过。`emulator-5556` 原版 debug 数据库证据为 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`，重构版 all-phase smoke `1/1` 通过 | 已完成（按已确认边界） | 旧版数据必须可导入；已映射数据直接可用，未业务化表无损 archive-only；不得写成 23 张表全部 Rust v17 业务迁移 |
@@ -26,6 +26,7 @@
 ## 2026-08-02 并行架构批次
 
 - Phase 3：ReadStyleConfig、BookmarkSnapshot、NoteSnapshot 迁移为 Freezed 值对象，保留 JSON 与兼容构造行为。
+- Phase 3：Web API、WebDAV、阅读进度、主题排版、RSS、规则、崩溃和诊断领域模型迁移为 Freezed；运行时元数据保留兼容构造并补齐值语义。
 - Phase 2：init_engine 的公开 FRB 错误改为 AppError，新增生成绑定错误解码契约。
 - Phase 5：java.ajax 使用独立 HTTP 客户端和 deadline；超时会取消请求 future，并在专用 Runtime 退出时回收连接。getStrResponse 与 WebView 宿主仍未覆盖。
 - 验证：Rust 268/268、Flutter 934（3 项既有条件跳过）、flutter analyze --no-pub 已通过；架构扫描和 git diff --check 在本批文档更新后复核。

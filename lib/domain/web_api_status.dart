@@ -1,14 +1,14 @@
-/// Pure Dart status of the local Web API server.
-class WebApiStatus {
-  const WebApiStatus({
-    required this.running,
-    required this.port,
-    required this.token,
-    required this.baseUrl,
-  });
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-  final bool running;
-  final int port;
-  final String token;
-  final String baseUrl;
+part 'web_api_status.freezed.dart';
+
+/// Pure Dart status of the local Web API server.
+@freezed
+class WebApiStatus with _$WebApiStatus {
+  const factory WebApiStatus({
+    required bool running,
+    required int port,
+    required String token,
+    required String baseUrl,
+  }) = _WebApiStatus;
 }

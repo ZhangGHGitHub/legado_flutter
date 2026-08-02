@@ -1,161 +1,63 @@
 import 'dart:convert';
 
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'rss_source.freezed.dart';
+
 /// RSS 订阅源 — 对齐 Jingshiro [RssSource.kt] 完整字段。
-class RssSource {
-  final String sourceUrl;
-  final String sourceName;
-  final String sourceIcon;
-  final String sourceGroup;
-  final String sourceComment;
-  final bool enabled;
-  final String variableComment;
-  final String jsLib;
-  final bool enabledCookieJar;
-  final String concurrentRate;
-  final String header;
-  final String? loginUrl;
-  final String loginUi;
-  final String loginCheckJs;
-  final String coverDecodeJs;
-  final String sortUrl;
-  final bool singleUrl;
-  final int articleStyle;
-  final String ruleArticles;
-  final String ruleNextPage;
-  final String ruleTitle;
-  final String rulePubDate;
-  final String ruleDescription;
-  final String ruleImage;
-  final String ruleLink;
-  final String ruleContent;
-  final String contentWhitelist;
-  final String contentBlacklist;
-  final String shouldOverrideUrlLoading;
-  final String style;
-  final bool enableJs;
-  final bool loadWithBaseUrl;
-  final String injectJs;
-  final String preloadJs;
-  final String startHtml;
-  final String startStyle;
-  final String startJs;
-  final bool showWebLog;
-  final int lastUpdateTime;
-  final int customOrder;
-  final int type;
-  final bool preload;
-  final bool cacheFirst;
-  final String searchUrl;
+@freezed
+class RssSource with _$RssSource {
+  const RssSource._();
 
-  /// 原始 JSON（保留未映射字段）
-  final Map<String, dynamic> raw;
-
-  const RssSource({
-    required this.sourceUrl,
-    required this.sourceName,
-    this.sourceIcon = '',
-    this.sourceGroup = '',
-    this.sourceComment = '',
-    this.enabled = true,
-    this.variableComment = '',
-    this.jsLib = '',
-    this.enabledCookieJar = true,
-    this.concurrentRate = '',
-    this.header = '',
-    this.loginUrl,
-    this.loginUi = '',
-    this.loginCheckJs = '',
-    this.coverDecodeJs = '',
-    this.sortUrl = '',
-    this.singleUrl = false,
-    this.articleStyle = 0,
-    this.ruleArticles = '',
-    this.ruleNextPage = '',
-    this.ruleTitle = '',
-    this.rulePubDate = '',
-    this.ruleDescription = '',
-    this.ruleImage = '',
-    this.ruleLink = '',
-    this.ruleContent = '',
-    this.contentWhitelist = '',
-    this.contentBlacklist = '',
-    this.shouldOverrideUrlLoading = '',
-    this.style = '',
-    this.enableJs = true,
-    this.loadWithBaseUrl = true,
-    this.injectJs = '',
-    this.preloadJs = '',
-    this.startHtml = '',
-    this.startStyle = '',
-    this.startJs = '',
-    this.showWebLog = false,
-    this.lastUpdateTime = 0,
-    this.customOrder = 0,
-    this.type = 0,
-    this.preload = false,
-    this.cacheFirst = false,
-    this.searchUrl = '',
-    this.raw = const {},
-  });
-
-  RssSource copyWith({
-    String? sourceUrl,
-    String? sourceName,
-    String? sourceIcon,
-    String? sourceGroup,
-    bool? enabled,
+  const factory RssSource({
+    required String sourceUrl,
+    required String sourceName,
+    @Default('') String sourceIcon,
+    @Default('') String sourceGroup,
+    @Default('') String sourceComment,
+    @Default(true) bool enabled,
+    @Default('') String variableComment,
+    @Default('') String jsLib,
+    @Default(true) bool enabledCookieJar,
+    @Default('') String concurrentRate,
+    @Default('') String header,
     String? loginUrl,
-    int? customOrder,
-    Map<String, dynamic>? raw,
-  }) {
-    return RssSource(
-      sourceUrl: sourceUrl ?? this.sourceUrl,
-      sourceName: sourceName ?? this.sourceName,
-      sourceIcon: sourceIcon ?? this.sourceIcon,
-      sourceGroup: sourceGroup ?? this.sourceGroup,
-      sourceComment: sourceComment,
-      enabled: enabled ?? this.enabled,
-      variableComment: variableComment,
-      jsLib: jsLib,
-      enabledCookieJar: enabledCookieJar,
-      concurrentRate: concurrentRate,
-      header: header,
-      loginUrl: loginUrl ?? this.loginUrl,
-      loginUi: loginUi,
-      loginCheckJs: loginCheckJs,
-      coverDecodeJs: coverDecodeJs,
-      sortUrl: sortUrl,
-      singleUrl: singleUrl,
-      articleStyle: articleStyle,
-      ruleArticles: ruleArticles,
-      ruleNextPage: ruleNextPage,
-      ruleTitle: ruleTitle,
-      rulePubDate: rulePubDate,
-      ruleDescription: ruleDescription,
-      ruleImage: ruleImage,
-      ruleLink: ruleLink,
-      ruleContent: ruleContent,
-      contentWhitelist: contentWhitelist,
-      contentBlacklist: contentBlacklist,
-      shouldOverrideUrlLoading: shouldOverrideUrlLoading,
-      style: style,
-      enableJs: enableJs,
-      loadWithBaseUrl: loadWithBaseUrl,
-      injectJs: injectJs,
-      preloadJs: preloadJs,
-      startHtml: startHtml,
-      startStyle: startStyle,
-      startJs: startJs,
-      showWebLog: showWebLog,
-      lastUpdateTime: lastUpdateTime,
-      customOrder: customOrder ?? this.customOrder,
-      type: type,
-      preload: preload,
-      cacheFirst: cacheFirst,
-      searchUrl: searchUrl,
-      raw: raw ?? this.raw,
-    );
-  }
+    @Default('') String loginUi,
+    @Default('') String loginCheckJs,
+    @Default('') String coverDecodeJs,
+    @Default('') String sortUrl,
+    @Default(false) bool singleUrl,
+    @Default(0) int articleStyle,
+    @Default('') String ruleArticles,
+    @Default('') String ruleNextPage,
+    @Default('') String ruleTitle,
+    @Default('') String rulePubDate,
+    @Default('') String ruleDescription,
+    @Default('') String ruleImage,
+    @Default('') String ruleLink,
+    @Default('') String ruleContent,
+    @Default('') String contentWhitelist,
+    @Default('') String contentBlacklist,
+    @Default('') String shouldOverrideUrlLoading,
+    @Default('') String style,
+    @Default(true) bool enableJs,
+    @Default(true) bool loadWithBaseUrl,
+    @Default('') String injectJs,
+    @Default('') String preloadJs,
+    @Default('') String startHtml,
+    @Default('') String startStyle,
+    @Default('') String startJs,
+    @Default(false) bool showWebLog,
+    @Default(0) int lastUpdateTime,
+    @Default(0) int customOrder,
+    @Default(0) int type,
+    @Default(false) bool preload,
+    @Default(false) bool cacheFirst,
+    @Default('') String searchUrl,
+
+    /// 原始 JSON（保留未映射字段）。
+    @Default(<String, dynamic>{}) Map<String, dynamic> raw,
+  }) = _RssSource;
 
   static String _str(Map<String, dynamic> json, String key) =>
       json[key]?.toString() ?? '';
@@ -274,7 +176,7 @@ class RssSource {
     return map;
   }
 
-  /// 供 Rust 引擎使用的 JSON
+  /// 供 Rust 引擎使用的 JSON。
   String toEngineJson() => jsonEncode(toJson());
 
   static List<RssSource> listFromJsonString(String raw) {
@@ -284,6 +186,6 @@ class RssSource {
         .whereType<Map>()
         .map((e) => RssSource.fromJson(Map<String, dynamic>.from(e)))
         .where((s) => s.sourceUrl.isNotEmpty)
-        .toList();
+        .toList(growable: false);
   }
 }

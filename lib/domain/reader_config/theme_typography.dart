@@ -1,52 +1,25 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
 import 'reader_font_weight.dart';
 
+part 'theme_typography.freezed.dart';
+
 /// 单主题槽排版值。
-class ThemeTypography {
-  const ThemeTypography({
-    this.fontSize = 18.0,
-    this.lineHeight = 1.8,
-    this.fontFamily = '',
-    this.fontWeight = ReaderFontWeight.normal,
-    this.paddingHorizontal = 20.0,
-    this.paddingVertical = 8.0,
-    this.letterSpacing = 0.0,
-    this.paragraphSpacing = 0.2,
-    this.paragraphIndent = 2,
-  });
+@freezed
+class ThemeTypography with _$ThemeTypography {
+  const ThemeTypography._();
 
-  final double fontSize;
-  final double lineHeight;
-  final String fontFamily;
-  final ReaderFontWeight fontWeight;
-  final double paddingHorizontal;
-  final double paddingVertical;
-  final double letterSpacing;
-  final double paragraphSpacing;
-  final int paragraphIndent;
-
-  ThemeTypography copyWith({
-    double? fontSize,
-    double? lineHeight,
-    String? fontFamily,
-    ReaderFontWeight? fontWeight,
-    double? paddingHorizontal,
-    double? paddingVertical,
-    double? letterSpacing,
-    double? paragraphSpacing,
-    int? paragraphIndent,
-  }) {
-    return ThemeTypography(
-      fontSize: fontSize ?? this.fontSize,
-      lineHeight: lineHeight ?? this.lineHeight,
-      fontFamily: fontFamily ?? this.fontFamily,
-      fontWeight: fontWeight ?? this.fontWeight,
-      paddingHorizontal: paddingHorizontal ?? this.paddingHorizontal,
-      paddingVertical: paddingVertical ?? this.paddingVertical,
-      letterSpacing: letterSpacing ?? this.letterSpacing,
-      paragraphSpacing: paragraphSpacing ?? this.paragraphSpacing,
-      paragraphIndent: paragraphIndent ?? this.paragraphIndent,
-    );
-  }
+  const factory ThemeTypography({
+    @Default(18.0) double fontSize,
+    @Default(1.8) double lineHeight,
+    @Default('') String fontFamily,
+    @Default(ReaderFontWeight.normal) ReaderFontWeight fontWeight,
+    @Default(20.0) double paddingHorizontal,
+    @Default(8.0) double paddingVertical,
+    @Default(0.0) double letterSpacing,
+    @Default(0.2) double paragraphSpacing,
+    @Default(2) int paragraphIndent,
+  }) = _ThemeTypography;
 
   Map<String, dynamic> toJson() => {
     'fontSize': fontSize,
