@@ -1,29 +1,25 @@
-class SourceVerificationBrowserRequest {
-  const SourceVerificationBrowserRequest({
-    required this.sourceKey,
-    required this.url,
-    required this.title,
-    required this.html,
-    required this.headers,
-    required this.refetchAfterSuccess,
-  });
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-  final String sourceKey;
-  final String url;
-  final String title;
-  final String? html;
-  final Map<String, String> headers;
-  final bool refetchAfterSuccess;
+part 'source_verification_browser_port.freezed.dart';
+
+@freezed
+class SourceVerificationBrowserRequest with _$SourceVerificationBrowserRequest {
+  const factory SourceVerificationBrowserRequest({
+    required String sourceKey,
+    required String url,
+    required String title,
+    required String? html,
+    required Map<String, String> headers,
+    required bool refetchAfterSuccess,
+  }) = _SourceVerificationBrowserRequest;
 }
 
-class SourceVerificationBrowserResult {
-  const SourceVerificationBrowserResult({
-    required this.finalUrl,
-    required this.body,
-  });
-
-  final String finalUrl;
-  final String body;
+@freezed
+class SourceVerificationBrowserResult with _$SourceVerificationBrowserResult {
+  const factory SourceVerificationBrowserResult({
+    required String finalUrl,
+    required String body,
+  }) = _SourceVerificationBrowserResult;
 }
 
 class SourceVerificationCancelled implements Exception {

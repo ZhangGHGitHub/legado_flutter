@@ -1,4 +1,8 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
 import '../content/replace_rule.dart';
+
+part 'content_processing_port.freezed.dart';
 
 /// 正文处理用例的领域端口。
 ///
@@ -26,12 +30,10 @@ abstract interface class ContentProcessingPort {
 }
 
 /// 书源级正文替换规则的纯 Dart 表示。
-class ContentProcessingSourceRules {
-  final String contentReplace;
-  final String contentReplaceTo;
-
-  const ContentProcessingSourceRules({
-    this.contentReplace = '',
-    this.contentReplaceTo = '',
-  });
+@freezed
+class ContentProcessingSourceRules with _$ContentProcessingSourceRules {
+  const factory ContentProcessingSourceRules({
+    @Default('') String contentReplace,
+    @Default('') String contentReplaceTo,
+  }) = _ContentProcessingSourceRules;
 }

@@ -1,11 +1,15 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../rss/rss_article.dart';
 
-class RssArticlesResult {
-  const RssArticlesResult({required this.articles, this.nextUrl});
+part 'rss_port.freezed.dart';
 
-  final List<RssArticle> articles;
-  final String? nextUrl;
+@freezed
+class RssArticlesResult with _$RssArticlesResult {
+  const factory RssArticlesResult({
+    required List<RssArticle> articles,
+    String? nextUrl,
+  }) = _RssArticlesResult;
 }
 
 class RssPortException implements Exception {
