@@ -9,11 +9,15 @@ import 'package:legado_flutter/application/source_login/source_login_cookie_clea
 import 'package:legado_flutter/domain/ports/code_edit_prefs_store.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/features/sources/source_editor_page.dart';
+import 'package:legado_flutter/providers/source_provider.dart';
 import 'package:legado_flutter/services/code_edit_prefs.dart';
 import 'package:legado_flutter/infrastructure/qr/qr_code_port_adapter.dart';
 import 'package:legado_flutter/infrastructure/preferences/shared_preferences_code_edit_prefs.dart';
 import 'package:legado_flutter/infrastructure/source_login/source_login_cookie_clear_port_adapter.dart';
 import 'package:provider/provider.dart';
+
+import '../../application/source_management/source_controller_test.dart'
+    as source_fixtures;
 
 void main() {
   setUp(() => CodeEditPrefs.configureStore(_FakeCodeEditPrefsStore()));
@@ -25,17 +29,27 @@ void main() {
   );
 
   Future<void> pumpEditor(WidgetTester tester, _FakeClipboard clipboard) async {
+    final sourceProvider = SourceProvider(
+      repository: source_fixtures.createRepositoryForNotifierTest(),
+      validationPort: source_fixtures.createValidationPortForNotifierTest(),
+      sourceService: source_fixtures.createSourceServiceForNotifierTest(),
+    );
     await tester.pumpWidget(
-      MaterialApp(
-        home: Provider<ClipboardPort>.value(
-          value: clipboard,
-          child: Provider<QrCodePort>.value(
-            value: const QrCodePortAdapter(),
-            child: Provider<CodeEditPrefsPort>.value(
-              value: SharedPreferencesCodeEditPrefs(_FakeCodeEditPrefsStore()),
-              child: Provider<SourceLoginCookieClearPort>.value(
-                value: const SourceLoginCookieClearPortAdapter(),
-                child: SourceEditorPage(source: source),
+      ChangeNotifierProvider<SourceProvider>.value(
+        value: sourceProvider,
+        child: MaterialApp(
+          home: Provider<ClipboardPort>.value(
+            value: clipboard,
+            child: Provider<QrCodePort>.value(
+              value: const QrCodePortAdapter(),
+              child: Provider<CodeEditPrefsPort>.value(
+                value: SharedPreferencesCodeEditPrefs(
+                  _FakeCodeEditPrefsStore(),
+                ),
+                child: Provider<SourceLoginCookieClearPort>.value(
+                  value: const SourceLoginCookieClearPortAdapter(),
+                  child: SourceEditorPage(source: source),
+                ),
               ),
             ),
           ),
@@ -66,6 +80,51 @@ void main() {
     expect(copied['bookSourceUrl'], source.bookSourceUrl);
     expect(copied['bookSourceName'], source.bookSourceName);
     expect(find.text('已拷贝源'), findsOneWidget);
+  });
+
+  testWidgets('保存通过共享 SourceController 持久化编辑后的书源', (tester) async {
+    final clipboard = _FakeClipboard();
+    final repository = source_fixtures.createRepositoryForNotifierTest();
+    final sourceProvider = SourceProvider(
+      repository: repository,
+      validationPort: source_fixtures.createValidationPortForNotifierTest(),
+      sourceService: source_fixtures.createSourceServiceForNotifierTest(),
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<SourceProvider>.value(
+        value: sourceProvider,
+        child: MaterialApp(
+          home: MultiProvider(
+            providers: [
+              Provider<ClipboardPort>.value(value: clipboard),
+              Provider<QrCodePort>.value(value: const QrCodePortAdapter()),
+              Provider<CodeEditPrefsPort>.value(
+                value: SharedPreferencesCodeEditPrefs(
+                  _FakeCodeEditPrefsStore(),
+                ),
+              ),
+              Provider<SourceLoginCookieClearPort>.value(
+                value: const SourceLoginCookieClearPortAdapter(),
+              ),
+            ],
+            child: SourceEditorPage(source: source),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final nameField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField &&
+          widget.controller?.text == source.bookSourceName,
+    );
+    await tester.enterText(nameField, '更新后的书源');
+    await tester.tap(find.byTooltip('保存'));
+    await tester.pumpAndSettle();
+
+    expect(sourceProvider.sources, hasLength(1));
+    expect(sourceProvider.sources.single.bookSourceName, '更新后的书源');
   });
 
   testWidgets('pastes source JSON through the shared clipboard port', (

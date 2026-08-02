@@ -1,9 +1,13 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/replace/replace_notifier.dart';
+import '../../application/rss/rss_notifier.dart';
+import '../../application/source_management/source_notifier.dart';
 import '../../application/source_subscription/rule_sub_policy.dart';
 import '../../application/source_subscription/rule_sub_import_port.dart';
 import '../../application/source_subscription/rule_sub_prefs_port.dart';
@@ -13,11 +17,36 @@ import '../../providers/rss_provider.dart';
 import '../../providers/source_provider.dart';
 
 /// 规则订阅 — 对齐 Jingshiro [RuleSubActivity] + `activity_rule_sub.xml`
-class RuleSubPage extends StatefulWidget {
+class RuleSubPage extends StatelessWidget {
   const RuleSubPage({super.key, this.prefsPort});
 
   @visibleForTesting
   final RuleSubPrefsPort? prefsPort;
+
+  @override
+  Widget build(BuildContext context) {
+    return _withControllerScope(
+      context,
+      _RuleSubPageBody(prefsPort: prefsPort),
+    );
+  }
+
+  static Widget _withControllerScope(BuildContext context, Widget child) {
+    return riverpod.ProviderScope(
+      overrides: [
+        sourceControllerProvider.overrideWithValue(
+          context.read<SourceProvider>().controller,
+        ),
+        rssSourceControllerProvider.overrideWithValue(
+          context.read<RssProvider>().controller,
+        ),
+        replaceRulesControllerProvider.overrideWithValue(
+          context.read<ReplaceProvider>().controller,
+        ),
+      ],
+      child: child,
+    );
+  }
 
   /// 供 MainShell / 自动更新打开导入 UI（对齐 openImportUi）
   static Future<void> openImport(BuildContext context, RuleSub sub) async {
@@ -40,7 +69,10 @@ class RuleSubPage extends StatefulWidget {
       }
       await showDialog<void>(
         context: context,
-        builder: (_) => _RuleSubImportDialog(sub: sub, fetched: fetched),
+        builder: (_) => _withControllerScope(
+          context,
+          _RuleSubImportDialog(sub: sub, fetched: fetched),
+        ),
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -50,12 +82,18 @@ class RuleSubPage extends StatefulWidget {
       );
     }
   }
-
-  @override
-  State<RuleSubPage> createState() => _RuleSubPageState();
 }
 
-class _RuleSubPageState extends State<RuleSubPage> {
+class _RuleSubPageBody extends StatefulWidget {
+  const _RuleSubPageBody({this.prefsPort});
+
+  final RuleSubPrefsPort? prefsPort;
+
+  @override
+  State<_RuleSubPageBody> createState() => _RuleSubPageState();
+}
+
+class _RuleSubPageState extends State<_RuleSubPageBody> {
   late final RuleSubPrefsPort _prefsPort;
   late final RuleSubImportPort _importPort;
   List<RuleSub> _subs = [];
@@ -549,9 +587,10 @@ class _RuleSubImportDialogState extends State<_RuleSubImportDialog> {
       return;
     }
 
-    final sourceProvider = context.read<SourceProvider>();
-    final rssProvider = context.read<RssProvider>();
-    final replaceProvider = context.read<ReplaceProvider>();
+    final container = riverpod.ProviderScope.containerOf(context);
+    final sourceNotifier = container.read(sourceNotifierProvider.notifier);
+    final rssNotifier = container.read(rssNotifierProvider.notifier);
+    final replaceNotifier = container.read(replaceNotifierProvider.notifier);
     var imported = 0;
 
     switch (widget.fetched.kind) {
@@ -559,24 +598,26 @@ class _RuleSubImportDialogState extends State<_RuleSubImportDialog> {
         final list = [
           for (final i in indices) widget.fetched.bookSources[i].toJson(),
         ];
-        final ok = await sourceProvider.importSources(jsonEncode(list));
+        final ok = await sourceNotifier.importSources(jsonEncode(list));
         imported = ok ? list.length : 0;
       case RuleSubImportKind.rssSource:
         final list = [
           for (final i in indices) widget.fetched.rssSources[i].toJson(),
         ];
-        final ok = await rssProvider.importSources(jsonEncode(list));
+        final ok = await rssNotifier.importSources(jsonEncode(list));
         imported = ok ? list.length : 0;
       case RuleSubImportKind.replaceRule:
         for (final i in indices) {
           final rule = widget.fetched.replaceRules[i];
-          final existing = replaceProvider.replaceRules
+          final existing = container
+              .read(replaceNotifierProvider)
+              .rules
               .where((r) => r.id == rule.id)
               .firstOrNull;
           if (existing == null) {
-            await replaceProvider.addRule(rule);
+            await replaceNotifier.addRule(rule);
           } else {
-            await replaceProvider.updateRule(rule);
+            await replaceNotifier.updateRule(rule);
           }
           imported++;
         }

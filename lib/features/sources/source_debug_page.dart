@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
+import '../../application/source_management/source_notifier.dart';
 import '../../application/sources/source_debug_formatter_port.dart';
 import '../../domain/ports/book_source_debug_port.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
@@ -13,7 +15,7 @@ import '../../widgets/source_validation_sheet.dart';
 /// 书源调试 — 对齐 Jingshiro [BookSourceDebugActivity] / [activity_source_debug.xml]
 ///
 /// 从编辑页菜单「调试源」进入（保存后打开）。
-class SourceDebugPage extends StatefulWidget {
+class SourceDebugPage extends riverpod.ConsumerStatefulWidget {
   final BookSource source;
   final BookSourceDebugPort debugPort;
 
@@ -24,12 +26,16 @@ class SourceDebugPage extends StatefulWidget {
   });
 
   static Future<void> open(BuildContext context, BookSource source) {
-    final provider = context.read<SourceProvider>();
+    final sourceProvider = context.read<SourceProvider>();
     final debugPort = context.read<BookSourceDebugPort>();
     return Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ChangeNotifierProvider.value(
-          value: provider,
+        builder: (_) => riverpod.ProviderScope(
+          overrides: [
+            sourceControllerProvider.overrideWithValue(
+              sourceProvider.controller,
+            ),
+          ],
           child: SourceDebugPage(source: source, debugPort: debugPort),
         ),
       ),
@@ -37,10 +43,11 @@ class SourceDebugPage extends StatefulWidget {
   }
 
   @override
-  State<SourceDebugPage> createState() => _SourceDebugPageState();
+  riverpod.ConsumerState<SourceDebugPage> createState() =>
+      _SourceDebugPageState();
 }
 
-class _SourceDebugPageState extends State<SourceDebugPage>
+class _SourceDebugPageState extends riverpod.ConsumerState<SourceDebugPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchKeyword = '';
@@ -176,11 +183,12 @@ class _SourceDebugPageState extends State<SourceDebugPage>
   Future<void> _runFullValidation() async {
     setState(() => _isValidating = true);
     try {
-      final provider = context.read<SourceProvider>();
-      final result = await provider.validateSource(
-        widget.source,
-        keyword: _searchKeyword.isNotEmpty ? _searchKeyword : null,
-      );
+      final result = await ref
+          .read(sourceNotifierProvider.notifier)
+          .validateSource(
+            widget.source,
+            keyword: _searchKeyword.isNotEmpty ? _searchKeyword : null,
+          );
       if (!mounted || result == null) return;
       await SourceValidationSheet.show(
         context,

@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
+import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/application/sources/source_debug_formatter_port.dart';
+import 'package:legado_flutter/domain/ports/book_source_validation_port.dart';
 import 'package:legado_flutter/domain/ports/book_source_debug_port.dart';
 import 'package:legado_flutter/features/sources/source_debug_page.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
+import 'package:legado_flutter/providers/source_provider.dart';
 import 'package:provider/provider.dart';
+
+import '../../application/source_management/source_controller_test.dart'
+    as source_fixtures;
 
 void main() {
   final source = BookSource(
@@ -19,7 +26,9 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: _withFormatter(SourceDebugPage(source: source, debugPort: port)),
+        home: _withDependencies(
+          SourceDebugPage(source: source, debugPort: port),
+        ),
       ),
     );
 
@@ -41,7 +50,9 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: _withFormatter(SourceDebugPage(source: source, debugPort: port)),
+        home: _withDependencies(
+          SourceDebugPage(source: source, debugPort: port),
+        ),
       ),
     );
 
@@ -60,7 +71,9 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: _withFormatter(SourceDebugPage(source: source, debugPort: port)),
+        home: _withDependencies(
+          SourceDebugPage(source: source, debugPort: port),
+        ),
       ),
     );
 
@@ -71,6 +84,52 @@ void main() {
     expect(find.textContaining('搜索出错'), findsOneWidget);
     expect(find.textContaining('fixture failure'), findsOneWidget);
   });
+
+  testWidgets('一键校验通过共享 SourceNotifier 转发关键词并展示结果', (tester) async {
+    final debugPort = _FakeDebugPort();
+    final validationPort = _FakeValidationPort();
+    final sourceProvider = SourceProvider(
+      repository: source_fixtures.createRepositoryForNotifierTest(),
+      validationPort: validationPort,
+      sourceService: source_fixtures.createSourceServiceForNotifierTest(),
+    );
+    await tester.binding.setSurfaceSize(const Size(720, 1280));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _withDependencies(
+          SourceDebugPage(source: source, debugPort: debugPort),
+          sourceProvider: sourceProvider,
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).first, '校验关键词');
+    await tester.tap(find.byTooltip('一键校验'));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(validationPort.calls, 1);
+    expect(validationPort.source, source);
+    expect(validationPort.keyword, '校验关键词');
+    expect(find.text('校验通过'), findsOneWidget);
+  });
+}
+
+Widget _withDependencies(Widget child, {SourceProvider? sourceProvider}) {
+  final provider =
+      sourceProvider ??
+      SourceProvider(
+        repository: source_fixtures.createRepositoryForNotifierTest(),
+        validationPort: source_fixtures.createValidationPortForNotifierTest(),
+        sourceService: source_fixtures.createSourceServiceForNotifierTest(),
+      );
+  return riverpod.ProviderScope(
+    overrides: [
+      sourceControllerProvider.overrideWithValue(provider.controller),
+    ],
+    child: _withFormatter(child),
+  );
 }
 
 Widget _withFormatter(Widget child) {
@@ -78,6 +137,32 @@ Widget _withFormatter(Widget child) {
     value: _FakeFormatter(),
     child: child,
   );
+}
+
+class _FakeValidationPort implements BookSourceValidationPort {
+  int calls = 0;
+  BookSource? source;
+  String? keyword;
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  Future<BookSourceValidationSnapshot> validateSource(
+    BookSource source, {
+    required String keyword,
+  }) async {
+    calls++;
+    this.source = source;
+    this.keyword = keyword;
+    return const BookSourceValidationSnapshot(
+      searchOk: true,
+      discoveryOk: true,
+      tocOk: true,
+      contentOk: true,
+      searchTimeMs: 0,
+    );
+  }
 }
 
 class _FakeFormatter implements SourceDebugFormatterPort {

@@ -3389,3 +3389,13 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 保持调试/HTTP 参数、返回值、错误传播和既有 Rust API 不变；未处理登录头持久化 ack/重试、空值删除、真实异常 fixture 和 Rust `loginCheckJs` 错误响应语义。
 
 验证记录：owner 定向 `4/4`，含引擎、source debug 和本地 HTTP port；Flutter 串行全量 `873` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。未修改 `legado-main/`、Rust、正文/目录/分页/章节身份/UTF-16 阅读位置。
+
+## 173. 2026-08-03：R6 Provider 书源三页面迁移
+
+- `SourceEditorPage`、`SourceDebugPage` 和 `RuleSubPage` 通过局部 Riverpod `ProviderScope` 复用既有共享控制器；页面状态读取与写入收敛到 `SourceNotifier`、`RssNotifier` 和 `ReplaceNotifier`，未创建第二份业务状态。
+- 保存书源、执行一键校验、导入规则订阅三类动作分别通过对应 Notifier/Controller 完成；保留书源编辑六个 Tab、调试搜索/目录/URL 测试参数和日志、规则订阅 JSON/自动更新/编辑删除重排及原版可观察行为。
+- 新增三页面回归测试，未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：三页面定向 `19/19`；Flutter 串行全量 `1071` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断；`scripts/check_architecture_boundaries.ps1` 通过；`git diff --check` 通过，仅有既有 Windows LF/CRLF 提示。
+
+边界结论：本批完成书源编辑、调试和规则订阅页面的 Riverpod 调用边界；其他 Provider 消费者继续按后续批次收敛，不宣称 R1-12、Web/WASM/PWA 或真实 Android TTS 门禁变化。

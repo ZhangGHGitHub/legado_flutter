@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -11,6 +12,7 @@ import '../../application/preferences/code_edit_prefs_port.dart';
 import '../../application/platform/clipboard_port.dart';
 import '../../application/qr/qr_code_port.dart';
 import '../../application/source_login/source_login_cookie_clear_port.dart';
+import '../../application/source_management/source_notifier.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../providers/source_provider.dart';
 import '../../theme/legado_tokens.dart';
@@ -28,13 +30,31 @@ import 'source_login_page.dart';
 ///
 /// Chrome：TitleBar「编辑书源」；类型/启用/发现/CookieJar/事件监听/定制按钮在 Tab 上方；
 /// Tab：基本 | 搜索 | 发现 | 详情 | 目录 | 正文；红标签+底线输入；菜单对齐 source_edit。
-class SourceEditorPage extends StatefulWidget {
+class SourceEditorPage extends StatelessWidget {
   final BookSource source;
 
   const SourceEditorPage({super.key, required this.source});
 
   @override
-  State<SourceEditorPage> createState() => _SourceEditorPageState();
+  Widget build(BuildContext context) {
+    final sourceProvider = context.read<SourceProvider>();
+    return riverpod.ProviderScope(
+      overrides: [
+        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+      ],
+      child: _SourceEditorPageBody(source: source),
+    );
+  }
+}
+
+class _SourceEditorPageBody extends riverpod.ConsumerStatefulWidget {
+  final BookSource source;
+
+  const _SourceEditorPageBody({required this.source});
+
+  @override
+  riverpod.ConsumerState<_SourceEditorPageBody> createState() =>
+      _SourceEditorPageState();
 }
 
 class _EditField {
@@ -53,7 +73,8 @@ class _EditField {
   }
 }
 
-class _SourceEditorPageState extends State<SourceEditorPage>
+class _SourceEditorPageState
+    extends riverpod.ConsumerState<_SourceEditorPageBody>
     with SingleTickerProviderStateMixin {
   static const _bookTypes = ['文本', '音频', '图片', '文件', '视频'];
   static const _tabs = ['基本', '搜索', '发现', '详情', '目录', '正文'];
@@ -664,7 +685,7 @@ class _SourceEditorPageState extends State<SourceEditorPage>
         }
         return null;
       }
-      await context.read<SourceProvider>().updateSource(updated);
+      await ref.read(sourceNotifierProvider.notifier).updateSource(updated);
       _originalJson = _encodeCurrent();
       if (mounted) {
         ScaffoldMessenger.of(
