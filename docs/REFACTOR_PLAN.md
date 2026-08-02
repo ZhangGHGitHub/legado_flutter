@@ -18,6 +18,8 @@
 
 > **R1-12 产品决策（2026-08-02）：** 旧版 Legado 数据必须能够导入，已完成业务映射的数据导入后立即可用；`readRecord` 和非核心 Room 表暂不业务化，但必须无损 archive-only 保存，不得因未映射而拒绝旧数据导入或丢弃原始行。导入前备份沿用原版 JSON 逻辑备份，不新增文件级 SQLite 备份要求。
 
+> **R1-12 当前权威状态（2026-08-03）：** 上述产品边界已完成：六张核心表导入后可直接使用，`readRecord` 与非核心 Room 表无损 archive-only 保存，JSON 备份、事务回滚和幂等导入通过。不宣称 `readRecord` 统计语义、非核心表 Rust v17 业务化或真实原版非空数据库证据完成；真实证据补齐前不新增 R2-R6 生产实现。
+
 2026-08-03 Phase 4/R6 Provider 状态迁移第十二批：补齐 `SourceNotifier`、`RssNotifier`、`ReplaceNotifier`、`MyPageNotifier`、`AppConfigNotifier` 和 `RemoteBookNotifier` 的 Riverpod `dependencies` 声明，使根级 controller 覆盖与 Notifier 依赖关系一致；移除发现、搜索、书架样式、我的、RSS Tab 及书源相关页面对已注入 controller 的重复局部 scope，继续复用同一 application controller。Sources 管理动作和书源市场/编辑/调试回归保留原 JSON、导入、持久化、校验和 UI 行为，旧 Provider 兼容外观不变；补齐直接挂载书架页面的测试宿主根 `ProviderScope`，不改变测试断言。受影响页面/管理定向 `19/19`、新增测试宿主回归 `2/2`、Flutter 串行全量 `1104`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。`BookProvider`、Reader、正文/目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12、`emulator-5556` UI 基线及 Web/WASM/PWA、真实 Android TTS 暂停门禁均未改变；R6 尚未全量退出。
 
 2026-08-03 Phase 4/R6 Provider 状态迁移第十一批：AppConfig 新增 Freezed `AppConfigState`、共享 `AppConfigController` 和 `AppConfigNotifier`，`ConfigPage` 只迁移配置状态订阅，保留既有 `AppConfig` 单例、四个配置键、`load()` 并发去重、乐观持久化和启动顺序。组合根将 `SourceProvider.controller` 绑定到唯一 `sourceControllerProvider`，`BookInfoPage`、`BookmarkPage`、`ChangeSourcePage` 移除局部桥接；`BookProvider` 仍是书籍、章节、阅读、目录和入库事实源。AppConfig 定向 `9/9`、Source 页面/组合根定向 `8/8`、Flutter 串行全量 `1100`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。剩余 BookProvider/Reader 高风险边界不在本批写集，下一批优先按审查结果处理 SourcesPage 管理动作或 Source scope 清理；本批不改变 `legado-main/`、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
@@ -191,7 +193,9 @@ test/integration/         设备与平台链路验收
 - 历史 Android smoke 导入阶段已补 fingerprint 非空及 `books`、`sources`、`chapters` 正行数前置断言；空库不会被登记为真实非空迁移通过。历史记录显示 `emulator-5556` 曾安装 debug 重构 APK，并以基于原版 schema 的临时非空等价 fixture 完成 import/verify 两阶段，验证书籍字段、阅读位置、章节身份、重启、幂等和备份恢复；该 fixture 证据不等于真实原版非空 Room 数据证据，当前设备状态以最新 owner 门禁记录为准。
 - Room 导入回归进一步覆盖源主库及 `-wal`/`-shm` 侧文件状态不变；Dart 导入报告解析定向 `3/3`，Rust Room 定向 `21/21`。这两项只增强数据边界证据，不改变 `readRecord`、非核心业务 port 或文件级备份的产品决策边界。
 
-##### R1-12：Kotlin Room v99 数据迁移门禁（复核中，部分完成）
+##### R1-12：Kotlin Room v99 数据迁移门禁（archive-only 产品边界已完成）
+
+> 当前权威判定：六张核心业务表、`readRecord`/非核心表 archive-only、23 表原始归档、JSON 备份、事务回滚和幂等导入均已在当前产品边界内完成；后续统计业务化、非核心 Rust v17 业务化和真实原版非空数据证据必须作为单独范围处理。
 
 目标：支持从原版 Android Kotlin Room 数据库文件安全迁移到 Rust schema，而不是只支持本工程旧 Rust schema。
 
@@ -220,7 +224,7 @@ test/integration/         设备与平台链路验收
 - `replace_rules.sortOrder`、`scope`、`group` 不进入当前 Rust v17 替换规则业务模型，仅通过原始快照 archive-only 保留。
 - 导入报告已保留 Rust 输出的 `sourceRoomIdentityHash` 与 `backupPath`；Flutter 计数键按 Rust 契约使用 `sources`、`detailedReadRecords`、`replaceRules`，重复 fingerprint 导入的 `backupWritten` 必须为 false。
 
-R1-12 当前判定：六张核心业务表映射、`readRecord` archive-only 保存与 23 表原始归档已实现，新增 v99 门禁和正冲突测试已记录通过；但整体迁移门禁仍在复核中，不能标记 R1-12 或 R1 最终退出。后续非核心表业务模型、`readRecord` 映射和原版真实非空数据补充采集必须另行按计划执行；本轮没有推进新的 R2-R6 实现。
+R1-12 当前判定：六张核心业务表映射、`readRecord` archive-only 保存、23 表原始归档、v99 门禁、事务回滚、JSON 备份和幂等导入均已在当前产品边界内完成。该判定不等于 `readRecord` 统计业务化、非核心表 Rust v17 业务化或真实原版非空数据库证据完成；后续如扩大这些范围，必须另行形成产品决策和迁移批次。本轮不新增 R2-R6 生产实现。
 
 #### R2：书源引擎与 FRB 适配边界
 
@@ -368,7 +372,7 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 4. 测试失败先判断实现缺陷、环境限制、基线错误或 fixture 缺失；不得为了通过而削弱断言或替换原版基线。
 5. 每个阶段必须记录迁移前后依赖关系、删除的旧入口、保留的兼容适配和全量测试结果。
 
-### 0.5 当前状态
+### 0.5 当前状态（历史口径；以文档顶部 R1-12 当前权威状态为准）
 
 当前已完成 **R0 架构盘点与行为基线**、**R3 正文/缓存/远端 ZIP**、**R4 目录复核** 和 **R5 本地开发门禁/本地 Web API 归属迁移**；R1 因 Kotlin Room v99 → Rust v17 迁移门禁重新打开，当前只确认核心七表映射与 23 表原始归档，不能标记 R1 最终退出。R2 书源/网络边界与 R6 功能域迁移已有历史实现证据，但当前不据此宣称 R2/R6 阶段退出；R6 应用用例边界仍继续收口。横切基础设施 P0-1 至 P1-4 的历史证据继续保留，架构扫描中的 Feature→service backlog 不得当作例外或完成声明。发布前正式/主流 WebDAV、Web/WASM/PWA 与真实 Android TTS 继续暂停。逐项记录见 [`REFACTOR_ARCHITECTURE_BASELINE.md`](./REFACTOR_ARCHITECTURE_BASELINE.md)，不得改变正文、目录、分页、章节身份、UTF-16 位置和第 3 条断行规则。
 本轮并行补充完成 Widget 边界收口：书架分组、书签/书票/笔记、源校验/字典/替换预览和底部导航均通过 application/infrastructure port 使用，组合根已接入 W1-W3 Provider；Widget/Feature 扩展扫描不再发现直接 service 依赖，四个 Provider 依赖保留为下一批 backlog。定向与 owner 组合回归通过，Flutter 串行全量 `829` 通过、`3` 项既有条件跳过，analyze、架构脚本和 diff 检查通过。`read_book_async_test.dart` 增加预加载完成等待以消除 Windows 临时目录 teardown 锁竞争，不改变断言或阅读行为。

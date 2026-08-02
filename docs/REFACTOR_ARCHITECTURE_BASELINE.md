@@ -1,5 +1,7 @@
 # Legado Flutter 架构重构基线
 
+> **当前权威状态（2026-08-03）：** R1-12 已按 archive-only 产品边界完成：六张核心表映射后可直接使用，23 张 Room 实体表无损归档，JSON 备份、事务回滚和幂等导入通过；不宣称 `readRecord` 统计语义、非核心表 Rust v17 业务化或真实原版非空数据库证据完成。历史段落中的“R1 重新打开/部分完成”保留为当时证据链，不覆盖本条当前判定；真实原版非空证据补齐前不新增 R2-R6 生产实现。
+
 > 2026-08-02 当前 owner 状态：R1-12 已按产品决策完成 Room v99 探针、六张核心业务表映射、`readRecord` archive-only 保存、23 表原始归档、事务/JSON 备份/回滚/幂等和 `emulator-5556` 真实非空 Android smoke。Room 定向 `29/29`、Rust 全量 `262/262`、Flutter 导入/备份定向 `17/17`、analyze、架构边界检查和 `git diff --check` 通过。旧版数据必须可导入，已映射数据导入后直接可用，未业务化数据无损归档；备份保持 JSON，不增加文件级 SQLite 备份要求。
 
 > 2026-08-02 Phase 3 当前 owner 状态：Flutter `Book`/`BookSource`/`ReplaceRule`/阅读统计模型已改为 Freezed 领域模型，生成不可变值语义和 `copyWith`，同时保留旧版 JSON、`readConfig` 和嵌套书源规则兼容。Rust `BookDto`、`BookSourceDto` 均已提供 camelCase serde 投影；Rust `BookReadingStats.readingDays` 现已透传至 Dart。模型契约及书架/书源仓储、替换规则和统计链路定向回归通过，Rust 当前全量 `265/265`、Flutter 全量 `925`（`3` 项既有条件跳过）通过。Riverpod 生产页面和其余手写模型仍是后续批次。
