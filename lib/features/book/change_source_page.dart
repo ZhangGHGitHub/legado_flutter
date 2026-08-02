@@ -6,7 +6,6 @@ import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../providers/book_provider.dart';
-import '../../providers/source_provider.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/empty_state.dart';
 
@@ -18,13 +17,7 @@ class ChangeSourcePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sourceProvider = context.read<SourceProvider>();
-    return riverpod.ProviderScope(
-      overrides: [
-        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
-      ],
-      child: _ChangeSourcePageBody(book: book),
-    );
+    return _ChangeSourcePageBody(book: book);
   }
 }
 

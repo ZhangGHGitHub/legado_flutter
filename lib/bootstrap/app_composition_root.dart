@@ -70,6 +70,7 @@ import '../application/qr/qr_code_port.dart';
 import '../application/search/search_history_port.dart';
 import '../application/source_login/source_login_cookie_clear_port.dart';
 import '../application/source_login/source_login_page_port.dart';
+import '../application/source_management/source_notifier.dart';
 import '../application/main/privacy_consent_port.dart';
 import '../application/sources/source_debug_formatter_port.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
@@ -285,17 +286,25 @@ abstract final class AppCompositionRoot {
     required BookProviderSourcePort bookProviderSourcePort,
     required Widget child,
   }) {
-    return riverpod.ProviderScope(
-      overrides: [
-        coreApiProvider.overrideWithValue(
-          RealCoreApi(
-            books: bookRepository,
-            sources: sourceRepository,
-            sourceApi: bookProviderSourcePort,
-          ),
-        ),
-      ],
-      child: child,
+    final coreApi = RealCoreApi(
+      books: bookRepository,
+      sources: sourceRepository,
+      sourceApi: bookProviderSourcePort,
+    );
+    return Builder(
+      builder: (context) {
+        final sourceProvider = context.read<SourceProvider?>();
+        return riverpod.ProviderScope(
+          overrides: [
+            coreApiProvider.overrideWithValue(coreApi),
+            if (sourceProvider != null)
+              sourceControllerProvider.overrideWithValue(
+                sourceProvider.controller,
+              ),
+          ],
+          child: child,
+        );
+      },
     );
   }
 

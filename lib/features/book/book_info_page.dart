@@ -13,7 +13,6 @@ import 'package:legado_flutter/domain/source/book_source_type.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../domain/ports/book_source_search_port.dart';
 import '../../providers/book_provider.dart';
-import '../../providers/source_provider.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/legado_popup_menu.dart';
@@ -41,15 +40,9 @@ class BookInfoPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sourceProvider = context.read<SourceProvider>();
-    return riverpod.ProviderScope(
-      overrides: [
-        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
-      ],
-      child: _BookInfoPageBody(
-        book: book,
-        openReaderImmediately: openReaderImmediately,
-      ),
+    return _BookInfoPageBody(
+      book: book,
+      openReaderImmediately: openReaderImmediately,
     );
   }
 }

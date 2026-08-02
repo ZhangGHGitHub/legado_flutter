@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/config/app_config_notifier.dart';
 import '../../application/preferences/bookshelf_config_prefs_port.dart';
 import '../../config/app_config.dart';
 import '../../theme/legado_tokens.dart';
@@ -11,17 +13,31 @@ import 'theme_config_page.dart';
 import 'web_api_settings_card.dart';
 
 /// 配置中心 — 对齐 ConfigActivity（F2 骨架）
-class ConfigPage extends StatefulWidget {
+class ConfigPage extends StatelessWidget {
   const ConfigPage({super.key, this.initialTab = 0});
 
   /// 0=备份, 1=主题, 2=其它
   final int initialTab;
 
   @override
-  State<ConfigPage> createState() => _ConfigPageState();
+  Widget build(BuildContext context) {
+    return ProviderScope(
+      overrides: [appConfigProvider.overrideWithValue(AppConfig.instance)],
+      child: _ConfigPageContent(initialTab: initialTab),
+    );
+  }
 }
 
-class _ConfigPageState extends State<ConfigPage>
+class _ConfigPageContent extends ConsumerStatefulWidget {
+  const _ConfigPageContent({required this.initialTab});
+
+  final int initialTab;
+
+  @override
+  ConsumerState<_ConfigPageContent> createState() => _ConfigPageContentState();
+}
+
+class _ConfigPageContentState extends ConsumerState<_ConfigPageContent>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int _bookGroupStyle = 0;
@@ -90,8 +106,9 @@ class _ConfigPageState extends State<ConfigPage>
                 ),
               ),
               const SizedBox(height: 12),
-              Consumer<AppConfig>(
-                builder: (context, cfg, _) {
+              Builder(
+                builder: (context) {
+                  final cfg = ref.watch(appConfigNotifierProvider);
                   return Card(
                     child: Column(
                       children: [
@@ -99,14 +116,18 @@ class _ConfigPageState extends State<ConfigPage>
                           title: const Text('显示发现 Tab'),
                           subtitle: const Text('底栏「发现」入口，关闭后立即隐藏'),
                           value: cfg.showDiscovery,
-                          onChanged: (v) => cfg.setShowDiscovery(v),
+                          onChanged: (v) => ref
+                              .read(appConfigNotifierProvider.notifier)
+                              .setShowDiscovery(v),
                         ),
                         const Divider(height: 1),
                         SwitchListTile(
                           title: const Text('显示订阅 Tab'),
                           subtitle: const Text('底栏「订阅」入口，关闭后立即隐藏'),
                           value: cfg.showRSS,
-                          onChanged: (v) => cfg.setShowRSS(v),
+                          onChanged: (v) => ref
+                              .read(appConfigNotifierProvider.notifier)
+                              .setShowRSS(v),
                         ),
                       ],
                     ),

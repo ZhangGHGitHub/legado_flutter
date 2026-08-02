@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/domain/ports/book_source_book_info_port.dart';
@@ -52,7 +54,14 @@ void main() {
           ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
           ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
         ],
-        child: MaterialApp(home: _ChangeSourceHarness(book: original)),
+        child: riverpod.ProviderScope(
+          overrides: [
+            sourceControllerProvider.overrideWithValue(
+              sourceProvider.controller,
+            ),
+          ],
+          child: MaterialApp(home: _ChangeSourceHarness(book: original)),
+        ),
       ),
     );
     await tester.tap(find.text('打开换源'));

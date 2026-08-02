@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/domain/ports/book_source_book_info_port.dart';
@@ -56,7 +58,14 @@ void main() {
           ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
           Provider<BookSourceSearchPort>.value(value: const _EmptySearchPort()),
         ],
-        child: MaterialApp(home: BookInfoPage(book: book)),
+        child: riverpod.ProviderScope(
+          overrides: [
+            sourceControllerProvider.overrideWithValue(
+              sourceProvider.controller,
+            ),
+          ],
+          child: MaterialApp(home: BookInfoPage(book: book)),
+        ),
       ),
     );
     await tester.pumpAndSettle();

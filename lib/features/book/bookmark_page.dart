@@ -12,7 +12,6 @@ import '../../help/bookmark_hint.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../providers/book_provider.dart';
-import '../../providers/source_provider.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/bookmark_editor_sheet.dart';
 import '../../widgets/note_editor_sheet.dart';
@@ -28,13 +27,7 @@ class BookmarkPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sourceProvider = context.read<SourceProvider>();
-    return riverpod.ProviderScope(
-      overrides: [
-        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
-      ],
-      child: _BookmarkPageBody(port: port),
-    );
+    return _BookmarkPageBody(port: port);
   }
 }
 

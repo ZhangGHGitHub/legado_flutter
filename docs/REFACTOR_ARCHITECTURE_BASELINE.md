@@ -10,6 +10,16 @@
 
 > 2026-08-03 Phase 4/R6 当前 owner 状态：SourceProvider 第四批完成分组管理弹窗和书源市场子页面的共享状态接入。分组弹窗从当前旧 Provider 取得同一 controller 后覆盖局部 Riverpod scope，列表和 CRUD 通过 `SourceNotifier`；市场页的 tile 通过 Riverpod 状态判断已存在源，单个添加和全部导入均等待 controller 持久化完成。新增异步 Widget 测试验证全部导入在写入 release 前不提示、不返回，并修复局部 scope 外 `ProviderScope.containerOf` 的运行时错误。Source 管理相关定向 `38/38`、Flutter 全量 `1067`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。SourceEditor、SourceDebug、RuleSub、启动任务和规则订阅适配器仍保留旧 Provider，R6 尚未全量退出。
 
+> 2026-08-03 Phase 4/R6 当前 owner 状态：AppConfig 已新增 Freezed 状态、共享 Controller 和 Riverpod Notifier，`ConfigPage` 通过局部 scope 订阅既有 `AppConfig` 单例；`load()` 并发去重、乐观持久化、四个配置键和启动顺序保持不变。组合根已将现有 `SourceProvider.controller` 覆盖到 `sourceControllerProvider`，`BookInfoPage`、`BookmarkPage`、`ChangeSourcePage` 直接消费根级 SourceNotifier，旧 Provider 继续为未迁移消费者提供兼容外观。AppConfig 定向 `9/9`、Source 页面/组合根定向 `8/8`、Flutter 串行全量 `1100`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。BookProvider/Reader 仍为高风险事实源边界，R6 尚未全量退出。
+
+## 192. 2026-08-03：AppConfig 与 SourceController 根级状态边界
+
+- AppConfig application 层新增 `AppConfigState`、`AppConfigController` 和 `AppConfigNotifier`，只将 `ConfigPage` 的四项配置状态接入 Riverpod；旧 `AppConfig` 单例继续负责 SharedPreferencesRuntime、`load()` single-flight、持久化和启动兼容语义。
+- `AppCompositionRoot.withCoreApi` 在已有 ProviderScope 中绑定 `SourceProvider.controller`，三个书籍页面删除局部 Source scope；测试宿主显式提供同一 controller。`BookProvider` 继续负责书籍、章节、阅读、目录、换源落库和入库，未创建第二份书籍事实源。
+- 只读审查确认 `BookProvider`、Reader、正文/目录和媒体链路属于高风险边界；下一批可独立处理 SourcesPage 管理动作或 Source scope 清理，不把这些边界与正文、章节身份、UTF-16 阅读位置或 R1-12 混迁。
+
+验证记录：AppConfig 定向 `9/9`、Source 页面/组合根定向 `8/8`、Flutter 串行全量 `1100`（`3` 项既有条件跳过）；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。该批不代表 BookProvider 生产状态、Source 全链路、R6 全量或 R1-12/平台门禁退出。
+
 ## 191. 2026-08-03：书源分组与市场子页面共享 Riverpod 状态
 
 - `source_group_manage_dialog.dart` 通过当前 `SourceProvider.controller` 建立局部 `ProviderScope`，分组列表订阅 `SourceNotifier`，添加、重命名和删除保留原中文文案、空名删除语义和主题布局。
