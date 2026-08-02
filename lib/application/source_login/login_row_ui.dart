@@ -1,22 +1,23 @@
 import 'dart:convert';
 
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'login_row_ui.freezed.dart';
+
 /// 登录行 UI - 对齐 legado `RowUi`。
 enum LoginRowType { text, password, button, toggle, select, checkbox }
 
-class LoginRowUi {
-  final String name;
-  final LoginRowType type;
-  final String? viewName;
-  final String? defaultValue;
-  final List<String> chars;
+@freezed
+class LoginRowUi with _$LoginRowUi {
+  const LoginRowUi._();
 
-  const LoginRowUi({
-    required this.name,
-    required this.type,
-    this.viewName,
-    this.defaultValue,
-    this.chars = const [],
-  });
+  const factory LoginRowUi({
+    required String name,
+    required LoginRowType type,
+    String? viewName,
+    String? defaultValue,
+    @Default(<String>[]) List<String> chars,
+  }) = _LoginRowUi;
 
   String get label =>
       (viewName != null && viewName!.isNotEmpty) ? viewName! : name;

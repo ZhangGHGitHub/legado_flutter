@@ -1,4 +1,7 @@
 import '../../domain/source/book_source.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'source_login_page_port.freezed.dart';
 
 /// 书源登录页的表单、脚本与 Cookie 会话边界。
 abstract interface class SourceLoginPagePort {
@@ -111,30 +114,22 @@ final class UnavailableSourceLoginPagePort implements SourceLoginPagePort {
   }) => const SourceLoginScriptResult(output: '', commands: []);
 }
 
-class SourceLoginCommand {
-  const SourceLoginCommand({
-    required this.operation,
-    this.text = '',
-    this.url = '',
-    this.html = '',
-    this.data,
-  });
-
-  final String operation;
-  final String text;
-  final String url;
-  final String html;
-  final Map<String, dynamic>? data;
+@freezed
+class SourceLoginCommand with _$SourceLoginCommand {
+  const factory SourceLoginCommand({
+    required String operation,
+    @Default('') String text,
+    @Default('') String url,
+    @Default('') String html,
+    Map<String, dynamic>? data,
+  }) = _SourceLoginCommand;
 }
 
-class SourceLoginScriptResult {
-  const SourceLoginScriptResult({
-    required this.output,
-    required this.commands,
-    this.loginInfo = const {},
-  });
-
-  final String output;
-  final List<SourceLoginCommand> commands;
-  final Map<String, String> loginInfo;
+@freezed
+class SourceLoginScriptResult with _$SourceLoginScriptResult {
+  const factory SourceLoginScriptResult({
+    required String output,
+    required List<SourceLoginCommand> commands,
+    @Default(<String, String>{}) Map<String, String> loginInfo,
+  }) = _SourceLoginScriptResult;
 }

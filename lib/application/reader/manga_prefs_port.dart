@@ -1,3 +1,7 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'manga_prefs_port.freezed.dart';
+
 /// 漫画阅读器偏好持久化边界。
 abstract interface class MangaPrefsPort {
   Future<void> ensureLoaded();
@@ -61,87 +65,34 @@ abstract interface class MangaPrefsPort {
 enum MangaReadDirection { vertical, leftToRight, rightToLeft }
 
 /// 漫画阅读页脚显示配置。
-class MangaFooterConfig {
-  final bool hideFooter;
-  final bool hideChapterName;
-  final bool hidePageNumber;
-  final bool hidePageNumberLabel;
-  final bool hideChapter;
-  final bool hideChapterLabel;
-  final bool hideProgressRatio;
-  final bool hideProgressRatioLabel;
-  final int footerOrientation;
-
-  const MangaFooterConfig({
-    this.hideFooter = false,
-    this.hideChapterName = false,
-    this.hidePageNumber = false,
-    this.hidePageNumberLabel = false,
-    this.hideChapter = false,
-    this.hideChapterLabel = false,
-    this.hideProgressRatio = false,
-    this.hideProgressRatioLabel = false,
-    this.footerOrientation = 1,
-  });
-
-  MangaFooterConfig copyWith({
-    bool? hideFooter,
-    bool? hideChapterName,
-    bool? hidePageNumber,
-    bool? hidePageNumberLabel,
-    bool? hideChapter,
-    bool? hideChapterLabel,
-    bool? hideProgressRatio,
-    bool? hideProgressRatioLabel,
-    int? footerOrientation,
-  }) {
-    return MangaFooterConfig(
-      hideFooter: hideFooter ?? this.hideFooter,
-      hideChapterName: hideChapterName ?? this.hideChapterName,
-      hidePageNumber: hidePageNumber ?? this.hidePageNumber,
-      hidePageNumberLabel: hidePageNumberLabel ?? this.hidePageNumberLabel,
-      hideChapter: hideChapter ?? this.hideChapter,
-      hideChapterLabel: hideChapterLabel ?? this.hideChapterLabel,
-      hideProgressRatio: hideProgressRatio ?? this.hideProgressRatio,
-      hideProgressRatioLabel:
-          hideProgressRatioLabel ?? this.hideProgressRatioLabel,
-      footerOrientation: footerOrientation ?? this.footerOrientation,
-    );
-  }
+@freezed
+class MangaFooterConfig with _$MangaFooterConfig {
+  const factory MangaFooterConfig({
+    @Default(false) bool hideFooter,
+    @Default(false) bool hideChapterName,
+    @Default(false) bool hidePageNumber,
+    @Default(false) bool hidePageNumberLabel,
+    @Default(false) bool hideChapter,
+    @Default(false) bool hideChapterLabel,
+    @Default(false) bool hideProgressRatio,
+    @Default(false) bool hideProgressRatioLabel,
+    @Default(1) int footerOrientation,
+  }) = _MangaFooterConfig;
 }
 
 /// 漫画图片滤镜配置。
-class MangaColorFilterConfig {
-  final int r;
-  final int g;
-  final int b;
-  final int a;
-  final int brightness;
+@freezed
+class MangaColorFilterConfig with _$MangaColorFilterConfig {
+  const MangaColorFilterConfig._();
 
-  const MangaColorFilterConfig({
-    this.r = 0,
-    this.g = 0,
-    this.b = 0,
-    this.a = 0,
-    this.brightness = 0,
-  });
+  const factory MangaColorFilterConfig({
+    @Default(0) int r,
+    @Default(0) int g,
+    @Default(0) int b,
+    @Default(0) int a,
+    @Default(0) int brightness,
+  }) = _MangaColorFilterConfig;
 
   bool get isIdentity =>
       r == 0 && g == 0 && b == 0 && a == 0 && brightness == 0;
-
-  MangaColorFilterConfig copyWith({
-    int? r,
-    int? g,
-    int? b,
-    int? a,
-    int? brightness,
-  }) {
-    return MangaColorFilterConfig(
-      r: r ?? this.r,
-      g: g ?? this.g,
-      b: b ?? this.b,
-      a: a ?? this.a,
-      brightness: brightness ?? this.brightness,
-    );
-  }
 }

@@ -30,6 +30,7 @@
 - Phase 3：ClickZoneLayout、RuleSub、BookSourceValidationSnapshot 和 LegacyRoomImportReport 迁移为 Freezed；Room 报告保留手写严格 JSON 解析，避免弱化缺失/类型错误和中文错误原文契约。
 - Phase 3：应用 HTTP、书源调试、本地解析和远端压缩包端口 DTO 迁移为 Freezed，保留端口签名、原始字节和顺序语义。
 - Phase 3：本地备份、正文规则输入、RSS 结果和书源验证浏览器端口 DTO 迁移为 Freezed；生成缓存恢复后复核原始正文、取消和列表语义。
+- Phase 3：章节进度、诊断、漫画配置和书源登录 application 模型迁移为 Freezed，保留 UTF-16 位置、敏感信息隔离、显示默认值和登录脚本默认参数。
 - Phase 2：init_engine 的公开 FRB 错误改为 AppError，新增生成绑定错误解码契约。
 - Phase 5：java.ajax 使用独立 HTTP 客户端和 deadline；超时会取消请求 future，并在专用 Runtime 退出时回收连接。getStrResponse 与 WebView 宿主仍未覆盖。
 - 验证：Rust 268/268、Flutter 934（3 项既有条件跳过）、flutter analyze --no-pub 已通过；架构扫描和 git diff --check 在本批文档更新后复核。

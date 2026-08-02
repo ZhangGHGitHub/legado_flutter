@@ -1,11 +1,16 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
 import '../../domain/book/chapter.dart';
 
-/// 阅读位置在目录刷新后的迁移结果。
-class ChapterProgress {
-  final int chapterIndex;
-  final int chapterPos;
+part 'chapter_progress_migrator.freezed.dart';
 
-  const ChapterProgress({required this.chapterIndex, required this.chapterPos});
+/// 阅读位置在目录刷新后的迁移结果。
+@freezed
+class ChapterProgress with _$ChapterProgress {
+  const factory ChapterProgress({
+    required int chapterIndex,
+    required int chapterPos,
+  }) = _ChapterProgress;
 }
 
 /// 将旧目录中的阅读位置迁移到刷新后的目录。

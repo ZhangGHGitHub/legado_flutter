@@ -1,7 +1,11 @@
 import 'dart:async';
 
+import 'package:freezed_annotation/freezed_annotation.dart';
+
 import '../../domain/diagnostics/diagnostic_record.dart';
 import '../startup/startup_task_runner.dart';
+
+part 'app_diagnostics_monitor.freezed.dart';
 
 enum AppDiagnosticEventKind {
   slowFrame,
@@ -11,52 +15,47 @@ enum AppDiagnosticEventKind {
   startupTaskFailure,
 }
 
-class AppDiagnosticsConfig {
-  const AppDiagnosticsConfig({
-    this.enabled = false,
-    this.recordFrames = true,
-    this.recordFreeze = true,
-    this.recordDispatchers = true,
-    this.recordStartupTasks = true,
-    this.frameBudget = const Duration(milliseconds: 16),
-    this.freezeProbeInterval = const Duration(seconds: 3),
-    this.freezeTolerance = const Duration(milliseconds: 300),
-    this.dispatcherTimeout = const Duration(seconds: 5),
-  });
+@freezed
+class AppDiagnosticsConfig with _$AppDiagnosticsConfig {
+  const factory AppDiagnosticsConfig({
+    @Default(false) bool enabled,
+    @Default(true) bool recordFrames,
+    @Default(true) bool recordFreeze,
+    @Default(true) bool recordDispatchers,
+    @Default(true) bool recordStartupTasks,
+    @Default(Duration(milliseconds: 16)) Duration frameBudget,
+    @Default(Duration(seconds: 3)) Duration freezeProbeInterval,
+    @Default(Duration(milliseconds: 300)) Duration freezeTolerance,
+    @Default(Duration(seconds: 5)) Duration dispatcherTimeout,
+  }) = _AppDiagnosticsConfig;
 
-  const AppDiagnosticsConfig.disabled() : this();
-
-  final bool enabled;
-  final bool recordFrames;
-  final bool recordFreeze;
-  final bool recordDispatchers;
-  final bool recordStartupTasks;
-  final Duration frameBudget;
-  final Duration freezeProbeInterval;
-  final Duration freezeTolerance;
-  final Duration dispatcherTimeout;
+  const factory AppDiagnosticsConfig.disabled({
+    @Default(false) bool enabled,
+    @Default(true) bool recordFrames,
+    @Default(true) bool recordFreeze,
+    @Default(true) bool recordDispatchers,
+    @Default(true) bool recordStartupTasks,
+    @Default(Duration(milliseconds: 16)) Duration frameBudget,
+    @Default(Duration(seconds: 3)) Duration freezeProbeInterval,
+    @Default(Duration(milliseconds: 300)) Duration freezeTolerance,
+    @Default(Duration(seconds: 5)) Duration dispatcherTimeout,
+  }) = _DisabledAppDiagnosticsConfig;
 }
 
-class AppDiagnosticEvent {
-  const AppDiagnosticEvent({
-    required this.kind,
-    required this.source,
-    required this.message,
-    required this.occurredAt,
-    this.duration,
-    this.threshold,
-    this.error,
-    this.stackTrace,
-  });
+@freezed
+class AppDiagnosticEvent with _$AppDiagnosticEvent {
+  const AppDiagnosticEvent._();
 
-  final AppDiagnosticEventKind kind;
-  final String source;
-  final String message;
-  final DateTime occurredAt;
-  final Duration? duration;
-  final Duration? threshold;
-  final Object? error;
-  final StackTrace? stackTrace;
+  const factory AppDiagnosticEvent({
+    required AppDiagnosticEventKind kind,
+    required String source,
+    required String message,
+    required DateTime occurredAt,
+    Duration? duration,
+    Duration? threshold,
+    Object? error,
+    StackTrace? stackTrace,
+  }) = _AppDiagnosticEvent;
 
   bool get isCrash => false;
   String get level => DiagnosticSeverity.warning.level;
