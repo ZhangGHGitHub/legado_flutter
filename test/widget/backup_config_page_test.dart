@@ -80,7 +80,7 @@ class _FakeLegacyRoomImportUseCase implements LegacyRoomImportUseCase {
   @override
   LegacyRoomImportReport importDatabase({
     required String sourcePath,
-    required String backupPath,
+    required String? backupPath,
     bool replace = false,
   }) {
     return const LegacyRoomImportReport(

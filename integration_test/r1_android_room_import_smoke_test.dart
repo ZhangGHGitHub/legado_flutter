@@ -16,7 +16,11 @@ import 'package:legado_flutter/services/legacy_room_import_service_factory.dart'
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-const _phase = String.fromEnvironment('R1_ROOM_PHASE', defaultValue: 'import');
+const _phase = String.fromEnvironment('R1_ROOM_PHASE', defaultValue: 'all');
+const _dataset = String.fromEnvironment(
+  'R1_ROOM_DATASET',
+  defaultValue: 'real',
+);
 const _sourcePath = String.fromEnvironment(
   'R1_ROOM_SOURCE_PATH',
   defaultValue:
@@ -94,7 +98,7 @@ void main() {
       documents.path,
       'r1-room-gate-pre-import.json',
     );
-    if (_phase == 'import') {
+    if (_phase == 'import' || _phase == 'all') {
       final target = File(targetPath);
       if (await target.exists()) await target.delete();
       final preImportBackup = File(preImportBackupPath);
@@ -113,7 +117,7 @@ void main() {
       backup: FrbBackupPort(),
     );
 
-    if (_phase == 'import') {
+    if (_phase == 'import' || _phase == 'all') {
       final report = importService.importDatabase(
         sourcePath: _sourcePath,
         backupPath: preImportBackupPath,
@@ -167,40 +171,70 @@ void main() {
         ),
       );
       final importedBooks = await database.getBooks();
-      expect(importedBooks.any((book) => book.id == 'book-android'), isTrue);
       expect(importedBooks.any((book) => book.id == 'r1-device-book'), isTrue);
-      final importedBook = importedBooks.firstWhere(
-        (book) => book.id == 'book-android',
-      );
-      expect(importedBook.name, 'Android 迁移测试书');
-      expect(importedBook.author, '测试作者');
-      expect(importedBook.sourceUrl, 'book-android');
-      expect(importedBook.bookSourceUrl, 'https://source.android.test');
-      expect(importedBook.tocUrl, 'https://toc.android.test');
-      expect(importedBook.durChapterIndex, 0);
-      expect(importedBook.currentPageIndex, 17);
-      expect(importedBook.readIteration, 2);
-      expect(importedBook.readConfig.extra['fontSize'], 20);
+      final sourceBooks = importedBooks
+          .where((book) => book.id != 'r1-device-book')
+          .toList();
+      expect(sourceBooks, isNotEmpty, reason: '真实 Room 源库至少应导入一本书');
+      final importedBook = sourceBooks.first;
+      expect(importedBook.id, isNotEmpty);
+      expect(importedBook.name, isNotEmpty);
+      expect(importedBook.author, isNotEmpty);
+      expect(importedBook.sourceUrl, importedBook.id);
+      expect(importedBook.bookSourceUrl, isNotEmpty);
+      expect(importedBook.tocUrl, isNotEmpty);
+      expect(importedBook.durChapterIndex, greaterThanOrEqualTo(0));
+      expect(importedBook.currentPageIndex, greaterThanOrEqualTo(0));
+      expect(importedBook.readIteration, greaterThanOrEqualTo(0));
 
-      final importedChapters = await database.getChapters('book-android');
-      expect(importedChapters, hasLength(1));
+      final importedChapters = await database.getChapters(importedBook.id);
+      expect(importedChapters, isNotEmpty);
+      expect(importedChapters.length, report.counts['chapters']);
+      final chapterIds = <String>{};
+      for (final chapter in importedChapters) {
+        expect(chapter.id, isNotEmpty);
+        expect(chapterIds.add(chapter.id), isTrue, reason: '章节 ID 不得重复');
+        expect(
+          chapter.id,
+          Chapter.idFor(
+            bookId: importedBook.id,
+            url: chapter.url,
+            index: chapter.index,
+          ),
+        );
+      }
+      expect(report.counts['detailedReadRecords'], greaterThan(0));
+      expect(report.counts['readRecord'], greaterThan(0));
       expect(
-        importedChapters.single.id,
-        Chapter.idFor(
-          bookId: 'book-android',
-          url: 'https://source.android.test/chapter/1',
-          index: 0,
-        ),
+        report.warnings.any((warning) => warning.contains('readRecord')),
+        isTrue,
+        reason: '真实 Room readRecord 仍应保留 archive-only warning',
       );
-      expect(importedChapters.single.title, '第一章');
-      expect(importedChapters.single.index, 0);
-      return;
+
+      if (_dataset == 'fixture') {
+        expect(importedBook.id, 'book-android');
+        expect(importedBook.name, 'Android 迁移测试书');
+        expect(importedBook.author, '测试作者');
+        expect(importedBook.bookSourceUrl, 'https://source.android.test');
+        expect(importedBook.tocUrl, 'https://toc.android.test');
+        expect(importedBook.durChapterIndex, 0);
+        expect(importedBook.currentPageIndex, 17);
+        expect(importedBook.readIteration, 2);
+        expect(importedBook.readConfig.extra['fontSize'], 20);
+        expect(importedChapters, hasLength(1));
+        expect(importedChapters.single.title, '第一章');
+        expect(importedChapters.single.index, 0);
+      }
+      if (_phase != 'all') return;
     }
 
-    expect(_phase, 'verify');
+    expect(<String>{'all', 'verify'}, contains(_phase));
     final persistedBooks = await database.getBooks();
-    expect(persistedBooks.any((book) => book.id == 'book-android'), isTrue);
     expect(persistedBooks.any((book) => book.id == 'r1-device-book'), isTrue);
+    final persistedSourceBooks = persistedBooks
+        .where((book) => book.id != 'r1-device-book')
+        .toList();
+    expect(persistedSourceBooks, isNotEmpty);
 
     final duplicateBackupPath = p.join(
       documents.path,
@@ -232,6 +266,31 @@ void main() {
       reason: '重复 Room 导入不得增加 legacyRoomImports 归档数',
     );
 
+    // 重复导入已存在时，Rust 允许省略备份路径；此调用仍经 application
+    // service、FRB port 和 generated FRB API，不能用手写报告替代。
+    final booksBeforeNullBackupDuplicate = await database.getBooks();
+    final archivesBeforeNullBackupDuplicate = _legacyRoomImportCount(
+      FrbBackupPort().exportBackup(),
+    );
+    final duplicateWithoutBackup = importService.importDatabase(
+      sourcePath: _sourcePath,
+      backupPath: null,
+      replace: false,
+    );
+    expect(duplicateWithoutBackup.skippedDuplicate, isTrue);
+    expect(duplicateWithoutBackup.backupWritten, isFalse);
+    expect(duplicateWithoutBackup.backupPath, isNull);
+    expect(
+      (await database.getBooks()).map((book) => book.id).toList(),
+      booksBeforeNullBackupDuplicate.map((book) => book.id).toList(),
+      reason: '省略备份路径的重复 Room 导入不得修改目标业务书籍',
+    );
+    expect(
+      _legacyRoomImportCount(FrbBackupPort().exportBackup()),
+      archivesBeforeNullBackupDuplicate,
+      reason: '省略备份路径的重复 Room 导入不得增加 legacyRoomImports 归档数',
+    );
+
     final backupFile = await backupService.backupToLocalFile();
     final backupBytes = await backupFile.readAsBytes();
     expect(backupBytes, isNotEmpty);
@@ -239,7 +298,13 @@ void main() {
     expect(await database.getBooks(), isEmpty);
     await backupService.restoreFromBytes(backupBytes);
     final restoredBooks = await database.getBooks();
-    expect(restoredBooks.any((book) => book.id == 'book-android'), isTrue);
     expect(restoredBooks.any((book) => book.id == 'r1-device-book'), isTrue);
+    for (final book in persistedBooks) {
+      expect(
+        restoredBooks.any((restored) => restored.id == book.id),
+        isTrue,
+        reason: '备份恢复不得丢失书籍 ${book.id}',
+      );
+    }
   });
 }

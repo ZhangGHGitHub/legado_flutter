@@ -43,112 +43,36 @@ class BookReadConfig with _$BookReadConfig {
 }
 
 /// 书籍领域实体，对应 Legado 的一本书。
-class Book {
-  final String id;
-  final String name;
-  final String author;
-  final String coverUrl;
-  final String type;
-  final double progress;
-  final String? currentChapter;
-  final String? lastChapter;
-  final int totalChapterNum;
-  final int durChapterIndex;
-  final int currentPageIndex;
-  final BookReadConfig readConfig;
-  final bool isFavorite;
-  final String sourceUrl;
-  final String tocUrl;
-  final String description;
-  final String bookSourceUrl;
-  final String group;
-  final int readIteration;
-  final bool simReadEnabled;
-  final String simReadStartDate;
-  final int simReadStartChapter;
-  final int simReadDailyChapters;
-  final String? updatedAt;
+@freezed
+class Book with _$Book {
+  const Book._();
 
-  Book({
-    required this.id,
-    required this.name,
-    this.author = '未知作者',
-    this.coverUrl = '',
-    this.type = 'online',
-    this.progress = 0.0,
-    this.currentChapter,
-    this.lastChapter,
-    this.totalChapterNum = 0,
-    this.durChapterIndex = 0,
-    this.currentPageIndex = 0,
-    this.readConfig = const BookReadConfig(),
-    this.isFavorite = false,
-    this.sourceUrl = '',
-    this.tocUrl = '',
-    this.description = '',
-    this.bookSourceUrl = '',
-    this.group = '',
-    this.readIteration = 0,
-    this.simReadEnabled = false,
-    this.simReadStartDate = '',
-    this.simReadStartChapter = 0,
-    this.simReadDailyChapters = 3,
-    this.updatedAt,
-  });
-
-  Book copyWith({
-    String? id,
-    String? name,
-    String? author,
-    String? coverUrl,
-    String? type,
-    double? progress,
+  const factory Book({
+    required String id,
+    required String name,
+    @Default('未知作者') String author,
+    @Default('') String coverUrl,
+    @Default('online') String type,
+    @Default(0.0) double progress,
     String? currentChapter,
     String? lastChapter,
-    int? totalChapterNum,
-    int? durChapterIndex,
-    int? currentPageIndex,
-    BookReadConfig? readConfig,
-    bool? isFavorite,
-    String? sourceUrl,
-    String? tocUrl,
-    String? description,
-    String? bookSourceUrl,
-    String? group,
-    int? readIteration,
-    bool? simReadEnabled,
-    String? simReadStartDate,
-    int? simReadStartChapter,
-    int? simReadDailyChapters,
+    @Default(0) int totalChapterNum,
+    @Default(0) int durChapterIndex,
+    @Default(0) int currentPageIndex,
+    @Default(BookReadConfig()) BookReadConfig readConfig,
+    @Default(false) bool isFavorite,
+    @Default('') String sourceUrl,
+    @Default('') String tocUrl,
+    @Default('') String description,
+    @Default('') String bookSourceUrl,
+    @Default('') String group,
+    @Default(0) int readIteration,
+    @Default(false) bool simReadEnabled,
+    @Default('') String simReadStartDate,
+    @Default(0) int simReadStartChapter,
+    @Default(3) int simReadDailyChapters,
     String? updatedAt,
-  }) {
-    return Book(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      author: author ?? this.author,
-      coverUrl: coverUrl ?? this.coverUrl,
-      type: type ?? this.type,
-      progress: progress ?? this.progress,
-      currentChapter: currentChapter ?? this.currentChapter,
-      lastChapter: lastChapter ?? this.lastChapter,
-      totalChapterNum: totalChapterNum ?? this.totalChapterNum,
-      durChapterIndex: durChapterIndex ?? this.durChapterIndex,
-      currentPageIndex: currentPageIndex ?? this.currentPageIndex,
-      readConfig: readConfig ?? this.readConfig,
-      isFavorite: isFavorite ?? this.isFavorite,
-      sourceUrl: sourceUrl ?? this.sourceUrl,
-      tocUrl: tocUrl ?? this.tocUrl,
-      description: description ?? this.description,
-      bookSourceUrl: bookSourceUrl ?? this.bookSourceUrl,
-      group: group ?? this.group,
-      readIteration: readIteration ?? this.readIteration,
-      simReadEnabled: simReadEnabled ?? this.simReadEnabled,
-      simReadStartDate: simReadStartDate ?? this.simReadStartDate,
-      simReadStartChapter: simReadStartChapter ?? this.simReadStartChapter,
-      simReadDailyChapters: simReadDailyChapters ?? this.simReadDailyChapters,
-      updatedAt: updatedAt ?? this.updatedAt,
-    );
-  }
+  }) = _Book;
 
   factory Book.fromJson(Map<String, dynamic> json) {
     return Book(

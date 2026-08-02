@@ -45,6 +45,13 @@ AppError = Network | Parse | Database | JsExecution | Validation | Unsupported |
 | `bookSourceUrl` | `String` | 书源 URL |
 | `group` | `String` | 书架分组 |
 | `readIteration` | `int` | 重读次数 |
+| `simReadEnabled` | `bool` | 模拟阅读开关 |
+| `simReadStartDate` | `String` | 模拟阅读起始日期 |
+| `simReadStartChapter` | `int` | 模拟阅读起始章节 |
+| `simReadDailyChapters` | `int` | 每日模拟阅读章节数，范围 `1..999` |
+| `updatedAt` | `String?` | 数据库更新时间；旧行缺失时 Rust 输出空字符串 |
+
+Rust `BookDto` 是 `books` 查询的唯一 serde 投影，序列化为上述 camelCase JSON；`db_get_books` 仍返回 `Vec<String>`，因此 Flutter 的 `RustDatabasePort.getBooks()`、FRB 绑定和现有备份 JSON 兼容接口不变。`readConfig` 必须保留完整对象、`currentChapter` 保持 nullable，`currentPageIndex` 继续保持既有阅读位置语义。新增字段必须同步更新 Rust DTO、Flutter `Book` 和契约测试。
 
 ### SearchResultItem
 
@@ -56,6 +63,24 @@ AppError = Network | Parse | Database | JsExecution | Validation | Unsupported |
 | `coverUrl` | `String` | 封面 URL，可为空 |
 | `kind` | `String` | 类型 |
 | `note` | `String` | 备注 |
+
+### BookSource
+
+Rust `BookSourceDto` 与 Flutter `BookSource` 共享以下 camelCase JSON 字段；`rawSourceJson` 必须保留原始 Legado JSON，嵌套规则不得因 DTO 投影而丢失。Rust 内部 `BookSource::to_dto()` 当前只做纯内存转换，尚未作为新的 FFI 入口暴露。
+
+```text
+bookSourceUrl, bookSourceName, bookSourceType, bookSourceGroup,
+enabled, customOrder, lastUpdateTime, weight, enabledExplore, respondTime,
+ruleSearchUrl, ruleSearchList, ruleSearchName, ruleSearchAuthor,
+ruleSearchCoverUrl, ruleSearchKind, ruleSearchNote,
+ruleBookUrlPattern, ruleBookName, ruleBookAuthor, ruleBookCoverUrl,
+ruleBookKind, ruleBookNote, ruleBookLastChapter,
+ruleChapterList, ruleChapterName, ruleChapterUrl, ruleChapterUrlIsFull,
+ruleContentUrl, ruleContent, ruleContentRemove,
+rulePageUrl, rulePageNext, bookSourceComment, rawSourceJson
+```
+
+Rust DTO 的 `rulePageNext` 按扁平字段、目录分页、正文分页顺序回退；其它嵌套规则的完整形状由 `rawSourceJson` 保留。新增字段必须同步更新 Rust DTO、Flutter Freezed 模型和契约测试。
 
 ## CoreApi
 

@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -55,7 +56,55 @@ pub struct BookSource {
     pub rule_explore_obj: Option<Value>,
 }
 
+/// Flutter/domain-facing projection of a Legado book source.
+///
+/// The parser keeps the complete source JSON in `raw_source_json`; this DTO
+/// exposes only the stable flat fields shared by the current Flutter model.
+#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookSourceDto {
+    pub book_source_url: String,
+    pub book_source_name: String,
+    pub book_source_type: String,
+    pub book_source_group: String,
+    pub enabled: bool,
+    pub custom_order: i64,
+    pub last_update_time: i64,
+    pub weight: i64,
+    pub enabled_explore: bool,
+    pub respond_time: i64,
+    pub rule_search_url: String,
+    pub rule_search_list: String,
+    pub rule_search_name: String,
+    pub rule_search_author: String,
+    pub rule_search_cover_url: String,
+    pub rule_search_kind: String,
+    pub rule_search_note: String,
+    pub rule_book_url_pattern: String,
+    pub rule_book_name: String,
+    pub rule_book_author: String,
+    pub rule_book_cover_url: String,
+    pub rule_book_kind: String,
+    pub rule_book_note: String,
+    pub rule_book_last_chapter: String,
+    pub rule_chapter_list: String,
+    pub rule_chapter_name: String,
+    pub rule_chapter_url: String,
+    pub rule_chapter_url_is_full: String,
+    pub rule_content_url: String,
+    pub rule_content: String,
+    pub rule_content_remove: String,
+    pub rule_page_url: String,
+    pub rule_page_next: String,
+    pub book_source_comment: String,
+    pub raw_source_json: String,
+}
+
 impl BookSource {
+    pub fn to_dto(&self) -> BookSourceDto {
+        BookSourceDto::from(self)
+    }
+
     pub fn from_json(json_str: &str) -> Result<Self, String> {
         let obj: Value =
             serde_json::from_str(json_str).map_err(|e| format!("书源 JSON 解析失败: {e}"))?;
@@ -241,6 +290,114 @@ impl BookSource {
     }
 }
 
+impl From<&BookSource> for BookSourceDto {
+    fn from(source: &BookSource) -> Self {
+        let raw = serde_json::from_str::<Value>(&source.raw_json).unwrap_or(Value::Null);
+        let rule_page_next = first_non_empty([
+            root_string(&raw, "rulePageNext"),
+            source.rule_toc_next_toc_url.clone(),
+            source.rule_content_next_url.clone(),
+        ]);
+
+        Self {
+            book_source_url: source.book_source_url.clone(),
+            book_source_name: source.book_source_name.clone(),
+            book_source_type: root_string_or(&raw, "bookSourceType", "0"),
+            book_source_group: root_string(&raw, "bookSourceGroup"),
+            enabled: root_bool_or(&raw, "enabled", true),
+            custom_order: root_i64(&raw, "customOrder"),
+            last_update_time: root_i64(&raw, "lastUpdateTime"),
+            weight: root_i64(&raw, "weight"),
+            enabled_explore: root_bool_or(&raw, "enabledExplore", true),
+            respond_time: root_i64_or(&raw, "respondTime", 180000),
+            rule_search_url: source.rule_search_url.clone(),
+            rule_search_list: source.rule_search_list.clone(),
+            rule_search_name: source.rule_search_name.clone(),
+            rule_search_author: source.rule_search_author.clone(),
+            rule_search_cover_url: source.rule_search_cover_url.clone(),
+            rule_search_kind: source.rule_search_kind.clone(),
+            rule_search_note: source.rule_search_note.clone(),
+            rule_book_url_pattern: root_string_or(
+                &raw,
+                "ruleBookUrlPattern",
+                &nested_string(&raw, "ruleBookInfo", "bookUrl"),
+            ),
+            rule_book_name: source.rule_book_info_name.clone(),
+            rule_book_author: source.rule_book_info_author.clone(),
+            rule_book_cover_url: source.rule_book_info_cover_url.clone(),
+            rule_book_kind: source.rule_book_info_kind.clone(),
+            rule_book_note: source.rule_book_info_intro.clone(),
+            rule_book_last_chapter: source.rule_book_info_last_chapter.clone(),
+            rule_chapter_list: source.rule_toc_chapter_list.clone(),
+            rule_chapter_name: source.rule_toc_chapter_name.clone(),
+            rule_chapter_url: source.rule_toc_chapter_url.clone(),
+            rule_chapter_url_is_full: root_string(&raw, "ruleChapterUrlIsFull"),
+            rule_content_url: root_string(&raw, "ruleContentUrl"),
+            rule_content: source.rule_content.clone(),
+            rule_content_remove: root_string(&raw, "ruleContentRemove"),
+            rule_page_url: root_string(&raw, "rulePageUrl"),
+            rule_page_next,
+            book_source_comment: root_string(&raw, "bookSourceComment"),
+            raw_source_json: source.raw_json.clone(),
+        }
+    }
+}
+
+fn first_non_empty<const N: usize>(values: [String; N]) -> String {
+    values
+        .into_iter()
+        .find(|value| !value.is_empty())
+        .unwrap_or_default()
+}
+
+fn root_value<'a>(raw: &'a Value, key: &str) -> Option<&'a Value> {
+    raw.as_object().and_then(|object| object.get(key))
+}
+
+fn root_string(raw: &Value, key: &str) -> String {
+    root_value(raw, key)
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn root_string_or(raw: &Value, key: &str, default: &str) -> String {
+    let value = root_string(raw, key);
+    if value.is_empty() {
+        default.to_string()
+    } else {
+        value
+    }
+}
+
+fn root_i64(raw: &Value, key: &str) -> i64 {
+    root_value(raw, key)
+        .and_then(Value::as_i64)
+        .unwrap_or_default()
+}
+
+fn root_i64_or(raw: &Value, key: &str, default: i64) -> i64 {
+    root_value(raw, key)
+        .and_then(Value::as_i64)
+        .unwrap_or(default)
+}
+
+fn root_bool_or(raw: &Value, key: &str, default: bool) -> bool {
+    match root_value(raw, key) {
+        Some(Value::Bool(value)) => *value,
+        Some(Value::Number(value)) => value.as_i64().map(|value| value != 0).unwrap_or(default),
+        _ => default,
+    }
+}
+
+fn nested_string(raw: &Value, outer: &str, inner: &str) -> String {
+    root_value(raw, outer)
+        .and_then(|value| value.get(inner))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string()
+}
+
 /// 是否含 `@js:` 规则片段。
 ///
 /// Rust QuickJS 支持 `<js>...</js>`；`@js:` 是 Legado 的 URL 模板脚本，
@@ -287,6 +444,44 @@ fn has_json_rule(rule: &Value) -> bool {
         }),
         Value::String(s) => s.starts_with('$'),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod dto_tests {
+    use super::*;
+
+    #[test]
+    fn book_source_dto_preserves_legacy_json_contract() {
+        let source = BookSource::from_json(
+            &serde_json::json!({
+                "bookSourceUrl": "https://example.com",
+                "bookSourceName": "示例",
+                "enabled": false,
+                "customOrder": 7,
+                "ruleSearch": {"bookList": ".item", "name": "h2"},
+                "ruleBookInfo": {"name": "h1", "bookUrl": "a"},
+                "ruleToc": {"chapterList": ".chapter", "nextTocUrl": "next"},
+                "ruleContent": {"content": ".content", "nextContentUrl": "nextPage"},
+                "rulePageNext": "flatNext",
+                "customField": {"keep": true}
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let encoded = serde_json::to_value(source.to_dto()).unwrap();
+
+        assert_eq!(encoded["bookSourceUrl"], "https://example.com");
+        assert_eq!(encoded["bookSourceName"], "示例");
+        assert_eq!(encoded["enabled"], false);
+        assert_eq!(encoded["customOrder"], 7);
+        assert_eq!(encoded["ruleSearchList"], ".item");
+        assert_eq!(encoded["ruleBookUrlPattern"], "a");
+        assert_eq!(encoded["ruleChapterList"], ".chapter");
+        assert_eq!(encoded["ruleContent"], ".content");
+        assert_eq!(encoded["rulePageNext"], "flatNext");
+        assert_eq!(encoded["rawSourceJson"], source.raw_json);
     }
 }
 

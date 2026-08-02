@@ -11,14 +11,34 @@
 >
 > 当前暂停项（2026-07-26）：Web 平台/WASM/PWA 构建、Web 平台适配和相关验收；TTS 真实 Android 引擎验收。除这两类门禁外，Android/Windows 重构继续按固定顺序推进。
 
-> **统一设计约束：** [LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md](./LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md) 已于 2026-08-01 固化为目标架构和后续迁移的硬约束。当前 Provider、手写模型、字符串错误和宿主级 QuickJS 超时缺口均视为待迁移项；在对应门禁通过前，不得宣称严格设计一致。
+> **统一设计约束：** [LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md](./LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md) 已于 2026-08-01 固化为目标架构和后续迁移的硬约束。当前 Provider、剩余手写模型、字符串错误和宿主级 QuickJS 超时缺口均视为待迁移项；在对应门禁通过前，不得宣称严格设计一致。
+> **Android UI 目标基线：** 原版 UI/功能对照固定使用 `emulator-5556` 上的 `io.legado.app.debug`，版本为 `3.26.072317debug`；重构版使用 `com.legado.legado_flutter` 单独验证。截图、交互、主题、文字、布局和功能验收均以该版本为准，其他版本不得替代该 UI 基线。
 
-2026-08-02 R1-12 追溯补充：Rust Room 七张核心表已补齐逐字段 golden fixture，Flutter 导入报告已覆盖核心表计数、保留行、归档表、告警、未映射列、指纹和重复导入幂等。`books.originName` 现明确列入未映射字段，因为当前 Rust v17 业务映射只在原始快照保留该列。验证：Rust Room `21/21`、Flutter Room `5/5`、Rust 全量 `249/249`、Flutter 全量 `911`（`3` 项既有条件跳过）、analyze、架构扫描和 `git diff --check` 通过。真实原版非空数据库仍缺失，`readRecord`/详细阅读记录语义、非核心表业务化和文件级备份目标仍需后续决策；本条不关闭 R1-12，不推进新的 R2-R6 实现。
+> **R1-12 表范围口径：** 当前 Rust v17 业务映射为六张核心表（`books`、`book_sources`、`chapters`、`bookmarks`、`detailedReadRecord`、`replace_rules`）；`readRecord` 作为第七张迁移关注表仅 archive-only 保存。文档历史记录中的“七张核心表”按此口径解释，不代表七张表均已业务化。
+
+> **R1-12 产品决策（2026-08-02）：** 旧版 Legado 数据必须能够导入，已完成业务映射的数据导入后立即可用；`readRecord` 和非核心 Room 表暂不业务化，但必须无损 archive-only 保存，不得因未映射而拒绝旧数据导入或丢弃原始行。导入前备份沿用原版 JSON 逻辑备份，不新增文件级 SQLite 备份要求。
+
+2026-08-02 Phase 3 模型契约批次：`Book` 与 `BookSource` 领域模型改用 Freezed 生成不可变值语义和 `copyWith`，保留原有 Legado JSON 字段、`readConfig` 兼容解析、嵌套书源规则和 `toEngineJson` 行为；新增模型契约测试并通过书架/书源仓储及 Provider 定向回归 `28/28`。全量 Flutter `922` 项通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。当前只完成 Flutter 领域模型收敛，Rust 独立书籍 DTO、Riverpod 页面迁移和其余手写模型仍按计划排队，不改变 Room 导入、正文、目录、分页、章节身份或 UTF-16 阅读位置。
+2026-08-02 Phase 3 Rust 书源 DTO 批次：新增 `BookSourceDto` serde camelCase 投影和 `BookSource::to_dto()`，与 Flutter `BookSource` 共享稳定扁平字段，并保留 `rawSourceJson` 和 `rulePageNext` 的确定性回退；仅做纯内存转换，暂不新增 FFI 入口。DTO 定向 `1/1`、Rust 全量 `263/263`、`cargo fmt -p legado_engine` 通过；不改变现有书源解析、网络请求、Room 导入、正文、目录、分页、章节身份或 UTF-16 阅读位置。
+2026-08-02 Phase 3 Rust 书籍 DTO 批次：新增 `BookDto` 作为 `books` 查询的 camelCase serde 投影，`get_books_json()` 改为先映射 DTO 再序列化；`db_get_books()` 继续返回 `Vec<String>`，不触发 FRB 生成漂移。新增 DTO 字段契约与完整数据库行映射测试，覆盖 `readConfig`、阅读位置、模拟阅读和 `updatedAt`。验证：DTO/数据库定向 `3/3`、Rust 全量 `265/265`、Flutter 全量 `922`（`3` 项既有条件跳过）通过；不改变 Room 导入、正文、目录、分页、章节身份或 UTF-16 阅读位置。
+2026-08-02 Phase 3 替换规则模型批次：`ReplaceRule` 改为 Freezed 值对象，保留手写 JSON 字段、缺失字段默认值、构造参数和 `toJson` 输出；新增值相等与 `copyWith` 契约测试。定向替换规则链路 `11/11`、Flutter 全量 `923`（`3` 项既有条件跳过）通过；不改变替换规则匹配、正文净化、断行、第 3 条断行规则或 Rust `ContentReplaceRuleDto` FFI。
+2026-08-02 Phase 3 阅读统计模型批次：`BookReadingStats`、`ReadingStats` 与 `DailyReadingStat` 改为 Freezed 值对象；`BookReadingStats.readingDays` 以默认 `0` 加入 Dart 领域模型，FRB 书票适配器原样转发 Rust 已有字段，不再静默丢失。定向统计/书票链路 `12/12`、Flutter 全量 `925`（`3` 项既有条件跳过）通过；不改变统计查询、页面计算、正文、目录、分页、章节身份或 UTF-16 阅读位置。
+
+2026-08-02 R1-12 并发一致性补强：Room 源库 probe、schema 读取和逐表读取统一在单一 SQLite 只读事务快照中完成；导入 fingerprint 检查移入 `BEGIN IMMEDIATE`，与业务写入和归档写入共用互斥事务；导入前备份改用 `create_new` 唯一临时文件、`sync_all` 和不覆盖 hard-link 提交，避免并发覆盖和 TOCTOU。验证：Room 定向 `26/26`、数据库定向 `28/28`、Rust 全量 `259/259`、`cargo fmt -p legado_engine` 通过；本批不改变 Room 字段映射、正文、目录、分页、章节身份、UTF-16 阅读位置或 R1-12 产品决策边界。
+
+2026-08-02 R1-12 追溯补充：Rust Room 六张核心业务表及 `readRecord` archive-only 已补齐逐字段 golden fixture，Flutter 导入报告已覆盖核心表计数、保留行、归档表、告警、未映射列、指纹和重复导入幂等。`books.originName` 现明确列入未映射字段，因为当前 Rust v17 业务映射只在原始快照保留该列。验证：Rust Room `21/21`、Flutter Room `5/5`、Rust 全量 `249/249`、Flutter 全量 `911`（`3` 项既有条件跳过）、analyze、架构扫描和 `git diff --check` 通过。真实原版非空数据库仍缺失，`readRecord`/详细阅读记录语义、非核心表业务化和文件级备份目标仍需后续决策；本条不关闭 R1-12，不推进新的 R2-R6 实现。
 2026-08-02 R1-12 报告契约补充：重复导入报告明确归档表、告警、未映射列为空，未知字段向前兼容；Flutter Room 定向 `6/6` 通过。本条不改变阶段退出条件。
 2026-08-02 R1-12 书源规则落库补充：`upsert_source_json` 对 Room 映射产生的嵌套规则增加扁平业务列回退写入，保留已有扁平字段优先，并覆盖 `rulePageNext` 的目录/正文分页回退。实际目标表断言确认书籍、书源、章节核心字段落库，章节 `wordCount` 继续仅在原始归档中保留。验证：Rust Room `22/22`、数据库 `24/24`、Rust 全量 `251/251`、Flutter 全量 `912`（`3` 项既有跳过）、analyze、架构扫描和 `git diff --check` 通过。本条不关闭 R1-12。
 2026-08-02 R1-12 阅读记录与替换规则归档边界补充：owner 工作树复核通过 Room 定向 `23/23`、数据库定向 `24/24`、Rust 全量 `252/252`、Flutter 全量 `912`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check`。`readRecord` 明确采用 archive-only 保存并纳入导入报告原始计数，继续不写入 Rust v17 阅读统计业务表；`detailedReadRecord` 原始行及 Room 自增 `id` 保留在 `raw_snapshot_json`，业务映射按书名聚合为 sessions，聚合后的 session 不保留 Room 自增 `id`；`replace_rules.sortOrder`、`scope`、`group` 仅保留在原始归档，不进入当前 Rust v17 替换规则业务映射。本批不关闭 R1-12；真实原版非空数据库、`readRecord` 最终产品统计语义、非核心表业务 port 和文件级 SQLite 备份目标仍属于未决边界。
 2026-08-02 R1-12 导入报告与事务边界补充：Flutter 报告模型补齐 `sourceRoomIdentityHash`、`backupPath`，统一计数键为 Rust 实际输出的 `sources`、`detailedReadRecords`、`replaceRules`，重复导入 `backupWritten=false`；Android smoke 增加 23 张实体表精确集合、逐表行数和 archive-only 集合校验；Rust 增加未 checkpoint WAL/SHM 字节只读、`replace=true` 成功替换及导入前备份内容回归。验证：Flutter 报告定向 `6/6`、Rust Room `24/24`、数据库 `26/26`、Rust 全量 `255/255`、Flutter 全量 `912`（`3` 项既有条件跳过）、analyze、架构边界扫描和 `git diff --check` 通过。Android smoke 因设备不可用未执行；真实原版非空数据库、阅读统计产品语义、非核心表业务化和文件级 SQLite 备份目标仍未关闭，本条不关闭 R1-12。
 2026-08-02 R1-12 报告失败契约与回滚证据补充：报告模型对 Rust 输出必需字段执行严格缺失/类型校验，保留可选字段缺失兼容和未知字段兼容；Android smoke 增加重复导入不写新备份、目标书籍/归档数量不增加断言；Rust 失败回滚测试确认导入前备份包含原有书籍、原有归档和 raw snapshot。验证：报告定向 `10/10`、Rust Room `24/24`、Rust 全量 `255/255`、Flutter 全量 `912`（`3` 项既有条件跳过）、analyze、架构边界扫描和 `git diff --check` 通过。Android smoke 因设备不可用未执行；本条不关闭 R1-12。
+2026-08-02 R1-12 幂等与归档覆盖补强：完全相同的 detailedReadRecord 会话在新 Room snapshot fingerprint 下不重复写入；报告明确 readRecord 的原始计数、archive-only、四个未映射列和 warning；非核心 archive-only fixture 为每张归档表补充代表性非空行，冲突统计明确不包含 readRecord/readingRecords/detailedReadRecords。验证：Rust Room `25/25`、Rust 全量 `256/256`、release 构建、Flutter 报告 `10/10`、Flutter 全量 `916`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界扫描和 `git diff --check` 通过。emulator-5556 当前在线，但原版 io.legado.app.releaseS 为不可调试 release 包，数据库目录无权限读取；外部 backup.zip 仅含配置，不含 Room 数据库，因此 Android smoke 与真实非空 Room 迁移证据仍未完成。本条不关闭 R1-12。
+2026-08-02 R1-12 Dart 导入端口契约补强：`backupPath` 在 Dart port、use case 和 FRB adapter 中与 Rust `Option<String>` 对齐；重复导入允许 `backupPath=null` 并保留 `backupWritten=false`，首次导入缺少备份路径仍由 Rust 拒绝。新增 application 定向测试覆盖可空路径转发和下游拒绝。验证：Flutter 导入报告定向 `12/12`、Flutter 全量 `917`（`3` 项既有条件跳过）、`flutter analyze --no-pub` 通过；本条不关闭 R1-12。
+2026-08-02 R1-12 跨层报告与 Android smoke 契约补强：主机侧报告测试固定 Rust serde 输出的 13 个字段、类型和 nullable 分支；Android smoke 增加真实 application → FRB → generated API 的重复导入 `backupPath=null` 断言，保留业务书籍和归档数量不变断言。验证：Flutter 导入报告定向 `13/13`、Flutter 全量 `918`（`3` 项既有条件跳过）、`flutter analyze --no-pub` 通过；真实 Android smoke 因原版 release 包数据库目录无权限读取未执行，本条不关闭 R1-12。
+2026-08-02 R1-12 映射安全补强：章节 ID 继续使用与 Flutter `Chapter.idFor` 一致的 UTF-16 FNV-1a 算法；同批次出现相同 ID 但对应不同 `bookId/url/title` 时明确拒绝，避免静默覆盖。核心映射列遇到异常 SQLite 类型时不改变兼容映射结果，而是在报告登记包含表名、列名、稳定行标识、期望类型和实际类型的 warning；`NULL` 可选文本不报警，`group`、`bookSourceType`、规则 ID 的正常整数转字符串不报警，原始快照继续保留原值。新增非法数值、REAL 布尔列、数组文本、非法时间和布尔字符串回归。验证：`cargo fmt -p legado_engine`、Room 定向 `28/28`、Rust 全量 `261/261` 通过。本条不关闭 R1-12；真实非空 Room 数据库证据、`readRecord` 产品统计语义和非核心表业务化仍未完成。
+2026-08-02 R1-12 类型降级端到端证据：新增真实 SQLite 文件导入回归，确认异常数值、REAL 布尔列和非法时间进入 `LegacyRoomImportReport.warnings`，同时 `rawSnapshotJson` 保留原始 SQLite 值。验证：Room 定向 `29/29`、Rust 全量 `262/262`、`cargo fmt -p legado_engine` 通过。本条不关闭 R1-12。
+2026-08-02 R1-12 真实 Android Room v99 证据：使用 `emulator-5556` 上原版 `io.legado.app.debug` `3.26.072317debug` 的真实 `databases/legado.db`，确认 `user_version=99`、identity hash 正确，源数据包含 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`。重构版 all-phase smoke 通过，覆盖真实字段映射、876 个章节 UTF-16 FNV-1a ID、持久化、重复导入幂等、`backupPath=null` 和备份恢复；命令为 `flutter test --no-pub integration_test/r1_android_room_import_smoke_test.dart -d emulator-5556`，结果 `1/1`。本条关闭“真实非空 Room 数据库证据缺失”这一子项，但不关闭 R1-12；`readRecord` 产品统计语义和非核心表业务化仍保持 archive-only 边界。
+2026-08-02 R1-12 当前 owner 汇总：Room 定向 `29/29`、Rust 全量 `262/262`、Flutter 导入/备份定向 `17/17`、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 全部通过；真实 Android 非空数据库证据已由 `emulator-5556` 完成。根据已确认的产品决策，六张核心表导入后直接可用，`readRecord` 和非核心表无损 archive-only 保存，导入前备份沿用 JSON 逻辑备份。R1-12 按该边界完成，不将 archive-only 表宣称为 Rust v17 业务表；后续可按计划进入下一阶段。
 
 ### 0.0.1 设计稿收敛顺序
 
@@ -135,12 +155,14 @@ test/integration/         设备与平台链路验收
 
 退出条件：数据模型契约测试通过；本工程 Rust 旧 schema 可读写；章节身份和阅读位置迁移无差异；Kotlin Room v99 数据库探针、字段映射、导入事务、备份/回滚和真实/合成 fixture 回归通过。
 
-当前判定：R1 已重新打开，尚未最终退出。R1-12 当前只按“核心七表业务映射 + 23 个 Room 实体表全量原始归档”描述；本批已补 Kotlin Room v99 版本/identity hash 门禁、备份保护、正冲突、归档恢复、JSON 恢复事务性、既有数据回滚、非核心 fingerprint 稳定性、缺失实体表结构、实体 table-only、非法 UTF-8 无损和源库文件字节级只读边界测试，Room 定向 `21/21`、Rust 全量 `249`、release、Flutter analyze 和 Flutter 全量 `908`（`3` 项既有条件跳过）结果均通过。缺失实体表或 view 冒充实体会在读行前拒绝，非法 UTF-8 不进行 lossy 替换且不产生目标写入。`readRecord` 仍仅登记 warning；非核心表仍为 archive-only，真实非空 `original_legado.db` 证据仍缺失，不能据此宣称 23 张表已全部完成 Rust v17 业务迁移。R1-12 的非核心业务 port、`readRecord` 映射和真实非空数据边界不在本轮擅自决定。R1-12 完成前，不推进新的 R2-R6 实现，也不以历史 R2-R6 记录替代当前退出条件。
+> 本节下方的 R1 历史验证快照保留当时的证据链；当前判定以本文顶部最新 R1-12 owner 汇总为准。真实 `emulator-5556` Room v99 非空数据库 smoke 已通过，当前仍未关闭的只有 `readRecord` 产品统计语义、非核心 Room 表业务化和文件级 SQLite 备份目标。
+
+当前判定（当前验证快照）：R1 已重新打开，尚未最终退出。R1-12 当前只按“核心七表业务映射 + 23 个 Room 实体表全量原始归档”描述；本批已补 Kotlin Room v99 版本/identity hash 门禁、备份保护、正冲突、归档恢复、JSON 恢复事务性、既有数据回滚、非核心 fingerprint 稳定性、缺失实体表结构、实体 table-only、非法 UTF-8 无损和源库文件字节级只读边界测试，Room 定向 `26/26`、数据库定向 `28/28`、Rust 全量 `259/259`、release、Flutter analyze 和 Flutter 全量 `918`（`3` 项既有条件跳过）结果均通过。缺失实体表或 view 冒充实体会在读行前拒绝，非法 UTF-8 不进行 lossy 替换且不产生目标写入。`readRecord` 仍仅登记 warning；非核心表仍为 archive-only，真实非空 `original_legado.db` 证据仍缺失，不能据此宣称 23 张表已全部完成 Rust v17 业务迁移。R1-12 的非核心业务 port、`readRecord` 映射和真实非空数据边界不在本轮擅自决定。R1-12 完成前，不推进新的 R2-R6 实现，也不以历史 R2-R6 记录替代当前退出条件。
 只读 schema 形状审计确认原版 `99.json` 与仓库 `original_legado.db` 的 23/23 个实体表列集合一致，无缺列/额外列；唯一 view 为 `book_sources_part`。当前七张核心表均为空，`book_groups` 有 7 行，`keyboardAssists` 有 14 行；该审计不替代真实非空核心数据迁移证据。
 最新 owner 门禁补强：`readRecord.lastRead` 已纳入结构探针，四字段仍只保留原始快照；导入前备份写入失败会清理临时路径且不触碰预存在路径。Room 定向 `21/21`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。`readRecord` 设备维度/书名聚合、非核心业务化和文件级 SQLite 备份仍需独立决策或证据。
-归档无损回归已补合法 BLOB 字节数组往返断言，以及成功导入/非法 UTF-8 失败时源库文件字节和大小不变断言；`emulator-5558` 可见但只安装原版包、未安装重构 APK，当前 smoke 不能完成重构版真实非空 Room 数据迁移验收，仍是 R1-12 未关闭证据。
-并行回归补齐 `readRecord` 四字段原始归档/恢复、重复 fingerprint 备份 no-op 和成功/失败源库文件字节级只读断言；Room `21/21`、数据库 `23/23`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。`emulator-5558` 仅安装原版包，未安装重构 APK；真实非空 Android 迁移仍需独立前置和证据。
-- Android smoke 导入阶段已补 fingerprint 非空及 `books`、`sources`、`chapters` 正行数前置断言；空库不会被登记为真实非空迁移通过。`emulator-5558` 已安装 debug 重构 APK，基于原版 schema 的临时非空等价 fixture 已完成 import/verify 两阶段，并验证书籍字段、阅读位置、章节身份、重启、幂等和备份恢复；真实原版非空数据库仍待取得。
+归档无损回归已补合法 BLOB 字节数组往返断言，以及成功导入/非法 UTF-8 失败时源库文件字节和大小不变断言；`emulator-5556` 可见但只安装原版包、未安装重构 APK，当前 smoke 不能完成重构版真实非空 Room 数据迁移验收，仍是 R1-12 未关闭证据。
+并行回归补齐 `readRecord` 四字段原始归档/恢复、重复 fingerprint 备份 no-op 和成功/失败源库文件字节级只读断言；Room `21/21`、数据库 `23/23`、Rust 全量 `249`、release、架构扫描和 `git diff --check` 通过。`emulator-5556` 仅安装原版包，未安装重构 APK；真实非空 Android 迁移仍需独立前置和证据。
+- 历史 Android smoke 导入阶段已补 fingerprint 非空及 `books`、`sources`、`chapters` 正行数前置断言；空库不会被登记为真实非空迁移通过。历史记录显示 `emulator-5556` 曾安装 debug 重构 APK，并以基于原版 schema 的临时非空等价 fixture 完成 import/verify 两阶段，验证书籍字段、阅读位置、章节身份、重启、幂等和备份恢复；该 fixture 证据不等于真实原版非空 Room 数据证据，当前设备状态以最新 owner 门禁记录为准。
 - Room 导入回归进一步覆盖源主库及 `-wal`/`-shm` 侧文件状态不变；Dart 导入报告解析定向 `3/3`，Rust Room 定向 `21/21`。这两项只增强数据边界证据，不改变 `readRecord`、非核心业务 port 或文件级备份的产品决策边界。
 
 ##### R1-12：Kotlin Room v99 数据迁移门禁（复核中，部分完成）
@@ -172,7 +194,7 @@ test/integration/         设备与平台链路验收
 - `replace_rules.sortOrder`、`scope`、`group` 不进入当前 Rust v17 替换规则业务模型，仅通过原始快照 archive-only 保留。
 - 导入报告已保留 Rust 输出的 `sourceRoomIdentityHash` 与 `backupPath`；Flutter 计数键按 Rust 契约使用 `sources`、`detailedReadRecords`、`replaceRules`，重复 fingerprint 导入的 `backupWritten` 必须为 false。
 
-R1-12 当前判定：核心七表业务映射与 23 表原始归档已实现，新增 v99 门禁和正冲突测试已记录通过；但整体迁移门禁仍在复核中，不能标记 R1-12 或 R1 最终退出。后续非核心表业务模型、`readRecord` 映射和原版真实非空数据补充采集必须另行按计划执行；本轮没有推进新的 R2-R6 实现。
+R1-12 当前判定：六张核心业务表映射、`readRecord` archive-only 保存与 23 表原始归档已实现，新增 v99 门禁和正冲突测试已记录通过；但整体迁移门禁仍在复核中，不能标记 R1-12 或 R1 最终退出。后续非核心表业务模型、`readRecord` 映射和原版真实非空数据补充采集必须另行按计划执行；本轮没有推进新的 R2-R6 实现。
 
 #### R2：书源引擎与 FRB 适配边界
 
@@ -361,10 +383,10 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 | Rust 引擎版本 | **v0.5.6** |
 | Rust DB Schema | **v17** |
 | 原版 Room Schema | **v99**（只读基线：`legado-main/app/src/main/java/io/legado/app/data/AppDatabase.kt`） |
-| FRB | **已完成 codegen**，`lib/src/rust/` 18 个生成文件，全部 async |
+| FRB | **已完成 codegen**，`lib/src/rust/` 当前 tracked Dart 绑定 15 个，数量以 `git ls-files` 为准 |
 | Rust crate 数量 | **2**（`legado_engine` + `legado-webdav`） |
-| Flutter .dart 文件 | **322 个** |
-| 测试文件 | **155 个 Dart 测试文件**；另有 **7 个 Android 集成测试文件** |
+| Flutter .dart 文件 | 当前 tracked 快照 **965 个** |
+| 测试文件 | 当前 `test/` tracked Dart **326 个**；`integration_test/` tracked Dart **13 个** |
 | 已构建平台 | Android ✅ / Windows ✅ |
 | 未构建平台 | iOS ❌ / macOS ❌ / Linux ❌ / Web（配置未测试）⚠️ |
 
@@ -377,15 +399,15 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 │         ~~ #[frb] async FFI ~~               │
 ├──────────────────────────────────────────────┤
 │  flutter_rust_bridge 2.11.1                  │
-│  lib/src/rust/ (16 generated dart files)     │
+│  lib/src/rust/ (15 tracked generated dart files)│
 ├──────────────────────────────────────────────┤
 │           legado_engine (Rust)               │
 │                                              │
 │  api/   — FRB 导出层（14 个 API 模块）        │
 │  rule/  — CSS/XPath/Legado DSL/JSONPath/rquickjs │
 │  http/  — reqwest async + Cookie + 限速 + 代理   │
-│  db/    — rusqlite (bundled) Schema v9       │
-│  web_server.rs — axum HTTP API               │
+│  db/    — rusqlite (bundled) Rust schema v17 │
+│  本地 Web API — Dart IO + token auth          │
 │  notes_store.rs — 笔记 CRUD                  │
 ├──────────────────────────────────────────────┤
 │           legado-webdav (Rust)               │
@@ -417,9 +439,9 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 | 功能 | 状态 |
 |------|:---:|
-| SQLite CRUD（全部 5 张表） | ✅ |
+| SQLite CRUD（Rust v17 核心业务/归档/阅读/笔记/书签相关表） | ✅ |
 | 书籍/书源/章节/替换规则 CRUD | ✅ |
-| 阅读记录 CRUD + 统计 + 导出 (CSV/JSON) | ✅ |
+| Rust v17 阅读记录 CRUD + 统计 + 导出 (CSV/JSON，不含 legacy Room `readRecord` 迁移) | ✅ |
 | 笔记 CRUD + Markdown 导出 | ✅ |
 | 数据库备份/恢复 (JSON) | ✅ |
 | WebDAV 客户端 (list/up/down/del) | ✅ |
@@ -475,7 +497,7 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 ### 2.5 测试
 
-| 类型 | 文件数 |
+| 类型 | 文件数（历史分类摘要） |
 |------|:---:|
 | Rust 单元测试 | `src/tests.rs` |
 | Rust 集成测试 | 11 个（Web API 已迁至 Dart 集成测试） |
@@ -483,7 +505,7 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 | Dart Widget 测试 | 11 个 |
 | Dart Service 测试 | 10 个 |
 | Dart Integration 测试 | 5 个 |
-| **总计** | **31+** |
+| **总计（历史分类摘要）** | **31+** |
 
 ---
 
@@ -663,7 +685,7 @@ rquickjs 中未注入图片解密相关回调。
 
 | 计划 Phase | 计划内容 | 实际状态 |
 |------------|----------|:---:|
-| Phase 0 | FRB codegen + iOS/WASM 编译链 + CI | FRB codegen ✅ / iOS ❌ / WASM ❌ / CI ❌ |
+| Phase 0 | FRB codegen + iOS/WASM 编译链 + CI | FRB codegen ✅ / iOS ❌ / WASM ❌ / 基础 CI ✅；平台发布矩阵未关闭 |
 | Phase 1.1 | 规则引擎完整化（XPath/JSONPath/JS） | ✅ **已完成** |
 | Phase 1.2 | Rust 业务 API（search/toc/content/book_info） | ✅ **已完成**（远超计划：额外完成 explore/validate/debug/read_record/notes/backup） |
 | Phase 1.3 | Flutter UI 核心页面 | ✅ **已完成**（远超计划：额外完成 RSS/AI 聊天/主题配置/备份配置） |
@@ -771,4 +793,4 @@ Week 12:
 
 ---
 
-> 最后更新：2026-07-11 | 引擎 v0.5.6 | DB Schema v9
+> 最后更新：2026-08-02 | 引擎 v0.5.6 | Rust DB Schema v17 | 原版 Room v99 | FRB 2.11.1

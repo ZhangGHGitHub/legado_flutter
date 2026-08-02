@@ -11,14 +11,11 @@ class LegacyRoomImportService implements LegacyRoomImportUseCase {
   @override
   LegacyRoomImportReport importDatabase({
     required String sourcePath,
-    required String backupPath,
+    required String? backupPath,
     bool replace = false,
   }) {
     if (sourcePath.trim().isEmpty) {
       throw ArgumentError.value(sourcePath, 'sourcePath');
-    }
-    if (backupPath.trim().isEmpty) {
-      throw ArgumentError.value(backupPath, 'backupPath');
     }
     return LegacyRoomImportReport.fromJson(
       _port.importDatabase(

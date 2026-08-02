@@ -23,6 +23,7 @@ class FrbBookplatePort implements BookplatePort {
       durationSeconds: stats.durationSeconds,
       startDate: stats.startDate,
       lastDate: stats.lastDate,
+      readingDays: stats.readingDays,
     );
   }
 }

@@ -72,8 +72,10 @@ const REQUIRED_TABLE_COLUMNS: &[(&str, &[&str])] = &[
 
 /// Room v99 entities from the read-only Kotlin schema baseline.
 ///
-/// The seven tables above have a Rust v17 business mapping. The remaining
-/// entities are archived verbatim until their product-level ports exist.
+/// Six core tables have a Rust v17 business mapping today. readRecord is
+/// intentionally archived verbatim with an explicit report warning until its
+/// product statistics semantics are decided. The remaining entities are
+/// archived verbatim until their product-level ports exist.
 const ROOM_ENTITY_TABLES: &[&str] = &[
     "books",
     "book_groups",
@@ -192,6 +194,15 @@ pub fn probe_legacy_room_database(path: &str) -> Result<LegacyRoomProbe, DbError
 }
 
 pub fn probe_legacy_room_connection(conn: &Connection) -> Result<LegacyRoomProbe, DbError> {
+    let transaction = conn.unchecked_transaction()?;
+    let probe = probe_legacy_room_connection_in_transaction(&transaction)?;
+    transaction.commit()?;
+    Ok(probe)
+}
+
+fn probe_legacy_room_connection_in_transaction(
+    conn: &Connection,
+) -> Result<LegacyRoomProbe, DbError> {
     let user_version: i32 = conn.query_row("PRAGMA user_version", [], |row| row.get(0))?;
     let room_identity_hash = read_room_identity_hash(conn)?;
 
@@ -235,7 +246,16 @@ pub fn extract_legacy_room_database(path: &str) -> Result<LegacyRoomSnapshot, Db
 }
 
 pub fn extract_legacy_room_connection(conn: &Connection) -> Result<LegacyRoomSnapshot, DbError> {
-    let probe = probe_legacy_room_connection(conn)?;
+    let transaction = conn.unchecked_transaction()?;
+    let snapshot = extract_legacy_room_connection_in_transaction(&transaction)?;
+    transaction.commit()?;
+    Ok(snapshot)
+}
+
+fn extract_legacy_room_connection_in_transaction(
+    conn: &Connection,
+) -> Result<LegacyRoomSnapshot, DbError> {
+    let probe = probe_legacy_room_connection_in_transaction(conn)?;
     if !probe.has_required_core_shape() {
         return Err(DbError::Message(format!(
             "旧 Room 数据库缺少迁移所需结构: tables={:?}, columns={:?}",
@@ -285,11 +305,12 @@ pub fn map_legacy_room_snapshot(
 ) -> Result<LegacyRoomMapping, DbError> {
     let mut warnings = Vec::new();
     let unmapped_columns = detect_unmapped_columns(snapshot);
+    warnings.extend(collect_mapping_type_warnings(snapshot)?);
 
     let books = map_books(table(snapshot, "books")?);
     let book_index = BookIdentityIndex::new(&books, &mut warnings);
     let sources = map_sources(table(snapshot, "book_sources")?);
-    let chapters = map_chapters(table(snapshot, "chapters")?);
+    let chapters = map_chapters(table(snapshot, "chapters")?)?;
     let bookmarks = map_bookmarks(table(snapshot, "bookmarks")?, &book_index, &mut warnings);
     let detailed_read_records = map_detailed_read_records(table(snapshot, "detailedReadRecord")?);
     let replace_rules = map_replace_rules(table(snapshot, "replace_rules")?);
@@ -450,28 +471,40 @@ fn map_sources(rows: &[Value]) -> Vec<Value> {
         .collect()
 }
 
-fn map_chapters(rows: &[Value]) -> Vec<Value> {
-    rows.iter()
-        .map(|row| {
-            let book_id = str_value(row, "bookUrl");
-            let url = str_value(row, "url");
-            let index = i64_value(row, "index").max(0);
-            json!({
-                "id": chapter_id_for(&book_id, &url, index),
-                "bookId": book_id,
-                "title": str_value(row, "title"),
-                "index": index,
-                "url": url,
-                "isVolume": bool_value(row, "isVolume"),
-                "isVip": bool_value(row, "isVip"),
-                "isPay": bool_value(row, "isPay"),
-                "tag": str_value(row, "tag"),
-                "baseUrl": str_value(row, "baseUrl"),
-                "isDownloaded": false,
-                "content": Value::Null,
-            })
-        })
-        .collect()
+fn map_chapters(rows: &[Value]) -> Result<Vec<Value>, DbError> {
+    let mut seen = BTreeMap::<String, (String, String, String)>::new();
+    let mut chapters = Vec::with_capacity(rows.len());
+    for row in rows {
+        let book_id = str_value(row, "bookUrl");
+        let url = str_value(row, "url");
+        let title = str_value(row, "title");
+        let index = i64_value(row, "index").max(0);
+        let chapter_id = chapter_id_for(&book_id, &url, index);
+        let identity = (book_id.clone(), url.clone(), title.clone());
+        if let Some(existing) = seen.insert(chapter_id.clone(), identity.clone()) {
+            if existing != identity {
+                return Err(DbError::Message(format!(
+                    "章节 ID 冲突: {chapter_id} 同时对应 bookId={:?}, url={:?}, title={:?} 和 bookId={:?}, url={:?}, title={:?}",
+                    existing.0, existing.1, existing.2, identity.0, identity.1, identity.2
+                )));
+            }
+        }
+        chapters.push(json!({
+            "id": chapter_id,
+            "bookId": book_id,
+            "title": title,
+            "index": index,
+            "url": url,
+            "isVolume": bool_value(row, "isVolume"),
+            "isVip": bool_value(row, "isVip"),
+            "isPay": bool_value(row, "isPay"),
+            "tag": str_value(row, "tag"),
+            "baseUrl": str_value(row, "baseUrl"),
+            "isDownloaded": false,
+            "content": Value::Null,
+        }));
+    }
+    Ok(chapters)
 }
 
 fn map_bookmarks(
@@ -682,6 +715,175 @@ fn detect_unmapped_columns(snapshot: &LegacyRoomSnapshot) -> BTreeMap<String, Ve
         }
     }
     result
+}
+
+fn collect_mapping_type_warnings(snapshot: &LegacyRoomSnapshot) -> Result<Vec<String>, DbError> {
+    const TEXT_COLUMNS: &[(&str, &[&str])] = &[
+        (
+            "books",
+            &[
+                "bookUrl",
+                "tocUrl",
+                "origin",
+                "name",
+                "author",
+                "coverUrl",
+                "customCoverUrl",
+                "intro",
+                "customIntro",
+                "latestChapterTitle",
+                "durChapterTitle",
+            ],
+        ),
+        (
+            "book_sources",
+            &[
+                "bookSourceUrl",
+                "bookSourceName",
+                "bookSourceGroup",
+                "searchUrl",
+            ],
+        ),
+        ("chapters", &["url", "bookUrl", "title", "baseUrl", "tag"]),
+        (
+            "bookmarks",
+            &[
+                "bookName",
+                "bookAuthor",
+                "chapterName",
+                "bookText",
+                "content",
+            ],
+        ),
+        ("detailedReadRecord", &["bookName"]),
+        ("replace_rules", &["name", "pattern", "replacement"]),
+    ];
+    const INTEGER_COLUMNS: &[(&str, &[&str])] = &[
+        (
+            "books",
+            &[
+                "durChapterIndex",
+                "durChapterPos",
+                "totalChapterNum",
+                "readIteration",
+            ],
+        ),
+        ("chapters", &["index"]),
+        ("bookmarks", &["time", "chapterIndex", "chapterPos"]),
+        (
+            "detailedReadRecord",
+            &["startTime", "endTime", "readIteration"],
+        ),
+    ];
+    const BOOLEAN_COLUMNS: &[(&str, &[&str])] = &[
+        ("chapters", &["isVolume", "isVip", "isPay"]),
+        ("replace_rules", &["isEnabled", "isRegex"]),
+    ];
+
+    let mut warnings = Vec::new();
+    for (table_name, columns) in TEXT_COLUMNS {
+        for (row_index, row) in table(snapshot, table_name)?.iter().enumerate() {
+            for column in *columns {
+                if let Some(value) = row.get(*column) {
+                    if !value.is_null() && !value.is_string() {
+                        push_mapping_type_warning(
+                            &mut warnings,
+                            table_name,
+                            *column,
+                            row,
+                            row_index,
+                            "TEXT or NULL",
+                            json_type_name(value),
+                        );
+                    }
+                }
+            }
+        }
+    }
+    for (table_name, columns) in INTEGER_COLUMNS {
+        for (row_index, row) in table(snapshot, table_name)?.iter().enumerate() {
+            for column in *columns {
+                if let Some(value) = row.get(*column) {
+                    if !matches!(value, Value::Number(number) if number.as_i64().is_some() || number.as_u64().is_some())
+                    {
+                        push_mapping_type_warning(
+                            &mut warnings,
+                            table_name,
+                            *column,
+                            row,
+                            row_index,
+                            "INTEGER",
+                            json_type_name(value),
+                        );
+                    }
+                }
+            }
+        }
+    }
+    for (table_name, columns) in BOOLEAN_COLUMNS {
+        for (row_index, row) in table(snapshot, table_name)?.iter().enumerate() {
+            for column in *columns {
+                if let Some(value) = row.get(*column) {
+                    let valid = matches!(
+                        value,
+                        Value::Number(number)
+                            if matches!(number.as_i64(), Some(0 | 1))
+                                || matches!(number.as_u64(), Some(0 | 1))
+                    );
+                    if !valid {
+                        push_mapping_type_warning(
+                            &mut warnings,
+                            table_name,
+                            *column,
+                            row,
+                            row_index,
+                            "INTEGER 0/1",
+                            json_type_name(value),
+                        );
+                    }
+                }
+            }
+        }
+    }
+    Ok(warnings)
+}
+
+fn push_mapping_type_warning(
+    warnings: &mut Vec<String>,
+    table: &str,
+    column: &str,
+    row: &Value,
+    row_index: usize,
+    expected: &str,
+    actual: &str,
+) {
+    warnings.push(format!(
+        "Room 映射类型降级: table={table}, column={column}, row={}, expected={expected}, actual={actual}; 保留原始值并使用兼容映射",
+        mapping_row_identity(row, row_index)
+    ));
+}
+
+fn mapping_row_identity(row: &Value, row_index: usize) -> String {
+    for key in ["bookUrl", "url", "bookSourceUrl", "id", "time", "bookName"] {
+        if let Some(value) = row.get(key).filter(|value| !value.is_null()) {
+            return format!("{key}={value}");
+        }
+    }
+    format!("row={row_index}")
+}
+
+fn json_type_name(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "NULL",
+        Value::Bool(_) => "BOOLEAN",
+        Value::Number(number) if number.as_i64().is_some() || number.as_u64().is_some() => {
+            "INTEGER"
+        }
+        Value::Number(_) => "REAL",
+        Value::String(_) => "TEXT",
+        Value::Array(_) => "ARRAY",
+        Value::Object(_) => "BLOB/OBJECT",
+    }
 }
 
 fn table<'a>(snapshot: &'a LegacyRoomSnapshot, table: &str) -> Result<&'a [Value], DbError> {
@@ -1073,6 +1275,60 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_keeps_probe_and_rows_on_one_read_transaction() {
+        let source_path = test_path("consistent-snapshot-source");
+        let source_conn = write_wal_room_fixture(&source_path);
+        source_conn
+            .execute(
+                "INSERT INTO chapters (url, bookUrl, title, \"index\", baseUrl)
+                 VALUES ('chapter-1', 'book-1', '第一章', 0, '')",
+                [],
+            )
+            .unwrap();
+        let reader = Connection::open_with_flags(
+            &source_path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .unwrap();
+        let reader_changes_before = reader.total_changes();
+        let transaction = reader.unchecked_transaction().unwrap();
+
+        let probe = probe_legacy_room_connection_in_transaction(&transaction).unwrap();
+        assert_eq!(probe.user_version, KOTLIN_ROOM_CURRENT_VERSION);
+        assert!(probe.has_required_core_shape());
+
+        let writer = Connection::open(&source_path).unwrap();
+        writer
+            .execute(
+                "UPDATE books SET name='提交后的书名' WHERE bookUrl='book-1'",
+                [],
+            )
+            .unwrap();
+        writer
+            .execute(
+                "UPDATE chapters SET title='提交后的章节' WHERE url='chapter-1'",
+                [],
+            )
+            .unwrap();
+        drop(writer);
+
+        let snapshot = extract_legacy_room_connection_in_transaction(&transaction).unwrap();
+        transaction.commit().unwrap();
+
+        assert_eq!(snapshot.tables["books"].len(), 1);
+        assert_eq!(snapshot.tables["books"][0]["name"], "迁移书");
+        assert_eq!(snapshot.tables["chapters"].len(), 1);
+        assert_eq!(snapshot.tables["chapters"][0]["title"], "第一章");
+        assert_eq!(reader.total_changes(), reader_changes_before);
+
+        drop(reader);
+        drop(source_conn);
+        let _ = std::fs::remove_file(&source_path);
+        let _ = std::fs::remove_file(format!("{source_path}-wal"));
+        let _ = std::fs::remove_file(format!("{source_path}-shm"));
+    }
+
+    #[test]
     fn snapshot_archives_all_room_entities_and_marks_non_core_tables() {
         let conn = Connection::open_in_memory().unwrap();
         create_minimal_room_schema(&conn, KOTLIN_ROOM_CURRENT_VERSION);
@@ -1116,6 +1372,24 @@ mod tests {
                 "INSERT INTO book_groups (groupId, groupName)
                  VALUES ('g1', CAST(X'00FF10' AS BLOB))",
                 [],
+            )
+            .unwrap();
+            conn.execute_batch(
+                "INSERT INTO searchBooks (bookUrl) VALUES ('search-book');
+                 INSERT INTO search_keywords (word) VALUES ('关键词');
+                 INSERT INTO cookies (url, cookie) VALUES ('https://cookie.test', 'sid=1');
+                 INSERT INTO rssSources (sourceUrl) VALUES ('https://rss.test');
+                 INSERT INTO rssArticles (origin) VALUES ('rss-origin');
+                 INSERT INTO rssReadRecords (record) VALUES ('rss-record');
+                 INSERT INTO rssStars (origin) VALUES ('rss-star');
+                 INSERT INTO txtTocRules (id) VALUES (1);
+                 INSERT INTO httpTTS (id) VALUES (2);
+                 INSERT INTO caches (key, value) VALUES ('cache-key', 'cache-value');
+                 INSERT INTO ruleSubs (id) VALUES (3);
+                 INSERT INTO dictRules (name) VALUES ('词典规则');
+                 INSERT INTO keyboardAssists (type) VALUES ('键盘');
+                 INSERT INTO book_thoughts (id) VALUES (4);
+                 INSERT INTO servers (id) VALUES (5);",
             )
             .unwrap();
         }
@@ -1175,6 +1449,31 @@ mod tests {
             raw_value["tables"]["book_groups"][0]["groupName"],
             json!({"$blob": [0, 255, 16]})
         );
+        for table in [
+            "book_groups",
+            "searchBooks",
+            "search_keywords",
+            "cookies",
+            "rssSources",
+            "rssArticles",
+            "rssReadRecords",
+            "rssStars",
+            "txtTocRules",
+            "httpTTS",
+            "caches",
+            "ruleSubs",
+            "dictRules",
+            "keyboardAssists",
+            "book_thoughts",
+            "servers",
+            "readRecord",
+        ] {
+            assert_eq!(
+                raw_value["tables"][table].as_array().unwrap().len(),
+                1,
+                "expected representative archive row in {table}"
+            );
+        }
 
         let restored = EngineDb::open_in_memory().unwrap();
         restored.restore_backup_json(&exported, true).unwrap();
@@ -1441,6 +1740,10 @@ mod tests {
             .warnings
             .iter()
             .any(|warning| warning.contains("readRecord contains aggregate")));
+        assert!(!mapping
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Room 映射类型降级")));
         assert!(mapping
             .unmapped_columns
             .get("chapters")
@@ -1458,6 +1761,176 @@ mod tests {
                 "expected replace_rules.{column} to remain archive-only"
             );
         }
+    }
+
+    #[test]
+    fn mapping_warns_on_invalid_core_types_without_changing_compatibility_mapping() {
+        let mut tables = BTreeMap::new();
+        tables.insert(
+            "books".to_string(),
+            vec![json!({
+                "bookUrl": "book-1",
+                "name": "书",
+                "author": "作者",
+                "origin": "source",
+                "durChapterIndex": {"invalid": true},
+                "durChapterPos": 7,
+                "totalChapterNum": 10,
+                "readIteration": null,
+                "readConfig": "{}"
+            })],
+        );
+        tables.insert(
+            "book_sources".to_string(),
+            vec![json!({
+                "bookSourceUrl": "source",
+                "bookSourceType": 0,
+                "ruleSearch": "{}"
+            })],
+        );
+        tables.insert(
+            "chapters".to_string(),
+            vec![json!({
+                "url": "chapter-1",
+                "bookUrl": "book-1",
+                "title": "第一章",
+                "index": 0,
+                "isVolume": 0,
+                "isVip": 0.5,
+                "isPay": 0
+            })],
+        );
+        tables.insert(
+            "bookmarks".to_string(),
+            vec![json!({
+                "time": 1,
+                "bookName": "书",
+                "bookAuthor": "作者",
+                "chapterIndex": 0,
+                "chapterPos": 0,
+                "bookText": ["raw"],
+                "content": "备注"
+            })],
+        );
+        tables.insert(
+            "detailedReadRecord".to_string(),
+            vec![json!({
+                "bookName": "书",
+                "startTime": "not-a-number",
+                "endTime": 2,
+                "readIteration": 1
+            })],
+        );
+        tables.insert(
+            "replace_rules".to_string(),
+            vec![json!({
+                "id": 1,
+                "name": "规则",
+                "pattern": "广告",
+                "replacement": "",
+                "isEnabled": "yes",
+                "isRegex": 0
+            })],
+        );
+        tables.insert("readRecord".to_string(), Vec::new());
+        let snapshot = LegacyRoomSnapshot {
+            user_version: KOTLIN_ROOM_CURRENT_VERSION,
+            room_identity_hash: Some(KOTLIN_ROOM_IDENTITY_HASH.to_string()),
+            columns: BTreeMap::new(),
+            tables,
+        };
+
+        let mapping = map_legacy_room_snapshot(&snapshot).unwrap();
+
+        assert_eq!(mapping.backup_json["books"][0]["durChapterIndex"], 0);
+        assert_eq!(mapping.backup_json["chapters"][0]["isVip"], false);
+        assert_eq!(mapping.backup_json["bookmarks"][0]["bookText"], "[\"raw\"]");
+        assert_eq!(
+            mapping.backup_json["detailedReadRecords"][0]["sessions"][0]["startTime"],
+            0
+        );
+        assert_eq!(mapping.backup_json["replaceRules"][0]["isEnabled"], false);
+        for (table, column) in [
+            ("books", "durChapterIndex"),
+            ("books", "readIteration"),
+            ("chapters", "isVip"),
+            ("bookmarks", "bookText"),
+            ("detailedReadRecord", "startTime"),
+            ("replace_rules", "isEnabled"),
+        ] {
+            assert!(
+                mapping.warnings.iter().any(|warning| {
+                    warning.contains("Room 映射类型降级")
+                        && warning.contains(&format!("table={table}"))
+                        && warning.contains(&format!("column={column}"))
+                        && warning.contains("row=")
+                        && warning.contains("expected=")
+                        && warning.contains("actual=")
+                }),
+                "missing type warning for {table}.{column}: {:?}",
+                mapping.warnings
+            );
+        }
+        assert_eq!(
+            snapshot.tables["books"][0]["durChapterIndex"],
+            json!({"invalid": true})
+        );
+        assert_eq!(snapshot.tables["bookmarks"][0]["bookText"], json!(["raw"]));
+    }
+
+    #[test]
+    fn import_reports_type_degradation_and_preserves_raw_sqlite_values() {
+        let source_path = test_path("invalid-core-types-source");
+        let backup_path = test_path("invalid-core-types-backup");
+        write_room_fixture(&source_path, false);
+        {
+            let conn = Connection::open(&source_path).unwrap();
+            conn.execute("UPDATE books SET durChapterIndex='invalid-index'", [])
+                .unwrap();
+            conn.execute("UPDATE chapters SET isVip=0.5", []).unwrap();
+            conn.execute("UPDATE detailedReadRecord SET startTime='invalid-time'", [])
+                .unwrap();
+        }
+
+        let db = EngineDb::open_in_memory().unwrap();
+        let report = db
+            .import_legacy_room_database(&source_path, Some(&backup_path), false)
+            .unwrap();
+
+        for (table, column) in [
+            ("books", "durChapterIndex"),
+            ("chapters", "isVip"),
+            ("detailedReadRecord", "startTime"),
+        ] {
+            assert!(
+                report.warnings.iter().any(|warning| {
+                    warning.contains("Room 映射类型降级")
+                        && warning.contains(&format!("table={table}"))
+                        && warning.contains(&format!("column={column}"))
+                }),
+                "missing imported type warning for {table}.{column}: {:?}",
+                report.warnings
+            );
+        }
+
+        let exported: Value = serde_json::from_str(&db.export_backup_json().unwrap()).unwrap();
+        let raw_snapshot: Value = serde_json::from_str(
+            exported["legacyRoomImports"][0]["rawSnapshotJson"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            raw_snapshot["tables"]["books"][0]["durChapterIndex"],
+            "invalid-index"
+        );
+        assert_eq!(raw_snapshot["tables"]["chapters"][0]["isVip"], 0.5);
+        assert_eq!(
+            raw_snapshot["tables"]["detailedReadRecord"][0]["startTime"],
+            "invalid-time"
+        );
+
+        cleanup_test_paths(&source_path, &backup_path);
     }
 
     #[test]
@@ -1511,6 +1984,15 @@ mod tests {
             .archive_only_tables
             .contains(&"readRecord".to_string()));
         assert_eq!(mapping.counts.get("readRecord"), Some(&1));
+        assert_eq!(
+            mapping.unmapped_columns.get("readRecord").unwrap(),
+            &vec![
+                "bookName".to_string(),
+                "deviceId".to_string(),
+                "lastRead".to_string(),
+                "readTime".to_string()
+            ]
+        );
 
         // The established mapping groups detailed sessions by book name and
         // deliberately leaves aggregate readRecord data unmapped.
@@ -1835,6 +2317,23 @@ mod tests {
         let report = db
             .import_legacy_room_database(&source_path, Some(&backup_path), false)
             .unwrap();
+        assert_eq!(report.counts.get("readRecord"), Some(&1));
+        assert_eq!(report.preserved_rows.get("readRecord"), Some(&1));
+        assert!(report
+            .archive_only_tables
+            .contains(&"readRecord".to_string()));
+        assert_eq!(
+            report.unmapped_columns.get("readRecord").unwrap(),
+            &vec![
+                "bookName".to_string(),
+                "deviceId".to_string(),
+                "lastRead".to_string(),
+                "readTime".to_string()
+            ]
+        );
+        assert!(report.warnings.iter().any(|warning| {
+            warning.contains("readRecord contains aggregate readTime/lastRead")
+        }));
         let reading_record_count: i64 = db
             .conn
             .query_row("SELECT COUNT(*) FROM reading_records", [], |row| row.get(0))
@@ -1904,6 +2403,93 @@ mod tests {
         assert_eq!(restored_detailed_record_count, 1);
 
         cleanup_test_paths(&source_path, &backup_path);
+    }
+
+    #[test]
+    fn mapping_rejects_chapter_id_collision_with_different_identity() {
+        let first_url = "https://example/OUfhSGIE";
+        let second_url = "https://example/xG2OqleT";
+        assert_eq!(
+            chapter_id_for("book-1", first_url, 0),
+            chapter_id_for("book-1", second_url, 0),
+            "fixture must collide under the existing UTF-16 FNV-1a algorithm"
+        );
+
+        let rows = vec![
+            json!({
+                "url": first_url,
+                "bookUrl": "book-1",
+                "title": "第一章",
+                "index": 0,
+            }),
+            json!({
+                "url": second_url,
+                "bookUrl": "book-1",
+                "title": "第二章",
+                "index": 1,
+            }),
+        ];
+
+        let error = map_chapters(&rows).unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("章节 ID 冲突"));
+        assert!(message.contains(first_url));
+        assert!(message.contains(second_url));
+        assert!(message.contains("第一章"));
+        assert!(message.contains("第二章"));
+    }
+
+    #[test]
+    fn import_new_snapshot_fingerprint_does_not_duplicate_detailed_sessions() {
+        let source_path = test_path("new-fingerprint-source");
+        let first_backup_path = test_path("new-fingerprint-backup-first");
+        let second_backup_path = test_path("new-fingerprint-backup-second");
+        write_room_fixture(&source_path, false);
+        {
+            let conn = Connection::open(&source_path).unwrap();
+            conn.execute("UPDATE detailedReadRecord SET endTime=200000", [])
+                .unwrap();
+        }
+        let db = EngineDb::open_in_memory().unwrap();
+
+        let first = db
+            .import_legacy_room_database(&source_path, Some(&first_backup_path), false)
+            .unwrap();
+        assert!(!first.skipped_duplicate);
+        let detailed_count_after_first: i64 = db
+            .conn
+            .query_row("SELECT COUNT(*) FROM detailed_read_records", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(detailed_count_after_first, 1);
+
+        {
+            let conn = Connection::open(&source_path).unwrap();
+            conn.execute(
+                "INSERT INTO book_groups (groupId, groupName) VALUES ('changed', '归档变化')",
+                [],
+            )
+            .unwrap();
+        }
+
+        let second = db
+            .import_legacy_room_database(&source_path, Some(&second_backup_path), false)
+            .unwrap();
+        assert_ne!(second.fingerprint, first.fingerprint);
+        assert!(!second.skipped_duplicate);
+        assert!(second.backup_written);
+        assert_eq!(db.legacy_room_import_count().unwrap(), 2);
+        let detailed_count_after_second: i64 = db
+            .conn
+            .query_row("SELECT COUNT(*) FROM detailed_read_records", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(detailed_count_after_second, 1);
+
+        cleanup_test_paths(&source_path, &first_backup_path);
+        let _ = std::fs::remove_file(&second_backup_path);
     }
 
     #[test]

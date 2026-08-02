@@ -1,29 +1,24 @@
-class DailyReadingStat {
-  const DailyReadingStat({
-    required this.date,
-    required this.chars,
-    required this.durationSeconds,
-  });
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-  final String date;
-  final int chars;
-  final int durationSeconds;
+part 'reading_stats.freezed.dart';
+
+@freezed
+class DailyReadingStat with _$DailyReadingStat {
+  const factory DailyReadingStat({
+    required String date,
+    required int chars,
+    required int durationSeconds,
+  }) = _DailyReadingStat;
 }
 
-class ReadingStats {
-  const ReadingStats({
-    required this.totalChars,
-    required this.totalDurationSeconds,
-    required this.todayChars,
-    required this.todayDurationSeconds,
-    required this.weekChars,
-    required this.daily,
-  });
-
-  final int totalChars;
-  final int totalDurationSeconds;
-  final int todayChars;
-  final int todayDurationSeconds;
-  final int weekChars;
-  final List<DailyReadingStat> daily;
+@freezed
+class ReadingStats with _$ReadingStats {
+  const factory ReadingStats({
+    required int totalChars,
+    required int totalDurationSeconds,
+    required int todayChars,
+    required int todayDurationSeconds,
+    required int weekChars,
+    required List<DailyReadingStat> daily,
+  }) = _ReadingStats;
 }

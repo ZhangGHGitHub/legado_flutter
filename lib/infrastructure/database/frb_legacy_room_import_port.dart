@@ -7,7 +7,7 @@ class FrbLegacyRoomImportPort implements LegacyRoomImportPort {
   @override
   String importDatabase({
     required String sourcePath,
-    required String backupPath,
+    required String? backupPath,
     required bool replace,
   }) {
     LegadoDbBridge.requireReady();

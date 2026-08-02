@@ -1,6 +1,6 @@
 ## Parallel Batch
 
-Original goal: continue the Rust + Flutter refactor while preserving the pre-refactor Android Beta behavior on `emulator-5558`.
+Original goal: continue the Rust + Flutter refactor while preserving the pre-refactor Android Beta behavior on `emulator-5556`.
 
 Acceptance check: the architecture boundary scan removes the assigned Feature-to-service imports, targeted tests pass in the owner checkout, and the final Flutter suite remains green.
 
@@ -8,7 +8,7 @@ Product impact check: `runtime_behavior:` these ports preserve reader settings, 
 
 Default native gate: `flutter test --no-pub <affected tests>` and `flutter analyze --no-pub <affected files>`.
 
-Aggregate gate: `flutter test --no-pub --concurrency=1 --reporter compact`, `flutter analyze --no-pub`, `dart format`, `git diff --check`, then Android smoke comparison on `emulator-5558`.
+Aggregate gate: `flutter test --no-pub --concurrency=1 --reporter compact`, `flutter analyze --no-pub`, `dart format`, `git diff --check`, then Android smoke comparison on `emulator-5556`.
 
 Detour budget: stop a lane after three unresolved runs of the same test; report the cause without weakening tests.
 
@@ -35,7 +35,7 @@ Acceleration note:
 - The serial full Flutter suite was started, but the command runner closed its output pipe after 122 seconds; the resulting `FileSystemException` is an executor timeout, not an assertion failure. It remains an unproven aggregate gate and must be rerun in an environment without that pipe limit.
 - Architecture scan is reduced from 21 to 5 direct Feature-to-service imports. The five remaining imports are all in `ReaderPage`.
 - Android reference validation uses `D:\Android\platform-tools\adb.exe`; rebuilt-app installation and comparison remain pending the R6 aggregate gate.
-- Android reference baseline was recovered through `D:\Android\platform-tools\adb.exe`: `emulator-5558` runs the pre-refactor package `io.legado.app.releaseS`. Its first-run path is privacy agreement, update log, optional local backup-password prompt, then the bookshelf empty state. The empty bookshelf uses a brown top bar, red active indicator, four bottom tabs (bookshelf/discover/subscriptions/me), and the text `书架还空着，先去搜索书籍或从发现里添加吧!`. Generated screenshots remain local evidence only.
+- Android reference baseline is maintained through `D:\Android\platform-tools\adb.exe`: `emulator-5556` runs the pre-refactor debug package `io.legado.app.debug` version `3.26.072317debug`. Its first-run path is privacy agreement, update log, optional local backup-password prompt, then the bookshelf empty state. The empty bookshelf uses a brown top bar, red active indicator, four bottom tabs (bookshelf/discover/subscriptions/me), and the text `书架还空着，先去搜索书籍或从发现里添加吧!`. Generated screenshots remain local evidence only.
 
 ## Partial Results
 
@@ -51,7 +51,7 @@ Product impact check: `runtime_behavior:` reading-progress sync, bookmarks, and 
 
 Default native gate: targeted Flutter tests and targeted analyze for each lane.
 
-Aggregate gate: architecture scan, serial Flutter suite, full analyze, `git diff --check`, and rebuilt-app smoke on `emulator-5558`.
+Aggregate gate: architecture scan, serial Flutter suite, full analyze, `git diff --check`, and rebuilt-app smoke on `emulator-5556`.
 
 Detour budget: three unresolved repetitions of the same test failure.
 
@@ -71,7 +71,7 @@ Batch 2 validation status:
 - Reader progress tests preserve UTF-16 chapter positions and WebDAV ETag/412 retry semantics.
 - Read-only review found no blocking integration defect; it confirmed the content-refetch provider must remain after `SourceProvider` and alternate Reader hosts must inject the three new ports.
 - Aggregate Flutter suite: `813` passed, `3` existing conditional skips.
-- Android `emulator-5558`: Module 3 single-chapter Reader snapshot `1/1` passed; multi-chapter boundary snapshot `1/1` passed. Both built and installed the debug APK, loaded Rust engine v0.5.6, and preserved pagination geometry.
+- Android `emulator-5556`: Module 3 single-chapter Reader snapshot `1/1` passed; multi-chapter boundary snapshot `1/1` passed. Both built and installed the debug APK, loaded Rust engine v0.5.6, and preserved pagination geometry.
 - The hand-built Android Reader test hosts now register all Reader ports, including the no-op progress port used because these snapshot cases do not exercise WebDAV.
 - Theme reference: the legacy Beta bookshelf colors are treated as theme-derived values. The captured brown top bar/red active state is a baseline for the selected theme, not a hard-coded color contract.
 - Full Flutter suite, full analyze, format/diff checks, and rebuilt Android smoke remain aggregate gates.

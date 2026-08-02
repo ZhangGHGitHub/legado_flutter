@@ -4,7 +4,7 @@ import '../remote/legacy_room_import_report.dart';
 abstract interface class LegacyRoomImportUseCase {
   LegacyRoomImportReport importDatabase({
     required String sourcePath,
-    required String backupPath,
+    required String? backupPath,
     bool replace = false,
   });
 }

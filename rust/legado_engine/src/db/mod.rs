@@ -1,11 +1,14 @@
 //! Rust 本地数据库 — 与 Flutter `legado.db` schema v7 对齐（Phase C）
 
+use crate::model::book::BookDto;
 use once_cell::sync::OnceCell;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use thiserror::Error;
 
@@ -15,6 +18,7 @@ const SCHEMA_VERSION: i32 = 17;
 
 static DB: OnceCell<Mutex<EngineDb>> = OnceCell::new();
 static DB_INIT_LOCK: Mutex<()> = Mutex::new(());
+static IMPORT_BACKUP_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Error, Debug)]
 pub enum DbError {
@@ -307,55 +311,31 @@ impl EngineDb {
         let snapshot = room_import::extract_legacy_room_database(source_path)?;
         let mapping = room_import::map_legacy_room_snapshot(&snapshot)?;
         let fingerprint = room_import::snapshot_fingerprint(&snapshot);
-        let already_imported = self.conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM legacy_room_imports WHERE fingerprint=?1)",
-            params![fingerprint],
-            |row| row.get::<_, i64>(0),
-        )? == 1;
-
         let normalized_backup_path = backup_path
             .filter(|path| !path.trim().is_empty())
             .map(str::to_string);
-        if already_imported && !replace {
-            let archive_only_tables = mapping.archive_only_tables.clone();
-            let mut warnings = mapping.warnings;
-            warnings.push(format!(
-                "legacy Room snapshot already imported; skipped duplicate: {fingerprint}"
-            ));
-            return Ok(room_import::LegacyRoomImportReport {
-                source_room_version: snapshot.user_version,
-                source_room_identity_hash: snapshot.room_identity_hash,
-                fingerprint,
-                replaced: false,
-                skipped_duplicate: true,
-                backup_path: normalized_backup_path,
-                backup_written: false,
-                counts: mapping.counts,
-                conflict_counts: BTreeMap::new(),
-                preserved_rows: snapshot
-                    .tables
-                    .iter()
-                    .map(|(table, rows)| (table.clone(), rows.len()))
-                    .collect(),
-                archive_only_tables,
-                warnings,
-                unmapped_columns: mapping.unmapped_columns,
-            });
-        }
-
-        let backup_path = normalized_backup_path
-            .as_deref()
-            .ok_or_else(|| DbError::Message("首次 Room 导入必须提供导入前备份路径".to_string()))?;
-        let backup_json = self.export_backup_json()?;
-        write_import_backup(backup_path, &backup_json)?;
-        let conflict_counts = if replace {
-            BTreeMap::new()
-        } else {
-            import_conflict_counts(&self.conn, &mapping.backup_json)?
-        };
 
         self.conn.execute_batch("BEGIN IMMEDIATE")?;
-        let result = (|| {
+        let result: Result<Option<BTreeMap<String, usize>>, DbError> = (|| {
+            let already_imported = self.conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM legacy_room_imports WHERE fingerprint=?1)",
+                params![fingerprint],
+                |row| row.get::<_, i64>(0),
+            )? == 1;
+            if already_imported && !replace {
+                return Ok(None);
+            }
+
+            let backup_path = normalized_backup_path.as_deref().ok_or_else(|| {
+                DbError::Message("首次 Room 导入必须提供导入前备份路径".to_string())
+            })?;
+            let backup_json = self.export_backup_json()?;
+            write_import_backup(backup_path, &backup_json)?;
+            let conflict_counts = if replace {
+                BTreeMap::new()
+            } else {
+                import_conflict_counts(&self.conn, &mapping.backup_json)?
+            };
             if replace {
                 self.clear_all_for_restore()?;
             }
@@ -378,11 +358,11 @@ impl EngineDb {
                     mapping.backup_json.to_string(),
                 ],
             )?;
-            Ok::<(), DbError>(())
+            Ok(Some(conflict_counts))
         })();
 
         match result {
-            Ok(()) => match self.conn.execute_batch("COMMIT") {
+            Ok(Some(conflict_counts)) => match self.conn.execute_batch("COMMIT") {
                 Ok(()) => Ok(room_import::LegacyRoomImportReport {
                     source_room_version: snapshot.user_version,
                     source_room_identity_hash: snapshot.room_identity_hash,
@@ -402,6 +382,38 @@ impl EngineDb {
                     warnings: mapping.warnings,
                     unmapped_columns: mapping.unmapped_columns,
                 }),
+                Err(error) => {
+                    let _ = self.conn.execute_batch("ROLLBACK");
+                    Err(DbError::Sqlite(error))
+                }
+            },
+            Ok(None) => match self.conn.execute_batch("COMMIT") {
+                Ok(()) => {
+                    let archive_only_tables = mapping.archive_only_tables.clone();
+                    let mut warnings = mapping.warnings;
+                    warnings.push(format!(
+                        "legacy Room snapshot already imported; skipped duplicate: {fingerprint}"
+                    ));
+                    Ok(room_import::LegacyRoomImportReport {
+                        source_room_version: snapshot.user_version,
+                        source_room_identity_hash: snapshot.room_identity_hash,
+                        fingerprint,
+                        replaced: false,
+                        skipped_duplicate: true,
+                        backup_path: normalized_backup_path,
+                        backup_written: false,
+                        counts: mapping.counts,
+                        conflict_counts: BTreeMap::new(),
+                        preserved_rows: snapshot
+                            .tables
+                            .iter()
+                            .map(|(table, rows)| (table.clone(), rows.len()))
+                            .collect(),
+                        archive_only_tables,
+                        warnings,
+                        unmapped_columns: mapping.unmapped_columns,
+                    })
+                }
                 Err(error) => {
                     let _ = self.conn.execute_batch("ROLLBACK");
                     Err(DbError::Sqlite(error))
@@ -490,36 +502,39 @@ impl EngineDb {
         let rows = stmt.query_map([], |row| {
             let daily_raw = row.get::<_, Option<i64>>(21)?.unwrap_or(3);
             let daily = if daily_raw < 1 { 3 } else { daily_raw.min(999) };
-            Ok(json!({
-                "id": row.get::<_, String>(0)?,
-                "name": row.get::<_, String>(1)?,
-                "author": row.get::<_, String>(2)?,
-                "coverUrl": row.get::<_, String>(3)?,
-                "type": row.get::<_, String>(4)?,
-                "progress": row.get::<_, f64>(5)?,
-                "currentChapter": row.get::<_, Option<String>>(6)?,
-                "lastChapter": row.get::<_, String>(7)?,
-                "totalChapterNum": row.get::<_, Option<i64>>(8)?.unwrap_or(0).max(0),
-                "durChapterIndex": row.get::<_, Option<i64>>(9)?.unwrap_or(0).max(0),
-                "currentPageIndex": row.get::<_, i64>(10)?,
-                "isFavorite": row.get::<_, i64>(11)? == 1,
-                "sourceUrl": row.get::<_, String>(12)?,
-                "description": row.get::<_, String>(13)?,
-                "bookSourceUrl": row.get::<_, String>(14)?,
-                "tocUrl": row.get::<_, Option<String>>(15)?.unwrap_or_default(),
-                "group": row.get::<_, String>(16)?,
-                "readIteration": row.get::<_, Option<i64>>(17)?.unwrap_or(0),
-                "simReadEnabled": row.get::<_, Option<i64>>(18)?.unwrap_or(0) == 1,
-                "simReadStartDate": row.get::<_, Option<String>>(19)?.unwrap_or_default(),
-                "simReadStartChapter": row.get::<_, Option<i64>>(20)?.unwrap_or(0).max(0),
-                "simReadDailyChapters": daily,
-                "readConfig": parse_read_config(row.get::<_, Option<String>>(22)?),
-                "updatedAt": row.get::<_, Option<String>>(23)?.unwrap_or_default(),
-            }))
+            Ok(BookDto {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                author: row.get(2)?,
+                cover_url: row.get(3)?,
+                book_type: row.get(4)?,
+                progress: row.get(5)?,
+                current_chapter: row.get(6)?,
+                last_chapter: row.get(7)?,
+                total_chapter_num: row.get::<_, Option<i64>>(8)?.unwrap_or(0).max(0),
+                dur_chapter_index: row.get::<_, Option<i64>>(9)?.unwrap_or(0).max(0),
+                current_page_index: row.get(10)?,
+                is_favorite: row.get::<_, i64>(11)? == 1,
+                source_url: row.get(12)?,
+                description: row.get(13)?,
+                book_source_url: row.get(14)?,
+                toc_url: row.get::<_, Option<String>>(15)?.unwrap_or_default(),
+                group: row.get(16)?,
+                read_iteration: row.get::<_, Option<i64>>(17)?.unwrap_or(0),
+                sim_read_enabled: row.get::<_, Option<i64>>(18)?.unwrap_or(0) == 1,
+                sim_read_start_date: row.get::<_, Option<String>>(19)?.unwrap_or_default(),
+                sim_read_start_chapter: row.get::<_, Option<i64>>(20)?.unwrap_or(0).max(0),
+                sim_read_daily_chapters: daily,
+                read_config: parse_read_config(row.get::<_, Option<String>>(22)?),
+                updated_at: row.get::<_, Option<String>>(23)?.unwrap_or_default(),
+            })
         })?;
         rows.map(|r| {
-            r.map(|v| v.to_string())
-                .map_err(|e| DbError::Message(e.to_string()))
+            r.and_then(|dto| {
+                serde_json::to_string(&dto)
+                    .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))
+            })
+            .map_err(|e| DbError::Message(e.to_string()))
         })
         .collect()
     }
@@ -1203,6 +1218,19 @@ impl EngineDb {
             return Ok(());
         }
 
+        let duplicate: i64 = self.conn.query_row(
+            "SELECT EXISTS(
+               SELECT 1 FROM detailed_read_records
+               WHERE book_name = ?1 AND start_time = ?2
+                 AND end_time = ?3 AND read_iteration = ?4
+             )",
+            params![book_name, start_time, end_time, read_iteration],
+            |row| row.get(0),
+        )?;
+        if duplicate == 1 {
+            return Ok(());
+        }
+
         let last: Option<(i64, i64)> = self
             .conn
             .query_row(
@@ -1588,14 +1616,58 @@ fn write_import_backup(path: &str, backup_json: &str) -> Result<(), DbError> {
             )));
         }
     }
-    let temporary = format!("{path}.tmp-{}", std::process::id());
-    if let Err(error) = fs::write(&temporary, backup_json) {
-        let _ = fs::remove_file(&temporary);
+    loop {
+        let sequence = IMPORT_BACKUP_TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let temporary = PathBuf::from(format!("{path}.tmp-{}-{sequence}", std::process::id()));
+        match write_import_backup_at_temporary_path(destination, backup_json, &temporary) {
+            Ok(()) => return Ok(()),
+            Err(_error) if temporary.exists() => continue,
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+fn write_import_backup_at_temporary_path(
+    destination: &Path,
+    backup_json: &str,
+    temporary: &Path,
+) -> Result<(), DbError> {
+    let mut file = match OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(temporary)
+    {
+        Ok(file) => file,
+        Err(error) => {
+            return Err(DbError::Message(format!("写入导入前备份失败: {error}")));
+        }
+    };
+    if let Err(error) = file
+        .write_all(backup_json.as_bytes())
+        .and_then(|_| file.sync_all())
+    {
+        drop(file);
+        let _ = fs::remove_file(temporary);
         return Err(DbError::Message(format!("写入导入前备份失败: {error}")));
     }
-    if let Err(error) = fs::rename(&temporary, destination) {
-        let _ = fs::remove_file(&temporary);
+    drop(file);
+
+    let result = fs::hard_link(temporary, destination);
+    let cleanup_result = fs::remove_file(temporary);
+    if let Err(error) = result {
+        let _ = cleanup_result;
+        if error.kind() == std::io::ErrorKind::AlreadyExists || destination.exists() {
+            return Err(DbError::Message(format!(
+                "导入前备份路径已存在，为避免覆盖拒绝写入: {}",
+                destination.display()
+            )));
+        }
         return Err(DbError::Message(format!("完成导入前备份失败: {error}")));
+    }
+    if let Err(error) = cleanup_result {
+        return Err(DbError::Message(format!(
+            "清理导入前备份临时文件失败: {error}"
+        )));
     }
     Ok(())
 }
@@ -2189,12 +2261,27 @@ mod tests {
         fs::create_dir(&temporary).unwrap();
 
         let error =
-            write_import_backup(&destination.to_string_lossy(), "{\"books\":[]}").unwrap_err();
+            write_import_backup_at_temporary_path(&destination, "{\"books\":[]}", &temporary)
+                .unwrap_err();
 
         assert!(error.to_string().contains("写入导入前备份失败"));
         assert!(temporary.is_dir());
         assert!(!destination.exists());
         fs::remove_dir_all(&temporary).unwrap();
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn import_backup_does_not_overwrite_existing_destination() {
+        let directory = test_directory("backup-existing-destination");
+        let destination = directory.join("before.json");
+        fs::write(&destination, "原有备份").unwrap();
+
+        let error =
+            write_import_backup(&destination.to_string_lossy(), "{\"books\":[]}").unwrap_err();
+
+        assert!(error.to_string().contains("路径已存在"));
+        assert_eq!(fs::read_to_string(&destination).unwrap(), "原有备份");
         fs::remove_dir_all(directory).unwrap();
     }
 
@@ -2345,6 +2432,34 @@ mod tests {
         assert_eq!(fs::read(&first_backup_path).unwrap(), first_backup);
         assert_eq!(db.legacy_room_import_count().unwrap(), 1);
 
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn room_import_locks_before_duplicate_check_and_backup_creation() {
+        let directory = test_directory("import-lock-order");
+        let source_path = directory.join("room.db");
+        let target_path = directory.join("legado.db");
+        let backup_path = directory.join("before.json");
+        write_minimal_room_import_source(&source_path);
+
+        let first = EngineDb::open(&target_path.to_string_lossy()).unwrap();
+        let second = EngineDb::open(&target_path.to_string_lossy()).unwrap();
+        first.conn.execute_batch("BEGIN IMMEDIATE").unwrap();
+
+        let error = second
+            .import_legacy_room_database(
+                &source_path.to_string_lossy(),
+                Some(&backup_path.to_string_lossy()),
+                false,
+            )
+            .unwrap_err();
+
+        assert!(error.to_string().contains("database is locked"));
+        assert!(!backup_path.exists());
+        first.conn.execute_batch("ROLLBACK").unwrap();
+        drop(second);
+        drop(first);
         fs::remove_dir_all(directory).unwrap();
     }
 
@@ -2802,6 +2917,59 @@ mod tests {
                 .and_then(|x| x.as_i64()),
             Some(2)
         );
+    }
+
+    #[test]
+    fn book_query_maps_database_columns_through_book_dto() {
+        let db = EngineDb::open_in_memory().unwrap();
+        db.insert_book_json(
+            r#"{
+                "id":"dto-book", "name":"DTO 书", "author":"DTO 作者",
+                "coverUrl":"https://example.test/cover.jpg", "type":"audio",
+                "progress":0.25, "currentChapter":"第三章", "lastChapter":"第十二章",
+                "totalChapterNum":12, "durChapterIndex":2, "currentPageIndex":42,
+                "isFavorite":true, "sourceUrl":"https://example.test/book",
+                "description":"DTO 简介", "bookSourceUrl":"https://example.test/source",
+                "tocUrl":"https://example.test/toc", "group":"分组", "readIteration":4,
+                "simReadEnabled":true, "simReadStartDate":"2026-08-02",
+                "simReadStartChapter":2, "simReadDailyChapters":6,
+                "readConfig":{"reverseToc":true,"pageAnim":3}
+            }"#,
+        )
+        .unwrap();
+        db.conn
+            .execute(
+                "UPDATE books SET updatedAt=?1 WHERE id='dto-book'",
+                params!["2026-08-02 12:34:56"],
+            )
+            .unwrap();
+
+        let book: Value = serde_json::from_str(&db.get_books_json().unwrap()[0]).unwrap();
+
+        assert_eq!(book["id"], "dto-book");
+        assert_eq!(book["name"], "DTO 书");
+        assert_eq!(book["author"], "DTO 作者");
+        assert_eq!(book["coverUrl"], "https://example.test/cover.jpg");
+        assert_eq!(book["type"], "audio");
+        assert_eq!(book["progress"], 0.25);
+        assert_eq!(book["currentChapter"], "第三章");
+        assert_eq!(book["lastChapter"], "第十二章");
+        assert_eq!(book["totalChapterNum"], 12);
+        assert_eq!(book["durChapterIndex"], 2);
+        assert_eq!(book["currentPageIndex"], 42);
+        assert_eq!(book["isFavorite"], true);
+        assert_eq!(book["sourceUrl"], "https://example.test/book");
+        assert_eq!(book["description"], "DTO 简介");
+        assert_eq!(book["bookSourceUrl"], "https://example.test/source");
+        assert_eq!(book["tocUrl"], "https://example.test/toc");
+        assert_eq!(book["group"], "分组");
+        assert_eq!(book["readIteration"], 4);
+        assert_eq!(book["simReadEnabled"], true);
+        assert_eq!(book["simReadStartDate"], "2026-08-02");
+        assert_eq!(book["simReadStartChapter"], 2);
+        assert_eq!(book["simReadDailyChapters"], 6);
+        assert_eq!(book["readConfig"], json!({"reverseToc":true,"pageAnim":3}));
+        assert_eq!(book["updatedAt"], "2026-08-02 12:34:56");
     }
 
     #[test]
@@ -3325,6 +3493,7 @@ mod tests {
         assert_eq!(conflicts.get("bookmarks"), Some(&1));
         assert!(!conflicts.contains_key("readingRecords"));
         assert!(!conflicts.contains_key("detailedReadRecords"));
+        assert!(!conflicts.contains_key("readRecord"));
 
         // 再次恢复必须成功，且每个映射实体仍只有一行。
         db.restore_backup_json(&backup.to_string(), false).unwrap();
@@ -3335,8 +3504,8 @@ mod tests {
             ("replace_rules", 1_i64),
             ("bookmarks", 1_i64),
             ("reading_records", 1_i64),
-            // 详细阅读会话不参与主键冲突统计，重复恢复按现有语义追加。
-            ("detailed_read_records", 2_i64),
+            // 详细阅读会话不参与主键冲突统计，但完全相同会话必须幂等。
+            ("detailed_read_records", 1_i64),
         ] {
             let actual: i64 = db
                 .conn

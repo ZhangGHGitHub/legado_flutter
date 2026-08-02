@@ -6,9 +6,10 @@ import 'package:legado_flutter/domain/remote/legacy_room_import_report.dart';
 import 'package:legado_flutter/services/legacy_room_import_service_factory.dart';
 
 class _FakeLegacyRoomImportPort implements LegacyRoomImportPort {
-  _FakeLegacyRoomImportPort({this.reportJson});
+  _FakeLegacyRoomImportPort({this.reportJson, this.rejectMissingBackupPath});
 
   final String? reportJson;
+  final bool? rejectMissingBackupPath;
   String? sourcePath;
   String? backupPath;
   bool? replace;
@@ -16,12 +17,15 @@ class _FakeLegacyRoomImportPort implements LegacyRoomImportPort {
   @override
   String importDatabase({
     required String sourcePath,
-    required String backupPath,
+    required String? backupPath,
     required bool replace,
   }) {
     this.sourcePath = sourcePath;
     this.backupPath = backupPath;
     this.replace = replace;
+    if (rejectMissingBackupPath == true && backupPath == null) {
+      throw StateError('Rust rejected a missing backup path');
+    }
     return reportJson ??
         '''{
       "sourceRoomVersion": 99,
@@ -194,6 +198,48 @@ void main() {
     expect(report.unmappedColumns, isEmpty);
   });
 
+  test('forwards a null backup path for duplicate imports', () {
+    final port = _FakeLegacyRoomImportPort(
+      reportJson: '''{
+        "sourceRoomVersion": 99,
+        "sourceRoomIdentityHash": "room-v99-null-backup-identity-hash",
+        "fingerprint": "room-v99-null-backup",
+        "replaced": false,
+        "skippedDuplicate": true,
+        "backupPath": null,
+        "backupWritten": false,
+        "counts": {},
+        "conflictCounts": {},
+        "preservedRows": {},
+        "archiveOnlyTables": [],
+        "warnings": [],
+        "unmappedColumns": {}
+      }''',
+    );
+    final service = LegacyRoomImportServices.create(port);
+
+    final report = service.importDatabase(
+      sourcePath: '/legacy/legado.db',
+      backupPath: null,
+      replace: false,
+    );
+
+    expect(port.sourcePath, '/legacy/legado.db');
+    expect(port.backupPath, isNull);
+    expect(port.replace, isFalse);
+    expect(report.sourceRoomIdentityHash, 'room-v99-null-backup-identity-hash');
+    expect(report.fingerprint, 'room-v99-null-backup');
+    expect(report.skippedDuplicate, isTrue);
+    expect(report.backupPath, isNull);
+    expect(report.backupWritten, isFalse);
+    expect(report.counts, isEmpty);
+    expect(report.conflictCounts, isEmpty);
+    expect(report.preservedRows, isEmpty);
+    expect(report.archiveOnlyTables, isEmpty);
+    expect(report.warnings, isEmpty);
+    expect(report.unmappedColumns, isEmpty);
+  });
+
   test(
     'ignores unknown report fields without changing the supported contract',
     () {
@@ -247,6 +293,88 @@ void main() {
 
     expect(report.sourceRoomIdentityHash, isNull);
     expect(report.backupPath, isNull);
+  });
+
+  test('matches the complete Rust serde report shape on both import paths', () {
+    const expectedKeys = <String>{
+      'sourceRoomVersion',
+      'sourceRoomIdentityHash',
+      'fingerprint',
+      'replaced',
+      'skippedDuplicate',
+      'backupPath',
+      'backupWritten',
+      'counts',
+      'conflictCounts',
+      'preservedRows',
+      'archiveOnlyTables',
+      'warnings',
+      'unmappedColumns',
+    };
+    const rustReportPayloads = [
+      '''{
+        "sourceRoomVersion": 99,
+        "sourceRoomIdentityHash": "room-v99-success-identity",
+        "fingerprint": "room-v99-success",
+        "replaced": false,
+        "skippedDuplicate": false,
+        "backupPath": "/backup/pre-import.json",
+        "backupWritten": true,
+        "counts": {"books": 1},
+        "conflictCounts": {},
+        "preservedRows": {"books": 1},
+        "archiveOnlyTables": ["book_groups"],
+        "warnings": ["readRecord deferred"],
+        "unmappedColumns": {"chapters": ["wordCount"]}
+      }''',
+      '''{
+        "sourceRoomVersion": 99,
+        "sourceRoomIdentityHash": "room-v99-duplicate-identity",
+        "fingerprint": "room-v99-duplicate",
+        "replaced": false,
+        "skippedDuplicate": true,
+        "backupPath": null,
+        "backupWritten": false,
+        "counts": {"books": 1},
+        "conflictCounts": {},
+        "preservedRows": {"books": 1},
+        "archiveOnlyTables": ["book_groups"],
+        "warnings": ["legacy Room snapshot already imported; skipped duplicate"],
+        "unmappedColumns": {"chapters": ["wordCount"]}
+      }''',
+    ];
+
+    for (final raw in rustReportPayloads) {
+      final payload = jsonDecode(raw) as Map<String, dynamic>;
+      expect(payload.keys.toSet(), expectedKeys);
+      expect(payload['sourceRoomVersion'], isA<int>());
+      expect(payload['sourceRoomIdentityHash'], anyOf(isA<String>(), isNull));
+      expect(payload['fingerprint'], isA<String>());
+      expect(payload['replaced'], isA<bool>());
+      expect(payload['skippedDuplicate'], isA<bool>());
+      expect(payload['backupPath'], anyOf(isA<String>(), isNull));
+      expect(payload['backupWritten'], isA<bool>());
+      expect(payload['counts'], isA<Map<String, dynamic>>());
+      expect(payload['conflictCounts'], isA<Map<String, dynamic>>());
+      expect(payload['preservedRows'], isA<Map<String, dynamic>>());
+      expect(payload['archiveOnlyTables'], isA<List<dynamic>>());
+      expect(payload['warnings'], isA<List<dynamic>>());
+      expect(payload['unmappedColumns'], isA<Map<String, dynamic>>());
+
+      final report = LegacyRoomImportReport.fromJson(raw);
+      expect(report.sourceRoomVersion, 99);
+      expect(report.sourceRoomIdentityHash, isNotNull);
+      expect(report.fingerprint, isNotEmpty);
+      expect(report.backupPath, anyOf(isA<String>(), isNull));
+      expect(report.counts, {'books': 1});
+      expect(report.conflictCounts, isEmpty);
+      expect(report.preservedRows, {'books': 1});
+      expect(report.archiveOnlyTables, ['book_groups']);
+      expect(report.warnings, isNotEmpty);
+      expect(report.unmappedColumns, {
+        'chapters': ['wordCount'],
+      });
+    }
   });
 
   test('rejects missing required report fields', () {
@@ -376,18 +504,26 @@ void main() {
     expect(report.hasWarnings, isTrue);
   });
 
-  test('requires a source and durable backup path', () {
-    final service = LegacyRoomImportServices.create(
-      _FakeLegacyRoomImportPort(),
-    );
+  test(
+    'requires a source and leaves missing backup path validation to Rust',
+    () {
+      final port = _FakeLegacyRoomImportPort(rejectMissingBackupPath: true);
+      final service = LegacyRoomImportServices.create(port);
 
-    expect(
-      () => service.importDatabase(sourcePath: '', backupPath: '/backup.json'),
-      throwsArgumentError,
-    );
-    expect(
-      () => service.importDatabase(sourcePath: '/legacy.db', backupPath: ''),
-      throwsArgumentError,
-    );
-  });
+      expect(
+        () =>
+            service.importDatabase(sourcePath: '', backupPath: '/backup.json'),
+        throwsArgumentError,
+      );
+
+      expect(
+        () =>
+            service.importDatabase(sourcePath: '/legacy.db', backupPath: null),
+        throwsStateError,
+      );
+      expect(port.sourcePath, '/legacy.db');
+      expect(port.backupPath, isNull);
+      expect(port.replace, isFalse);
+    },
+  );
 }

@@ -1,13 +1,14 @@
-class BookReadingStats {
-  const BookReadingStats({
-    required this.readChars,
-    required this.durationSeconds,
-    required this.startDate,
-    required this.lastDate,
-  });
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-  final int readChars;
-  final int durationSeconds;
-  final String? startDate;
-  final String? lastDate;
+part 'book_reading_stats.freezed.dart';
+
+@freezed
+class BookReadingStats with _$BookReadingStats {
+  const factory BookReadingStats({
+    required int readChars,
+    required int durationSeconds,
+    required String? startDate,
+    required String? lastDate,
+    @Default(0) int readingDays,
+  }) = _BookReadingStats;
 }

@@ -1,96 +1,51 @@
 import 'dart:convert';
 
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'book_source.freezed.dart';
+
 /// 书源模型 - 兼容 legado 阅读3.0 书源 JSON 格式
-class BookSource {
-  final String bookSourceUrl;
-  final String bookSourceName;
-  final String bookSourceType;
-  final String bookSourceGroup;
-  final bool enabled;
+@freezed
+class BookSource with _$BookSource {
+  const BookSource._();
 
-  // ── 排序 / 发现 ──
-  final int customOrder;
-  final int lastUpdateTime;
-  final int weight;
-  final bool enabledExplore;
-  final int respondTime;
-
-  // ── 搜索规则 ──
-  final String ruleSearchUrl;
-  final String ruleSearchList;
-  final String ruleSearchName;
-  final String ruleSearchAuthor;
-  final String ruleSearchCoverUrl;
-  final String ruleSearchKind;
-  final String ruleSearchNote;
-
-  // ── 书籍详情规则 ──
-  final String ruleBookUrlPattern;
-  final String ruleBookName;
-  final String ruleBookAuthor;
-  final String ruleBookCoverUrl;
-  final String ruleBookKind;
-  final String ruleBookNote;
-  final String ruleBookLastChapter;
-
-  // ── 目录规则 ──
-  final String ruleChapterList;
-  final String ruleChapterName;
-  final String ruleChapterUrl;
-  final String ruleChapterUrlIsFull;
-
-  // ── 正文规则 ──
-  final String ruleContentUrl;
-  final String ruleContent;
-  final String ruleContentRemove;
-
-  // ── 翻页规则 ──
-  final String rulePageUrl;
-  final String rulePageNext;
-
-  // ── 元信息 ──
-  final String bookSourceComment;
-
-  /// 完整 Legado 原始 JSON（保留后端规则，用于 JSON API 书源）
-  final String rawSourceJson;
-
-  BookSource({
-    required this.bookSourceUrl,
-    required this.bookSourceName,
-    this.bookSourceType = '0',
-    this.bookSourceGroup = '',
-    this.enabled = true,
-    this.customOrder = 0,
-    this.lastUpdateTime = 0,
-    this.weight = 0,
-    this.enabledExplore = true,
-    this.respondTime = 180000,
-    this.ruleSearchUrl = '',
-    this.ruleSearchList = '',
-    this.ruleSearchName = '',
-    this.ruleSearchAuthor = '',
-    this.ruleSearchCoverUrl = '',
-    this.ruleSearchKind = '',
-    this.ruleSearchNote = '',
-    this.ruleBookUrlPattern = '',
-    this.ruleBookName = '',
-    this.ruleBookAuthor = '',
-    this.ruleBookCoverUrl = '',
-    this.ruleBookKind = '',
-    this.ruleBookNote = '',
-    this.ruleBookLastChapter = '',
-    this.ruleChapterList = '',
-    this.ruleChapterName = '',
-    this.ruleChapterUrl = '',
-    this.ruleChapterUrlIsFull = '',
-    this.ruleContentUrl = '',
-    this.ruleContent = '',
-    this.ruleContentRemove = '',
-    this.rulePageUrl = '',
-    this.rulePageNext = '',
-    this.bookSourceComment = '',
-    this.rawSourceJson = '',
-  });
+  const factory BookSource({
+    required String bookSourceUrl,
+    required String bookSourceName,
+    @Default('0') String bookSourceType,
+    @Default('') String bookSourceGroup,
+    @Default(true) bool enabled,
+    @Default(0) int customOrder,
+    @Default(0) int lastUpdateTime,
+    @Default(0) int weight,
+    @Default(true) bool enabledExplore,
+    @Default(180000) int respondTime,
+    @Default('') String ruleSearchUrl,
+    @Default('') String ruleSearchList,
+    @Default('') String ruleSearchName,
+    @Default('') String ruleSearchAuthor,
+    @Default('') String ruleSearchCoverUrl,
+    @Default('') String ruleSearchKind,
+    @Default('') String ruleSearchNote,
+    @Default('') String ruleBookUrlPattern,
+    @Default('') String ruleBookName,
+    @Default('') String ruleBookAuthor,
+    @Default('') String ruleBookCoverUrl,
+    @Default('') String ruleBookKind,
+    @Default('') String ruleBookNote,
+    @Default('') String ruleBookLastChapter,
+    @Default('') String ruleChapterList,
+    @Default('') String ruleChapterName,
+    @Default('') String ruleChapterUrl,
+    @Default('') String ruleChapterUrlIsFull,
+    @Default('') String ruleContentUrl,
+    @Default('') String ruleContent,
+    @Default('') String ruleContentRemove,
+    @Default('') String rulePageUrl,
+    @Default('') String rulePageNext,
+    @Default('') String bookSourceComment,
+    @Default('') String rawSourceJson,
+  }) = _BookSource;
 
   /// 是否为 JSON API 书源（有 rawSourceJson 且包含 JSON 路径规则）
   bool get isJsonApiSource {
@@ -324,7 +279,9 @@ class BookSource {
           nested('ruleSearch', 'kind', flatKey: 'ruleSearchKind') ?? '',
       ruleSearchNote:
           nested('ruleSearch', 'note', flatKey: 'ruleSearchNote') ?? '',
-      ruleBookUrlPattern: safeString(json['ruleBookUrlPattern']) ?? '',
+      ruleBookUrlPattern:
+          nested('ruleBookInfo', 'bookUrl', flatKey: 'ruleBookUrlPattern') ??
+          '',
       ruleBookName:
           nested('ruleBookInfo', 'name', flatKey: 'ruleBookName') ?? '',
       ruleBookAuthor:
@@ -423,58 +380,6 @@ class BookSource {
 
   /// 供 Rust 桥接：完整 Legado JSON，并同步 enabled / 分组
   String toEngineJson() => jsonEncode(toJson());
-
-  BookSource copyWith({
-    String? bookSourceUrl,
-    String? bookSourceName,
-    String? bookSourceType,
-    String? bookSourceGroup,
-    bool? enabled,
-    int? customOrder,
-    int? lastUpdateTime,
-    int? weight,
-    bool? enabledExplore,
-    int? respondTime,
-    String? rawSourceJson,
-  }) {
-    return BookSource(
-      bookSourceUrl: bookSourceUrl ?? this.bookSourceUrl,
-      bookSourceName: bookSourceName ?? this.bookSourceName,
-      bookSourceType: bookSourceType ?? this.bookSourceType,
-      bookSourceGroup: bookSourceGroup ?? this.bookSourceGroup,
-      enabled: enabled ?? this.enabled,
-      customOrder: customOrder ?? this.customOrder,
-      lastUpdateTime: lastUpdateTime ?? this.lastUpdateTime,
-      weight: weight ?? this.weight,
-      enabledExplore: enabledExplore ?? this.enabledExplore,
-      respondTime: respondTime ?? this.respondTime,
-      ruleSearchUrl: ruleSearchUrl,
-      ruleSearchList: ruleSearchList,
-      ruleSearchName: ruleSearchName,
-      ruleSearchAuthor: ruleSearchAuthor,
-      ruleSearchCoverUrl: ruleSearchCoverUrl,
-      ruleSearchKind: ruleSearchKind,
-      ruleSearchNote: ruleSearchNote,
-      ruleBookUrlPattern: ruleBookUrlPattern,
-      ruleBookName: ruleBookName,
-      ruleBookAuthor: ruleBookAuthor,
-      ruleBookCoverUrl: ruleBookCoverUrl,
-      ruleBookKind: ruleBookKind,
-      ruleBookNote: ruleBookNote,
-      ruleBookLastChapter: ruleBookLastChapter,
-      ruleChapterList: ruleChapterList,
-      ruleChapterName: ruleChapterName,
-      ruleChapterUrl: ruleChapterUrl,
-      ruleChapterUrlIsFull: ruleChapterUrlIsFull,
-      ruleContentUrl: ruleContentUrl,
-      ruleContent: ruleContent,
-      ruleContentRemove: ruleContentRemove,
-      rulePageUrl: rulePageUrl,
-      rulePageNext: rulePageNext,
-      bookSourceComment: bookSourceComment,
-      rawSourceJson: rawSourceJson ?? this.rawSourceJson,
-    );
-  }
 
   @override
   String toString() => 'BookSource($bookSourceName)';

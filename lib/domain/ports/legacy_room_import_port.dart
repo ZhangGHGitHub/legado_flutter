@@ -2,7 +2,7 @@
 abstract interface class LegacyRoomImportPort {
   String importDatabase({
     required String sourcePath,
-    required String backupPath,
+    required String? backupPath,
     required bool replace,
   });
 }
