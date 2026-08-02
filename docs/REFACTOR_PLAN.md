@@ -47,6 +47,7 @@
 2026-08-03 Phase 3 端口 DTO 并行收敛续批：本地备份条目、书源级正文替换输入、RSS 文章结果和书源网页验证请求/结果改为 Freezed，保留端口签名、默认值、异常原文、原始正文处理边界、RSS 列表顺序和浏览器取消语义。生成器资产图曾将缺失的网页验证产物误判为已生成；仅清理 `.dart_tool/build` 可再生缓存后完整重建，产物恢复且 owner 定向/既有回归 `24/24`、Flutter 全量 `1021`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。未改变正文、断行、第 3 条断行规则、分页、章节身份、Room 导入或暂停平台门禁。
 2026-08-03 Phase 3 application 模型并行收敛：`ChapterProgress`、`AppDiagnosticsConfig`、`AppDiagnosticEvent`、`MangaFooterConfig`、`MangaColorFilterConfig`、`LoginRowUi`、`SourceLoginCommand` 和 `SourceLoginScriptResult` 改为 Freezed，保留章节 URL/标题匹配、UTF-16 位置裁剪、诊断敏感信息隔离、漫画显示默认值与 `isIdentity`、登录表单/脚本默认参数及端口签名。登录模型初次生成因 Freezed 默认参数标注失败，补齐 `@Default(...)` 后完整生成恢复。owner 合并定向 `14/14`、Flutter 全量 `1035`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、第 3 条断行规则、Room 导入、真实 Android TTS 或暂停平台门禁。
 2026-08-03 Phase 3 application 状态模型并行收敛：`ReadingPageRange`、`ReadStyleSlotOverride`、`RuleSubImportResult` 和 `StartupTaskReport` 改为 Freezed，保留 UTF-16 半开页范围、图片路径清除、规则订阅顺序/名称回退和启动任务并发、超时、失败隔离与重试语义。owner 合并定向 `20/20`、Flutter 全量 `1048`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过；未改变正文、断行、分页、章节身份、Room 导入或暂停平台门禁。
+2026-08-03 Phase 3 application 状态模型并行收敛续批：`BookshelfState`、`ReadingSessionDelta` 和 `DetailedReadingSession` 改为 Freezed，保留书架四种状态工厂、列表防御性复制、刷新失败回退、并发旧请求丢弃，以及阅读会话增量计时、120 秒阈值、书名裁剪和 `readIteration`。owner 合并定向 `14/14`、Flutter 全量 `1054`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。审查确认 `AppBootstrapResult` 是组合根运行时容器，继续保持手写，不迁移为 Freezed。
 
 ### 0.0.1 设计稿收敛顺序
 

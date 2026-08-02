@@ -1,33 +1,39 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../domain/book/book.dart';
 import '../core_api_provider.dart';
 
+part 'bookshelf_notifier.freezed.dart';
+
 enum BookshelfStatus { initial, loading, success, failure }
 
 /// Immutable presentation state for the bookshelf feature.
-class BookshelfState {
-  const BookshelfState._({
-    required this.status,
-    required this.books,
-    this.error,
-    this.stackTrace,
-    this.isRefreshing = false,
-  });
+@freezed
+class BookshelfState with _$BookshelfState {
+  const BookshelfState._();
+
+  const factory BookshelfState._value({
+    required BookshelfStatus status,
+    @Default(<Book>[]) List<Book> books,
+    Object? error,
+    StackTrace? stackTrace,
+    @Default(false) bool isRefreshing,
+  }) = _BookshelfState;
 
   factory BookshelfState.initial() =>
-      const BookshelfState._(status: BookshelfStatus.initial, books: []);
+      const BookshelfState._value(status: BookshelfStatus.initial);
 
   factory BookshelfState.loading({
     List<Book> books = const [],
     bool isRefreshing = false,
-  }) => BookshelfState._(
+  }) => BookshelfState._value(
     status: BookshelfStatus.loading,
     books: List.unmodifiable(books),
     isRefreshing: isRefreshing,
   );
 
-  factory BookshelfState.success(List<Book> books) => BookshelfState._(
+  factory BookshelfState.success(List<Book> books) => BookshelfState._value(
     status: BookshelfStatus.success,
     books: List.unmodifiable(books),
   );
@@ -36,18 +42,12 @@ class BookshelfState {
     Object error,
     StackTrace stackTrace, {
     List<Book> books = const [],
-  }) => BookshelfState._(
+  }) => BookshelfState._value(
     status: BookshelfStatus.failure,
     books: List.unmodifiable(books),
     error: error,
     stackTrace: stackTrace,
   );
-
-  final BookshelfStatus status;
-  final List<Book> books;
-  final Object? error;
-  final StackTrace? stackTrace;
-  final bool isRefreshing;
 
   bool get isInitialLoading =>
       status == BookshelfStatus.loading && !isRefreshing;

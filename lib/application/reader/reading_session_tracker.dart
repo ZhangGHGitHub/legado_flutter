@@ -1,3 +1,7 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'reading_session_tracker.freezed.dart';
+
 /// 阅读页的增量会话计时器，避免只在页面销毁时写入整段会话。
 class ReadingSessionTracker {
   ReadingSessionTracker({DateTime Function()? clock})
@@ -37,16 +41,13 @@ class ReadingSessionTracker {
   }
 }
 
-class ReadingSessionDelta {
-  const ReadingSessionDelta({
-    required this.chars,
-    required this.durationSeconds,
-    required this.endedAt,
-  });
-
-  final int chars;
-  final int durationSeconds;
-  final DateTime endedAt;
+@freezed
+class ReadingSessionDelta with _$ReadingSessionDelta {
+  const factory ReadingSessionDelta({
+    required int chars,
+    required int durationSeconds,
+    required DateTime endedAt,
+  }) = _ReadingSessionDelta;
 }
 
 /// 原版 DetailedReadRecordTracker 的 Dart 侧会话计时器。
@@ -84,16 +85,12 @@ class DetailedReadingSessionTracker {
   }
 }
 
-class DetailedReadingSession {
-  const DetailedReadingSession({
-    required this.bookName,
-    required this.startTime,
-    required this.endTime,
-    required this.readIteration,
-  });
-
-  final String bookName;
-  final DateTime startTime;
-  final DateTime endTime;
-  final int readIteration;
+@freezed
+class DetailedReadingSession with _$DetailedReadingSession {
+  const factory DetailedReadingSession({
+    required String bookName,
+    required DateTime startTime,
+    required DateTime endTime,
+    required int readIteration,
+  }) = _DetailedReadingSession;
 }
