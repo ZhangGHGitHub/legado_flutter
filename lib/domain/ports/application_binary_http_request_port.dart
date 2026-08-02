@@ -1,17 +1,18 @@
 import 'dart:typed_data';
 
+import 'package:freezed_annotation/freezed_annotation.dart';
+
 import 'application_http_request_port.dart';
 
-class ApplicationBinaryHttpResponse {
-  const ApplicationBinaryHttpResponse({
-    required this.statusCode,
-    required this.contentType,
-    required this.body,
-  });
+part 'application_binary_http_request_port.freezed.dart';
 
-  final int statusCode;
-  final String contentType;
-  final Uint8List body;
+@freezed
+class ApplicationBinaryHttpResponse with _$ApplicationBinaryHttpResponse {
+  const factory ApplicationBinaryHttpResponse({
+    required int statusCode,
+    required String contentType,
+    required Uint8List body,
+  }) = _ApplicationBinaryHttpResponse;
 }
 
 abstract interface class ApplicationBinaryHttpRequestPort {

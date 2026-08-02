@@ -1,10 +1,15 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'application_http_request_port.freezed.dart';
+
 enum ApplicationHttpPolicy { publicOnly, localNetwork }
 
-class ApplicationHttpResponse {
-  const ApplicationHttpResponse({required this.statusCode, required this.body});
-
-  final int statusCode;
-  final String body;
+@freezed
+class ApplicationHttpResponse with _$ApplicationHttpResponse {
+  const factory ApplicationHttpResponse({
+    required int statusCode,
+    required String body,
+  }) = _ApplicationHttpResponse;
 }
 
 abstract interface class ApplicationHttpRequestPort {

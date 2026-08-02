@@ -1,12 +1,14 @@
-/// 远端书籍压缩包中的可导入文件。
-class RemoteArchiveBookFile {
-  const RemoteArchiveBookFile({
-    required this.relativePath,
-    required this.bytes,
-  });
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-  final String relativePath;
-  final List<int> bytes;
+part 'remote_archive_parser_port.freezed.dart';
+
+/// 远端书籍压缩包中的可导入文件。
+@Freezed(makeCollectionsUnmodifiable: false)
+class RemoteArchiveBookFile with _$RemoteArchiveBookFile {
+  const factory RemoteArchiveBookFile({
+    required String relativePath,
+    required List<int> bytes,
+  }) = _RemoteArchiveBookFile;
 }
 
 class RemoteArchiveParserException implements Exception {
