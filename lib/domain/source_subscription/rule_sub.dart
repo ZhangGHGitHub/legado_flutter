@@ -1,70 +1,28 @@
-const _ruleSubCopyWithUnset = Object();
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'rule_sub.freezed.dart';
 
 /// 规则订阅领域实体，对齐 Legado `RuleSub` 的持久化字段。
-class RuleSub {
-  const RuleSub({
-    required this.id,
-    this.name = '',
-    this.url = '',
-    this.type = 0,
-    this.customOrder = 0,
-    this.autoUpdate = false,
-    this.update = 0,
-    this.updateInterval = 0,
-    this.silentUpdate = false,
-    this.js,
-    this.showRule,
-    this.sourceUrl,
-  });
+@Freezed(equal: false, fromJson: false, toJson: false)
+class RuleSub with _$RuleSub {
+  const RuleSub._();
 
-  final int id;
-  final String name;
-  final String url;
+  const factory RuleSub({
+    required int id,
+    @Default('') String name,
+    @Default('') String url,
 
-  /// 0 书源 / 1 订阅源 / 2 替换规则。
-  final int type;
-  final int customOrder;
-  final bool autoUpdate;
-  final int update;
-  final int updateInterval;
-  final bool silentUpdate;
-  final String? js;
-  final String? showRule;
-  final String? sourceUrl;
-
-  RuleSub copyWith({
-    int? id,
-    String? name,
-    String? url,
-    int? type,
-    int? customOrder,
-    bool? autoUpdate,
-    int? update,
-    int? updateInterval,
-    bool? silentUpdate,
-    Object? js = _ruleSubCopyWithUnset,
-    Object? showRule = _ruleSubCopyWithUnset,
-    Object? sourceUrl = _ruleSubCopyWithUnset,
-  }) {
-    return RuleSub(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      url: url ?? this.url,
-      type: type ?? this.type,
-      customOrder: customOrder ?? this.customOrder,
-      autoUpdate: autoUpdate ?? this.autoUpdate,
-      update: update ?? this.update,
-      updateInterval: updateInterval ?? this.updateInterval,
-      silentUpdate: silentUpdate ?? this.silentUpdate,
-      js: identical(js, _ruleSubCopyWithUnset) ? this.js : js as String?,
-      showRule: identical(showRule, _ruleSubCopyWithUnset)
-          ? this.showRule
-          : showRule as String?,
-      sourceUrl: identical(sourceUrl, _ruleSubCopyWithUnset)
-          ? this.sourceUrl
-          : sourceUrl as String?,
-    );
-  }
+    /// 0 书源 / 1 订阅源 / 2 替换规则。
+    @Default(0) int type,
+    @Default(0) int customOrder,
+    @Default(false) bool autoUpdate,
+    @Default(0) int update,
+    @Default(0) int updateInterval,
+    @Default(false) bool silentUpdate,
+    String? js,
+    String? showRule,
+    String? sourceUrl,
+  }) = _RuleSub;
 
   factory RuleSub.fromJson(Map<String, dynamic> json, {int fallbackId = 0}) {
     return RuleSub(

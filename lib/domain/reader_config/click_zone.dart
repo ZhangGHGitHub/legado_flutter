@@ -1,3 +1,7 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'click_zone.freezed.dart';
+
 /// 点击区行为。
 ///
 /// [code] 与 legado AppConfig 存值一致：-1 无操作，0 菜单，1 下一页……
@@ -33,28 +37,21 @@ enum ClickZoneAction {
 }
 
 /// 九宫格点击区域布局快照。
-class ClickZoneLayout {
-  const ClickZoneLayout({
-    required this.tl,
-    required this.tc,
-    required this.tr,
-    required this.ml,
-    required this.mc,
-    required this.mr,
-    required this.bl,
-    required this.bc,
-    required this.br,
-  });
+@freezed
+class ClickZoneLayout with _$ClickZoneLayout {
+  const ClickZoneLayout._();
 
-  final ClickZoneAction tl;
-  final ClickZoneAction tc;
-  final ClickZoneAction tr;
-  final ClickZoneAction ml;
-  final ClickZoneAction mc;
-  final ClickZoneAction mr;
-  final ClickZoneAction bl;
-  final ClickZoneAction bc;
-  final ClickZoneAction br;
+  const factory ClickZoneLayout({
+    required ClickZoneAction tl,
+    required ClickZoneAction tc,
+    required ClickZoneAction tr,
+    required ClickZoneAction ml,
+    required ClickZoneAction mc,
+    required ClickZoneAction mr,
+    required ClickZoneAction bl,
+    required ClickZoneAction bc,
+    required ClickZoneAction br,
+  }) = _ClickZoneLayout;
 
   bool get hasMenu =>
       tl == ClickZoneAction.menu ||
@@ -66,28 +63,4 @@ class ClickZoneLayout {
       bl == ClickZoneAction.menu ||
       bc == ClickZoneAction.menu ||
       br == ClickZoneAction.menu;
-
-  ClickZoneLayout copyWith({
-    ClickZoneAction? tl,
-    ClickZoneAction? tc,
-    ClickZoneAction? tr,
-    ClickZoneAction? ml,
-    ClickZoneAction? mc,
-    ClickZoneAction? mr,
-    ClickZoneAction? bl,
-    ClickZoneAction? bc,
-    ClickZoneAction? br,
-  }) {
-    return ClickZoneLayout(
-      tl: tl ?? this.tl,
-      tc: tc ?? this.tc,
-      tr: tr ?? this.tr,
-      ml: ml ?? this.ml,
-      mc: mc ?? this.mc,
-      mr: mr ?? this.mr,
-      bl: bl ?? this.bl,
-      bc: bc ?? this.bc,
-      br: br ?? this.br,
-    );
-  }
 }

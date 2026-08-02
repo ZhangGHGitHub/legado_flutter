@@ -1,20 +1,20 @@
-/// 书源校验结果在领域边界上的纯 Dart 快照。
-class BookSourceValidationSnapshot {
-  final bool searchOk;
-  final bool discoveryOk;
-  final bool tocOk;
-  final bool contentOk;
-  final int searchTimeMs;
-  final List<String> errors;
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-  const BookSourceValidationSnapshot({
-    required this.searchOk,
-    required this.discoveryOk,
-    required this.tocOk,
-    required this.contentOk,
-    required this.searchTimeMs,
-    this.errors = const [],
-  });
+part 'source_validation_result.freezed.dart';
+
+/// 书源校验结果在领域边界上的纯 Dart 快照。
+@freezed
+class BookSourceValidationSnapshot with _$BookSourceValidationSnapshot {
+  const BookSourceValidationSnapshot._();
+
+  const factory BookSourceValidationSnapshot({
+    required bool searchOk,
+    required bool discoveryOk,
+    required bool tocOk,
+    required bool contentOk,
+    required int searchTimeMs,
+    @Default([]) List<String> errors,
+  }) = _BookSourceValidationSnapshot;
 
   bool get allOk => searchOk && discoveryOk && tocOk && contentOk;
 

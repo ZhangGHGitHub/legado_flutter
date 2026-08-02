@@ -1,22 +1,29 @@
 import 'dart:convert';
 
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'legacy_room_import_report.freezed.dart';
+
 /// Kotlin Room 数据库导入结果。
-class LegacyRoomImportReport {
-  const LegacyRoomImportReport({
-    required this.sourceRoomVersion,
-    required this.fingerprint,
-    required this.replaced,
-    required this.skippedDuplicate,
-    required this.backupWritten,
-    required this.counts,
-    required this.conflictCounts,
-    required this.preservedRows,
-    required this.warnings,
-    required this.unmappedColumns,
-    this.archiveOnlyTables = const [],
-    this.sourceRoomIdentityHash,
-    this.backupPath,
-  });
+@freezed
+class LegacyRoomImportReport with _$LegacyRoomImportReport {
+  const LegacyRoomImportReport._();
+
+  const factory LegacyRoomImportReport({
+    required int sourceRoomVersion,
+    required String fingerprint,
+    required bool replaced,
+    required bool skippedDuplicate,
+    required bool backupWritten,
+    required Map<String, int> counts,
+    required Map<String, int> conflictCounts,
+    required Map<String, int> preservedRows,
+    required List<String> warnings,
+    required Map<String, List<String>> unmappedColumns,
+    @Default(<String>[]) List<String> archiveOnlyTables,
+    String? sourceRoomIdentityHash,
+    String? backupPath,
+  }) = _LegacyRoomImportReport;
 
   factory LegacyRoomImportReport.fromJson(String raw) {
     final value = jsonDecode(raw);
@@ -39,20 +46,6 @@ class LegacyRoomImportReport {
       unmappedColumns: _requiredStringListMap(value, 'unmappedColumns'),
     );
   }
-
-  final int sourceRoomVersion;
-  final String? sourceRoomIdentityHash;
-  final String fingerprint;
-  final bool replaced;
-  final bool skippedDuplicate;
-  final bool backupWritten;
-  final String? backupPath;
-  final Map<String, int> counts;
-  final Map<String, int> conflictCounts;
-  final Map<String, int> preservedRows;
-  final List<String> archiveOnlyTables;
-  final List<String> warnings;
-  final Map<String, List<String>> unmappedColumns;
 
   bool get hasWarnings => warnings.isNotEmpty || unmappedColumns.isNotEmpty;
 }
