@@ -1,19 +1,20 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'reading_position_mapper.freezed.dart';
+
 /// A page range in the original chapter text.
 ///
 /// [start] and [end] are Dart UTF-16 offsets and follow the half-open
 /// interval convention [start, end). The displayed text may contain a
 /// layout-only newline, so it is intentionally not required to equal the
 /// source substring.
-class ReadingPageRange {
-  final String text;
-  final int start;
-  final int end;
-
-  const ReadingPageRange({
-    required this.text,
-    required this.start,
-    required this.end,
-  });
+@freezed
+class ReadingPageRange with _$ReadingPageRange {
+  const factory ReadingPageRange({
+    required String text,
+    required int start,
+    required int end,
+  }) = _ReadingPageRange;
 }
 
 /// Maps stable chapter positions to the current layout's page indexes.

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../domain/reader_config/read_style_config.dart';
+
+part 'read_style_flutter_mapper.freezed.dart';
 
 abstract final class ReadStyleColorMapper {
   static Color? parse(String? raw) {
@@ -30,22 +33,18 @@ extension ReadStyleConfigColors on ReadStyleConfig {
 }
 
 /// 阅读主题槽位的本地 Flutter 覆盖，图片路径另存。
-class ReadStyleSlotOverride {
-  const ReadStyleSlotOverride({
-    this.name,
-    this.background,
-    this.text,
-    this.accent,
-    this.bgImagePath,
-    this.darkStatusIcon = true,
-  });
+@Freezed(copyWith: false)
+class ReadStyleSlotOverride with _$ReadStyleSlotOverride {
+  const ReadStyleSlotOverride._();
 
-  final String? name;
-  final Color? background;
-  final Color? text;
-  final Color? accent;
-  final String? bgImagePath;
-  final bool darkStatusIcon;
+  const factory ReadStyleSlotOverride({
+    String? name,
+    Color? background,
+    Color? text,
+    Color? accent,
+    String? bgImagePath,
+    @Default(true) bool darkStatusIcon,
+  }) = _ReadStyleSlotOverride;
 
   Map<String, dynamic> toJson() => {
     if (name != null) 'name': name,

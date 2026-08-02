@@ -1,27 +1,25 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'startup_task_runner.freezed.dart';
 
 enum StartupTaskStatus { running, succeeded, failed, skipped }
 
-class StartupTaskReport {
-  const StartupTaskReport({
-    required this.id,
-    required this.status,
-    required this.attempt,
-    required this.startedAt,
-    this.finishedAt,
-    this.error,
-    this.stackTrace,
-  });
+@freezed
+class StartupTaskReport with _$StartupTaskReport {
+  const StartupTaskReport._();
 
-  final String id;
-  final StartupTaskStatus status;
-  final int attempt;
-  final DateTime startedAt;
-  final DateTime? finishedAt;
-  final Object? error;
-  final StackTrace? stackTrace;
+  const factory StartupTaskReport({
+    required String id,
+    required StartupTaskStatus status,
+    required int attempt,
+    required DateTime startedAt,
+    DateTime? finishedAt,
+    Object? error,
+    StackTrace? stackTrace,
+  }) = _StartupTaskReport;
 
   bool get isTerminal => status != StartupTaskStatus.running;
 

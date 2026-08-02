@@ -1,7 +1,11 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
 import '../../domain/content/replace_rule.dart';
 import '../../domain/rss/rss_source.dart';
 import '../../domain/source/book_source.dart';
 import '../../domain/source_subscription/rule_sub.dart';
+
+part 'rule_sub_import_port.freezed.dart';
 
 /// 规则订阅拉取与自动更新的应用层边界。
 abstract interface class RuleSubImportPort {
@@ -12,33 +16,31 @@ abstract interface class RuleSubImportPort {
 
 enum RuleSubImportKind { bookSource, rssSource, replaceRule }
 
-class RuleSubImportResult {
-  const RuleSubImportResult._({
-    required this.kind,
-    this.bookSources = const [],
-    this.rssSources = const [],
-    this.replaceRules = const [],
-  });
+@freezed
+class RuleSubImportResult with _$RuleSubImportResult {
+  const RuleSubImportResult._();
 
-  final RuleSubImportKind kind;
-  final List<BookSource> bookSources;
-  final List<RssSource> rssSources;
-  final List<ReplaceRule> replaceRules;
+  const factory RuleSubImportResult._value({
+    required RuleSubImportKind kind,
+    @Default(<BookSource>[]) List<BookSource> bookSources,
+    @Default(<RssSource>[]) List<RssSource> rssSources,
+    @Default(<ReplaceRule>[]) List<ReplaceRule> replaceRules,
+  }) = _RuleSubImportResult;
 
   factory RuleSubImportResult.bookSources(List<BookSource> values) =>
-      RuleSubImportResult._(
+      RuleSubImportResult._value(
         kind: RuleSubImportKind.bookSource,
         bookSources: values,
       );
 
   factory RuleSubImportResult.rssSources(List<RssSource> values) =>
-      RuleSubImportResult._(
+      RuleSubImportResult._value(
         kind: RuleSubImportKind.rssSource,
         rssSources: values,
       );
 
   factory RuleSubImportResult.replaceRules(List<ReplaceRule> values) =>
-      RuleSubImportResult._(
+      RuleSubImportResult._value(
         kind: RuleSubImportKind.replaceRule,
         replaceRules: values,
       );
