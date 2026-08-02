@@ -8,6 +8,16 @@
 
 > 2026-08-03 Phase 4/R6 当前 owner 状态：SourceProvider 第三批已完成共享 application 状态层和 SourcesPage 状态订阅迁移。`SourceState` 使用 Freezed 并对列表、Map 及嵌套结果做防御性不可变快照；`SourceController` 统一承载书源 CRUD、分组、JSON/URL 导入、搜索、图片请求头和校验，并以请求序号阻止旧 load/search/validate 结果覆盖新状态，内置源初始化使用 single-flight。旧 `SourceProvider` 仅作为共享 controller 的 ChangeNotifier 兼容外观，`importSourcesFromFile` 的平台文件选择仍留在兼容入口；`SourcesPage` 通过局部 `ProviderScope` 读取 Riverpod 状态，选择/排序/分享和未迁移子页不变。controller/Notifier/Provider 兼容定向 `25/25`、source Feature/Widget `10/10`、Flutter 全量 `1066`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。`SearchPage`、探索、书架/阅读器、启动任务和规则订阅仍使用兼容外观，R6 尚未全量退出。
 
+> 2026-08-03 Phase 4/R6 当前 owner 状态：SourceProvider 第四批完成分组管理弹窗和书源市场子页面的共享状态接入。分组弹窗从当前旧 Provider 取得同一 controller 后覆盖局部 Riverpod scope，列表和 CRUD 通过 `SourceNotifier`；市场页的 tile 通过 Riverpod 状态判断已存在源，单个添加和全部导入均等待 controller 持久化完成。新增异步 Widget 测试验证全部导入在写入 release 前不提示、不返回，并修复局部 scope 外 `ProviderScope.containerOf` 的运行时错误。Source 管理相关定向 `38/38`、Flutter 全量 `1067`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。SourceEditor、SourceDebug、RuleSub、启动任务和规则订阅适配器仍保留旧 Provider，R6 尚未全量退出。
+
+## 191. 2026-08-03：书源分组与市场子页面共享 Riverpod 状态
+
+- `source_group_manage_dialog.dart` 通过当前 `SourceProvider.controller` 建立局部 `ProviderScope`，分组列表订阅 `SourceNotifier`，添加、重命名和删除保留原中文文案、空名删除语义和主题布局。
+- `source_market_page.dart` 通过局部 scope 共享同一 controller，市场 tile 使用 Riverpod 源列表判断存在状态，单个添加和“全部导入”等待持久化完成；新增异步 Widget 测试固定写入未完成前不得提示/返回的契约。
+- 首轮测试捕获 `_importAll` 从 scope 外 context 调 `ProviderScope.containerOf` 的运行时错误，改为在 scope 内 Consumer 取得 Notifier 后显式传递；未修改 `legado-main/`、正文、目录、分页、章节身份、UTF-16 位置、第 3 条断行规则、Room 导入或暂停平台门禁。SourceEditor、SourceDebug、RuleSub 及规则订阅适配器保留兼容外观。
+
+验证记录：Source 管理相关定向 `38/38`、`flutter test --no-pub --concurrency=1 --reporter compact` 为 `1067` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。该批不代表 Source 全链路或 R6 阶段退出。
+
 ## 190. 2026-08-03：SourceProvider 共享状态与 SourcesPage 首条 Riverpod 迁移
 
 - 新增 `SourceState`、`SourceController` 和 `SourceNotifier`，将书源加载、CRUD、分组、JSON/URL 导入、搜索、图片请求头和校验状态统一放入 application 层；请求序号保护 load/search/validate 竞态，内置书源初始化使用 single-flight，状态对外暴露不可变列表、Map 和嵌套搜索结果。

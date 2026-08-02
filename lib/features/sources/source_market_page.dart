@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
+import '../../application/source_management/source_notifier.dart';
 import '../../application/source_market/source_market_mapper.dart';
 import '../../application/source_market/source_market_port.dart';
 import '../../providers/source_provider.dart';
@@ -29,48 +31,65 @@ class _SourceMarketPageState extends State<SourceMarketPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('书源市场'),
-        actions: [
-          TextButton.icon(
-            icon: const Icon(Icons.download),
-            label: const Text('全部导入'),
-            onPressed: () async {
-              final market = await _marketFuture;
-              if (context.mounted) _importAll(context, market);
-            },
-          ),
-        ],
-      ),
-      body: FutureBuilder<Map<String, List<BookSource>>>(
-        future: _marketFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('加载书源失败: ${snapshot.error}'));
-          }
-          final market = snapshot.data ?? {};
-          return ListView(
-            padding: const EdgeInsets.all(12),
-            children: market.entries.map((entry) {
-              return _CategoryGroup(category: entry.key, sources: entry.value);
-            }).toList(),
+    final sourceProvider = context.read<SourceProvider>();
+    return riverpod.ProviderScope(
+      overrides: [
+        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+      ],
+      child: riverpod.Consumer(
+        builder: (context, ref, _) {
+          final notifier = ref.read(sourceNotifierProvider.notifier);
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('书源市场'),
+              actions: [
+                TextButton.icon(
+                  icon: const Icon(Icons.download),
+                  label: const Text('全部导入'),
+                  onPressed: () async {
+                    final market = await _marketFuture;
+                    if (context.mounted) {
+                      await _importAll(context, market, notifier);
+                    }
+                  },
+                ),
+              ],
+            ),
+            body: FutureBuilder<Map<String, List<BookSource>>>(
+              future: _marketFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text('加载书源失败: ${snapshot.error}'));
+                }
+                final market = snapshot.data ?? {};
+                return ListView(
+                  padding: const EdgeInsets.all(12),
+                  children: market.entries.map((entry) {
+                    return _CategoryGroup(
+                      category: entry.key,
+                      sources: entry.value,
+                    );
+                  }).toList(),
+                );
+              },
+            ),
           );
         },
       ),
     );
   }
 
-  void _importAll(BuildContext context, Map<String, List<BookSource>> market) {
-    final provider = context.read<SourceProvider>();
-    for (final entry in market.entries) {
-      for (final source in entry.value) {
-        provider.addSource(source);
-      }
-    }
+  Future<void> _importAll(
+    BuildContext context,
+    Map<String, List<BookSource>> market,
+    SourceNotifier notifier,
+  ) async {
+    final sources = [for (final entry in market.entries) ...entry.value];
+    await notifier.importParsedSources(sources);
+    if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('已导入所有书源')));
@@ -106,12 +125,16 @@ class _CategoryGroup extends StatelessWidget {
   }
 }
 
-class _SourceMarketTile extends StatelessWidget {
+class _SourceMarketTile extends riverpod.ConsumerWidget {
   final BookSource source;
   const _SourceMarketTile({required this.source});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, riverpod.WidgetRef ref) {
+    final sources = ref.watch(
+      sourceNotifierProvider.select((state) => state.sources),
+    );
+    final exists = sources.any((s) => s.bookSourceUrl == source.bookSourceUrl);
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: ListTile(
@@ -132,24 +155,20 @@ class _SourceMarketTile extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: Consumer<SourceProvider>(
-          builder: (context, provider, _) {
-            final exists = provider.sources.any(
-              (s) => s.bookSourceUrl == source.bookSourceUrl,
-            );
-            return exists
-                ? const Icon(Icons.check, color: Colors.green)
-                : FilledButton.tonal(
-                    onPressed: () {
-                      provider.addSource(source);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('已添加 ${source.bookSourceName}')),
-                      );
-                    },
-                    child: const Text('添加'),
+        trailing: exists
+            ? const Icon(Icons.check, color: Colors.green)
+            : FilledButton.tonal(
+                onPressed: () async {
+                  await ref
+                      .read(sourceNotifierProvider.notifier)
+                      .addSource(source);
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('已添加 ${source.bookSourceName}')),
                   );
-          },
-        ),
+                },
+                child: const Text('添加'),
+              ),
       ),
     );
   }
