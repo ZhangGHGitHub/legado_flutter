@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
+import '../../application/replace/replace_notifier.dart';
 import '../../application/replace/replace_preset_port.dart';
 import '../../domain/content/replace_rule.dart';
 import '../../providers/replace_provider.dart';
@@ -8,14 +10,27 @@ import '../../widgets/replace_preview_panel.dart';
 import '../../widgets/legado_popup_menu.dart';
 
 /// 替换净化页面 - 规则管理 + 实时预览 + 预设库
-class ReplacePage extends StatefulWidget {
+class ReplacePage extends StatelessWidget {
   const ReplacePage({super.key});
 
   @override
-  State<ReplacePage> createState() => _ReplacePageState();
+  Widget build(BuildContext context) {
+    final controller = context.read<ReplaceProvider>().controller;
+    return riverpod.ProviderScope(
+      overrides: [replaceRulesControllerProvider.overrideWithValue(controller)],
+      child: const _ReplacePageBody(),
+    );
+  }
 }
 
-class _ReplacePageState extends State<ReplacePage>
+class _ReplacePageBody extends StatefulWidget {
+  const _ReplacePageBody();
+
+  @override
+  State<_ReplacePageBody> createState() => _ReplacePageBodyState();
+}
+
+class _ReplacePageBodyState extends State<_ReplacePageBody>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
@@ -58,7 +73,9 @@ class _ReplacePageState extends State<ReplacePage>
             offset: legadoAppBarPopupOffset(context),
             onSelected: (v) {
               if (v == 'reset') {
-                context.read<ReplaceProvider>().resetReplaceRules();
+                riverpod.ProviderScope.containerOf(
+                  context,
+                ).read(replaceNotifierProvider.notifier).resetReplaceRules();
               }
             },
             itemBuilder: (_) => [
@@ -67,19 +84,24 @@ class _ReplacePageState extends State<ReplacePage>
           ),
         ],
       ),
-      body: Consumer<ReplaceProvider>(
-        builder: (context, provider, _) {
-          final rules = provider.replaceRules;
+      body: riverpod.Consumer(
+        builder: (context, ref, _) {
+          final state = ref.watch(replaceNotifierProvider);
+          final notifier = ref.read(replaceNotifierProvider.notifier);
+          final rules = state.rules;
           return TabBarView(
             controller: _tabController,
             children: [
               _RulesListTab(
                 rules: rules,
                 onEdit: (rule) => _showRuleEditor(context, rule),
+                onReset: notifier.resetReplaceRules,
+                onToggle: notifier.toggleRule,
+                onDelete: notifier.deleteRule,
               ),
               ReplacePreviewPanel(
                 rules: rules,
-                applyRules: provider.previewContent,
+                applyRules: notifier.previewContent,
               ),
             ],
           );
@@ -89,6 +111,9 @@ class _ReplacePageState extends State<ReplacePage>
   }
 
   void _showPresetPicker(BuildContext context) {
+    final notifier = riverpod.ProviderScope.containerOf(
+      context,
+    ).read(replaceNotifierProvider.notifier);
     final presetPort = context.read<ReplacePresetPort>();
     final allPresets = presetPort.all;
     final groups = presetPort.grouped();
@@ -193,9 +218,7 @@ class _ReplacePageState extends State<ReplacePage>
                               (p) => selected.contains(p.id),
                             );
                             final rules = presetPort.toRules(presets);
-                            final added = await context
-                                .read<ReplaceProvider>()
-                                .importPresets(rules);
+                            final added = await notifier.importPresets(rules);
                             if (ctx.mounted) Navigator.pop(ctx);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -215,6 +238,9 @@ class _ReplacePageState extends State<ReplacePage>
   }
 
   void _showRuleEditor(BuildContext context, ReplaceRule? rule) {
+    final notifier = riverpod.ProviderScope.containerOf(
+      context,
+    ).read(replaceNotifierProvider.notifier);
     final nameController = TextEditingController(text: rule?.name ?? '');
     final patternController = TextEditingController(text: rule?.pattern ?? '');
     final replacementController = TextEditingController(
@@ -286,11 +312,10 @@ class _ReplacePageState extends State<ReplacePage>
                   isRegex: isRegex,
                   isEnabled: rule?.isEnabled ?? true,
                 );
-                final provider = context.read<ReplaceProvider>();
                 if (rule == null) {
-                  provider.addRule(newRule);
+                  notifier.addRule(newRule);
                 } else {
-                  provider.updateRule(newRule);
+                  notifier.updateRule(newRule);
                 }
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(rule == null ? '规则已添加' : '规则已更新')),
@@ -306,10 +331,19 @@ class _ReplacePageState extends State<ReplacePage>
 }
 
 class _RulesListTab extends StatelessWidget {
-  const _RulesListTab({required this.rules, required this.onEdit});
+  const _RulesListTab({
+    required this.rules,
+    required this.onEdit,
+    required this.onReset,
+    required this.onToggle,
+    required this.onDelete,
+  });
 
   final List<ReplaceRule> rules;
   final void Function(ReplaceRule rule) onEdit;
+  final VoidCallback onReset;
+  final void Function(String ruleId, bool enabled) onToggle;
+  final void Function(String ruleId) onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -330,8 +364,7 @@ class _RulesListTab extends StatelessWidget {
             FilledButton.tonalIcon(
               icon: const Icon(Icons.restore),
               label: const Text('恢复默认规则'),
-              onPressed: () =>
-                  context.read<ReplaceProvider>().resetReplaceRules(),
+              onPressed: onReset,
             ),
           ],
         ),
@@ -368,7 +401,14 @@ class _RulesListTab extends StatelessWidget {
             ],
           ),
         ),
-        ...rules.map((rule) => _ReplaceRuleTile(rule: rule, onEdit: onEdit)),
+        ...rules.map(
+          (rule) => _ReplaceRuleTile(
+            rule: rule,
+            onEdit: onEdit,
+            onToggle: onToggle,
+            onDelete: onDelete,
+          ),
+        ),
       ],
     );
   }
@@ -377,8 +417,15 @@ class _RulesListTab extends StatelessWidget {
 class _ReplaceRuleTile extends StatelessWidget {
   final ReplaceRule rule;
   final void Function(ReplaceRule rule) onEdit;
+  final void Function(String ruleId, bool enabled) onToggle;
+  final void Function(String ruleId) onDelete;
 
-  const _ReplaceRuleTile({required this.rule, required this.onEdit});
+  const _ReplaceRuleTile({
+    required this.rule,
+    required this.onEdit,
+    required this.onToggle,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -413,9 +460,7 @@ class _ReplaceRuleTile extends StatelessWidget {
         ),
         trailing: Switch(
           value: rule.isEnabled,
-          onChanged: (v) {
-            context.read<ReplaceProvider>().toggleRule(rule.id, v);
-          },
+          onChanged: (v) => onToggle(rule.id, v),
         ),
         onTap: () => onEdit(rule),
         onLongPress: () {
@@ -432,7 +477,7 @@ class _ReplaceRuleTile extends StatelessWidget {
                 FilledButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    context.read<ReplaceProvider>().deleteRule(rule.id);
+                    onDelete(rule.id);
                   },
                   style: FilledButton.styleFrom(backgroundColor: Colors.red),
                   child: const Text('删除'),

@@ -6,7 +6,7 @@
 > **重构来源与基线：** [Jingshiro/legado](https://github.com/Jingshiro/legado)；UI 1:1 对齐和行为兼容是重构验收子目标，不是独立产品定位。
 > **本地原版基线：** 根目录 `legado-main/` 是只读的原版行为、数据结构、UI 和错误语义核对目录，不是本项目的主源码目录，也不参与 Flutter/Rust 构建。
 > 目标平台：Android / iOS / Windows / macOS / Linux / Web (WASM)  
-> 最后更新：2026-08-02
+> 最后更新：2026-08-03
 > 引擎版本：**v0.5.6** | Rust DB Schema：**v17** | 原版 Room：**v99** | FRB：**2.11.1**
 >
 > 当前暂停项（2026-07-26）：Web 平台/WASM/PWA 构建、Web 平台适配和相关验收；TTS 真实 Android 引擎验收。除这两类门禁外，Android/Windows 重构继续按固定顺序推进。
@@ -17,6 +17,8 @@
 > **R1-12 表范围口径：** 当前 Rust v17 业务映射为六张核心表（`books`、`book_sources`、`chapters`、`bookmarks`、`detailedReadRecord`、`replace_rules`）；`readRecord` 作为第七张迁移关注表仅 archive-only 保存。文档历史记录中的“七张核心表”按此口径解释，不代表七张表均已业务化。
 
 > **R1-12 产品决策（2026-08-02）：** 旧版 Legado 数据必须能够导入，已完成业务映射的数据导入后立即可用；`readRecord` 和非核心 Room 表暂不业务化，但必须无损 archive-only 保存，不得因未映射而拒绝旧数据导入或丢弃原始行。导入前备份沿用原版 JSON 逻辑备份，不新增文件级 SQLite 备份要求。
+
+2026-08-03 Phase 4/R6 Provider 状态迁移首批：新增 application 层 `ReplaceState` Freezed 状态和共享 `ReplaceRulesController`，由 `ReplaceNotifier` 提供 `ReplacePage` 的生产 Riverpod 状态入口；旧 `ReplaceProvider` 保留为 ChangeNotifier 兼容外观，并与 Riverpod 共享同一控制器，避免迁移期间出现两份规则状态。保留替换规则 CRUD、内置规则初始化、按 pattern 去重、正文处理和预览语义，规则列表继续不可变。定向控制器/Notifier/Provider 测试 `5/5`、Flutter 串行全量 `1057`（`3` 项既有条件跳过）、`flutter analyze --no-pub` 和架构边界检查通过；`BookProvider`、`RssProvider`、`SourceProvider` 仍未切换为 Riverpod，R1-12、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则及暂停平台门禁均不受影响。
 
 2026-08-02 Phase 3 模型契约批次：`Book` 与 `BookSource` 领域模型改用 Freezed 生成不可变值语义和 `copyWith`，保留原有 Legado JSON 字段、`readConfig` 兼容解析、嵌套书源规则和 `toEngineJson` 行为；新增模型契约测试并通过书架/书源仓储及 Provider 定向回归 `28/28`。全量 Flutter `922` 项通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。当前只完成 Flutter 领域模型收敛，Rust 独立书籍 DTO、Riverpod 页面迁移和其余手写模型仍按计划排队，不改变 Room 导入、正文、目录、分页、章节身份或 UTF-16 阅读位置。
 2026-08-02 Phase 3 Rust 书源 DTO 批次：新增 `BookSourceDto` serde camelCase 投影和 `BookSource::to_dto()`，与 Flutter `BookSource` 共享稳定扁平字段，并保留 `rawSourceJson` 和 `rulePageNext` 的确定性回退；仅做纯内存转换，暂不新增 FFI 入口。DTO 定向 `1/1`、Rust 全量 `263/263`、`cargo fmt -p legado_engine` 通过；不改变现有书源解析、网络请求、Room 导入、正文、目录、分页、章节身份或 UTF-16 阅读位置。

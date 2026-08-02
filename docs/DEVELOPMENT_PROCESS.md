@@ -1,11 +1,12 @@
 # Legado Flutter — Jingshiro/legado Rust + Flutter 重构开发流程
 
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
-> 最后更新：2026-08-02
+> 最后更新：2026-08-03
 
 设备对照约定（2026-08-02）：原版 UI/功能对照固定使用 `emulator-5556` 上的 `io.legado.app.debug`，目标版本为 `3.26.072317debug`；`com.legado.legado_flutter` 作为重构版包单独验证，不按包名混用。UI 截图、交互、主题、文字、布局和功能验收均以该版本为准，其他原版版本只能作为历史参考。Room 数据迁移执行前仍须确认源库来源和可读性。
 2026-08-02 R1-12 最新 owner 汇总：Room 定向 `29/29`、Rust 全量 `262/262`、Flutter 导入/备份定向 `17/17`、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 全部通过；`emulator-5556` 上原版 `io.legado.app.debug` 的真实 Room v99 非空数据库已完成重构版 all-phase smoke。R1-12 仍不退出，剩余产品边界为 `readRecord` 统计语义、非核心表 Rust v17 业务化和文件级 SQLite 备份目标；在这些边界确认前不推进新的 R2-R6 实现。
 2026-08-02 R1-12 产品决策已确认并完成门禁收口：旧版 Legado 数据导入不得因未业务化字段失败；六张核心业务表导入后直接可用，`readRecord` 与非核心表继续无损 archive-only 保存；备份保持原版 JSON 逻辑，不增加文件级 SQLite 备份要求。Room 定向 `29/29`、Rust 全量 `262/262`、Flutter 导入/备份定向 `17/17`、analyze、架构边界和 diff 检查通过，R1-12 按该边界完成；后续不将未业务化字段静默写入 Rust v17 统计或业务表。
+2026-08-03 Phase 4/R6 Provider 状态迁移首批：先以控制器状态、共享监听和规则列表不可变契约测试固定行为，再新增 `ReplaceState`/`ReplaceRulesController`、Riverpod `ReplaceNotifier`，最后将 `ReplacePage` 切换到局部 `ProviderScope`；旧 `ReplaceProvider` 只作为共享控制器的 ChangeNotifier 兼容外观。定向控制器/Notifier/Provider `5/5`、Flutter 串行全量 `1057`（`3` 项既有条件跳过）、`flutter analyze --no-pub` 和架构边界检查通过。迁移不改变内置规则、CRUD、按 pattern 去重、正文替换和预览；Book/RSS/Source Provider 及其余页面仍按后续独立写集处理，不据此宣称 Riverpod 全量迁移或 R6 退出。
 2026-08-02 Phase 3 模型契约批次：先新增 `Book`/`BookSource` Freezed 构造、值相等和 `copyWith` 契约测试，再迁移模型实现；保留 `readConfig` 旧 JSON 兼容、嵌套书源规则和 `toEngineJson`。模型及相关书架/书源仓储、Provider 定向测试共 `28/28` 通过；全量 Flutter `922` 项通过、`3` 项既有条件跳过，`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。本批未迁移 UI 页面、Rust 独立书籍 DTO 或 Riverpod 生产页面，不改变正文、目录、分页、章节身份、UTF-16 阅读位置和 R1-12 边界。
 2026-08-02 Phase 3 Rust 书源 DTO 批次：在 Flutter 模型契约通过后新增 Rust `BookSourceDto` serde camelCase 投影及 `BookSource::to_dto()`，先用 raw JSON/嵌套规则/分页回退测试固定字段契约，再完成纯内存转换。DTO 定向 `1/1`、Rust 全量 `263/263`、`cargo fmt -p legado_engine` 通过；不新增 FFI 入口，不改变书源解析、网络、正文、目录、分页、章节身份、UTF-16 阅读位置或 R1-12 边界。
 2026-08-02 Phase 3 Rust 书籍 DTO 批次：先以 serde 字段与数据库完整行映射测试固定 `BookDto` 契约，再让 `get_books_json()` 委托 DTO 序列化；`db_get_books()`/FRB/Flutter `List<String>` 接口保持不变。定向 `3/3`、Rust 全量 `265/265`、Flutter 全量 `922`（`3` 项既有条件跳过）通过；未改动 Room 导入、正文、目录、分页、章节身份、UTF-16 阅读位置或暂停项。

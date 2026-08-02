@@ -6,6 +6,14 @@
 
 > 2026-08-02 Phase 3 Rust DTO 状态：Rust `BookSourceDto` 已提供与 Flutter `BookSource` 对齐的 camelCase serde 投影，`rawSourceJson` 完整保留，`rulePageNext` 回退顺序由测试固定。`BookDto` 已接入 `get_books_json()`，完整字段、默认值、`readConfig`、阅读位置和时间输出由定向测试固定；两者均未新增 FFI 入口，现有 `db_get_books()` 继续输出 `Vec<String>`。DTO 定向 `3/3`、Rust 全量 `265/265` 通过；生产 typed FFI 联调和其余手写模型仍未完成。
 
+## 188. 2026-08-03：ReplaceProvider 首条生产 Riverpod 状态迁移
+
+- 新增 application 层 `ReplaceState` 和 `ReplaceRulesController`，将规则 CRUD、内置规则初始化、按 pattern 去重、正文处理和预览统一放在共享控制器；规则列表通过 Freezed 状态保持不可变。
+- 新增 Riverpod `ReplaceNotifier`，`ReplacePage` 在局部 `ProviderScope` 中读取 Notifier；旧 `ReplaceProvider` 保留 ChangeNotifier 兼容 API，并与页面共享同一控制器，避免迁移期间出现双份规则状态。
+- 未迁移 `BookProvider`、`RssProvider`、`SourceProvider`，未改变 `legado-main/`、Room 导入、正文算法、目录顺序、分页、章节身份、UTF-16 位置或第 3 条断行规则。
+
+验证记录：替换控制器/Notifier/Provider 定向 `5/5`、Flutter 串行全量 `1057`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。Riverpod 生产页面并未全量迁移，R6 阶段退出条件不因本批改变。
+
 ## 187. 2026-08-02：R1-12 Room 快照与导入并发一致性复核
 
 - Room v99 源库 probe、schema 和逐表读取统一在单一 SQLite 只读事务中完成，避免并发写入造成跨提交混合快照。
