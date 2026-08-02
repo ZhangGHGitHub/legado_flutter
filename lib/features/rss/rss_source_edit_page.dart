@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
 import '../../application/rss/rss_login_port.dart';
+import '../../application/rss/rss_notifier.dart';
 import '../../application/rss/rss_source_edit_port.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../features/sources/source_login_page.dart';
+import '../../providers/rss_provider.dart';
 
 /// 订阅源编辑 — 对齐 Jingshiro RssSourceEditActivity 核心字段。
-class RssSourceEditPage extends StatefulWidget {
+class RssSourceEditPage extends StatelessWidget {
   const RssSourceEditPage({super.key, this.source, this.editor});
 
   /// `null` 表示新建
@@ -17,10 +20,27 @@ class RssSourceEditPage extends StatefulWidget {
   final RssSourceEditPort? editor;
 
   @override
-  State<RssSourceEditPage> createState() => _RssSourceEditPageState();
+  Widget build(BuildContext context) {
+    final controller = context.read<RssProvider>().controller;
+    return riverpod.ProviderScope(
+      overrides: [rssSourceControllerProvider.overrideWithValue(controller)],
+      child: _RssSourceEditBody(source: source, editor: editor),
+    );
+  }
 }
 
-class _RssSourceEditPageState extends State<RssSourceEditPage>
+class _RssSourceEditBody extends riverpod.ConsumerStatefulWidget {
+  const _RssSourceEditBody({this.source, this.editor});
+
+  final RssSource? source;
+  final RssSourceEditPort? editor;
+
+  @override
+  riverpod.ConsumerState<_RssSourceEditBody> createState() =>
+      _RssSourceEditBodyState();
+}
+
+class _RssSourceEditBodyState extends riverpod.ConsumerState<_RssSourceEditBody>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   late final TextEditingController _url;
@@ -158,8 +178,12 @@ class _RssSourceEditPageState extends State<RssSourceEditPage>
     setState(() => _saving = true);
     try {
       final source = _build();
-      final editor = widget.editor ?? context.read<RssSourceEditPort>();
-      await editor.save(source);
+      final editor = widget.editor;
+      if (editor != null) {
+        await editor.save(source);
+      } else {
+        await ref.read(rssNotifierProvider.notifier).upsertSource(source);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,

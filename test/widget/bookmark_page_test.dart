@@ -3,11 +3,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/bookmark/bookmark_page_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/features/book/bookmark_page.dart';
+import 'package:legado_flutter/providers/source_provider.dart';
+import 'package:provider/provider.dart';
+
+import '../application/source_management/source_controller_test.dart'
+    as source_fixtures;
 
 void main() {
   testWidgets('BookmarkPage shows title and empty hint', (tester) async {
+    final sourceProvider = SourceProvider(
+      repository: source_fixtures.createRepositoryForNotifierTest(),
+      validationPort: source_fixtures.createValidationPortForNotifierTest(),
+      sourceService: source_fixtures.createSourceServiceForNotifierTest(),
+    );
+    addTearDown(sourceProvider.dispose);
+
     await tester.pumpWidget(
-      const MaterialApp(home: BookmarkPage(port: _FakeBookmarkPagePort())),
+      ChangeNotifierProvider<SourceProvider>.value(
+        value: sourceProvider,
+        child: const MaterialApp(
+          home: BookmarkPage(port: _FakeBookmarkPagePort()),
+        ),
+      ),
     );
     await tester.pump();
     for (var i = 0; i < 20; i++) {

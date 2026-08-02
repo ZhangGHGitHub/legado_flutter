@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
 import '../../application/diagnostics/app_log_port.dart';
 import '../../application/platform/clipboard_port.dart';
+import '../../application/source_management/source_notifier.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 
 /// 添加书籍网址 — 对齐 Jingshiro「添加网址」：多行 URL → 匹配书源 → **直接加入书架**。
-class AddBookUrlDialog extends StatefulWidget {
+class AddBookUrlDialog extends StatelessWidget {
   const AddBookUrlDialog({super.key, this.clipboard});
 
   final ClipboardPort? clipboard;
@@ -20,10 +22,29 @@ class AddBookUrlDialog extends StatefulWidget {
   }
 
   @override
-  State<AddBookUrlDialog> createState() => _AddBookUrlDialogState();
+  Widget build(BuildContext context) {
+    final sourceProvider = context.read<SourceProvider>();
+    return riverpod.ProviderScope(
+      overrides: [
+        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+      ],
+      child: _AddBookUrlDialogBody(clipboard: clipboard),
+    );
+  }
 }
 
-class _AddBookUrlDialogState extends State<AddBookUrlDialog> {
+class _AddBookUrlDialogBody extends riverpod.ConsumerStatefulWidget {
+  const _AddBookUrlDialogBody({this.clipboard});
+
+  final ClipboardPort? clipboard;
+
+  @override
+  riverpod.ConsumerState<_AddBookUrlDialogBody> createState() =>
+      _AddBookUrlDialogState();
+}
+
+class _AddBookUrlDialogState
+    extends riverpod.ConsumerState<_AddBookUrlDialogBody> {
   final _controller = TextEditingController();
   bool _busy = false;
   String? _error;
@@ -58,7 +79,7 @@ class _AddBookUrlDialogState extends State<AddBookUrlDialog> {
     });
 
     try {
-      final sources = context.read<SourceProvider>().sources;
+      final sources = ref.read(sourceNotifierProvider).sources;
       final books = context.read<BookProvider>();
       final result = await books.addBooksByUrls(
         text,

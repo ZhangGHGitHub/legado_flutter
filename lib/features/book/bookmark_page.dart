@@ -3,9 +3,11 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
 import '../../application/bookmark/bookmark_page_port.dart';
+import '../../application/source_management/source_notifier.dart';
 import '../../help/bookmark_hint.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
@@ -19,16 +21,34 @@ import '../obsidian/obsidian_export_dialog.dart';
 import '../../features/reader/reader_page.dart';
 
 /// 书签与想法 — 对齐 AllBookmarkActivity：书签 / 想法分 Tab
-class BookmarkPage extends StatefulWidget {
+class BookmarkPage extends StatelessWidget {
   const BookmarkPage({super.key, this.port});
 
   final BookmarkPagePort? port;
 
   @override
-  State<BookmarkPage> createState() => _BookmarkPageState();
+  Widget build(BuildContext context) {
+    final sourceProvider = context.read<SourceProvider>();
+    return riverpod.ProviderScope(
+      overrides: [
+        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+      ],
+      child: _BookmarkPageBody(port: port),
+    );
+  }
 }
 
-class _BookmarkPageState extends State<BookmarkPage>
+class _BookmarkPageBody extends riverpod.ConsumerStatefulWidget {
+  const _BookmarkPageBody({this.port});
+
+  final BookmarkPagePort? port;
+
+  @override
+  riverpod.ConsumerState<_BookmarkPageBody> createState() =>
+      _BookmarkPageState();
+}
+
+class _BookmarkPageState extends riverpod.ConsumerState<_BookmarkPageBody>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   late final BookmarkPagePort _port;
@@ -209,7 +229,9 @@ class _BookmarkPageState extends State<BookmarkPage>
         provider.currentChapters.first.bookId == book.id) {
       chapters = List<Chapter>.from(provider.currentChapters);
     } else {
-      final source = context.read<SourceProvider>().findSourceForBook(book);
+      final source = ref
+          .read(sourceNotifierProvider.notifier)
+          .findSourceForBook(book);
       if (source != null) {
         try {
           await provider.loadChapters(book, source: source);
