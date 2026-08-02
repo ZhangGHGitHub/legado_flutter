@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/lifecycle/app_lifecycle_coordinator.dart';
+import '../../application/mine/my_page_notifier.dart';
 import '../../application/mine/my_page_port.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/legado_list_tile.dart';
@@ -26,24 +28,39 @@ import 'reading_skill_page.dart';
 import 'webdav_config_dialog.dart';
 
 /// 我的 Tab — 对齐 Jingshiro [MyFragment](https://github.com/Jingshiro/legado/blob/main/app/src/main/java/io/legado/app/ui/main/my/MyFragment.kt)
-class MyPage extends StatefulWidget {
+class MyPage extends StatelessWidget {
   const MyPage({super.key});
 
   @override
-  State<MyPage> createState() => _MyPageState();
+  Widget build(BuildContext context) {
+    return riverpod.ProviderScope(
+      overrides: [
+        myPagePortProvider.overrideWithValue(context.read<MyPagePort>()),
+      ],
+      child: const _MyPageBody(),
+    );
+  }
 }
 
-class _MyPageState extends State<MyPage> {
-  bool _webServiceOn = false;
-  String _webServiceUrl = '';
-  bool _localBackupBusy = false;
+class _MyPageBody extends riverpod.ConsumerStatefulWidget {
+  const _MyPageBody();
+
+  @override
+  riverpod.ConsumerState<_MyPageBody> createState() => _MyPageBodyState();
+}
+
+class _MyPageBodyState extends riverpod.ConsumerState<_MyPageBody> {
   AppLifecycleCoordinator? _lifecycle;
   int _lastResumeCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadWebService();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(myPageNotifierProvider.notifier).loadWebService();
+      }
+    });
   }
 
   @override
@@ -71,41 +88,34 @@ class _MyPageState extends State<MyPage> {
     _loadWebService();
   }
 
-  Future<void> _loadWebService() async {
-    final status = await context.read<MyPagePort>().loadWebService();
-    if (!mounted) return;
-    setState(() {
-      _webServiceOn = status.isActive;
-      _webServiceUrl = status.isActive ? status.baseUrl : '';
-    });
-  }
+  Future<void> _loadWebService() =>
+      ref.read(myPageNotifierProvider.notifier).loadWebService();
 
   Future<void> _localBackup() async {
-    if (_localBackupBusy) return;
-    final port = context.read<MyPagePort>();
+    final notifier = ref.read(myPageNotifierProvider.notifier);
+    if (ref.read(myPageNotifierProvider).localBackupBusy) return;
+    final port = ref.read(myPagePortProvider);
     if (!port.isEngineAvailable || !port.isDatabaseReady) {
       _snack('Rust 引擎或数据库未就绪');
       return;
     }
-    setState(() => _localBackupBusy = true);
     try {
-      final fileName = await port.backupLocally();
+      final fileName = await notifier.backupLocally();
       if (!mounted) return;
-      _snack('本地备份完成：$fileName');
+      if (fileName != null) _snack('本地备份完成：$fileName');
     } catch (e) {
       if (mounted) _snack('本地备份失败: $e');
-    } finally {
-      if (mounted) setState(() => _localBackupBusy = false);
     }
   }
 
   Future<void> _webServiceLongPress() async {
     await _loadWebService();
-    if (!_webServiceOn || _webServiceUrl.isEmpty) {
+    final pageState = ref.read(myPageNotifierProvider);
+    if (!pageState.webServiceOn || pageState.webServiceUrl.isEmpty) {
       _snack('请先开启 Web 服务');
       return;
     }
-    final url = _webServiceUrl;
+    final url = pageState.webServiceUrl;
     if (!mounted) return;
     final choice = await showModalBottomSheet<String>(
       context: context,
@@ -147,19 +157,22 @@ class _MyPageState extends State<MyPage> {
   }
 
   Future<void> _toggleWebService() async {
-    final port = context.read<MyPagePort>();
+    final notifier = ref.read(myPageNotifierProvider.notifier);
+    final port = ref.read(myPagePortProvider);
     if (!port.isEngineAvailable || !port.isDatabaseReady) {
       _snack('Rust 引擎或数据库未就绪');
       return;
     }
-    final status = await port.toggleWebService();
-    if (!mounted) return;
-    setState(() {
-      _webServiceOn = status.isActive;
-      _webServiceUrl = status.isActive ? status.baseUrl : '';
-    });
-    if (!mounted) return;
-    _snack(status.enabled ? 'Web API 已启动 ${status.baseUrl}' : 'Web API 已停止');
+    try {
+      final status = await notifier.toggleWebService();
+      if (mounted) {
+        _snack(
+          status.enabled ? 'Web API 已启动 ${status.baseUrl}' : 'Web API 已停止',
+        );
+      }
+    } catch (e) {
+      if (mounted) _snack('Web API 切换失败: $e');
+    }
   }
 
   Future<void> _showWebDavDialog() async {
@@ -217,7 +230,7 @@ class _MyPageState extends State<MyPage> {
   }
 
   void _showAbout() {
-    final port = context.read<MyPagePort>();
+    final port = ref.read(myPagePortProvider);
     final engine = port.isEngineAvailable
         ? 'Rust 引擎 v${port.engineVersion}'
         : 'Rust 引擎未加载';
@@ -232,13 +245,14 @@ class _MyPageState extends State<MyPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final pageState = ref.watch(myPageNotifierProvider);
     final themeLabel = switch (context.watch<ThemeModeController>().mode) {
       LegadoThemeMode.system => '跟随系统',
       LegadoThemeMode.light => '浅色模式',
       LegadoThemeMode.dark => '深色模式',
     };
     final presetLabel = context.watch<ThemeModeController>().presetLabel;
-    final webLabel = _webServiceOn ? '已开启' : 'Web服务';
+    final webLabel = pageState.webServiceOn ? '已开启' : 'Web服务';
 
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
@@ -301,7 +315,9 @@ class _MyPageState extends State<MyPage> {
                     icon: Icons.backup_outlined,
                     label: '备份管理',
                     onTap: () => _openConfig(0),
-                    onLongPress: _localBackupBusy ? null : _localBackup,
+                    onLongPress: pageState.localBackupBusy
+                        ? null
+                        : _localBackup,
                   ),
                   QuickActionButton(
                     icon: Icons.cloud_outlined,

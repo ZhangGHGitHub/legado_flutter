@@ -1,12 +1,16 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/bookshelf/remote_archive_import_port.dart';
+import '../../application/bookshelf/remote_book_controller.dart';
+import '../../application/bookshelf/remote_book_notifier.dart';
 import '../../application/bookshelf/remote_book_sort_port.dart';
+import '../../application/bookshelf/remote_book_state.dart';
 import '../../application/bookshelf/webdav_prefs_port.dart';
 import '../../application/diagnostics/app_log_port.dart';
 import '../../domain/ports/webdav_repository.dart';
@@ -17,9 +21,6 @@ import '../../widgets/legado_popup_menu.dart';
 import '../../features/book/book_info_page.dart';
 import '../../features/my/webdav_config_dialog.dart';
 import 'app_log_dialog.dart';
-
-/// 排序 — 对齐 Jingshiro [RemoteBookSort]（Name / Default=时间）。
-enum _RemoteSort { name, time }
 
 /// 远程书籍（WebDAV）— 对齐 Jingshiro [RemoteBookActivity] /
 /// [RemoteBookViewModel] / [AppWebDav.defaultBookWebDav]。
@@ -52,22 +53,7 @@ class RemoteBookPage extends StatefulWidget {
 
 class _RemoteBookPageState extends State<RemoteBookPage> {
   late final WebDavRepository _webdav;
-  WebDavConfig? _config;
-  late String _booksRoot;
-  String _path = '';
-  final List<WebDavEntry> _dirStack = [];
-  List<WebDavEntry> _entries = [];
-  final Set<String> _selected = {};
-  bool _loading = true;
-  bool _importing = false;
-  String? _error;
-  bool _needsConfig = false;
-  String _filter = '';
-  // 对齐 ViewModel：默认按时间、降序
-  _RemoteSort _sort = _RemoteSort.time;
-  bool _sortAscending = false;
-  bool _searchOpen = false;
-  bool _booksRootEnsured = false;
+  late final RemoteBookController _remoteBookController;
   final _searchCtl = TextEditingController();
   RemoteArchiveImportPort get _archiveImporter =>
       widget.archiveImporter ?? context.read<RemoteArchiveImportPort>();
@@ -78,23 +64,18 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
   WebDavPrefsPort get _webdavPrefs =>
       widget.webdavPrefs ?? context.read<WebDavPrefsPort>();
 
-  /// Jingshiro `bookFileRegex` 可导入子集（本地引擎仅 txt/epub）。
-  static final _importableExt = RegExp(r'\.(txt|epub)$', caseSensitive: false);
-
-  /// Jingshiro 列出但不支持本地导入的书籍扩展 — TODO: 接 LocalBook 多格式。
-  static final _listedBookExt = RegExp(
-    r'\.(txt|epub|umd|pdf|mobi|azw3?|cbz)$',
-    caseSensitive: false,
-  );
-
-  /// Jingshiro `archiveFileRegex` — TODO: 解压后 importFiles。
-  static final _archiveExt = RegExp(r'\.(zip|rar|7z)$', caseSensitive: false);
-
   @override
   void initState() {
     super.initState();
     _webdav = widget.webdavRepository ?? context.read<WebDavRepository>();
-    _bootstrap();
+    _remoteBookController = RemoteBookController(
+      webdavRepository: _webdav,
+      archiveImporter: _archiveImporter,
+      bookSorter: _bookSorter,
+      webdavPrefs: _webdavPrefs,
+      appLog: context.read<AppLogPort>(),
+    );
+    _remoteBookController.bootstrap();
   }
 
   @override
@@ -103,139 +84,24 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
     super.dispose();
   }
 
-  Future<void> _bootstrap() async {
-    final cfg = await _webdavPrefs.load();
-    if (!mounted) return;
-    _applyConfig(cfg);
-    await _reload();
-  }
-
-  void _applyConfig(WebDavConfig cfg) {
-    _config = cfg;
-    _booksRoot = cfg.booksDir;
-    _path = _booksRoot;
-    _dirStack.clear();
-    _selected.clear();
-    _booksRootEnsured = false;
-  }
-
-  String get _displayPath {
+  String _displayPath(RemoteBookState state) {
     final parts = <String>['books'];
-    for (final d in _dirStack) {
+    for (final d in state.dirStack) {
       parts.add(d.name);
     }
     return '${parts.join('/')}/';
   }
 
-  Future<void> _reload() async {
-    final appLog = context.read<AppLogPort>();
-    final cfg = _config;
-    if (cfg == null || !cfg.isReady) {
-      setState(() {
-        _loading = false;
-        _needsConfig = true;
-        _error = cfg == null || !cfg.isConfigured
-            ? '请先配置 WebDAV 服务器'
-            : '请填写 WebDAV 账号和密码';
-        _entries = [];
-      });
-      return;
-    }
-    setState(() {
-      _loading = true;
-      _error = null;
-      _needsConfig = false;
-    });
-    try {
-      if (!_booksRootEnsured) {
-        await _webdav.ensureDir(
-          url: cfg.url,
-          username: cfg.account,
-          password: cfg.password,
-          path: _booksRoot,
-        );
-        _booksRootEnsured = true;
-      }
-      final list = await _webdav.list(
-        url: cfg.url,
-        username: cfg.account,
-        password: cfg.password,
-        path: _path,
-      );
-      final filtered = list.where((e) {
-        if (e.isDir) return true;
-        return _isListedRemoteFile(e.name);
-      }).toList();
-      if (!mounted) return;
-      setState(() {
-        _entries = filtered;
-        _loading = false;
-        _selected.removeWhere((path) => filtered.every((e) => e.path != path));
-      });
-    } catch (e) {
-      await appLog.e('获取webDav书籍出错\n$e');
-      if (!mounted) return;
-      final raw = '$e';
-      final hint =
-          raw.contains(RegExp(r'404|Not Found|PROPFIND', caseSensitive: false))
-          ? '\n\n请检查 WebDAV 账号对「${cfg.booksDir}」目录的访问和创建权限。'
-          : '';
-      setState(() {
-        _loading = false;
-        _error = '获取webDav书籍出错\n$raw$hint';
-        _entries = [];
-      });
-    }
-  }
+  Future<void> _reload() => _remoteBookController.reload();
 
-  List<WebDavEntry> get _visibleEntries {
-    var list = List<WebDavEntry>.from(_entries);
-    final key = _filter.trim().toLowerCase();
-    if (key.isNotEmpty) {
-      list = list.where((e) => e.name.toLowerCase().contains(key)).toList();
-    }
-    return _bookSorter.sort(
-      list,
-      mode: _sort == _RemoteSort.name
-          ? RemoteBookSortMode.name
-          : RemoteBookSortMode.time,
-      ascending: _sortAscending,
-    );
-  }
+  bool _isImportable(String name) => RemoteBookController.isImportable(name);
 
-  void _enterDir(WebDavEntry e) {
-    if (!e.isDir) return;
-    setState(() {
-      _dirStack.add(e);
-      _path = e.path;
-      _selected.clear();
-    });
-    _reload();
-  }
+  bool _isArchive(String name) => RemoteBookController.isArchive(name);
 
-  bool _goBackDir() {
-    if (_dirStack.isEmpty) return false;
-    setState(() {
-      _dirStack.removeLast();
-      _path = _dirStack.isEmpty ? _booksRoot : _dirStack.last.path;
-      _selected.clear();
-    });
-    _reload();
-    return true;
-  }
-
-  bool _isListedRemoteFile(String name) =>
-      _listedBookExt.hasMatch(name) || _archiveExt.hasMatch(name);
-
-  bool _isImportable(String name) => _importableExt.hasMatch(name);
-
-  bool _isArchive(String name) => _archiveExt.hasMatch(name);
-
-  bool _isZipArchive(String name) =>
-      RegExp(r'\.zip$', caseSensitive: false).hasMatch(name);
+  bool _isZipArchive(String name) => RemoteBookController.isZipArchive(name);
 
   bool _isSelectableImport(String name) =>
-      _isImportable(name) || _isZipArchive(name);
+      RemoteBookController.isSelectableImport(name);
 
   Book? _shelfBookFor(WebDavEntry e, BookProvider books) {
     final base = p.basenameWithoutExtension(e.name);
@@ -248,47 +114,14 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
     return null;
   }
 
-  void _toggleSelect(WebDavEntry e) {
-    if (e.isDir || !_isSelectableImport(e.name)) return;
-    setState(() {
-      if (_selected.contains(e.path)) {
-        _selected.remove(e.path);
-      } else {
-        _selected.add(e.path);
-      }
-    });
-  }
+  void _toggleSelect(WebDavEntry e) => _remoteBookController.toggleSelection(e);
 
-  void _selectAllVisible(bool all) {
-    final files = _visibleEntries
-        .where((e) => !e.isDir && _isSelectableImport(e.name))
-        .toList();
-    setState(() {
-      if (all) {
-        _selected.addAll(files.map((e) => e.path));
-      } else {
-        for (final f in files) {
-          _selected.remove(f.path);
-        }
-      }
-    });
-  }
+  void _selectAllVisible(bool all) =>
+      _remoteBookController.selectAllVisible(all);
 
   /// 对齐 Jingshiro [SelectActionBar.revertSelection]。
-  void _invertVisibleSelection() {
-    final files = _visibleEntries
-        .where((e) => !e.isDir && _isSelectableImport(e.name))
-        .toList();
-    setState(() {
-      for (final f in files) {
-        if (_selected.contains(f.path)) {
-          _selected.remove(f.path);
-        } else {
-          _selected.add(f.path);
-        }
-      }
-    });
-  }
+  void _invertVisibleSelection() =>
+      _remoteBookController.invertVisibleSelection();
 
   void _openShelfBook(Book book) {
     Navigator.push(
@@ -316,22 +149,19 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
       ),
     );
     if (ok != true || !mounted) return;
-    setState(() {
-      _selected
-        ..clear()
-        ..add(e.path);
-    });
+    _remoteBookController.selectOnly(e);
     await _addSelectedToShelf();
   }
 
   Future<void> _addSelectedToShelf() async {
     final appLog = context.read<AppLogPort>();
-    final cfg = _config;
-    if (cfg == null || _selected.isEmpty) return;
-    final targets = _entries
-        .where((e) => _selected.contains(e.path))
+    final state = _remoteBookController.state;
+    final cfg = state.config;
+    if (cfg == null || state.selected.isEmpty) return;
+    final targets = state.entries
+        .where((e) => state.selected.contains(e.path))
         .toList(growable: false);
-    setState(() => _importing = true);
+    _remoteBookController.setImporting(true);
     var ok = 0;
     var fail = 0;
     try {
@@ -389,32 +219,28 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
       }
       await appLog.i('远程书籍加入书架: 成功 $ok / ${targets.length}');
       if (!mounted) return;
-      setState(() => _selected.clear());
+      _remoteBookController.clearSelection();
+      _remoteBookController.recordImportResult(imported: ok, failed: fail);
       final msg = fail == 0 ? '成功添加 $ok 本书' : '成功 $ok 本，失败 $fail 本';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } finally {
-      if (mounted) setState(() => _importing = false);
+      if (mounted && _remoteBookController.state.isImporting) {
+        _remoteBookController.recordImportResult(imported: ok, failed: fail);
+      }
     }
   }
 
   Future<void> _openServerConfig() async {
-    final saved = await WebDavConfigDialog.show(context, initial: _config);
+    final saved = await WebDavConfigDialog.show(
+      context,
+      initial: _remoteBookController.state.config,
+    );
     if (saved == null || !mounted) return;
-    _applyConfig(saved);
-    setState(() {});
+    _remoteBookController.applyConfig(saved);
     await _reload();
   }
 
-  void _setSort(_RemoteSort key) {
-    setState(() {
-      if (_sort == key) {
-        _sortAscending = !_sortAscending;
-      } else {
-        _sort = key;
-        _sortAscending = true;
-      }
-    });
-  }
+  void _setSort(RemoteBookSortMode key) => _remoteBookController.setSort(key);
 
   String _subtitleFor(WebDavEntry e, bool onShelf) {
     if (e.isDir) return '文件夹';
@@ -430,21 +256,35 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
 
   @override
   Widget build(BuildContext context) {
-    final visible = _visibleEntries;
+    return riverpod.ProviderScope(
+      overrides: [
+        remoteBookControllerProvider.overrideWithValue(_remoteBookController),
+      ],
+      child: riverpod.Consumer(
+        builder: (context, ref, _) {
+          final state = ref.watch(remoteBookNotifierProvider);
+          return _buildWithState(context, state);
+        },
+      ),
+    );
+  }
+
+  Widget _buildWithState(BuildContext context, RemoteBookState state) {
+    final visible = _remoteBookController.visibleEntries;
     final checkable = visible
         .where((e) => !e.isDir && _isSelectableImport(e.name))
         .length;
-    final canBack = _dirStack.isNotEmpty;
+    final canBack = state.canGoBack;
     final scheme = Theme.of(context).colorScheme;
 
     return PopScope(
       canPop: !canBack,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _goBackDir();
+        if (!didPop) _remoteBookController.goBackDirectory();
       },
       child: Scaffold(
         appBar: AppBar(
-          title: _searchOpen
+          title: state.searchOpen
               ? TextField(
                   controller: _searchCtl,
                   autofocus: true,
@@ -452,47 +292,43 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
                     hintText: '筛选 • 远程书籍',
                     border: InputBorder.none,
                   ),
-                  onChanged: (v) => setState(() => _filter = v),
+                  onChanged: _remoteBookController.setFilter,
                 )
               : const Text('远程书籍'),
           actions: [
             IconButton(
-              tooltip: _searchOpen ? '关闭搜索' : '筛选',
+              tooltip: state.searchOpen ? '关闭搜索' : '筛选',
               onPressed: () {
-                setState(() {
-                  _searchOpen = !_searchOpen;
-                  if (!_searchOpen) {
-                    _filter = '';
-                    _searchCtl.clear();
-                  }
-                });
+                final open = !state.searchOpen;
+                _remoteBookController.setSearchOpen(open);
+                if (!open) _searchCtl.clear();
               },
-              icon: Icon(_searchOpen ? Icons.close : Icons.search),
+              icon: Icon(state.searchOpen ? Icons.close : Icons.search),
             ),
             IconButton(
               tooltip: '刷新',
-              onPressed: _loading || _importing ? null : _reload,
+              onPressed: state.isLoading || state.isImporting ? null : _reload,
               icon: const Icon(Icons.refresh),
             ),
             // 对齐 book_remote.xml：排序独立 always-show
-            PopupMenuButton<_RemoteSort>(
+            PopupMenuButton<RemoteBookSortMode>(
               offset: legadoAppBarPopupOffset(context),
               tooltip: '排序',
               icon: const Icon(Icons.sort),
               onSelected: _setSort,
               itemBuilder: (_) => [
                 CheckedPopupMenuItem(
-                  value: _RemoteSort.name,
-                  checked: _sort == _RemoteSort.name,
+                  value: RemoteBookSortMode.name,
+                  checked: state.sortMode == RemoteBookSortMode.name,
                   child: Text(
-                    '名称${_sort == _RemoteSort.name ? (_sortAscending ? ' ↑' : ' ↓') : ''}',
+                    '名称${state.sortMode == RemoteBookSortMode.name ? (state.sortAscending ? ' ↑' : ' ↓') : ''}',
                   ),
                 ),
                 CheckedPopupMenuItem(
-                  value: _RemoteSort.time,
-                  checked: _sort == _RemoteSort.time,
+                  value: RemoteBookSortMode.time,
+                  checked: state.sortMode == RemoteBookSortMode.time,
                   child: Text(
-                    '时间${_sort == _RemoteSort.time ? (_sortAscending ? ' ↑' : ' ↓') : ''}',
+                    '时间${state.sortMode == RemoteBookSortMode.time ? (state.sortAscending ? ' ↑' : ' ↓') : ''}',
                   ),
                 ),
               ],
@@ -530,18 +366,20 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
                 dense: true,
                 leading: IconButton(
                   tooltip: '上级',
-                  onPressed: canBack ? _goBackDir : null,
+                  onPressed: canBack
+                      ? _remoteBookController.goBackDirectory
+                      : null,
                   icon: const Icon(Icons.arrow_upward),
                 ),
                 title: Text(
-                  _displayPath,
+                  _displayPath(state),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 14, color: scheme.onSurface),
                 ),
               ),
             ),
-            Expanded(child: _buildBody(visible, scheme)),
+            Expanded(child: _buildBody(visible, scheme, state)),
             if (checkable > 0)
               SafeArea(
                 child: Material(
@@ -555,34 +393,34 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
                     child: Row(
                       children: [
                         TextButton(
-                          onPressed: _importing
+                          onPressed: state.isImporting
                               ? null
                               : () => _selectAllVisible(
-                                  _selected.length < checkable,
+                                  state.selected.length < checkable,
                                 ),
                           child: Text(
-                            _selected.length >= checkable && checkable > 0
+                            state.selected.length >= checkable && checkable > 0
                                 ? '取消全选'
                                 : '全选',
                           ),
                         ),
                         TextButton(
-                          onPressed: _importing
+                          onPressed: state.isImporting
                               ? null
                               : _invertVisibleSelection,
                           child: const Text('反选'),
                         ),
                         Expanded(
                           child: Text(
-                            '已选 ${_selected.length} / $checkable',
+                            '已选 ${state.selected.length} / $checkable',
                             textAlign: TextAlign.center,
                           ),
                         ),
                         FilledButton(
-                          onPressed: _importing || _selected.isEmpty
+                          onPressed: state.isImporting || state.selected.isEmpty
                               ? null
                               : _addSelectedToShelf,
-                          child: _importing
+                          child: state.isImporting
                               ? const SizedBox(
                                   width: 18,
                                   height: 18,
@@ -591,9 +429,9 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
                                   ),
                                 )
                               : Text(
-                                  _selected.isEmpty
+                                  state.selected.isEmpty
                                       ? '加入书架'
-                                      : '加入书架（${_selected.length}）',
+                                      : '加入书架（${state.selected.length}）',
                                 ),
                         ),
                       ],
@@ -607,11 +445,15 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
     );
   }
 
-  Widget _buildBody(List<WebDavEntry> visible, ColorScheme scheme) {
-    if (_loading) {
+  Widget _buildBody(
+    List<WebDavEntry> visible,
+    ColorScheme scheme,
+    RemoteBookState state,
+  ) {
+    if (state.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_error != null) {
+    if (state.error != null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -619,21 +461,23 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                _needsConfig ? Icons.cloud_off_outlined : Icons.error_outline,
+                state.needsConfig
+                    ? Icons.cloud_off_outlined
+                    : Icons.error_outline,
                 size: 48,
                 color: scheme.onSurfaceVariant,
               ),
               const SizedBox(height: 12),
-              Text(_error!, textAlign: TextAlign.center),
+              Text(state.error!, textAlign: TextAlign.center),
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: _openServerConfig,
                 child: const Text('服务器配置'),
               ),
-              if (!_needsConfig) ...[
+              if (!state.needsConfig) ...[
                 const SizedBox(height: 8),
                 TextButton(
-                  onPressed: _importing ? null : _reload,
+                  onPressed: state.isImporting ? null : _reload,
                   child: const Text('重试'),
                 ),
               ],
@@ -645,7 +489,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
     if (visible.isEmpty) {
       return Center(
         child: Text(
-          _filter.trim().isEmpty ? '目录为空' : '无匹配项',
+          state.filter.trim().isEmpty ? '目录为空' : '无匹配项',
           style: TextStyle(color: scheme.onSurfaceVariant),
         ),
       );
@@ -660,7 +504,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
             final shelfBook = e.isDir ? null : _shelfBookFor(e, books);
             final onShelf = shelfBook != null;
             final selectable = !e.isDir && _isSelectableImport(e.name);
-            final selected = _selected.contains(e.path);
+            final selected = state.selected.contains(e.path);
             return ListTile(
               leading: e.isDir
                   ? Icon(Icons.folder_outlined, color: scheme.primary)
@@ -687,12 +531,14 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
                         color: scheme.primary,
                         size: 22,
                       ),
-                      onPressed: _importing ? null : () => _confirmReAdd(e),
+                      onPressed: state.isImporting
+                          ? null
+                          : () => _confirmReAdd(e),
                     )
                   : null,
               onTap: () {
                 if (e.isDir) {
-                  _enterDir(e);
+                  _remoteBookController.enterDirectory(e);
                 } else if (shelfBook != null) {
                   // 对齐 RemoteBookActivity.startRead：已在书架则打开
                   _openShelfBook(shelfBook);

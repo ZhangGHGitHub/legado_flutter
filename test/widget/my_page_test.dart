@@ -53,10 +53,48 @@ void main() {
       expect(find.text(title), findsOneWidget);
     }
   });
+
+  testWidgets(
+    'MyPage reflects Web service state from the local Riverpod scope',
+    (WidgetTester tester) async {
+      final themeController = ThemeModeController();
+      await themeController.load();
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: themeController),
+            ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
+            Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
+            Provider<MyPagePort>.value(
+              value: const _FakeMyPagePort(
+                loadStatus: MyPageWebServiceStatus(
+                  enabled: true,
+                  running: true,
+                  baseUrl: 'http://127.0.0.1:1122',
+                ),
+              ),
+            ),
+          ],
+          child: const MaterialApp(home: MyPage()),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('已开启'), findsOneWidget);
+    },
+  );
 }
 
 class _FakeMyPagePort implements MyPagePort {
-  const _FakeMyPagePort();
+  const _FakeMyPagePort({
+    this.loadStatus = const MyPageWebServiceStatus(
+      enabled: false,
+      running: false,
+    ),
+  });
+
+  final MyPageWebServiceStatus loadStatus;
 
   @override
   bool get isEngineAvailable => true;
@@ -68,8 +106,7 @@ class _FakeMyPagePort implements MyPagePort {
   String get engineVersion => 'test';
 
   @override
-  Future<MyPageWebServiceStatus> loadWebService() async =>
-      const MyPageWebServiceStatus(enabled: false, running: false);
+  Future<MyPageWebServiceStatus> loadWebService() async => loadStatus;
 
   @override
   Future<MyPageWebServiceStatus> toggleWebService() async =>
