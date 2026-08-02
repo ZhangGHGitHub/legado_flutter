@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/database/dao/replace_rule_dao.dart';
@@ -16,6 +17,9 @@ import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import '../helpers/fake_reader_font_port.dart';
 import 'package:legado_flutter/application/web_api/web_api_prefs_port.dart';
 import 'package:legado_flutter/application/startup/startup_task_runner.dart';
+import 'package:legado_flutter/application/source_management/source_notifier.dart';
+import 'package:legado_flutter/application/rss/rss_notifier.dart';
+import 'package:legado_flutter/application/mine/my_page_notifier.dart';
 import 'package:legado_flutter/domain/crash/crash_report.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/book_group.dart';
@@ -127,8 +131,13 @@ void main() {
             ),
           ),
         ],
-        child: const MaterialApp(
-          home: MainShell(startupPort: _FakeMainShellStartupPort()),
+        child: Builder(
+          builder: (context) => riverpod.ProviderScope(
+            overrides: _riverpodOverrides(context),
+            child: const MaterialApp(
+              home: MainShell(startupPort: _FakeMainShellStartupPort()),
+            ),
+          ),
         ),
       ),
     );
@@ -206,8 +215,13 @@ void main() {
             ),
           ),
         ],
-        child: const MaterialApp(
-          home: MainShell(startupPort: _FakeMainShellStartupPort()),
+        child: Builder(
+          builder: (context) => riverpod.ProviderScope(
+            overrides: _riverpodOverrides(context),
+            child: const MaterialApp(
+              home: MainShell(startupPort: _FakeMainShellStartupPort()),
+            ),
+          ),
         ),
       ),
     );
@@ -286,11 +300,16 @@ void main() {
               ),
             ),
           ],
-          child: MaterialApp(
-            home: MainShell(
-              pendingCrashReport: _crashReport(),
-              onCrashReportPresented: () async => presented += 1,
-              startupPort: const _FakeMainShellStartupPort(),
+          child: Builder(
+            builder: (context) => riverpod.ProviderScope(
+              overrides: _riverpodOverrides(context),
+              child: MaterialApp(
+                home: MainShell(
+                  pendingCrashReport: _crashReport(),
+                  onCrashReportPresented: () async => presented += 1,
+                  startupPort: const _FakeMainShellStartupPort(),
+                ),
+              ),
             ),
           ),
         ),
@@ -313,6 +332,19 @@ void main() {
     },
   );
 }
+
+List<riverpod.Override> _riverpodOverrides(BuildContext context) => [
+  sourceControllerProvider.overrideWithValue(
+    context.read<SourceProvider>().controller,
+  ),
+  sourceNotifierProvider.overrideWith(SourceNotifier.new),
+  rssSourceControllerProvider.overrideWithValue(
+    context.read<RssProvider>().controller,
+  ),
+  rssNotifierProvider.overrideWith(RssNotifier.new),
+  myPagePortProvider.overrideWithValue(context.read<MyPagePort>()),
+  myPageNotifierProvider.overrideWith(MyPageNotifier.new),
+];
 
 CrashReport _crashReport() => CrashReport(
   occurredAt: DateTime(2026, 7, 29, 12),

@@ -11,7 +11,6 @@ import '../../application/bookshelf/bookshelf_display_port.dart';
 import '../../application/bookshelf/bookshelf_local_book_port.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../providers/book_provider.dart';
-import '../../providers/source_provider.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_group_manage_dialog.dart';
 import '../../widgets/error_view.dart';
@@ -296,113 +295,107 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
 
   @override
   Widget build(BuildContext context) {
-    final sourceProvider = context.read<SourceProvider>();
-    return riverpod.ProviderScope(
-      overrides: [
-        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
-      ],
-      child: riverpod.Consumer(
-        builder: (context, ref, _) {
-          final sourceNotifier = ref.read(sourceNotifierProvider.notifier);
-          return Scaffold(
-            key: _scaffoldKey,
-            drawer: Consumer<BookProvider>(
-              builder: (context, provider, _) => _buildDrawer(provider.books),
-            ),
-            appBar: AppBar(
-              title: Text(_selectedGroup == '__all__' ? '书架' : _selectedGroup),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  tooltip: '刷新',
-                  onPressed: () => _updateToc(sourceNotifier),
+    return riverpod.Consumer(
+      builder: (context, ref, _) {
+        final sourceNotifier = ref.read(sourceNotifierProvider.notifier);
+        return Scaffold(
+          key: _scaffoldKey,
+          drawer: Consumer<BookProvider>(
+            builder: (context, provider, _) => _buildDrawer(provider.books),
+          ),
+          appBar: AppBar(
+            title: Text(_selectedGroup == '__all__' ? '书架' : _selectedGroup),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: '刷新',
+                onPressed: () => _updateToc(sourceNotifier),
+              ),
+              IconButton(
+                icon: const Icon(Icons.search),
+                tooltip: '联合搜索',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SearchPage()),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  tooltip: '联合搜索',
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SearchPage()),
-                  ),
-                ),
-                PopupMenuButton<String>(
-                  offset: legadoAppBarPopupOffset(context),
-                  icon: const Icon(Icons.more_vert),
-                  onSelected: (value) =>
-                      _onOverflowSelected(value, sourceNotifier),
-                  itemBuilder: (ctx) => BookshelfOverflowMenu.items(ctx),
-                ),
-              ],
-            ),
-            body: Consumer<BookProvider>(
-              builder: (context, provider, _) {
-                if (provider.isLoading && provider.books.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (provider.loadError != null && provider.books.isEmpty) {
-                  return ErrorView(
-                    message: provider.loadError!,
-                    onRetry: () => provider.loadBooks(),
-                  );
-                }
-                if (provider.books.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.menu_book_outlined,
-                          size: 64,
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        ),
-                        const SizedBox(height: LegadoTokens.spacingMd),
-                        const Text('书架空空如也'),
-                      ],
-                    ),
-                  );
-                }
-
-                final books = _processBooks(provider.books);
-                if (books.isEmpty) {
-                  return Center(
-                    child: Text(
-                      '此分组没有书籍',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  );
-                }
-
-                return LegadoRefreshIndicator(
-                  enabled: books.isNotEmpty,
-                  onRefreshTriggered: () {
-                    unawaited(
-                      _runTocUpdate(
-                        provider,
-                        books,
-                        sourceNotifier.findSourceForBook,
+              ),
+              PopupMenuButton<String>(
+                offset: legadoAppBarPopupOffset(context),
+                icon: const Icon(Icons.more_vert),
+                onSelected: (value) =>
+                    _onOverflowSelected(value, sourceNotifier),
+                itemBuilder: (ctx) => BookshelfOverflowMenu.items(ctx),
+              ),
+            ],
+          ),
+          body: Consumer<BookProvider>(
+            builder: (context, provider, _) {
+              if (provider.isLoading && provider.books.isEmpty) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (provider.loadError != null && provider.books.isEmpty) {
+                return ErrorView(
+                  message: provider.loadError!,
+                  onRetry: () => provider.loadBooks(),
+                );
+              }
+              if (provider.books.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.menu_book_outlined,
+                        size: 64,
+                        color: Theme.of(context).colorScheme.outlineVariant,
                       ),
-                    );
-                  },
-                  child: ScrollConfiguration(
-                    behavior: LegadoScrollBehavior(
-                      overscrollColor: Theme.of(context).colorScheme.primary,
-                    ).copyWith(scrollbars: false),
-                    child: BookshelfBooksView(
-                      config: widget.config,
-                      books: books,
-                      pinnedIds: const {},
-                      scrollController: widget.scrollController,
-                      isUpdating: provider.isBookShelfUpdating,
-                      onTap: _openBook,
-                      onLongPress: _confirmRemove,
-                    ),
+                      const SizedBox(height: LegadoTokens.spacingMd),
+                      const Text('书架空空如也'),
+                    ],
                   ),
                 );
-              },
-            ),
-          );
-        },
-      ),
+              }
+
+              final books = _processBooks(provider.books);
+              if (books.isEmpty) {
+                return Center(
+                  child: Text(
+                    '此分组没有书籍',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                );
+              }
+
+              return LegadoRefreshIndicator(
+                enabled: books.isNotEmpty,
+                onRefreshTriggered: () {
+                  unawaited(
+                    _runTocUpdate(
+                      provider,
+                      books,
+                      sourceNotifier.findSourceForBook,
+                    ),
+                  );
+                },
+                child: ScrollConfiguration(
+                  behavior: LegadoScrollBehavior(
+                    overscrollColor: Theme.of(context).colorScheme.primary,
+                  ).copyWith(scrollbars: false),
+                  child: BookshelfBooksView(
+                    config: widget.config,
+                    books: books,
+                    pinnedIds: const {},
+                    scrollController: widget.scrollController,
+                    isUpdating: provider.isBookShelfUpdating,
+                    onTap: _openBook,
+                    onLongPress: _confirmRemove,
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

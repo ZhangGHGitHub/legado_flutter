@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../application/search/search_history_port.dart';
 import '../../application/source_management/source_notifier.dart';
-import '../../providers/source_provider.dart';
 import '../../widgets/book_list_tile.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../../features/book/book_info_page.dart';
@@ -21,14 +20,8 @@ class SearchPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sourceProvider = context.read<SourceProvider>();
-    return riverpod.ProviderScope(
-      overrides: [
-        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
-      ],
-      child: _SearchPageBody(
-        initialRestrictSourceUrls: initialRestrictSourceUrls,
-      ),
+    return _SearchPageBody(
+      initialRestrictSourceUrls: initialRestrictSourceUrls,
     );
   }
 }

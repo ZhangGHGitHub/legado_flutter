@@ -8,7 +8,6 @@ import '../../application/source_management/source_notifier.dart';
 import '../../application/sources/source_debug_formatter_port.dart';
 import '../../domain/ports/book_source_debug_port.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
-import '../../providers/source_provider.dart';
 import '../../widgets/source_debug_panel.dart';
 import '../../widgets/source_validation_sheet.dart';
 
@@ -26,18 +25,10 @@ class SourceDebugPage extends riverpod.ConsumerStatefulWidget {
   });
 
   static Future<void> open(BuildContext context, BookSource source) {
-    final sourceProvider = context.read<SourceProvider>();
     final debugPort = context.read<BookSourceDebugPort>();
     return Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => riverpod.ProviderScope(
-          overrides: [
-            sourceControllerProvider.overrideWithValue(
-              sourceProvider.controller,
-            ),
-          ],
-          child: SourceDebugPage(source: source, debugPort: debugPort),
-        ),
+        builder: (_) => SourceDebugPage(source: source, debugPort: debugPort),
       ),
     );
   }

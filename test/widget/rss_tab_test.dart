@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:legado_flutter/features/rss/rss_tab_page.dart';
+import 'package:legado_flutter/application/rss/rss_notifier.dart';
 import 'package:legado_flutter/infrastructure/reader/reader_font_port_adapter.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import 'package:legado_flutter/providers/rss_provider.dart';
@@ -30,7 +32,12 @@ void main() {
           ChangeNotifierProvider.value(value: provider),
           Provider<ReaderFontPort>.value(value: const ReaderFontPortAdapter()),
         ],
-        child: const MaterialApp(home: RssTabPage()),
+        child: riverpod.ProviderScope(
+          overrides: [
+            rssSourceControllerProvider.overrideWithValue(provider.controller),
+          ],
+          child: const MaterialApp(home: RssTabPage()),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -51,7 +58,12 @@ void main() {
           ChangeNotifierProvider.value(value: provider),
           Provider<ReaderFontPort>.value(value: const ReaderFontPortAdapter()),
         ],
-        child: const MaterialApp(home: RssTabPage()),
+        child: riverpod.ProviderScope(
+          overrides: [
+            rssSourceControllerProvider.overrideWithValue(provider.controller),
+          ],
+          child: const MaterialApp(home: RssTabPage()),
+        ),
       ),
     );
     await tester.pumpAndSettle();

@@ -12,11 +12,14 @@ final appConfigControllerProvider = Provider<AppConfigController>((ref) {
   final controller = AppConfigController(config: ref.watch(appConfigProvider));
   ref.onDispose(controller.dispose);
   return controller;
-});
+}, dependencies: [appConfigProvider]);
 
 /// AppConfig 的 Riverpod 状态入口。
 final appConfigNotifierProvider =
-    NotifierProvider<AppConfigNotifier, AppConfigState>(AppConfigNotifier.new);
+    NotifierProvider<AppConfigNotifier, AppConfigState>(
+      AppConfigNotifier.new,
+      dependencies: [appConfigControllerProvider],
+    );
 
 /// 发布既有 AppConfig 单例的状态并转发配置命令。
 class AppConfigNotifier extends Notifier<AppConfigState> {

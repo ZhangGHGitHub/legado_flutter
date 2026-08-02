@@ -11,6 +11,7 @@ final replaceRulesControllerProvider = Provider<ReplaceRulesController>(
 
 final replaceNotifierProvider = NotifierProvider<ReplaceNotifier, ReplaceState>(
   ReplaceNotifier.new,
+  dependencies: [replaceRulesControllerProvider],
 );
 
 /// 替换规则页面的生产状态入口。

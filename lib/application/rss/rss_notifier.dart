@@ -11,6 +11,7 @@ final rssSourceControllerProvider = Provider<RssSourceController>(
 
 final rssNotifierProvider = NotifierProvider<RssNotifier, RssState>(
   RssNotifier.new,
+  dependencies: [rssSourceControllerProvider],
 );
 
 /// RSS 源管理页面的 Riverpod 状态入口。

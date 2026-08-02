@@ -14,7 +14,6 @@ import 'package:share_plus/share_plus.dart';
 
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
-import '../../providers/source_provider.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/check_source_keyword_dialog.dart';
 import '../../widgets/error_view.dart';
@@ -37,27 +36,14 @@ enum _SourceSort { manual, auto, name, url, enabled, lastUpdate, respondTime }
 
 /// 书源管理 — 对齐 Jingshiro [BookSourceActivity] /
 /// `activity_book_source.xml` + `item_book_source.xml` + `menu/book_source.xml`
-class SourcesPage extends StatelessWidget {
+class SourcesPage extends riverpod.ConsumerStatefulWidget {
   const SourcesPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final controller = context.read<SourceProvider>().controller;
-    return riverpod.ProviderScope(
-      overrides: [sourceControllerProvider.overrideWithValue(controller)],
-      child: const _SourcesPageBody(),
-    );
-  }
+  riverpod.ConsumerState<SourcesPage> createState() => _SourcesPageState();
 }
 
-class _SourcesPageBody extends StatefulWidget {
-  const _SourcesPageBody();
-
-  @override
-  State<_SourcesPageBody> createState() => _SourcesPageState();
-}
-
-class _SourcesPageState extends State<_SourcesPageBody> {
+class _SourcesPageState extends riverpod.ConsumerState<SourcesPage> {
   late final SourceManagementPrefsPort _managementPrefs;
   static const _checkboxLaneWidth = 48.0;
   static const _edgeScrollZone = 48.0;
@@ -353,7 +339,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
     return list;
   }
 
-  List<String> _allGroups(SourceProvider provider) => provider.knownGroups;
+  List<String> _allGroups(SourceNotifier notifier) => notifier.knownGroups;
 
   String _hostOf(BookSource s) {
     final u = Uri.tryParse(s.bookSourceUrl);
@@ -478,7 +464,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
       ),
     );
     if (ok != true || !mounted) return;
-    await context.read<SourceProvider>().deleteSources(_selected);
+    await ref.read(sourceNotifierProvider.notifier).deleteSources(_selected);
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -489,7 +475,9 @@ class _SourcesPageState extends State<_SourcesPageBody> {
   Future<void> _batchEnable(bool enabled) async {
     if (_selected.isEmpty) return;
     final n = _selected.length;
-    await context.read<SourceProvider>().setSourcesEnabled(_selected, enabled);
+    await ref
+        .read(sourceNotifierProvider.notifier)
+        .setSourcesEnabled(_selected, enabled);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(enabled ? '已启用 $n 个书源' : '已禁用 $n 个书源')),
@@ -498,8 +486,8 @@ class _SourcesPageState extends State<_SourcesPageBody> {
 
   Future<void> _batchSetGroup() async {
     if (_selected.isEmpty) return;
-    final provider = context.read<SourceProvider>();
-    final groups = _allGroups(provider);
+    final notifier = ref.read(sourceNotifierProvider.notifier);
+    final groups = _allGroups(notifier);
     final controller = TextEditingController();
     final group = await showDialog<String>(
       context: context,
@@ -567,13 +555,13 @@ class _SourcesPageState extends State<_SourcesPageBody> {
     if (group == null || !mounted) return;
     final count = _selected.length;
     if (group.isEmpty) {
-      await provider.clearGroupOnSources(_selected);
+      await notifier.clearGroupOnSources(_selected);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('已清除 $count 个书源分组')));
     } else {
-      await provider.setSourcesGroup(_selected, group);
+      await notifier.setSourcesGroup(_selected, group);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -586,8 +574,8 @@ class _SourcesPageState extends State<_SourcesPageBody> {
     final keyword = await showCheckSourceKeywordDialog(context);
     await _loadCheckSourceUiPrefs();
     if (keyword == null || !mounted) return;
-    final provider = context.read<SourceProvider>();
-    final selected = provider.sources
+    final notifier = ref.read(sourceNotifierProvider.notifier);
+    final selected = notifier.sources
         .where((s) => _selected.contains(s.bookSourceUrl))
         .toList();
     if (selected.isEmpty) return;
@@ -595,7 +583,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => _BatchValidateDialog(
-        provider: provider,
+        notifier: notifier,
         sources: selected,
         keyword: keyword,
       ),
@@ -605,10 +593,9 @@ class _SourcesPageState extends State<_SourcesPageBody> {
   Future<void> _batchExploreEnable(bool enabled) async {
     if (_selected.isEmpty) return;
     final n = _selected.length;
-    await context.read<SourceProvider>().setSourcesExploreEnabled(
-      _selected,
-      enabled,
-    );
+    await ref
+        .read(sourceNotifierProvider.notifier)
+        .setSourcesExploreEnabled(_selected, enabled);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(enabled ? '已启用 $n 个书源发现' : '已禁用 $n 个书源发现')),
@@ -648,7 +635,9 @@ class _SourcesPageState extends State<_SourcesPageBody> {
     );
     if (group == null || group.isEmpty || !mounted) return;
     final n = _selected.length;
-    await context.read<SourceProvider>().addGroupToSources(_selected, group);
+    await ref
+        .read(sourceNotifierProvider.notifier)
+        .addGroupToSources(_selected, group);
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -657,9 +646,9 @@ class _SourcesPageState extends State<_SourcesPageBody> {
 
   Future<void> _batchRemoveGroup() async {
     if (_selected.isEmpty) return;
-    final provider = context.read<SourceProvider>();
+    final notifier = ref.read(sourceNotifierProvider.notifier);
     final tags = <String>{};
-    for (final s in provider.sources) {
+    for (final s in notifier.sources) {
       if (!_selected.contains(s.bookSourceUrl)) continue;
       tags.addAll(_managementPrefs.splitGroups(s.bookSourceGroup));
     }
@@ -710,20 +699,20 @@ class _SourcesPageState extends State<_SourcesPageBody> {
     if (choice == null || !mounted) return;
     final n = _selected.length;
     if (choice == clearAll) {
-      await provider.clearGroupOnSources(_selected);
+      await notifier.clearGroupOnSources(_selected);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('已清除 $n 个书源的全部分组')));
     } else {
-      final withTag = provider.sources
+      final withTag = notifier.sources
           .where(
             (s) =>
                 _selected.contains(s.bookSourceUrl) &&
                 _managementPrefs.hasGroup(s.bookSourceGroup, choice),
           )
           .length;
-      await provider.removeGroupTagFromSources(_selected, choice);
+      await notifier.removeGroupTagFromSources(_selected, choice);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -733,7 +722,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
 
   Future<void> _batchMoveToTop() async {
     if (_selected.isEmpty) return;
-    await context.read<SourceProvider>().moveSourcesToTop(_selected);
+    await ref.read(sourceNotifierProvider.notifier).moveSourcesToTop(_selected);
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -742,7 +731,9 @@ class _SourcesPageState extends State<_SourcesPageBody> {
 
   Future<void> _batchMoveToBottom() async {
     if (_selected.isEmpty) return;
-    await context.read<SourceProvider>().moveSourcesToBottom(_selected);
+    await ref
+        .read(sourceNotifierProvider.notifier)
+        .moveSourcesToBottom(_selected);
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -751,8 +742,8 @@ class _SourcesPageState extends State<_SourcesPageBody> {
 
   Future<void> _exportSelected() async {
     if (_selected.isEmpty) return;
-    final provider = context.read<SourceProvider>();
-    final json = await provider.exportSourcesJson(_selected);
+    final notifier = ref.read(sourceNotifierProvider.notifier);
+    final json = await notifier.exportSourcesJson(_selected);
     final bytes = utf8.encode(json);
     try {
       final saved = await FilePicker.platform.saveFile(
@@ -783,9 +774,9 @@ class _SourcesPageState extends State<_SourcesPageBody> {
 
   Future<void> _shareSelected() async {
     if (_selected.isEmpty) return;
-    final json = await context.read<SourceProvider>().exportSourcesJson(
-      _selected,
-    );
+    final json = await ref
+        .read(sourceNotifierProvider.notifier)
+        .exportSourcesJson(_selected);
     try {
       await Share.share(json, subject: '书源');
     } catch (e) {
@@ -832,7 +823,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
   }
 
   void _showItemMenu(BookSource source, Offset anchor) {
-    final provider = context.read<SourceProvider>();
+    final notifier = ref.read(sourceNotifierProvider.notifier);
     final manual = _sort == _SourceSort.manual;
     final explore = hasExploreUrl(source);
     showMenu<String>(
@@ -867,18 +858,13 @@ class _SourcesPageState extends State<_SourcesPageBody> {
       if (action == null || !mounted) return;
       switch (action) {
         case 'top':
-          await provider.moveSourcesToTop([source.bookSourceUrl]);
+          await notifier.moveSourcesToTop([source.bookSourceUrl]);
         case 'bottom':
-          await provider.moveSourcesToBottom([source.bookSourceUrl]);
+          await notifier.moveSourcesToBottom([source.bookSourceUrl]);
         case 'edit':
           await Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => ChangeNotifierProvider.value(
-                value: provider,
-                child: SourceEditorPage(source: source),
-              ),
-            ),
+            MaterialPageRoute(builder: (_) => SourceEditorPage(source: source)),
           );
         case 'validate':
           await _validateOne(context, source);
@@ -898,9 +884,9 @@ class _SourcesPageState extends State<_SourcesPageBody> {
         case 'debug':
           await SourceDebugPage.open(context, source);
         case 'toggle':
-          await provider.toggleSource(source.bookSourceUrl, !source.enabled);
+          await notifier.toggleSource(source.bookSourceUrl, !source.enabled);
         case 'explore':
-          await provider.setSourcesExploreEnabled([
+          await notifier.setSourcesExploreEnabled([
             source.bookSourceUrl,
           ], !isExploreEnabled(source));
         case 'del':
@@ -922,7 +908,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
             ),
           );
           if (yes == true) {
-            await provider.deleteSources([source.bookSourceUrl]);
+            await notifier.deleteSources([source.bookSourceUrl]);
             _selected.remove(source.bookSourceUrl);
             if (mounted) setState(() {});
           }
@@ -1141,7 +1127,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
       body: riverpod.Consumer(
         builder: (context, ref, _) {
           final state = ref.watch(sourceNotifierProvider);
-          final provider = context.read<SourceProvider>();
+          final notifier = ref.read(sourceNotifierProvider.notifier);
           final sources = state.sources;
 
           if (state.isLoading && sources.isEmpty && state.loadError == null) {
@@ -1150,7 +1136,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
           if (state.loadError != null && sources.isEmpty) {
             return ErrorView(
               message: state.loadError!,
-              onRetry: () => provider.loadSources(),
+              onRetry: notifier.loadSources,
             );
           }
           if (sources.isEmpty) {
@@ -1171,8 +1157,8 @@ class _SourcesPageState extends State<_SourcesPageBody> {
             children: [
               Expanded(
                 child: _groupByDomain
-                    ? _buildDomainGroupedList(visible, provider, scheme, accent)
-                    : _buildFlatList(visible, provider, scheme, accent),
+                    ? _buildDomainGroupedList(visible, notifier, scheme, accent)
+                    : _buildFlatList(visible, notifier, scheme, accent),
               ),
               _buildSelectActionBar(scheme, visible),
             ],
@@ -1211,7 +1197,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
 
   Widget _buildFlatList(
     List<BookSource> visible,
-    SourceProvider provider,
+    SourceNotifier notifier,
     ColorScheme scheme,
     Color accent,
   ) {
@@ -1235,7 +1221,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
             final moved = items.removeAt(oldIndex);
             items.insert(target, moved);
             final urls = items.map((s) => s.bookSourceUrl).toList();
-            await provider.reorderSources(urls);
+            await notifier.reorderSources(urls);
           },
           itemBuilder: (_, i) {
             final s = visible[i];
@@ -1247,7 +1233,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
                   s,
                   i,
                   visible,
-                  provider,
+                  notifier,
                   scheme,
                   accent,
                   dragHandle: ReorderableDragStartListener(
@@ -1280,14 +1266,14 @@ class _SourcesPageState extends State<_SourcesPageBody> {
           color: scheme.outlineVariant.withValues(alpha: 0.35),
         ),
         itemBuilder: (_, i) =>
-            _buildSourceRow(visible[i], i, visible, provider, scheme, accent),
+            _buildSourceRow(visible[i], i, visible, notifier, scheme, accent),
       ),
     );
   }
 
   Widget _buildDomainGroupedList(
     List<BookSource> visible,
-    SourceProvider provider,
+    SourceNotifier notifier,
     ColorScheme scheme,
     Color accent,
   ) {
@@ -1328,7 +1314,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
                       s,
                       indexOf[s.bookSourceUrl]!,
                       visible,
-                      provider,
+                      notifier,
                       scheme,
                       accent,
                     ),
@@ -1351,17 +1337,17 @@ class _SourcesPageState extends State<_SourcesPageBody> {
     BookSource s,
     int index,
     List<BookSource> visible,
-    SourceProvider provider,
+    SourceNotifier notifier,
     ColorScheme scheme,
     Color accent, {
     Widget? dragHandle,
   }) {
     final checked = _selected.contains(s.bookSourceUrl);
     final validating =
-        provider.isValidating &&
-        provider.validatingSourceUrl == s.bookSourceUrl;
-    final validation = provider.validationOf(s.bookSourceUrl);
-    final progressMessage = provider.validationProgressOf(s.bookSourceUrl);
+        notifier.isValidating &&
+        notifier.validatingSourceUrl == s.bookSourceUrl;
+    final validation = notifier.validationOf(s.bookSourceUrl);
+    final progressMessage = notifier.validationProgressOf(s.bookSourceUrl);
     final hasExplore = hasExploreUrl(s);
     final group = s.bookSourceGroup.trim();
     final displayName = group.isEmpty
@@ -1450,19 +1436,14 @@ class _SourcesPageState extends State<_SourcesPageBody> {
               value: s.enabled,
               activeThumbColor: Colors.white,
               activeTrackColor: accent,
-              onChanged: (v) => provider.toggleSource(s.bookSourceUrl, v),
+              onChanged: (v) => notifier.toggleSource(s.bookSourceUrl, v),
             ),
             IconButton(
               tooltip: '编辑',
               icon: Icon(Icons.open_in_new, size: 20, color: scheme.onSurface),
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => ChangeNotifierProvider.value(
-                    value: provider,
-                    child: SourceEditorPage(source: s),
-                  ),
-                ),
+                MaterialPageRoute(builder: (_) => SourceEditorPage(source: s)),
               ),
             ),
             Stack(
@@ -1669,7 +1650,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
   }
 
   Future<void> _parseAndPreviewImport(BuildContext context, String text) async {
-    final provider = context.read<SourceProvider>();
+    final notifier = ref.read(sourceNotifierProvider.notifier);
     final showLoading = _looksLikeImportUrl(text);
     if (showLoading && context.mounted) {
       showDialog<void>(
@@ -1681,7 +1662,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
 
     List<BookSource>? candidates;
     try {
-      candidates = await provider.parseSourcesForImport(text);
+      candidates = await notifier.parseSourcesForImport(text);
     } catch (e) {
       if (showLoading && context.mounted) Navigator.pop(context);
       if (context.mounted) {
@@ -1708,7 +1689,7 @@ class _SourcesPageState extends State<_SourcesPageBody> {
     }
 
     final existingByUrl = {
-      for (final s in provider.sources) s.bookSourceUrl: s,
+      for (final s in notifier.sources) s.bookSourceUrl: s,
     };
     await showDialog<void>(
       context: context,
@@ -1761,8 +1742,8 @@ class _SourcesPageState extends State<_SourcesPageBody> {
     final keyword = await showCheckSourceKeywordDialog(context);
     await _loadCheckSourceUiPrefs();
     if (keyword == null || !context.mounted) return;
-    final provider = context.read<SourceProvider>();
-    final result = await provider.validateSource(
+    final notifier = ref.read(sourceNotifierProvider.notifier);
+    final result = await notifier.validateSource(
       source,
       keyword: keyword.isEmpty ? null : keyword,
     );
@@ -1888,12 +1869,12 @@ class _ImportUrlDialogState extends State<_ImportUrlDialog> {
 }
 
 class _BatchValidateDialog extends StatefulWidget {
-  final SourceProvider provider;
+  final SourceNotifier notifier;
   final List<BookSource>? sources;
   final String? keyword;
 
   const _BatchValidateDialog({
-    required this.provider,
+    required this.notifier,
     this.sources,
     this.keyword,
   });
@@ -1911,9 +1892,9 @@ class _BatchValidateDialogState extends State<_BatchValidateDialog> {
     super.initState();
     final targets =
         widget.sources ??
-        widget.provider.sources.where((s) => s.enabled).toList();
+        widget.notifier.sources.where((s) => s.enabled).toList();
     _total = targets.length;
-    widget.provider
+    widget.notifier
         .validateSources(
           targets,
           keyword: widget.keyword?.isEmpty == true ? null : widget.keyword,

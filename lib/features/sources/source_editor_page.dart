@@ -14,7 +14,6 @@ import '../../application/qr/qr_code_port.dart';
 import '../../application/source_login/source_login_cookie_clear_port.dart';
 import '../../application/source_management/source_notifier.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
-import '../../providers/source_provider.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../code_edit/code_edit_page.dart';
@@ -37,13 +36,7 @@ class SourceEditorPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sourceProvider = context.read<SourceProvider>();
-    return riverpod.ProviderScope(
-      overrides: [
-        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
-      ],
-      child: _SourceEditorPageBody(source: source),
-    );
+    return _SourceEditorPageBody(source: source);
   }
 }
 

@@ -11,7 +11,6 @@ import '../../application/bookshelf/bookshelf_local_book_port.dart';
 import '../../application/preferences/bookshelf_display_prefs_port.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../providers/book_provider.dart';
-import '../../providers/source_provider.dart';
 import '../../theme/legado_chrome.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_group_manage_dialog.dart';
@@ -249,56 +248,50 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
 
   @override
   Widget build(BuildContext context) {
-    final sourceProvider = context.read<SourceProvider>();
-    return riverpod.ProviderScope(
-      overrides: [
-        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
-      ],
-      child: riverpod.Consumer(
-        builder: (context, ref, _) {
-          final sourceNotifier = ref.read(sourceNotifierProvider.notifier);
-          return Consumer<BookProvider>(
-            builder: (context, provider, _) {
-              return Scaffold(
-                appBar: AppBar(
-                  titleSpacing: LegadoChrome.appBarTitleStartPaddingOf(context),
-                  title: _buildGroupTabs(provider.books),
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.refresh),
-                      tooltip: '刷新',
-                      onPressed: () => _updateToc(sourceNotifier),
+    return riverpod.Consumer(
+      builder: (context, ref, _) {
+        final sourceNotifier = ref.read(sourceNotifierProvider.notifier);
+        return Consumer<BookProvider>(
+          builder: (context, provider, _) {
+            return Scaffold(
+              appBar: AppBar(
+                titleSpacing: LegadoChrome.appBarTitleStartPaddingOf(context),
+                title: _buildGroupTabs(provider.books),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    tooltip: '刷新',
+                    onPressed: () => _updateToc(sourceNotifier),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.search),
+                    tooltip: '联合搜索',
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SearchPage()),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.search),
-                      tooltip: '联合搜索',
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const SearchPage()),
+                  ),
+                  PopupMenuButton<String>(
+                    offset: legadoAppBarPopupOffset(context),
+                    icon: const Icon(Icons.more_vert),
+                    onSelected: (value) =>
+                        _onOverflowSelected(value, sourceNotifier),
+                    itemBuilder: (ctx) => [
+                      ...BookshelfOverflowMenu.items(ctx),
+                      CheckedPopupMenuItem(
+                        value: 'show_grouped',
+                        checked: _showGrouped,
+                        child: const Text('按分组显示'),
                       ),
-                    ),
-                    PopupMenuButton<String>(
-                      offset: legadoAppBarPopupOffset(context),
-                      icon: const Icon(Icons.more_vert),
-                      onSelected: (value) =>
-                          _onOverflowSelected(value, sourceNotifier),
-                      itemBuilder: (ctx) => [
-                        ...BookshelfOverflowMenu.items(ctx),
-                        CheckedPopupMenuItem(
-                          value: 'show_grouped',
-                          checked: _showGrouped,
-                          child: const Text('按分组显示'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                body: _buildBody(provider, sourceNotifier),
-              );
-            },
-          );
-        },
-      ),
+                    ],
+                  ),
+                ],
+              ),
+              body: _buildBody(provider, sourceNotifier),
+            );
+          },
+        );
+      },
     );
   }
 

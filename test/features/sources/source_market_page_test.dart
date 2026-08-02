@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
+import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/application/source_market/source_market_port.dart';
 import 'package:legado_flutter/domain/repositories/book_source_repository.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
@@ -29,15 +31,22 @@ void main() {
             value: _FakeSourceMarketPort([source]),
           ),
         ],
-        child: MaterialApp(
-          home: Builder(
-            builder: (context) => Scaffold(
-              body: FilledButton(
-                onPressed: () => Navigator.push<void>(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SourceMarketPage()),
+        child: riverpod.ProviderScope(
+          overrides: [
+            sourceControllerProvider.overrideWithValue(
+              sourceProvider.controller,
+            ),
+          ],
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: FilledButton(
+                  onPressed: () => Navigator.push<void>(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SourceMarketPage()),
+                  ),
+                  child: const Text('打开市场'),
                 ),
-                child: const Text('打开市场'),
               ),
             ),
           ),

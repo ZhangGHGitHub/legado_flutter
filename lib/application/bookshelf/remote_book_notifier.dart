@@ -14,6 +14,7 @@ final remoteBookControllerProvider = Provider<RemoteBookController>(
 final remoteBookNotifierProvider =
     NotifierProvider<RemoteBookNotifier, RemoteBookState>(
       RemoteBookNotifier.new,
+      dependencies: [remoteBookControllerProvider],
     );
 
 /// 只发布共享控制器状态，并转发页面命令。

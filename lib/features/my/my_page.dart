@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/lifecycle/app_lifecycle_coordinator.dart';
 import '../../application/mine/my_page_notifier.dart';
-import '../../application/mine/my_page_port.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/legado_list_tile.dart';
 import '../../widgets/quick_action_button.dart';
@@ -33,12 +32,7 @@ class MyPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return riverpod.ProviderScope(
-      overrides: [
-        myPagePortProvider.overrideWithValue(context.read<MyPagePort>()),
-      ],
-      child: const _MyPageBody(),
-    );
+    return const _MyPageBody();
   }
 }
 

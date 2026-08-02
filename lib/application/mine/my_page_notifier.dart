@@ -12,11 +12,13 @@ final myPagePortProvider = Provider<MyPagePort>(
 /// 由 MyPagePort 构造页面范围内唯一的 Controller。
 final myPageControllerProvider = Provider<MyPageController>(
   (ref) => MyPageController(port: ref.watch(myPagePortProvider)),
+  dependencies: [myPagePortProvider],
 );
 
 /// “我的”页面的 Riverpod 状态入口。
 final myPageNotifierProvider = NotifierProvider<MyPageNotifier, MyPageState>(
   MyPageNotifier.new,
+  dependencies: [myPageControllerProvider],
 );
 
 /// 发布共享 Controller 状态并转发页面命令。

@@ -1,23 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
-import 'package:provider/provider.dart';
 
 import '../application/source_management/source_notifier.dart';
-import '../providers/source_provider.dart';
 import 'legado_dialog_title_bar.dart';
 
 /// 书源分组管理 — 对齐 Jingshiro
 /// `ui/book/source/manage/GroupManageDialog` + `item_group_manage.xml`
 Future<void> showSourceGroupManageDialog(BuildContext context) {
-  final controller = context.read<SourceProvider>().controller;
   return showDialog<void>(
     context: context,
     // Windows 无系统返回键；允许点遮罩关闭，底部另有「确认」
     barrierDismissible: true,
-    builder: (_) => riverpod.ProviderScope(
-      overrides: [sourceControllerProvider.overrideWithValue(controller)],
-      child: const _SourceGroupManageDialog(),
-    ),
+    builder: (_) => const _SourceGroupManageDialog(),
   );
 }
 

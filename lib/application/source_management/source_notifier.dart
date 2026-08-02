@@ -15,6 +15,7 @@ final sourceControllerProvider = Provider<SourceController>(
 /// 书源管理的 Riverpod 状态入口。
 final sourceNotifierProvider = NotifierProvider<SourceNotifier, SourceState>(
   SourceNotifier.new,
+  dependencies: [sourceControllerProvider],
 );
 
 /// 只发布共享控制器状态，并转发书源管理命令。

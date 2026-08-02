@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +13,7 @@ import 'package:legado_flutter/features/bookshelf/bookshelf_page.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
+import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'helpers/book_source_service_test_factory.dart';
 import 'application/source_management/source_controller_test.dart'
     as source_fixtures;
@@ -34,22 +36,27 @@ void main() {
     await sourceProvider.loadSources();
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: MultiProvider(
-          providers: [
-            ChangeNotifierProvider.value(value: bookProvider),
-            ChangeNotifierProvider.value(value: sourceProvider),
-            Provider<BookshelfDisplayPrefsPort>.value(
-              value: _FakeBookshelfDisplayPrefsPort(),
-            ),
-            Provider<BookGroupStorePort>.value(
-              value: _FakeBookGroupStorePort(),
-            ),
-            Provider<BookshelfLocalBookPort>.value(
-              value: _FakeBookshelfLocalBookPort(),
-            ),
-          ],
-          child: const BookshelfPage(),
+      riverpod.ProviderScope(
+        overrides: [
+          sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+        ],
+        child: MaterialApp(
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: bookProvider),
+              ChangeNotifierProvider.value(value: sourceProvider),
+              Provider<BookshelfDisplayPrefsPort>.value(
+                value: _FakeBookshelfDisplayPrefsPort(),
+              ),
+              Provider<BookGroupStorePort>.value(
+                value: _FakeBookGroupStorePort(),
+              ),
+              Provider<BookshelfLocalBookPort>.value(
+                value: _FakeBookshelfLocalBookPort(),
+              ),
+            ],
+            child: const BookshelfPage(),
+          ),
         ),
       ),
     );

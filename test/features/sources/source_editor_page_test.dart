@@ -2,10 +2,12 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:legado_flutter/application/platform/clipboard_port.dart';
 import 'package:legado_flutter/application/preferences/code_edit_prefs_port.dart';
 import 'package:legado_flutter/application/qr/qr_code_port.dart';
 import 'package:legado_flutter/application/source_login/source_login_cookie_clear_port.dart';
+import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/domain/ports/code_edit_prefs_store.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/features/sources/source_editor_page.dart';
@@ -37,18 +39,25 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider<SourceProvider>.value(
         value: sourceProvider,
-        child: MaterialApp(
-          home: Provider<ClipboardPort>.value(
-            value: clipboard,
-            child: Provider<QrCodePort>.value(
-              value: const QrCodePortAdapter(),
-              child: Provider<CodeEditPrefsPort>.value(
-                value: SharedPreferencesCodeEditPrefs(
-                  _FakeCodeEditPrefsStore(),
-                ),
-                child: Provider<SourceLoginCookieClearPort>.value(
-                  value: const SourceLoginCookieClearPortAdapter(),
-                  child: SourceEditorPage(source: source),
+        child: riverpod.ProviderScope(
+          overrides: [
+            sourceControllerProvider.overrideWithValue(
+              sourceProvider.controller,
+            ),
+          ],
+          child: MaterialApp(
+            home: Provider<ClipboardPort>.value(
+              value: clipboard,
+              child: Provider<QrCodePort>.value(
+                value: const QrCodePortAdapter(),
+                child: Provider<CodeEditPrefsPort>.value(
+                  value: SharedPreferencesCodeEditPrefs(
+                    _FakeCodeEditPrefsStore(),
+                  ),
+                  child: Provider<SourceLoginCookieClearPort>.value(
+                    value: const SourceLoginCookieClearPortAdapter(),
+                    child: SourceEditorPage(source: source),
+                  ),
                 ),
               ),
             ),
@@ -93,21 +102,28 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider<SourceProvider>.value(
         value: sourceProvider,
-        child: MaterialApp(
-          home: MultiProvider(
-            providers: [
-              Provider<ClipboardPort>.value(value: clipboard),
-              Provider<QrCodePort>.value(value: const QrCodePortAdapter()),
-              Provider<CodeEditPrefsPort>.value(
-                value: SharedPreferencesCodeEditPrefs(
-                  _FakeCodeEditPrefsStore(),
+        child: riverpod.ProviderScope(
+          overrides: [
+            sourceControllerProvider.overrideWithValue(
+              sourceProvider.controller,
+            ),
+          ],
+          child: MaterialApp(
+            home: MultiProvider(
+              providers: [
+                Provider<ClipboardPort>.value(value: clipboard),
+                Provider<QrCodePort>.value(value: const QrCodePortAdapter()),
+                Provider<CodeEditPrefsPort>.value(
+                  value: SharedPreferencesCodeEditPrefs(
+                    _FakeCodeEditPrefsStore(),
+                  ),
                 ),
-              ),
-              Provider<SourceLoginCookieClearPort>.value(
-                value: const SourceLoginCookieClearPortAdapter(),
-              ),
-            ],
-            child: SourceEditorPage(source: source),
+                Provider<SourceLoginCookieClearPort>.value(
+                  value: const SourceLoginCookieClearPortAdapter(),
+                ),
+              ],
+              child: SourceEditorPage(source: source),
+            ),
           ),
         ),
       ),

@@ -12,6 +12,16 @@
 
 > 2026-08-03 Phase 4/R6 当前 owner 状态：AppConfig 已新增 Freezed 状态、共享 Controller 和 Riverpod Notifier，`ConfigPage` 通过局部 scope 订阅既有 `AppConfig` 单例；`load()` 并发去重、乐观持久化、四个配置键和启动顺序保持不变。组合根已将现有 `SourceProvider.controller` 覆盖到 `sourceControllerProvider`，`BookInfoPage`、`BookmarkPage`、`ChangeSourcePage` 直接消费根级 SourceNotifier，旧 Provider 继续为未迁移消费者提供兼容外观。AppConfig 定向 `9/9`、Source 页面/组合根定向 `8/8`、Flutter 串行全量 `1100`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。BookProvider/Reader 仍为高风险事实源边界，R6 尚未全量退出。
 
+> 2026-08-03 Phase 4/R6 当前 owner 状态：第十二批完成 Riverpod provider 依赖声明与页面 scope 收口。六个 application Notifier 明确声明实际上游 provider，根级 `SourceProvider.controller`、RSS/替换/我的页面/配置和远程书籍 controller 覆盖不再触发 Riverpod 依赖断言；发现、搜索、书架样式、我的、RSS Tab 和书源相关页面不再重复创建已注入 controller 的局部 scope。Sources 管理、书源市场/编辑/调试和测试宿主保持既有行为与兼容入口。受影响定向 `19/19`、测试宿主补充 `2/2`、Flutter 全量 `1104`（`3` 项既有条件跳过）、analyze、架构边界和 diff 检查通过。BookProvider/Reader、正文/目录/分页、R1-12、原版 UI 基线及暂停平台门禁不变。
+
+## 193. 2026-08-03：Riverpod 依赖声明与页面根级 scope 收口
+
+- `SourceNotifier`、`RssNotifier`、`ReplaceNotifier`、`MyPageNotifier`、`AppConfigNotifier`、`RemoteBookNotifier` 对实际 `ref.watch` 上游 provider 补齐 `dependencies`，保持 Riverpod override 图与组合根一致，不改变 controller 或业务命令语义。
+- 移除已由组合根提供共享 controller 的页面局部 scope；Sources 管理动作、书源市场/编辑/调试和旧 Provider 兼容外观继续保留。直接构造 `BookshelfPage` 的旧测试宿主改为提供真实 controller override，未削弱空态、页面样式或主壳断言。
+- 未修改 `legado-main/`、Rust、正文算法、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则或 R1-12 数据库迁移边界；R6、Web/WASM/PWA 和真实 Android TTS 仍未退出。
+
+验证记录：受影响页面/管理定向 `19/19`、补充测试宿主 `2/2`、Flutter 串行全量 `1104`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 均通过。
+
 ## 192. 2026-08-03：AppConfig 与 SourceController 根级状态边界
 
 - AppConfig application 层新增 `AppConfigState`、`AppConfigController` 和 `AppConfigNotifier`，只将 `ConfigPage` 的四项配置状态接入 Riverpod；旧 `AppConfig` 单例继续负责 SharedPreferencesRuntime、`load()` single-flight、持久化和启动兼容语义。

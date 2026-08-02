@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/application/search/search_history_port.dart';
 import 'package:legado_flutter/application/source_management/source_management_book_source_port.dart';
+import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/ports/book_source_validation_port.dart';
 import 'package:legado_flutter/domain/repositories/book_source_repository.dart';
@@ -33,7 +35,14 @@ void main() {
             ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
             Provider<SearchHistoryPort>.value(value: _SearchHistory()),
           ],
-          child: const SearchPage(),
+          child: riverpod.ProviderScope(
+            overrides: [
+              sourceControllerProvider.overrideWithValue(
+                sourceProvider.controller,
+              ),
+            ],
+            child: const SearchPage(),
+          ),
         ),
       ),
     );

@@ -6,7 +6,6 @@ import '../../application/reader/reader_font_port.dart';
 import '../../application/rss/rss_login_port.dart';
 import '../../application/rss/rss_notifier.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
-import '../../providers/rss_provider.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_refresh_indicator.dart';
 import '../../features/my/read_record_page.dart';
@@ -29,11 +28,7 @@ class RssTabPage extends StatefulWidget {
 class RssTabPageState extends State<RssTabPage> {
   @override
   Widget build(BuildContext context) {
-    final controller = context.read<RssProvider>().controller;
-    return riverpod.ProviderScope(
-      overrides: [rssSourceControllerProvider.overrideWithValue(controller)],
-      child: const _RssTabPageBody(),
-    );
+    return const _RssTabPageBody();
   }
 }
 

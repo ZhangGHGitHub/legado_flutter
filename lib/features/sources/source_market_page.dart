@@ -5,7 +5,6 @@ import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../application/source_market/source_market_mapper.dart';
 import '../../application/source_market/source_market_port.dart';
-import '../../providers/source_provider.dart';
 
 /// 书源市场 - 内置推荐书源，一键导入
 class SourceMarketPage extends StatefulWidget {
@@ -31,54 +30,48 @@ class _SourceMarketPageState extends State<SourceMarketPage> {
 
   @override
   Widget build(BuildContext context) {
-    final sourceProvider = context.read<SourceProvider>();
-    return riverpod.ProviderScope(
-      overrides: [
-        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
-      ],
-      child: riverpod.Consumer(
-        builder: (context, ref, _) {
-          final notifier = ref.read(sourceNotifierProvider.notifier);
-          return Scaffold(
-            appBar: AppBar(
-              title: const Text('书源市场'),
-              actions: [
-                TextButton.icon(
-                  icon: const Icon(Icons.download),
-                  label: const Text('全部导入'),
-                  onPressed: () async {
-                    final market = await _marketFuture;
-                    if (context.mounted) {
-                      await _importAll(context, market, notifier);
-                    }
-                  },
-                ),
-              ],
-            ),
-            body: FutureBuilder<Map<String, List<BookSource>>>(
-              future: _marketFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(child: Text('加载书源失败: ${snapshot.error}'));
-                }
-                final market = snapshot.data ?? {};
-                return ListView(
-                  padding: const EdgeInsets.all(12),
-                  children: market.entries.map((entry) {
-                    return _CategoryGroup(
-                      category: entry.key,
-                      sources: entry.value,
-                    );
-                  }).toList(),
-                );
-              },
-            ),
-          );
-        },
-      ),
+    return riverpod.Consumer(
+      builder: (context, ref, _) {
+        final notifier = ref.read(sourceNotifierProvider.notifier);
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('书源市场'),
+            actions: [
+              TextButton.icon(
+                icon: const Icon(Icons.download),
+                label: const Text('全部导入'),
+                onPressed: () async {
+                  final market = await _marketFuture;
+                  if (context.mounted) {
+                    await _importAll(context, market, notifier);
+                  }
+                },
+              ),
+            ],
+          ),
+          body: FutureBuilder<Map<String, List<BookSource>>>(
+            future: _marketFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('加载书源失败: ${snapshot.error}'));
+              }
+              final market = snapshot.data ?? {};
+              return ListView(
+                padding: const EdgeInsets.all(12),
+                children: market.entries.map((entry) {
+                  return _CategoryGroup(
+                    category: entry.key,
+                    sources: entry.value,
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 

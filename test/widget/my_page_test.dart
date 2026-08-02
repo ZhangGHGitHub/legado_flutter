@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/lifecycle/app_lifecycle_coordinator.dart';
 import 'package:legado_flutter/application/mine/my_page_port.dart';
+import 'package:legado_flutter/application/mine/my_page_notifier.dart';
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import '../helpers/fake_reader_font_port.dart';
 import 'package:provider/provider.dart';
@@ -44,7 +46,12 @@ void main() {
           Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
           Provider<MyPagePort>.value(value: const _FakeMyPagePort()),
         ],
-        child: const MaterialApp(home: MyPage()),
+        child: riverpod.ProviderScope(
+          overrides: [
+            myPagePortProvider.overrideWithValue(const _FakeMyPagePort()),
+          ],
+          child: const MaterialApp(home: MyPage()),
+        ),
       ),
     );
     await tester.pump();
@@ -54,36 +61,37 @@ void main() {
     }
   });
 
-  testWidgets(
-    'MyPage reflects Web service state from the local Riverpod scope',
-    (WidgetTester tester) async {
-      final themeController = ThemeModeController();
-      await themeController.load();
-      await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider.value(value: themeController),
-            ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
-            Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
-            Provider<MyPagePort>.value(
-              value: const _FakeMyPagePort(
-                loadStatus: MyPageWebServiceStatus(
-                  enabled: true,
-                  running: true,
-                  baseUrl: 'http://127.0.0.1:1122',
-                ),
-              ),
-            ),
-          ],
+  testWidgets('MyPage reflects Web service state from the shared controller', (
+    WidgetTester tester,
+  ) async {
+    final themeController = ThemeModeController();
+    await themeController.load();
+    const port = _FakeMyPagePort(
+      loadStatus: MyPageWebServiceStatus(
+        enabled: true,
+        running: true,
+        baseUrl: 'http://127.0.0.1:1122',
+      ),
+    );
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: themeController),
+          ChangeNotifierProvider(create: (_) => AppLifecycleCoordinator()),
+          Provider<ReaderFontPort>.value(value: const _FakeReaderFontPort()),
+          Provider<MyPagePort>.value(value: port),
+        ],
+        child: riverpod.ProviderScope(
+          overrides: [myPagePortProvider.overrideWithValue(port)],
           child: const MaterialApp(home: MyPage()),
         ),
-      );
-      await tester.pump();
-      await tester.pump();
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
 
-      expect(find.text('已开启'), findsOneWidget);
-    },
-  );
+    expect(find.text('已开启'), findsOneWidget);
+  });
 }
 
 class _FakeMyPagePort implements MyPagePort {
