@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -9,6 +10,7 @@ import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/domain/source/book_source_type.dart';
+import '../../application/source_management/source_notifier.dart';
 import '../../domain/ports/book_source_search_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
@@ -27,7 +29,7 @@ import '../../utils/site_busy_guard.dart';
 const Color _kAccentRed = LegadoTokens.sourceDotRed;
 
 /// 书籍详情 — 对齐 Jingshiro BookInfoActivity 截图布局
-class BookInfoPage extends StatefulWidget {
+class BookInfoPage extends StatelessWidget {
   final Book book;
   final bool openReaderImmediately;
 
@@ -38,10 +40,35 @@ class BookInfoPage extends StatefulWidget {
   });
 
   @override
-  State<BookInfoPage> createState() => _BookInfoPageState();
+  Widget build(BuildContext context) {
+    final sourceProvider = context.read<SourceProvider>();
+    return riverpod.ProviderScope(
+      overrides: [
+        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+      ],
+      child: _BookInfoPageBody(
+        book: book,
+        openReaderImmediately: openReaderImmediately,
+      ),
+    );
+  }
 }
 
-class _BookInfoPageState extends State<BookInfoPage> {
+class _BookInfoPageBody extends riverpod.ConsumerStatefulWidget {
+  final Book book;
+  final bool openReaderImmediately;
+
+  const _BookInfoPageBody({
+    required this.book,
+    required this.openReaderImmediately,
+  });
+
+  @override
+  riverpod.ConsumerState<_BookInfoPageBody> createState() =>
+      _BookInfoPageState();
+}
+
+class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   late Book _book;
   bool _isInShelf = false;
   String? _errorMessage;
@@ -56,9 +83,14 @@ class _BookInfoPageState extends State<BookInfoPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _initPage());
   }
 
+  SourceNotifier get _sourceNotifier =>
+      ref.read(sourceNotifierProvider.notifier);
+
+  BookSource? _sourceForBook(Book book) =>
+      _sourceNotifier.findSourceForBook(book);
+
   Future<void> _initPage() async {
     final bookProvider = context.read<BookProvider>();
-    final sourceProvider = context.read<SourceProvider>();
     _coverUrl = _book.coverUrl;
 
     final shelf = bookProvider.findShelfBook(_book);
@@ -72,7 +104,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
 
     if (!mounted) return;
     setState(() => _errorMessage = null);
-    final source = sourceProvider.findSourceForBook(_book);
+    final source = _sourceForBook(_book);
     if (source != null) {
       final cached = bookProvider.currentChapters;
       final sameBook = cached.isNotEmpty && cached.first.bookId == _book.id;
@@ -133,7 +165,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
   }
 
   Future<void> _refreshChapters({bool force = false}) async {
-    final source = context.read<SourceProvider>().findSourceForBook(_book);
+    final source = _sourceForBook(_book);
     if (source == null || !mounted) return;
     try {
       await context.read<BookProvider>().loadChapters(
@@ -154,12 +186,11 @@ class _BookInfoPageState extends State<BookInfoPage> {
     return _coverUrl;
   }
 
-  String _sourceDisplayName() {
+  String _sourceDisplayName(List<BookSource> sources) {
     final sourceUrl = _book.bookSourceUrl;
     if (sourceUrl.isEmpty) return '未知书源';
     try {
-      final sp = context.read<SourceProvider>();
-      for (final s in sp.sources) {
+      for (final s in sources) {
         if (s.bookSourceUrl == sourceUrl) {
           return s.bookSourceName;
         }
@@ -283,7 +314,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
       provider.cancelDownload();
       return;
     }
-    final source = context.read<SourceProvider>().findSourceForBook(_book);
+    final source = _sourceForBook(_book);
     if (source == null) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -458,7 +489,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
     if (provider.currentChapters.isEmpty) {
       if (provider.isLoading || provider.isRefreshingToc) {
         // 等待进行中的合并请求结束
-        final source = context.read<SourceProvider>().findSourceForBook(_book);
+        final source = _sourceForBook(_book);
         if (source != null) {
           try {
             await provider.loadChapters(_book, source: source);
@@ -488,7 +519,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
       onChapterTap: (chapter, {int? pageIndex, int? chapterPos}) async {
         Navigator.pop(context);
         final idx = chapters.indexWhere((c) => c.id == chapter.id);
-        final source = context.read<SourceProvider>().findSourceForBook(_book);
+        final source = _sourceForBook(_book);
         final useManga = source?.isImageSource ?? false;
         await Navigator.push(
           context,
@@ -675,7 +706,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
     final chapterIndex = provider.currentChapters
         .indexWhere((c) => c.id == startChapter.id)
         .clamp(0, provider.currentChapters.length - 1);
-    final source = context.read<SourceProvider>().findSourceForBook(latestBook);
+    final source = _sourceForBook(latestBook);
     final useManga = source?.isImageSource ?? false;
     Navigator.push(
       context,
@@ -703,6 +734,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
 
   @override
   Widget build(BuildContext context) {
+    final sourceState = ref.watch(sourceNotifierProvider);
     final topPad = MediaQuery.paddingOf(context).top;
     const appBarH = kToolbarHeight;
 
@@ -792,7 +824,7 @@ class _BookInfoPageState extends State<BookInfoPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      _buildMetaRows(provider),
+                      _buildMetaRows(provider, sourceState.sources),
                       if (_book.description.trim().isNotEmpty) ...[
                         const SizedBox(height: 8),
                         _buildSynopsis(),
@@ -867,9 +899,9 @@ class _BookInfoPageState extends State<BookInfoPage> {
     );
   }
 
-  Widget _buildMetaRows(BookProvider provider) {
+  Widget _buildMetaRows(BookProvider provider, List<BookSource> sources) {
     final groupLabel = _book.group.isEmpty ? '未分组' : _book.group;
-    final sourceText = '${_originLabel()} ${_sourceDisplayName()}';
+    final sourceText = '${_originLabel()} ${_sourceDisplayName(sources)}';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(

@@ -3399,3 +3399,13 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：三页面定向 `19/19`；Flutter 串行全量 `1071` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断；`scripts/check_architecture_boundaries.ps1` 通过；`git diff --check` 通过，仅有既有 Windows LF/CRLF 提示。
 
 边界结论：本批完成书源编辑、调试和规则订阅页面的 Riverpod 调用边界；其他 Provider 消费者继续按后续批次收敛，不宣称 R1-12、Web/WASM/PWA 或真实 Android TTS 门禁变化。
+
+## 174. 2026-08-03：R6 Provider RSS、搜索探索与书籍换源页面迁移
+
+- `RssTabPage`、`RssFavoritesPage`、`SearchPage`、`ExploreTabPage`、`ExploreListPage`、`BookInfoPage` 和 `ChangeSourcePage` 通过局部 Riverpod `ProviderScope` 复用既有共享 `RssSourceController` 或 `SourceController`；`BookProvider` 仍只负责书籍、章节、阅读和缓存职责。
+- RSS 源筛选/收藏、书源搜索/探索、详情源显示和换源搜索改用对应 Notifier/Controller 状态，保留原版 JSON、搜索范围、分组、收藏、换源和 UI 行为；未注入旧版 `RssProvider` 的图片测试宿主使用空 application controller fallback，不改变生产组合根。
+- 新增并保留页面回归测试，未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：受影响定向 `11/11`；Flutter 串行全量 `1078` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断；`scripts/check_architecture_boundaries.ps1` 通过；`git diff --check` 通过，仅有既有 Windows LF/CRLF 提示。
+
+边界结论：本批完成 RSS、搜索/探索和书籍详情/换源页面的 Provider 消费边界；BookProvider 生产状态迁移及其他服务消费者继续按后续批次收敛，不宣称 R1-12、Web/WASM/PWA 或真实 Android TTS 门禁变化。

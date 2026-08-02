@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
 import '../../application/reader/reader_font_port.dart';
 import '../../application/rss/rss_login_port.dart';
+import '../../application/rss/rss_notifier.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../providers/rss_provider.dart';
 import '../../theme/legado_tokens.dart';
@@ -25,6 +27,25 @@ class RssTabPage extends StatefulWidget {
 }
 
 class RssTabPageState extends State<RssTabPage> {
+  @override
+  Widget build(BuildContext context) {
+    final controller = context.read<RssProvider>().controller;
+    return riverpod.ProviderScope(
+      overrides: [rssSourceControllerProvider.overrideWithValue(controller)],
+      child: const _RssTabPageBody(),
+    );
+  }
+}
+
+class _RssTabPageBody extends riverpod.ConsumerStatefulWidget {
+  const _RssTabPageBody();
+
+  @override
+  riverpod.ConsumerState<_RssTabPageBody> createState() =>
+      _RssTabPageBodyState();
+}
+
+class _RssTabPageBodyState extends riverpod.ConsumerState<_RssTabPageBody> {
   final _searchController = TextEditingController();
 
   @override
@@ -79,7 +100,7 @@ class RssTabPageState extends State<RssTabPage> {
   }
 
   void _showSourceMenu(RssSource source, Offset anchor) {
-    final provider = context.read<RssProvider>();
+    final provider = ref.read(rssNotifierProvider.notifier);
     showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -250,6 +271,7 @@ class RssTabPageState extends State<RssTabPage> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    ref.watch(rssNotifierProvider);
     return Scaffold(
       appBar: AppBar(
         titleSpacing: LegadoTokens.spacingSm,
@@ -266,9 +288,11 @@ class RssTabPageState extends State<RssTabPage> {
             tooltip: '收藏',
             onPressed: _openFavorites,
           ),
-          Consumer<RssProvider>(
-            builder: (context, provider, _) {
-              final groups = provider.enabledGroups();
+          riverpod.Consumer(
+            builder: (context, ref, _) {
+              final groups = ref
+                  .read(rssNotifierProvider.notifier)
+                  .enabledGroups();
               return IconButton(
                 icon: const Icon(Icons.hub_outlined),
                 tooltip: '分组',
@@ -291,11 +315,11 @@ class RssTabPageState extends State<RssTabPage> {
           ),
         ],
       ),
-      body: Consumer<RssProvider>(
-        builder: (context, provider, _) {
-          final sources = provider.enabledSources(
-            searchKey: _searchController.text,
-          );
+      body: riverpod.Consumer(
+        builder: (context, ref, _) {
+          final sources = ref
+              .read(rssNotifierProvider.notifier)
+              .enabledSources(searchKey: _searchController.text);
           return ScrollConfiguration(
             behavior: LegadoScrollBehavior(overscrollColor: scheme.primary),
             child: GridView.builder(

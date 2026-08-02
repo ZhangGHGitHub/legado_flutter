@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../application/search/search_history_port.dart';
+import '../../application/source_management/source_notifier.dart';
 import '../../providers/source_provider.dart';
 import '../../widgets/book_list_tile.dart';
 import '../../widgets/legado_popup_menu.dart';
@@ -11,17 +13,36 @@ import '../../features/book/book_info_page.dart';
 enum _ScopeMode { all, groups, sources }
 
 /// 搜索页面 — 按书源分组 + 精准搜索 + 搜索范围
-class SearchPage extends StatefulWidget {
+class SearchPage extends StatelessWidget {
   const SearchPage({super.key, this.initialRestrictSourceUrls});
 
   /// 非空时锁定为「按书源」并预选（书源编辑页「搜索」入口，对齐单源 scope）
   final Set<String>? initialRestrictSourceUrls;
 
   @override
-  State<SearchPage> createState() => _SearchPageState();
+  Widget build(BuildContext context) {
+    final sourceProvider = context.read<SourceProvider>();
+    return riverpod.ProviderScope(
+      overrides: [
+        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+      ],
+      child: _SearchPageBody(
+        initialRestrictSourceUrls: initialRestrictSourceUrls,
+      ),
+    );
+  }
 }
 
-class _SearchPageState extends State<SearchPage> {
+class _SearchPageBody extends riverpod.ConsumerStatefulWidget {
+  const _SearchPageBody({this.initialRestrictSourceUrls});
+
+  final Set<String>? initialRestrictSourceUrls;
+
+  @override
+  riverpod.ConsumerState<_SearchPageBody> createState() => _SearchPageState();
+}
+
+class _SearchPageState extends riverpod.ConsumerState<_SearchPageBody> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
   List<String> _history = [];
@@ -54,10 +75,10 @@ class _SearchPageState extends State<SearchPage> {
     super.dispose();
   }
 
-  Set<String>? _resolvedScopeUrls(SourceProvider provider) {
+  Set<String>? _resolvedScopeUrls(List<BookSource> sources) {
     if (_scopeMode == _ScopeMode.all || _scopeSourceUrls.isEmpty) {
       if (_scopeMode == _ScopeMode.groups && _selectedGroups.isNotEmpty) {
-        return provider.sources
+        return sources
             .where(
               (s) =>
                   s.enabled &&
@@ -76,7 +97,7 @@ class _SearchPageState extends State<SearchPage> {
     return _scopeSourceUrls;
   }
 
-  String _scopeSummary(SourceProvider provider) {
+  String _scopeSummary() {
     switch (_scopeMode) {
       case _ScopeMode.all:
         return '全部已启用书源';
@@ -94,13 +115,15 @@ class _SearchPageState extends State<SearchPage> {
     if (q.isEmpty) return;
     context.read<SearchHistoryPort>().add(q);
     _loadHistory();
-    final provider = context.read<SourceProvider>();
-    provider.searchAll(
-      q,
-      author: author,
-      preciseName: preciseName,
-      restrictSourceUrls: _resolvedScopeUrls(provider),
-    );
+    final sources = ref.read(sourceNotifierProvider).sources;
+    ref
+        .read(sourceNotifierProvider.notifier)
+        .searchAll(
+          q,
+          author: author,
+          preciseName: preciseName,
+          restrictSourceUrls: _resolvedScopeUrls(sources),
+        );
   }
 
   Widget _buildHistoryBar() {
@@ -161,8 +184,8 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  String _sourceName(SourceProvider provider, String sourceUrl) {
-    for (final s in provider.sources) {
+  String _sourceName(List<BookSource> sources, String sourceUrl) {
+    for (final s in sources) {
       if (s.bookSourceUrl == sourceUrl) {
         return s.bookSourceName;
       }
@@ -224,8 +247,11 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Future<void> _showScopeDialog() async {
-    final provider = context.read<SourceProvider>();
-    final enabled = provider.sources.where((s) => s.enabled).toList();
+    final enabled = ref
+        .read(sourceNotifierProvider)
+        .sources
+        .where((s) => s.enabled)
+        .toList();
     final groups = <String>{
       for (final s in enabled)
         s.bookSourceGroup.isEmpty ? '未分组' : s.bookSourceGroup,
@@ -430,8 +456,9 @@ class _SearchPageState extends State<SearchPage> {
       body: Column(
         children: [
           _buildHistoryBar(),
-          Consumer<SourceProvider>(
-            builder: (context, provider, _) {
+          riverpod.Consumer(
+            builder: (context, ref, _) {
+              ref.watch(sourceNotifierProvider);
               return Material(
                 color: theme.colorScheme.surfaceContainerLow,
                 child: InkWell(
@@ -451,7 +478,7 @@ class _SearchPageState extends State<SearchPage> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            '范围：${_scopeSummary(provider)}',
+                            '范围：${_scopeSummary()}',
                             style: TextStyle(
                               fontSize: 12,
                               color: theme.colorScheme.onSurfaceVariant,
@@ -473,11 +500,13 @@ class _SearchPageState extends State<SearchPage> {
             },
           ),
           Expanded(
-            child: Consumer<SourceProvider>(
-              builder: (context, provider, _) {
-                final hasResults = provider.searchResults.isNotEmpty;
+            child: riverpod.Consumer(
+              builder: (context, ref, _) {
+                final sourceState = ref.watch(sourceNotifierProvider);
+                final sources = sourceState.sources;
+                final hasResults = sourceState.searchResults.isNotEmpty;
 
-                if (provider.isLoading && !hasResults) {
+                if (sourceState.isLoading && !hasResults) {
                   return const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -496,8 +525,8 @@ class _SearchPageState extends State<SearchPage> {
                 }
 
                 if (!hasResults) {
-                  if (provider.statusMessage.isNotEmpty &&
-                      !provider.isLoading) {
+                  if (sourceState.statusMessage.isNotEmpty &&
+                      !sourceState.isLoading) {
                     return Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -509,7 +538,7 @@ class _SearchPageState extends State<SearchPage> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            provider.statusMessage,
+                            sourceState.statusMessage,
                             style: const TextStyle(fontSize: 16),
                           ),
                           const SizedBox(height: 8),
@@ -564,12 +593,12 @@ class _SearchPageState extends State<SearchPage> {
                   );
                 }
 
-                final groups = provider.searchResults.entries.toList()
+                final groups = sourceState.searchResults.entries.toList()
                   ..sort(
                     (a, b) => _sourceName(
-                      provider,
+                      sources,
                       a.key,
-                    ).compareTo(_sourceName(provider, b.key)),
+                    ).compareTo(_sourceName(sources, b.key)),
                   );
 
                 final totalCount = groups.fold<int>(
@@ -580,7 +609,7 @@ class _SearchPageState extends State<SearchPage> {
 
                 return Column(
                   children: [
-                    if (provider.isLoading)
+                    if (sourceState.isLoading)
                       const LinearProgressIndicator(minHeight: 2),
                     Expanded(
                       child: ListView.builder(
@@ -589,7 +618,7 @@ class _SearchPageState extends State<SearchPage> {
                         itemCount: groups.length,
                         itemBuilder: (context, index) {
                           final entry = groups[index];
-                          final name = _sourceName(provider, entry.key);
+                          final name = _sourceName(sources, entry.key);
                           return ExpansionTile(
                             initiallyExpanded: true,
                             title: Text(
@@ -633,7 +662,7 @@ class _SearchPageState extends State<SearchPage> {
                         ),
                       ),
                       child: Text(
-                        provider.isLoading
+                        sourceState.isLoading
                             ? '搜索中… 已找到 $totalCount 本 · $sourceCount 个书源'
                             : '共 $totalCount 本 · $sourceCount 个书源',
                         style: TextStyle(

@@ -389,6 +389,7 @@ Day 2  PR/Issue 模板
 
 2026-08-01 当前 R2 追溯记录：裸 `http_fetch`、网络配置、Cookie 和 HTTP trace 入口统一为 Rust `AppError`，同步更新 FRB 绑定；`cargo test -p legado_engine api:: -- --nocapture` 为 `57/57`，保留网络参数、Cookie 域、限流和 trace 行为。`cargo test -p legado_engine` 为 `202` 通过；Windows FRB HTTP 集成为 `2/2`；Flutter 串行全量为 `894` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界和 `git diff --check` 均通过。QuickJS 超时、统一初始化、编码事实源、书架生产 Riverpod 和其它公开字符串错误入口仍未完成。
 2026-08-03 当前 R6 追溯记录：三个并行开发线完成 `SourceEditorPage`、`SourceDebugPage` 和 `RuleSubPage` 的 Riverpod/Controller 调用边界迁移，主线复核共享控制器、原版行为边界和测试宿主。三页面定向 `19/19`；Flutter 串行全量 `1071` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未修改 Rust 或 `legado-main/`，正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 和暂停平台门禁保持不变。详见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
+2026-08-03 当前 R6 追溯记录：三个并行开发线完成 RSS 消费、搜索/探索和书籍详情/换源页面的 Riverpod/Controller 调用边界迁移，主线修复未注入旧版 `RssProvider` 的图片回归宿主兼容性。受影响定向 `11/11`；Flutter 串行全量 `1078` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未修改 Rust 或 `legado-main/`，正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 和暂停平台门禁保持不变。详见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
 
 ---
 

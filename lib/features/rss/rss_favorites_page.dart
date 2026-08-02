@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
+import '../../application/rss/rss_notifier.dart';
+import '../../application/rss/rss_controller.dart';
 import '../../domain/ports/application_http_request_port.dart';
 import '../../domain/rss/rss_article.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
@@ -11,14 +14,30 @@ import '../../widgets/remote_binary_image.dart';
 import 'rss_read_page.dart';
 
 /// RSS 收藏列表 — 对齐 Jingshiro RssFavorites / RssStar
-class RssFavoritesPage extends StatefulWidget {
+class RssFavoritesPage extends StatelessWidget {
   const RssFavoritesPage({super.key});
 
   @override
-  State<RssFavoritesPage> createState() => _RssFavoritesPageState();
+  Widget build(BuildContext context) {
+    final controller =
+        context.read<RssProvider?>()?.controller ?? RssSourceController();
+    return riverpod.ProviderScope(
+      overrides: [rssSourceControllerProvider.overrideWithValue(controller)],
+      child: const _RssFavoritesPageBody(),
+    );
+  }
 }
 
-class _RssFavoritesPageState extends State<RssFavoritesPage> {
+class _RssFavoritesPageBody extends riverpod.ConsumerStatefulWidget {
+  const _RssFavoritesPageBody();
+
+  @override
+  riverpod.ConsumerState<_RssFavoritesPageBody> createState() =>
+      _RssFavoritesPageBodyState();
+}
+
+class _RssFavoritesPageBodyState
+    extends riverpod.ConsumerState<_RssFavoritesPageBody> {
   List<RssArticle> _items = [];
   var _loading = true;
 
@@ -41,9 +60,10 @@ class _RssFavoritesPageState extends State<RssFavoritesPage> {
 
   RssSource? _findSource(String origin) {
     try {
-      return context.read<RssProvider>().sources.firstWhere(
-        (s) => s.sourceUrl == origin,
-      );
+      return ref
+          .read(rssNotifierProvider)
+          .sources
+          .firstWhere((s) => s.sourceUrl == origin);
     } catch (_) {
       return null;
     }
@@ -69,6 +89,7 @@ class _RssFavoritesPageState extends State<RssFavoritesPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(rssNotifierProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('收藏')),
       body: _loading

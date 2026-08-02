@@ -1,23 +1,45 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
+import '../../application/source_management/source_notifier.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/empty_state.dart';
 
 /// 换源页 — 按书名在启用书源中搜索，选中后更新来源并刷新目录
-class ChangeSourcePage extends StatefulWidget {
+class ChangeSourcePage extends StatelessWidget {
   final Book book;
 
   const ChangeSourcePage({super.key, required this.book});
 
   @override
-  State<ChangeSourcePage> createState() => _ChangeSourcePageState();
+  Widget build(BuildContext context) {
+    final sourceProvider = context.read<SourceProvider>();
+    return riverpod.ProviderScope(
+      overrides: [
+        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+      ],
+      child: _ChangeSourcePageBody(book: book),
+    );
+  }
 }
 
-class _ChangeSourcePageState extends State<ChangeSourcePage> {
+class _ChangeSourcePageBody extends riverpod.ConsumerStatefulWidget {
+  final Book book;
+
+  const _ChangeSourcePageBody({required this.book});
+
+  @override
+  riverpod.ConsumerState<_ChangeSourcePageBody> createState() =>
+      _ChangeSourcePageState();
+}
+
+class _ChangeSourcePageState
+    extends riverpod.ConsumerState<_ChangeSourcePageBody> {
   bool _applying = false;
   String? _applyError;
 
@@ -31,16 +53,17 @@ class _ChangeSourcePageState extends State<ChangeSourcePage> {
     final name = widget.book.name.trim();
     if (name.isEmpty) return;
     final author = widget.book.author.trim();
-    final provider = context.read<SourceProvider>();
-    await provider.searchAll(
-      name,
-      author: author.isNotEmpty && author != '未知作者' ? author : null,
-      preciseName: true,
-    );
+    await ref
+        .read(sourceNotifierProvider.notifier)
+        .searchAll(
+          name,
+          author: author.isNotEmpty && author != '未知作者' ? author : null,
+          preciseName: true,
+        );
   }
 
-  String _sourceName(SourceProvider provider, String sourceUrl) {
-    for (final s in provider.sources) {
+  String _sourceName(List<BookSource> sources, String sourceUrl) {
+    for (final s in sources) {
       if (s.bookSourceUrl == sourceUrl) return s.bookSourceName;
     }
     return Uri.tryParse(sourceUrl)?.host ?? sourceUrl;
@@ -75,8 +98,9 @@ class _ChangeSourcePageState extends State<ChangeSourcePage> {
     });
     try {
       final bookProvider = context.read<BookProvider>();
-      final sourceProvider = context.read<SourceProvider>();
-      final source = sourceProvider.findSourceForBook(selected);
+      final source = ref
+          .read(sourceNotifierProvider.notifier)
+          .findSourceForBook(selected);
       if (source == null) {
         throw StateError('找不到对应书源，请确认书源已启用');
       }
@@ -107,6 +131,7 @@ class _ChangeSourcePageState extends State<ChangeSourcePage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final sourceState = ref.watch(sourceNotifierProvider);
     return Scaffold(
       appBar: AppBar(
         title: Text('换源 · ${widget.book.name}'),
@@ -120,11 +145,11 @@ class _ChangeSourcePageState extends State<ChangeSourcePage> {
       ),
       body: Stack(
         children: [
-          Consumer<SourceProvider>(
-            builder: (context, provider, _) {
-              final hasResults = provider.searchResults.isNotEmpty;
+          Builder(
+            builder: (context) {
+              final hasResults = sourceState.searchResults.isNotEmpty;
 
-              if (provider.isLoading && !hasResults) {
+              if (sourceState.isLoading && !hasResults) {
                 return const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -140,8 +165,8 @@ class _ChangeSourcePageState extends State<ChangeSourcePage> {
               if (!hasResults) {
                 return EmptyState(
                   icon: Icons.search_off,
-                  title: provider.statusMessage.isNotEmpty
-                      ? provider.statusMessage
+                  title: sourceState.statusMessage.isNotEmpty
+                      ? sourceState.statusMessage
                       : '未找到可换源结果',
                   subtitle: '《${widget.book.name}》\n可下拉或点刷新重试',
                   actionLabel: '重新搜索',
@@ -150,7 +175,7 @@ class _ChangeSourcePageState extends State<ChangeSourcePage> {
               }
 
               final flat = <({String sourceUrl, Book book})>[];
-              for (final e in provider.searchResults.entries) {
+              for (final e in sourceState.searchResults.entries) {
                 for (final b in e.value) {
                   flat.add((sourceUrl: e.key, book: b));
                 }
@@ -160,14 +185,14 @@ class _ChangeSourcePageState extends State<ChangeSourcePage> {
                 final cb = _isCurrent(b.book);
                 if (ca != cb) return ca ? -1 : 1;
                 return _sourceName(
-                  provider,
+                  sourceState.sources,
                   a.sourceUrl,
-                ).compareTo(_sourceName(provider, b.sourceUrl));
+                ).compareTo(_sourceName(sourceState.sources, b.sourceUrl));
               });
 
               return Column(
                 children: [
-                  if (provider.isLoading)
+                  if (sourceState.isLoading)
                     const LinearProgressIndicator(minHeight: 2),
                   if (_applyError != null)
                     Material(
@@ -194,7 +219,7 @@ class _ChangeSourcePageState extends State<ChangeSourcePage> {
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        provider.isLoading
+                        sourceState.isLoading
                             ? '搜索中… 已找到 ${flat.length} 个结果'
                             : '共 ${flat.length} 个结果，点选即可换源',
                         style: TextStyle(
@@ -213,7 +238,7 @@ class _ChangeSourcePageState extends State<ChangeSourcePage> {
                         final book = item.book;
                         final current = _isCurrent(book);
                         final sourceName = _sourceName(
-                          provider,
+                          sourceState.sources,
                           item.sourceUrl,
                         );
                         final latest = _latestLine(book);
