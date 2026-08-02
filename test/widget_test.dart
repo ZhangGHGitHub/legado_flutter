@@ -11,7 +11,10 @@ import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/features/bookshelf/bookshelf_page.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
+import 'package:legado_flutter/providers/source_provider.dart';
 import 'helpers/book_source_service_test_factory.dart';
+import 'application/source_management/source_controller_test.dart'
+    as source_fixtures;
 
 void main() {
   SharedPreferences.setMockInitialValues({});
@@ -22,12 +25,20 @@ void main() {
       sourceService: createTestBookSourceService(),
       contentCache: const FileChapterContentCache(),
     );
+    final sourceProvider = SourceProvider(
+      repository: source_fixtures.createRepositoryForNotifierTest(),
+      validationPort: source_fixtures.createValidationPortForNotifierTest(),
+      sourceService: source_fixtures.createSourceServiceForNotifierTest(),
+    );
+    addTearDown(sourceProvider.dispose);
+    await sourceProvider.loadSources();
 
     await tester.pumpWidget(
       MaterialApp(
         home: MultiProvider(
           providers: [
             ChangeNotifierProvider.value(value: bookProvider),
+            ChangeNotifierProvider.value(value: sourceProvider),
             Provider<BookshelfDisplayPrefsPort>.value(
               value: _FakeBookshelfDisplayPrefsPort(),
             ),

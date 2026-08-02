@@ -3429,3 +3429,13 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：受影响定向 `7/7`；Flutter 串行全量 `1083` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断；架构边界脚本和 `git diff --check` 通过。
 
 边界结论：本批完成缓存页、书架整理和书架书单导入页面的 Provider 消费边界；`BookProvider` 生产状态及剩余页面消费者继续作为后续独立批次，不据此宣称 Riverpod 全量迁移完成。
+
+## 177. 2026-08-03：R6 Provider 搜索内容与书架样式迁移
+
+- `SearchContentPage` 通过局部 Riverpod `ProviderScope` 复用共享 `ReplaceController`；替换规则加载和正文净化改由 `ReplaceNotifier` 提供入口，搜索结果、取消、缓存、滚动和异步代数继续保留页面本地状态。
+- `BookshelfStyle1Page`、`BookshelfStyle2Page` 通过局部 Riverpod `ProviderScope` 复用共享 `SourceController`；目录刷新和 source resolver 改用 `SourceNotifier`，`BookProvider` 仍是书籍、分组、排序、目录刷新和持久化的唯一兼容事实源。
+- RemoteBook 本批只完成只读边界审查，确认远程页面状态可独立建模，但本地文件导入和书架入库仍保留在 `BookProvider`；未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+验证结果：受影响定向 `8/8`；Flutter 串行全量 `1086` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断；架构边界脚本和 `git diff --check` 通过。
+
+边界结论：本批完成搜索内容页与两种书架样式的 Provider 消费边界；RemoteBook 状态 Controller、`BookProvider` 生产状态迁移及正文阅读会话继续作为后续独立批次，不据此宣称 Riverpod 全量迁移完成。

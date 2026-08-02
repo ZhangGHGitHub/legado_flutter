@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
@@ -8,6 +9,7 @@ import '../../application/bookshelf/book_group_store_port.dart';
 import '../../application/bookshelf/bookshelf_display_port.dart';
 import '../../application/bookshelf/bookshelf_local_book_port.dart';
 import '../../application/preferences/bookshelf_display_prefs_port.dart';
+import '../../application/source_management/source_notifier.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../theme/legado_chrome.dart';
@@ -160,9 +162,8 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     }
   }
 
-  void _updateToc() {
+  void _updateToc(SourceNotifier sourceNotifier) {
     final provider = context.read<BookProvider>();
-    final sources = context.read<SourceProvider>();
     final books = _processBooks(provider.books);
     if (books.isEmpty) {
       ScaffoldMessenger.of(
@@ -170,7 +171,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
       ).showSnackBar(const SnackBar(content: Text('没有可更新的书籍')));
       return;
     }
-    unawaited(_runTocUpdate(provider, books, sources.findSourceForBook));
+    unawaited(_runTocUpdate(provider, books, sourceNotifier.findSourceForBook));
   }
 
   Future<void> _runTocUpdate(
@@ -205,12 +206,12 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     ).showSnackBar(SnackBar(content: Text('「$label」暂未实现')));
   }
 
-  void _onOverflowSelected(String a) async {
+  void _onOverflowSelected(String a, SourceNotifier sourceNotifier) async {
     if (await BookshelfMenuActions.handle(context, a)) return;
     if (!mounted) return;
     switch (a) {
       case BookshelfOverflowMenu.updateToc:
-        _updateToc();
+        _updateToc(sourceNotifier);
       case BookshelfOverflowMenu.addLocal:
         _addLocalBook();
       case BookshelfOverflowMenu.arrange:
@@ -248,48 +249,60 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<BookProvider>(
-      builder: (context, provider, _) {
-        return Scaffold(
-          appBar: AppBar(
-            titleSpacing: LegadoChrome.appBarTitleStartPaddingOf(context),
-            title: _buildGroupTabs(provider.books),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                tooltip: '刷新',
-                onPressed: _updateToc,
-              ),
-              IconButton(
-                icon: const Icon(Icons.search),
-                tooltip: '联合搜索',
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SearchPage()),
+    final sourceProvider = context.read<SourceProvider>();
+    return riverpod.ProviderScope(
+      overrides: [
+        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+      ],
+      child: riverpod.Consumer(
+        builder: (context, ref, _) {
+          final sourceNotifier = ref.read(sourceNotifierProvider.notifier);
+          return Consumer<BookProvider>(
+            builder: (context, provider, _) {
+              return Scaffold(
+                appBar: AppBar(
+                  titleSpacing: LegadoChrome.appBarTitleStartPaddingOf(context),
+                  title: _buildGroupTabs(provider.books),
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.refresh),
+                      tooltip: '刷新',
+                      onPressed: () => _updateToc(sourceNotifier),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.search),
+                      tooltip: '联合搜索',
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SearchPage()),
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      offset: legadoAppBarPopupOffset(context),
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (value) =>
+                          _onOverflowSelected(value, sourceNotifier),
+                      itemBuilder: (ctx) => [
+                        ...BookshelfOverflowMenu.items(ctx),
+                        CheckedPopupMenuItem(
+                          value: 'show_grouped',
+                          checked: _showGrouped,
+                          child: const Text('按分组显示'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-              PopupMenuButton<String>(
-                offset: legadoAppBarPopupOffset(context),
-                icon: const Icon(Icons.more_vert),
-                onSelected: _onOverflowSelected,
-                itemBuilder: (ctx) => [
-                  ...BookshelfOverflowMenu.items(ctx),
-                  CheckedPopupMenuItem(
-                    value: 'show_grouped',
-                    checked: _showGrouped,
-                    child: const Text('按分组显示'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          body: _buildBody(provider),
-        );
-      },
+                body: _buildBody(provider, sourceNotifier),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildBody(BookProvider provider) {
+  Widget _buildBody(BookProvider provider, SourceNotifier sourceNotifier) {
     if (provider.isLoading && provider.books.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -314,8 +327,9 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     return LegadoRefreshIndicator(
       enabled: books.isNotEmpty,
       onRefreshTriggered: () {
-        final sources = context.read<SourceProvider>();
-        unawaited(_runTocUpdate(provider, books, sources.findSourceForBook));
+        unawaited(
+          _runTocUpdate(provider, books, sourceNotifier.findSourceForBook),
+        );
       },
       child: ScrollConfiguration(
         behavior: LegadoScrollBehavior(

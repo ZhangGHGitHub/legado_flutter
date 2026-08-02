@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
 import '../../application/preferences/search_content_prefs_port.dart';
+import '../../application/replace/replace_notifier.dart';
 import '../../domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../providers/replace_provider.dart';
@@ -11,7 +13,7 @@ import 'search_content_result.dart';
 /// 全文搜索（对齐 `activity_search_content.xml` + SearchContentActivity）
 ///
 /// 范围：当前章、文件缓存章，或按用户选择联网加载全书章节。
-class SearchContentPage extends StatefulWidget {
+class SearchContentPage extends StatelessWidget {
   final String bookId;
   final String bookName;
   final List<Chapter> chapters;
@@ -70,10 +72,58 @@ class SearchContentPage extends StatefulWidget {
   }
 
   @override
-  State<SearchContentPage> createState() => _SearchContentPageState();
+  Widget build(BuildContext context) {
+    final controller = context.read<ReplaceProvider>().controller;
+    return riverpod.ProviderScope(
+      overrides: [replaceRulesControllerProvider.overrideWithValue(controller)],
+      child: _SearchContentPageBody(
+        bookId: bookId,
+        bookName: bookName,
+        chapters: chapters,
+        durChapterIndex: durChapterIndex,
+        currentChapterContent: currentChapterContent,
+        contentCache: contentCache,
+        initialQuery: initialQuery,
+        initialResults: initialResults,
+        initialResultIndex: initialResultIndex,
+        onlineContentLoader: onlineContentLoader,
+      ),
+    );
+  }
 }
 
-class _SearchContentPageState extends State<SearchContentPage> {
+class _SearchContentPageBody extends riverpod.ConsumerStatefulWidget {
+  final String bookId;
+  final String bookName;
+  final List<Chapter> chapters;
+  final int durChapterIndex;
+  final String currentChapterContent;
+  final String? initialQuery;
+  final List<SearchContentResult>? initialResults;
+  final int initialResultIndex;
+  final Future<String?> Function(Chapter chapter)? onlineContentLoader;
+  final ChapterContentCachePort contentCache;
+
+  const _SearchContentPageBody({
+    required this.bookId,
+    required this.bookName,
+    required this.chapters,
+    required this.durChapterIndex,
+    required this.currentChapterContent,
+    required this.contentCache,
+    this.initialQuery,
+    this.initialResults,
+    this.initialResultIndex = 0,
+    this.onlineContentLoader,
+  });
+
+  @override
+  riverpod.ConsumerState<_SearchContentPageBody> createState() =>
+      _SearchContentPageBodyState();
+}
+
+class _SearchContentPageBodyState
+    extends riverpod.ConsumerState<_SearchContentPageBody> {
   late final TextEditingController _queryCtrl;
   final ScrollController _scrollCtrl = ScrollController();
   final List<SearchContentResult> _results = [];
@@ -112,7 +162,7 @@ class _SearchContentPageState extends State<SearchContentPage> {
     _prefs = await context.read<SearchContentPrefsPort>().load();
     if (mounted) setState(() {});
     if (!mounted) return;
-    await context.read<ReplaceProvider>().loadRules();
+    await ref.read(replaceNotifierProvider.notifier).loadRules();
   }
 
   Future<void> _toggleReplace(bool value) async {
@@ -144,7 +194,7 @@ class _SearchContentPageState extends State<SearchContentPage> {
 
   String _prepareContent(String raw) {
     if (!_prefs.enableReplace) return raw;
-    return context.read<ReplaceProvider>().processContent(raw);
+    return ref.read(replaceNotifierProvider.notifier).processContent(raw);
   }
 
   @override
