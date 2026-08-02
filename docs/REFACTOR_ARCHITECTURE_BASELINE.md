@@ -3419,3 +3419,13 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：受影响定向 `8/8`；Flutter 串行全量 `1080` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断；`scripts/check_architecture_boundaries.ps1` 通过；`git diff --check` 通过，仅有既有 Windows LF/CRLF 提示。
 
 边界结论：本批完成书签、RSS 源编辑和书架 URL 导入页面的 Provider 消费边界；BookProvider 生产状态迁移及其他服务消费者继续按后续批次收敛，不宣称 R1-12、Web/WASM/PWA 或真实 Android TTS 门禁变化。
+
+## 176. 2026-08-03：R6 Provider 缓存、书架整理与书单导入迁移
+
+- `CacheBookPage`、`BookshelfArrangePage` 和 `ImportBookshelfDialog` 通过局部 Riverpod `ProviderScope` 复用共享 `SourceController`；书源查找、书源显示和书单导入前选择不再从页面动作直接读取 `SourceProvider` 的兼容状态。
+- `BookProvider` 继续负责书籍、缓存、导入、排序和持久化，未扩大本批写集；测试宿主显式补齐 `SourceProvider`、书架列表、公共文本获取和日志端口，保留原有导入与文件选择回归。
+- 未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。真实 Android TTS、Web/WASM/PWA、R1-12 和其他暂停门禁保持原边界。
+
+验证结果：受影响定向 `7/7`；Flutter 串行全量 `1083` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断；架构边界脚本和 `git diff --check` 通过。
+
+边界结论：本批完成缓存页、书架整理和书架书单导入页面的 Provider 消费边界；`BookProvider` 生产状态及剩余页面消费者继续作为后续独立批次，不据此宣称 Riverpod 全量迁移完成。

@@ -1,11 +1,13 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../application/bookshelf/book_group_store_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_port.dart';
+import '../../application/source_management/source_notifier.dart';
 import '../../domain/book/book_group.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import '../../providers/book_provider.dart';
@@ -16,7 +18,7 @@ import '../../widgets/legado_popup_menu.dart';
 import '../../features/book/book_info_page.dart';
 
 /// 书架整理 — 对齐 legado [BookshelfManageActivity] + `activity_arrange_book.xml`
-class BookshelfArrangePage extends StatefulWidget {
+class BookshelfArrangePage extends StatelessWidget {
   const BookshelfArrangePage({
     super.key,
     this.groupFilter,
@@ -40,10 +42,45 @@ class BookshelfArrangePage extends StatefulWidget {
   final BookGroupStorePort? groupStore;
 
   @override
-  State<BookshelfArrangePage> createState() => _BookshelfArrangePageState();
+  Widget build(BuildContext context) {
+    final sourceProvider = context.read<SourceProvider>();
+    return riverpod.ProviderScope(
+      overrides: [
+        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+      ],
+      child: _BookshelfArrangePageBody(
+        groupFilter: groupFilter,
+        groupLabel: groupLabel,
+        gridLayout: gridLayout,
+        preferences: preferences,
+        groupStore: groupStore,
+      ),
+    );
+  }
 }
 
-class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
+class _BookshelfArrangePageBody extends riverpod.ConsumerStatefulWidget {
+  const _BookshelfArrangePageBody({
+    this.groupFilter,
+    this.groupLabel = '全部',
+    this.gridLayout = false,
+    this.preferences,
+    this.groupStore,
+  });
+
+  final String? groupFilter;
+  final String groupLabel;
+  final bool gridLayout;
+  final BookshelfArrangePort? preferences;
+  final BookGroupStorePort? groupStore;
+
+  @override
+  riverpod.ConsumerState<_BookshelfArrangePageBody> createState() =>
+      _BookshelfArrangePageState();
+}
+
+class _BookshelfArrangePageState
+    extends riverpod.ConsumerState<_BookshelfArrangePageBody> {
   static const _filterAll = '__all__';
   static const _filterLocal = '__local__';
   static const _filterUngrouped = '__ungrouped__';
@@ -163,7 +200,9 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
     if (book.type == 'local' || book.bookSourceUrl.isEmpty) {
       return '本地书籍';
     }
-    final src = context.read<SourceProvider>().findSourceForBook(book);
+    final src = ref
+        .read(sourceNotifierProvider.notifier)
+        .findSourceForBook(book);
     return src?.bookSourceName ?? book.bookSourceUrl;
   }
 
@@ -387,7 +426,7 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
   }
 
   Future<void> _exportAllUseBookSource() async {
-    final sources = context.read<SourceProvider>();
+    final sources = ref.read(sourceNotifierProvider.notifier);
     final used = <String, dynamic>{};
     for (final book in context.read<BookProvider>().books) {
       final src = sources.findSourceForBook(book);
@@ -632,6 +671,7 @@ class _BookshelfArrangePageState extends State<BookshelfArrangePage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(sourceNotifierProvider);
     final visible = _visibleBooks;
     final scheme = Theme.of(context).colorScheme;
     final menuGroups = _groupStore.cached.where((g) => g.show).toList()

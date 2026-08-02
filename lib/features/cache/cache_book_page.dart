@@ -2,10 +2,12 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../application/cache/book_cache_export_port.dart';
+import '../../application/source_management/source_notifier.dart';
 import '../../domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import '../../providers/book_provider.dart';
@@ -15,13 +17,31 @@ import 'download_choice_dialog.dart';
 import 'download_helpers.dart';
 
 /// 离线缓存管理 — 对齐 Jingshiro `CacheActivity` + `item_download`
-class CacheBookPage extends StatefulWidget {
+class CacheBookPage extends StatelessWidget {
   const CacheBookPage({super.key, required this.contentCache});
 
   final ChapterContentCachePort contentCache;
 
   @override
-  State<CacheBookPage> createState() => _CacheBookPageState();
+  Widget build(BuildContext context) {
+    final sourceProvider = context.read<SourceProvider>();
+    return riverpod.ProviderScope(
+      overrides: [
+        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+      ],
+      child: _CacheBookPageBody(contentCache: contentCache),
+    );
+  }
+}
+
+class _CacheBookPageBody extends riverpod.ConsumerStatefulWidget {
+  const _CacheBookPageBody({required this.contentCache});
+
+  final ChapterContentCachePort contentCache;
+
+  @override
+  riverpod.ConsumerState<_CacheBookPageBody> createState() =>
+      _CacheBookPageState();
 }
 
 String _formatBytes(int bytes) {
@@ -48,7 +68,7 @@ class _CacheBookRow {
   String get sizeLabel => _formatBytes(bytes);
 }
 
-class _CacheBookPageState extends State<CacheBookPage> {
+class _CacheBookPageState extends riverpod.ConsumerState<_CacheBookPageBody> {
   final Map<String, _CacheBookRow> _rows = {};
   final Set<String> _selected = {};
   bool _loading = true;
@@ -108,7 +128,9 @@ class _CacheBookPageState extends State<CacheBookPage> {
       return;
     }
 
-    final source = context.read<SourceProvider>().findSourceForBook(book);
+    final source = ref
+        .read(sourceNotifierProvider.notifier)
+        .findSourceForBook(book);
     if (source == null) {
       ScaffoldMessenger.of(
         context,

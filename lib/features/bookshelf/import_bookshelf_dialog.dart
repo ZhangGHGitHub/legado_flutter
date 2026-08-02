@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
 import '../../application/bookshelf/bookshelf_list_port.dart';
 import '../../application/diagnostics/app_log_port.dart';
 import '../../application/platform/clipboard_port.dart';
+import '../../application/source_management/source_notifier.dart';
 import '../../domain/ports/public_text_fetch_port.dart';
 import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 
 /// 导入书单 — 对齐 Jingshiro：粘贴 url/json +「选文件」，按 name/author 精准搜索入库。
-class ImportBookshelfDialog extends StatefulWidget {
+class ImportBookshelfDialog extends StatelessWidget {
   const ImportBookshelfDialog({super.key, this.listPort});
 
   final BookshelfListPort? listPort;
@@ -22,10 +24,29 @@ class ImportBookshelfDialog extends StatefulWidget {
   }
 
   @override
-  State<ImportBookshelfDialog> createState() => _ImportBookshelfDialogState();
+  Widget build(BuildContext context) {
+    final sourceProvider = context.read<SourceProvider>();
+    return riverpod.ProviderScope(
+      overrides: [
+        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+      ],
+      child: _ImportBookshelfDialogBody(listPort: listPort),
+    );
+  }
 }
 
-class _ImportBookshelfDialogState extends State<ImportBookshelfDialog> {
+class _ImportBookshelfDialogBody extends riverpod.ConsumerStatefulWidget {
+  const _ImportBookshelfDialogBody({this.listPort});
+
+  final BookshelfListPort? listPort;
+
+  @override
+  riverpod.ConsumerState<_ImportBookshelfDialogBody> createState() =>
+      _ImportBookshelfDialogState();
+}
+
+class _ImportBookshelfDialogState
+    extends riverpod.ConsumerState<_ImportBookshelfDialogBody> {
   final _controller = TextEditingController();
   bool _busy = false;
   String? _error;
@@ -64,7 +85,7 @@ class _ImportBookshelfDialogState extends State<ImportBookshelfDialog> {
   Future<void> _submit() async {
     final appLog = context.read<AppLogPort>();
     final books = context.read<BookProvider>();
-    final sources = context.read<SourceProvider>().sources;
+    final sources = ref.read(sourceNotifierProvider).sources;
     setState(() {
       _busy = true;
       _error = null;

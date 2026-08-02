@@ -8,8 +8,13 @@ import 'package:legado_flutter/application/bookshelf/book_group_store_port.dart'
 import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_port.dart';
 import 'package:legado_flutter/application/book/book_group_policy.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
+import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/domain/book/book_group.dart';
 import 'package:legado_flutter/database/dao/source_dao.dart';
+import 'package:legado_flutter/domain/repositories/book_repository.dart';
+import 'package:legado_flutter/domain/repositories/book_source_repository.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/infrastructure/engine/frb_book_source_validation_port.dart';
 import 'package:legado_flutter/infrastructure/bookshelf/bookshelf_arrange_port_adapter.dart';
@@ -120,4 +125,154 @@ void main() {
     await preferences.saveOpenBookInfoByTitle(false);
     expect(await preferences.loadOpenBookInfoByTitle(), isFalse);
   });
+
+  testWidgets('arrange page reads source labels from the shared controller', (
+    tester,
+  ) async {
+    final source = BookSource(
+      bookSourceUrl: 'https://source.example',
+      bookSourceName: '共享书源',
+    );
+    final sourceRepository = _MemoryBookSourceRepository([source]);
+    final sourceProvider = SourceProvider(
+      repository: sourceRepository,
+      validationPort: FrbBookSourceValidationPort(),
+      sourceService: createTestBookSourceService(),
+    );
+    await sourceProvider.loadSources();
+
+    final bookProvider = BookProvider(
+      repository: _MemoryBookRepository(),
+      contentCache: const FileChapterContentCache(),
+      sourceService: createTestBookSourceService(),
+    );
+    await bookProvider.addBook(
+      Book(
+        id: 'https://source.example/book-1',
+        name: '测试书',
+        author: '作者',
+        sourceUrl: 'https://source.example/book-1',
+        bookSourceUrl: source.bookSourceUrl,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+          ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
+        ],
+        child: MaterialApp(
+          home: BookshelfArrangePage(
+            preferences: _FakeBookshelfArrangePrefs(),
+            groupStore: _FakeBookGroupStore(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('共享书源'), findsOneWidget);
+
+    await sourceProvider.updateSource(
+      source.copyWith(bookSourceName: '更新后的书源'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('更新后的书源'), findsOneWidget);
+  });
+}
+
+final class _MemoryBookSourceRepository implements BookSourceRepository {
+  _MemoryBookSourceRepository(Iterable<BookSource> initial)
+    : sources = List<BookSource>.of(initial);
+
+  final List<BookSource> sources;
+
+  @override
+  Future<void> upsert(BookSource source) async {
+    await update(source);
+  }
+
+  @override
+  Future<void> upsertAll(List<BookSource> values) async {
+    for (final source in values) {
+      await update(source);
+    }
+  }
+
+  @override
+  Future<void> update(BookSource source) async {
+    final index = sources.indexWhere(
+      (value) => value.bookSourceUrl == source.bookSourceUrl,
+    );
+    if (index < 0) {
+      sources.add(source);
+    } else {
+      sources[index] = source;
+    }
+  }
+
+  @override
+  Future<List<BookSource>> getAll() async => List.unmodifiable(sources);
+
+  @override
+  Future<List<BookSource>> getEnabled() async =>
+      sources.where((source) => source.enabled).toList();
+
+  @override
+  Future<void> toggle(String url, bool enabled) async {
+    final source = sources.firstWhere((value) => value.bookSourceUrl == url);
+    await update(source.copyWith(enabled: enabled));
+  }
+
+  @override
+  Future<void> delete(String url) async {
+    sources.removeWhere((source) => source.bookSourceUrl == url);
+  }
+}
+
+final class _MemoryBookRepository implements BookRepository {
+  final books = <String, Book>{};
+
+  @override
+  Future<void> insert(Book book) async => books[book.id] = book;
+
+  @override
+  Future<List<Book>> getAll() async => List.unmodifiable(books.values);
+
+  @override
+  Future<void> updateProgress(
+    String bookId,
+    double progress,
+    String? chapter, {
+    int pageIndex = 0,
+  }) async {}
+
+  @override
+  Future<void> delete(String bookId) async => books.remove(bookId);
+
+  @override
+  Future<void> updateCover(String bookId, String coverUrl) async {}
+
+  @override
+  Future<void> updateGroup(String bookId, String group) async {
+    final book = books[bookId];
+    if (book != null) books[bookId] = book.copyWith(group: group);
+  }
+
+  @override
+  Future<void> insertChapters(List<Chapter> chapters) async {}
+
+  @override
+  Future<List<Chapter>> getChapters(String bookId) async => const [];
+
+  @override
+  Future<String?> getChapterContent(String chapterId) async => null;
+
+  @override
+  Future<void> saveChapterContent(String chapterId, String content) async {}
+
+  @override
+  Future<void> clearChapterContent(Chapter chapter) async {}
 }

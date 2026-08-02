@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/application/bookshelf/bookshelf_list_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/ports/public_text_fetch_port.dart';
 import 'package:legado_flutter/features/bookshelf/import_bookshelf_dialog.dart';
+import 'package:legado_flutter/providers/source_provider.dart';
+
+import '../../application/source_management/source_controller_test.dart'
+    as source_fixtures;
 
 final class _FakeBookshelfListPort implements BookshelfListPort {
   @override
@@ -29,10 +34,20 @@ void main() {
   testWidgets('uses the bookshelf list port for file selection', (
     tester,
   ) async {
+    final sourceProvider = SourceProvider(
+      repository: source_fixtures.createRepositoryForNotifierTest(),
+      validationPort: source_fixtures.createValidationPortForNotifierTest(),
+      sourceService: source_fixtures.createSourceServiceForNotifierTest(),
+    );
+    await sourceProvider.loadSources();
+
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: ImportBookshelfDialog(listPort: _FakeBookshelfListPort()),
+      ChangeNotifierProvider<SourceProvider>.value(
+        value: sourceProvider,
+        child: MaterialApp(
+          home: Scaffold(
+            body: ImportBookshelfDialog(listPort: _FakeBookshelfListPort()),
+          ),
         ),
       ),
     );
