@@ -1,62 +1,50 @@
-import 'dart:io';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
+import '../../domain/book/book.dart';
+import '../../domain/repositories/book_source_repository.dart';
+import '../../domain/source/book_source.dart';
+import '../../domain/source/source_validation_result.dart';
+import 'source_controller.dart';
+import 'source_state.dart';
 
-import 'package:legado_flutter/application/source_login/source_login_page_port.dart';
-import 'package:legado_flutter/application/source_management/source_controller.dart';
-import 'package:legado_flutter/application/source_management/source_group_catalog_port.dart';
-import 'package:legado_flutter/application/source_management/source_management_book_source_port.dart';
-import 'package:legado_flutter/application/source_rules/check_source_prefs_port.dart';
-import 'package:legado_flutter/application/source_validation/source_validation_store_port.dart';
-import 'package:legado_flutter/domain/book/book.dart';
-import 'package:legado_flutter/domain/ports/book_source_validation_port.dart';
-import 'package:legado_flutter/domain/repositories/book_source_repository.dart';
-import 'package:legado_flutter/domain/source/book_source.dart';
-import 'package:legado_flutter/domain/source/source_validation_result.dart';
+/// Riverpod 迁移期间由组合根提供的共享书源控制器。
+final sourceControllerProvider = Provider<SourceController>(
+  (ref) => throw StateError('未提供 SourceController'),
+);
 
-/// 书源管理的 ChangeNotifier 兼容外观。
-///
-/// 业务状态由 [SourceController] 唯一持有。旧 Provider、Riverpod
-/// Notifier 和仍未迁移的消费者都监听同一份状态，迁移期间不会出现双份书源列表。
-class SourceProvider extends ChangeNotifier {
-  SourceProvider({
-    required BookSourceRepository repository,
-    required BookSourceValidationPort validationPort,
-    required SourceManagementBookSourcePort sourceService,
-    SourceLoginPagePort? loginPort,
-    CheckSourcePrefsPort? checkSourcePrefsPort,
-    SourceGroupCatalogPort? sourceGroupPort,
-    SourceValidationStorePort? validationStorePort,
-    Future<List<BookSource>> Function()? builtInSourcesLoader,
-  }) : _controller = SourceController(
-         repository: repository,
-         validationPort: validationPort,
-         sourceService: sourceService,
-         loginPort: loginPort,
-         checkSourcePrefsPort: checkSourcePrefsPort,
-         sourceGroupPort: sourceGroupPort,
-         validationStorePort: validationStorePort,
-         builtInSourcesLoader: builtInSourcesLoader,
-       ) {
-    _controller.addListener(_onControllerStateChanged);
-  }
+/// 书源管理的 Riverpod 状态入口。
+final sourceNotifierProvider = NotifierProvider<SourceNotifier, SourceState>(
+  SourceNotifier.new,
+);
 
-  final SourceController _controller;
+/// 只发布共享控制器状态，并转发书源管理命令。
+class SourceNotifier extends Notifier<SourceState> {
+  late SourceController _controller;
 
-  SourceController get controller => _controller;
-
-  List<BookSource> get sources => _controller.sources;
-  BookSourceRepository get repository => _controller.repository;
-  Map<String, List<Book>> get searchResults => _controller.searchResults;
+  List<BookSource> get sources => state.sources;
+  Map<String, List<Book>> get searchResults => state.searchResults;
   Map<String, SourceValidationResult> get validationResults =>
-      _controller.validationResults;
-  bool get isLoading => _controller.isLoading;
-  bool get isValidating => _controller.isValidating;
-  String? get validatingSourceUrl => _controller.validatingSourceUrl;
-  String get statusMessage => _controller.statusMessage;
-  String? get loadError => _controller.loadError;
+      state.validationResults;
+  Map<String, String> get validationProgress => state.validationProgress;
+  bool get isLoading => state.isLoading;
+  bool get isValidating => state.isValidating;
+  String? get validatingSourceUrl => state.validatingSourceUrl;
+  String get statusMessage => state.statusMessage;
+  String? get loadError => state.loadError;
   List<String> get knownGroups => _controller.knownGroups;
+  BookSourceRepository get repository => _controller.repository;
+
+  @override
+  SourceState build() {
+    _controller = ref.watch(sourceControllerProvider);
+    void onStateChanged(SourceState next) {
+      state = next;
+    }
+
+    _controller.addListener(onStateChanged);
+    ref.onDispose(() => _controller.removeListener(onStateChanged));
+    return _controller.state;
+  }
 
   SourceValidationResult? validationOf(String sourceUrl) =>
       _controller.validationOf(sourceUrl);
@@ -89,22 +77,6 @@ class SourceProvider extends ChangeNotifier {
 
   Future<bool> importSourcesFromUrl(String url) =>
       _controller.importSourcesFromUrl(url);
-
-  /// 旧文件导入入口保留在兼容外观，平台文件选择不进入 application 层。
-  Future<void> importSourcesFromFile() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['json'],
-      );
-      if (result == null || result.files.isEmpty) return;
-      final path = result.files.single.path;
-      if (path == null) return;
-      await _controller.importSources(await File(path).readAsString());
-    } catch (error) {
-      debugPrint('  ✗ 文件导入失败: $error');
-    }
-  }
 
   Future<void> toggleSource(String sourceUrl, bool enabled) =>
       _controller.toggleSource(sourceUrl, enabled);
@@ -191,15 +163,4 @@ class SourceProvider extends ChangeNotifier {
     keyword: keyword,
     onProgress: onProgress,
   );
-
-  static List<dynamic>? extractSourceListFromDecoded(dynamic decoded) =>
-      SourceController.extractSourceListFromDecoded(decoded);
-
-  void _onControllerStateChanged(_) => notifyListeners();
-
-  @override
-  void dispose() {
-    _controller.removeListener(_onControllerStateChanged);
-    super.dispose();
-  }
 }

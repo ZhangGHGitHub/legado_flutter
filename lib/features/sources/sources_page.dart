@@ -5,9 +5,11 @@ import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
 import '../../application/source_management/source_management_prefs_port.dart';
+import '../../application/source_management/source_notifier.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
@@ -35,14 +37,27 @@ enum _SourceSort { manual, auto, name, url, enabled, lastUpdate, respondTime }
 
 /// 书源管理 — 对齐 Jingshiro [BookSourceActivity] /
 /// `activity_book_source.xml` + `item_book_source.xml` + `menu/book_source.xml`
-class SourcesPage extends StatefulWidget {
+class SourcesPage extends StatelessWidget {
   const SourcesPage({super.key});
 
   @override
-  State<SourcesPage> createState() => _SourcesPageState();
+  Widget build(BuildContext context) {
+    final controller = context.read<SourceProvider>().controller;
+    return riverpod.ProviderScope(
+      overrides: [sourceControllerProvider.overrideWithValue(controller)],
+      child: const _SourcesPageBody(),
+    );
+  }
 }
 
-class _SourcesPageState extends State<SourcesPage> {
+class _SourcesPageBody extends StatefulWidget {
+  const _SourcesPageBody();
+
+  @override
+  State<_SourcesPageBody> createState() => _SourcesPageState();
+}
+
+class _SourcesPageState extends State<_SourcesPageBody> {
   late final SourceManagementPrefsPort _managementPrefs;
   static const _checkboxLaneWidth = 48.0;
   static const _edgeScrollZone = 48.0;
@@ -1018,9 +1033,11 @@ class _SourcesPageState extends State<SourcesPage> {
             ],
           ),
           // 分组筛选 — menu_group
-          Consumer<SourceProvider>(
-            builder: (context, provider, _) {
-              final groups = _allGroups(provider);
+          riverpod.Consumer(
+            builder: (context, ref, _) {
+              final groups = ref
+                  .read(sourceNotifierProvider.notifier)
+                  .knownGroups;
               return PopupMenuButton<String>(
                 tooltip: '分组',
                 icon: const Icon(Icons.hub_outlined),
@@ -1121,18 +1138,18 @@ class _SourcesPageState extends State<SourcesPage> {
           ),
         ],
       ),
-      body: Consumer<SourceProvider>(
-        builder: (context, provider, _) {
-          final sources = provider.sources;
+      body: riverpod.Consumer(
+        builder: (context, ref, _) {
+          final state = ref.watch(sourceNotifierProvider);
+          final provider = context.read<SourceProvider>();
+          final sources = state.sources;
 
-          if (provider.isLoading &&
-              sources.isEmpty &&
-              provider.loadError == null) {
+          if (state.isLoading && sources.isEmpty && state.loadError == null) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (provider.loadError != null && sources.isEmpty) {
+          if (state.loadError != null && sources.isEmpty) {
             return ErrorView(
-              message: provider.loadError!,
+              message: state.loadError!,
               onRetry: () => provider.loadSources(),
             );
           }

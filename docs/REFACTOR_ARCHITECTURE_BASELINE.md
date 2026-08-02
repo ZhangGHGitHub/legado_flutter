@@ -6,6 +6,16 @@
 
 > 2026-08-02 Phase 3 Rust DTO 状态：Rust `BookSourceDto` 已提供与 Flutter `BookSource` 对齐的 camelCase serde 投影，`rawSourceJson` 完整保留，`rulePageNext` 回退顺序由测试固定。`BookDto` 已接入 `get_books_json()`，完整字段、默认值、`readConfig`、阅读位置和时间输出由定向测试固定；两者均未新增 FFI 入口，现有 `db_get_books()` 继续输出 `Vec<String>`。DTO 定向 `3/3`、Rust 全量 `265/265` 通过；生产 typed FFI 联调和其余手写模型仍未完成。
 
+> 2026-08-03 Phase 4/R6 当前 owner 状态：SourceProvider 第三批已完成共享 application 状态层和 SourcesPage 状态订阅迁移。`SourceState` 使用 Freezed 并对列表、Map 及嵌套结果做防御性不可变快照；`SourceController` 统一承载书源 CRUD、分组、JSON/URL 导入、搜索、图片请求头和校验，并以请求序号阻止旧 load/search/validate 结果覆盖新状态，内置源初始化使用 single-flight。旧 `SourceProvider` 仅作为共享 controller 的 ChangeNotifier 兼容外观，`importSourcesFromFile` 的平台文件选择仍留在兼容入口；`SourcesPage` 通过局部 `ProviderScope` 读取 Riverpod 状态，选择/排序/分享和未迁移子页不变。controller/Notifier/Provider 兼容定向 `25/25`、source Feature/Widget `10/10`、Flutter 全量 `1066`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。`SearchPage`、探索、书架/阅读器、启动任务和规则订阅仍使用兼容外观，R6 尚未全量退出。
+
+## 190. 2026-08-03：SourceProvider 共享状态与 SourcesPage 首条 Riverpod 迁移
+
+- 新增 `SourceState`、`SourceController` 和 `SourceNotifier`，将书源加载、CRUD、分组、JSON/URL 导入、搜索、图片请求头和校验状态统一放入 application 层；请求序号保护 load/search/validate 竞态，内置书源初始化使用 single-flight，状态对外暴露不可变列表、Map 和嵌套搜索结果。
+- `SourceProvider` 改为共享 controller 的 ChangeNotifier 兼容外观，保留构造参数、公开方法、静态 JSON 提取入口和平台文件导入；`SourcesPage` 以 `SourceProvider.controller` 覆盖局部 Riverpod ProviderScope，业务状态从 `SourceNotifier` 订阅。未迁移的搜索、探索、书架/阅读器、启动任务、规则订阅和平台文件选择继续走兼容边界。
+- 修复两个兼容契约：无活动加载时取消请求不产生额外空状态通知；校验持久化失败时保留成功的内存校验结果并返回既有 `null` 结果。未修改 `legado-main/`、Room 导入、正文、目录、分页、章节身份、UTF-16 位置或第 3 条断行规则。
+
+验证记录：Source controller/Notifier/Provider 兼容定向 `25/25`、source Feature/Widget 定向 `10/10`、`flutter test --no-pub --concurrency=1 --reporter compact` 为 `1066` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。该批不代表 Source 全链路或 R6 阶段退出。
+
 ## 188. 2026-08-03：ReplaceProvider 首条生产 Riverpod 状态迁移
 
 - 新增 application 层 `ReplaceState` 和 `ReplaceRulesController`，将规则 CRUD、内置规则初始化、按 pattern 去重、正文处理和预览统一放在共享控制器；规则列表通过 Freezed 状态保持不可变。
