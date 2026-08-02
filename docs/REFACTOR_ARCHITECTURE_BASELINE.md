@@ -14,6 +14,14 @@
 
 验证记录：替换控制器/Notifier/Provider 定向 `5/5`、Flutter 串行全量 `1057`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。Riverpod 生产页面并未全量迁移，R6 阶段退出条件不因本批改变。
 
+## 189. 2026-08-03：RSS 源管理首条生产 Riverpod 状态迁移
+
+- 新增 application 层 `RssState` 与 `RssSourceController`，承载 RSS 源加载、持久化、导入、删除、启用、置顶、分组筛选和管理排序；Freezed 状态对外暴露不可变源列表。
+- 新增 `RssNotifier`，`RssSourceManagePage` 通过局部 `ProviderScope` 使用 Riverpod 状态；旧 `RssProvider` 与 Notifier 共享控制器，`RssTabPage`、启动任务和订阅适配器继续使用兼容外观。
+- 未修改 `legado-main/`、RSS 文章正文处理、Room 导入、正文算法、目录顺序、分页、章节身份、UTF-16 位置或第 3 条断行规则。
+
+验证记录：RSS 控制器/Notifier/Provider/页面定向 `9/9`、Flutter 串行全量 `1060`（`3` 项既有条件跳过）通过；`flutter analyze --no-pub`、架构边界和 `git diff --check` 在最终源码与文档复核后执行。
+
 ## 187. 2026-08-02：R1-12 Room 快照与导入并发一致性复核
 
 - Room v99 源库 probe、schema 和逐表读取统一在单一 SQLite 只读事务中完成，避免并发写入造成跨提交混合快照。

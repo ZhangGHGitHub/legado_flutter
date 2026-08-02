@@ -1,32 +1,35 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../application/rss/rss_controller.dart';
-import '../application/rss/rss_source_store_port.dart';
-import '../domain/ports/rss_source_import_port.dart';
-import 'package:legado_flutter/domain/rss/rss_source.dart';
+import '../../domain/rss/rss_source.dart';
+import 'rss_controller.dart';
+import 'rss_state.dart';
 
-/// RSS 订阅源管理的 ChangeNotifier 兼容外观。
-///
-/// 新页面使用 application 层控制器/Notifier；旧页面、启动任务和服务仍可
-/// 通过此外观保留原有调用签名，迁移期间两者共享同一份状态。
-class RssProvider extends ChangeNotifier {
-  RssProvider({
-    RssSourceImportPort? sourceImportPort,
-    RssSourceStorePort? sourceStore,
-    RssSourceController? controller,
-  }) : _controller =
-           controller ??
-           RssSourceController(
-             sourceImportPort: sourceImportPort,
-             sourceStore: sourceStore,
-           ) {
-    _controller.addListener(_onControllerStateChanged);
+/// RSS 页面局部覆盖的共享控制器入口。
+final rssSourceControllerProvider = Provider<RssSourceController>(
+  (ref) => throw StateError('未提供 RssSourceController'),
+);
+
+final rssNotifierProvider = NotifierProvider<RssNotifier, RssState>(
+  RssNotifier.new,
+);
+
+/// RSS 源管理页面的 Riverpod 状态入口。
+class RssNotifier extends Notifier<RssState> {
+  late RssSourceController _controller;
+
+  List<RssSource> get sources => state.sources;
+
+  @override
+  RssState build() {
+    _controller = ref.watch(rssSourceControllerProvider);
+    void onStateChanged(RssState next) {
+      state = next;
+    }
+
+    _controller.addListener(onStateChanged);
+    ref.onDispose(() => _controller.removeListener(onStateChanged));
+    return _controller.state;
   }
-
-  final RssSourceController _controller;
-
-  RssSourceController get controller => _controller;
-  List<RssSource> get sources => _controller.sources;
 
   Future<void> loadSources() => _controller.loadSources();
 
@@ -68,12 +71,4 @@ class RssProvider extends ChangeNotifier {
 
   Future<void> deleteSource(RssSource source) =>
       _controller.deleteSource(source);
-
-  void _onControllerStateChanged(_) => notifyListeners();
-
-  @override
-  void dispose() {
-    _controller.removeListener(_onControllerStateChanged);
-    super.dispose();
-  }
 }
