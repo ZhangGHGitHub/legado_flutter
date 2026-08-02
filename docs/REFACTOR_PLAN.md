@@ -40,6 +40,8 @@
 2026-08-02 R1-12 真实 Android Room v99 证据：使用 `emulator-5556` 上原版 `io.legado.app.debug` `3.26.072317debug` 的真实 `databases/legado.db`，确认 `user_version=99`、identity hash 正确，源数据包含 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`。重构版 all-phase smoke 通过，覆盖真实字段映射、876 个章节 UTF-16 FNV-1a ID、持久化、重复导入幂等、`backupPath=null` 和备份恢复；命令为 `flutter test --no-pub integration_test/r1_android_room_import_smoke_test.dart -d emulator-5556`，结果 `1/1`。本条关闭“真实非空 Room 数据库证据缺失”这一子项，但不关闭 R1-12；`readRecord` 产品统计语义和非核心表业务化仍保持 archive-only 边界。
 2026-08-02 R1-12 当前 owner 汇总：Room 定向 `29/29`、Rust 全量 `262/262`、Flutter 导入/备份定向 `17/17`、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 全部通过；真实 Android 非空数据库证据已由 `emulator-5556` 完成。根据已确认的产品决策，六张核心表导入后直接可用，`readRecord` 和非核心表无损 archive-only 保存，导入前备份沿用 JSON 逻辑备份。R1-12 按该边界完成，不将 archive-only 表宣称为 Rust v17 业务表；后续可按计划进入下一阶段。
 
+2026-08-02 Phase 3/5 并行架构批次：ReadStyleConfig、BookmarkSnapshot、NoteSnapshot 改为 Freezed 值对象，保持现有 JSON 默认值、构造参数、copyWith 和主题导入行为；init_engine 公开 FFI 错误边界统一为 AppError，保持调用签名与错误原文；QuickJS java.ajax 宿主请求增加独立客户端、5 秒 deadline、future 取消和连接回收，并以独立 Tokio Runtime 的慢响应 fixture 验证 Windows 连接关闭。验证：Rust 全量 268/268、Flutter 全量 934（3 项既有条件跳过）、flutter analyze --no-pub、架构边界检查和 git diff --check 通过。未覆盖 getStrResponse、WebView 宿主同步阻塞、业务页面整体 Riverpod 迁移、编码统一及暂停中的 Web/WASM/PWA、真实 Android TTS；不改变 Room 导入、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
 ### 0.0.1 设计稿收敛顺序
 
 后续实现按以下顺序推进，每一项必须先补契约和测试，再迁移生产调用者；不得通过放宽断言或跳过测试关闭缺口：

@@ -4,6 +4,8 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/Phase 3/5 并行批次：ReadStyleConfig、BookmarkSnapshot、NoteSnapshot 改为 Freezed 值对象，保留 JSON 默认值、构造参数、copyWith 和主题导入行为；init_engine 公开 FFI 错误统一为 AppError，FRB 生成绑定同步更新；QuickJS java.ajax 使用独立客户端和 5 秒 deadline，超时取消请求 future 并回收连接。新增模型、FFI 和 Windows 慢响应连接回归；Rust 全量 268/268、Flutter 全量 934（3 项既有条件跳过）、flutter analyze --no-pub 通过。getStrResponse、WebView 宿主阻塞、Riverpod 生产页面、编码统一和暂停平台仍未完成；不改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
 - 架构/Phase 3 阅读统计模型：`BookReadingStats`、`ReadingStats`、`DailyReadingStat` 改为 Freezed；新增值语义契约，`BookReadingStats.readingDays` 默认 `0` 并由 FRB 书票适配器原样转发 Rust 值。定向 `12/12`、Flutter 全量 `925`（`3` 项既有条件跳过）通过；不改变统计查询、页面计算或正文行为。
 - 架构/Phase 3 替换规则模型：`ReplaceRule` 改为 Freezed 值对象，保留旧 JSON 默认值、构造参数与 `toJson` 输出，新增值相等和 `copyWith` 契约测试。替换规则定向 `11/11`、Flutter 全量 `923`（`3` 项既有条件跳过）通过；不改变替换规则匹配、正文净化、断行、第 3 条断行规则或 Rust FFI。
 - 架构/Phase 3 Rust 书籍 DTO：新增 `BookDto` camelCase serde 投影，`get_books_json()` 改为通过 DTO 输出，保留 `db_get_books()` 的 `Vec<String>` FRB/Flutter 兼容接口。新增 DTO serde 与完整数据库行映射测试，覆盖 `readConfig`、阅读位置、模拟阅读和 `updatedAt`；定向 `3/3`、Rust 全量 `265/265`、Flutter 全量 `922`（`3` 项既有条件跳过）通过。本批未新增 typed FFI，不改变 Room 导入、正文、目录、分页、章节身份或 UTF-16 阅读位置。

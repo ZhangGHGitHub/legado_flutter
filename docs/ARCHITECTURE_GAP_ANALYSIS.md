@@ -23,6 +23,13 @@
 | CI | 已新增 Rust/Flutter/架构边界 push/PR workflow；Apple workflow 保留 | 部分完成 | GitHub runner 首次真实执行并补平台矩阵 |
 | 多平台完整验收 | Android/Windows 有证据；Web/WASM/PWA 等暂停 | 未完成 | 依平台条件逐项验收 |
 
+## 2026-08-02 并行架构批次
+
+- Phase 3：ReadStyleConfig、BookmarkSnapshot、NoteSnapshot 迁移为 Freezed 值对象，保留 JSON 与兼容构造行为。
+- Phase 2：init_engine 的公开 FRB 错误改为 AppError，新增生成绑定错误解码契约。
+- Phase 5：java.ajax 使用独立 HTTP 客户端和 deadline；超时会取消请求 future，并在专用 Runtime 退出时回收连接。getStrResponse 与 WebView 宿主仍未覆盖。
+- 验证：Rust 268/268、Flutter 934（3 项既有条件跳过）、flutter analyze --no-pub 已通过；架构扫描和 git diff --check 在本批文档更新后复核。
+
 ## 不得改变的行为契约
 
 架构迁移不得改变正文内容、目录顺序、章节身份、分页、UTF-16 阅读位置和原版第 3 条断行规则。每次迁移必须先有定向回归，再运行对应全量门禁。

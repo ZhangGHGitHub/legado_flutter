@@ -29,7 +29,7 @@ pub fn init_app() {
 
 /// 初始化 Rust 书源引擎
 #[frb(sync)]
-pub fn init_engine() -> Result<(), String> {
+pub fn init_engine() -> Result<(), AppError> {
     Ok(())
 }
 
@@ -758,6 +758,19 @@ mod eval_js_tests {
             AppError::JsExecution(ref message)
                 if message.contains("JS 执行失败") && message.contains("原始 JS 错误")
         ));
+    }
+}
+
+#[cfg(test)]
+mod init_engine_tests {
+    use super::{init_engine, AppError};
+
+    #[test]
+    fn init_engine_keeps_success_and_exposes_structured_error_type() {
+        fn assert_error_type(_: Result<(), AppError>) {}
+
+        assert_error_type(init_engine());
+        init_engine().expect("引擎初始化应保持成功");
     }
 }
 

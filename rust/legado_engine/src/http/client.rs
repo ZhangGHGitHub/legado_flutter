@@ -10,6 +10,7 @@ use reqwest::header::{
 use reqwest::{Client, ClientBuilder, Method, Proxy};
 use serde::Serialize;
 use std::collections::HashMap;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -89,6 +90,19 @@ fn trace_url(raw: &str) -> String {
 /// 单次书源响应上限，避免异常站点或错误 URL 无限占用内存。
 pub(crate) const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 
+/// 在宿主同步桥接中为单次 HTTP future 设定 deadline。
+///
+/// `tokio::time::timeout` 超时时会 drop 该 future，因此 reqwest 请求、响应体和
+/// host permit 会在当前 runtime 中一并释放，而不是留下后台工作线程。
+async fn with_host_http_deadline<T>(
+    timeout: Duration,
+    operation: impl Future<Output = Result<T, String>>,
+) -> Result<T, String> {
+    tokio::time::timeout(timeout, operation)
+        .await
+        .map_err(|_| format!("JS 宿主 HTTP 请求超时（超过 {} 毫秒）", timeout.as_millis()))?
+}
+
 fn build_http_client(cfg: &NetworkConfig) -> Client {
     let builder = Client::builder()
         // 网络代理只由 legado 的 NetworkConfig 控制，避免继承机器环境代理干扰离线测试。
@@ -108,6 +122,42 @@ fn build_http_client(cfg: &NetworkConfig) -> Client {
     apply_network_proxy(builder, cfg)
         .build()
         .expect("failed to build HTTP client")
+}
+
+/// 为 QuickJS 同步宿主调用构造独立客户端。
+///
+/// 宿主 deadline 到达后会丢弃整个客户端和请求 future；禁用空闲连接池可确保
+/// 未完成请求不会由共享客户端在后台继续持有 socket。
+fn build_host_http_client(deadline: Duration) -> Result<Client, String> {
+    build_host_http_client_with_builder(
+        Client::builder(),
+        &network_config::get_network_config(),
+        deadline,
+    )
+}
+
+fn build_host_http_client_with_builder(
+    builder: ClientBuilder,
+    cfg: &NetworkConfig,
+    deadline: Duration,
+) -> Result<Client, String> {
+    let builder = builder
+        .no_proxy()
+        .timeout(deadline)
+        .connect_timeout(Duration::from_secs(15).min(deadline))
+        .pool_max_idle_per_host(0)
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() >= 5 {
+                return attempt.error("重定向次数过多");
+            }
+            if let Err(error) = super::ssrf::assert_public_http_url(attempt.url().as_str()) {
+                return attempt.error(error);
+            }
+            attempt.follow()
+        }));
+    apply_network_proxy(builder, cfg)
+        .build()
+        .map_err(|error| format!("创建 JS 宿主 HTTP 客户端失败: {error}"))
 }
 
 fn apply_network_proxy(mut builder: ClientBuilder, cfg: &NetworkConfig) -> ClientBuilder {
@@ -675,21 +725,46 @@ pub fn ajax_blocking(
     source_json: Option<&str>,
     login_header: Option<&str>,
 ) -> Result<String, String> {
+    ajax_blocking_with_deadline(
+        url_raw,
+        referer,
+        source_json,
+        login_header,
+        Duration::from_secs(30),
+    )
+}
+
+/// `java.ajax` 的可取消同步桥接。
+///
+/// 请求 future 在 deadline 到达时被取消，随后 runtime 与其工作线程退出；调用方
+/// 不会带着仍在运行的 HTTP 请求继续执行。
+pub fn ajax_blocking_with_deadline(
+    url_raw: &str,
+    referer: Option<&str>,
+    source_json: Option<&str>,
+    login_header: Option<&str>,
+    deadline: Duration,
+) -> Result<String, String> {
     let url_raw = url_raw.to_string();
     let referer = referer.map(|s| s.to_string());
     let source_json = source_json.map(|s| s.to_string());
     let login_header = login_header.map(|s| s.to_string());
     let joined = std::thread::spawn(move || {
+        let client = build_host_http_client(deadline)?;
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|e| format!("创建 java.ajax runtime 失败: {e}"))?;
         rt.block_on(async move {
-            ajax_fetch(
-                &url_raw,
-                referer.as_deref(),
-                source_json.as_deref(),
-                login_header.as_deref(),
+            with_host_http_deadline(
+                deadline,
+                ajax_fetch(
+                    &client,
+                    &url_raw,
+                    referer.as_deref(),
+                    source_json.as_deref(),
+                    login_header.as_deref(),
+                ),
             )
             .await
         })
@@ -736,6 +811,7 @@ fn login_header_map(login_header: &str) -> std::collections::HashMap<String, Str
 }
 
 async fn ajax_fetch(
+    client: &Client,
     url_raw: &str,
     referer: Option<&str>,
     source_json: Option<&str>,
@@ -752,7 +828,7 @@ async fn ajax_fetch(
                 url = resolve_url(&url, base);
             }
         }
-        return fetch_text(&url, "GET", None, "UTF-8", referer, "").await;
+        return fetch_text_with_client(client, &url, "GET", None, "UTF-8", referer, "").await;
     }
 
     let cfg = parse_url_config(raw, "");
@@ -800,7 +876,8 @@ async fn ajax_fetch(
         h
     };
 
-    let response = send_request(
+    let response = send_request_with_client(
+        client,
         &url,
         &cfg.method,
         cfg.body.as_deref(),
@@ -877,6 +954,19 @@ pub async fn fetch_text(
     referer: Option<&str>,
     _source_key: &str,
 ) -> Result<String, String> {
+    let client = http_client()?;
+    fetch_text_with_client(&client, url, method, body, charset, referer, _source_key).await
+}
+
+async fn fetch_text_with_client(
+    client: &Client,
+    url: &str,
+    method: &str,
+    body: Option<&str>,
+    charset: &str,
+    referer: Option<&str>,
+    _source_key: &str,
+) -> Result<String, String> {
     let mut headers = default_headers();
     if let Some(r) = referer {
         if let Ok(v) = HeaderValue::from_str(r) {
@@ -891,11 +981,11 @@ pub async fn fetch_text(
         }
     }
 
-    let response = send_request(url, method, body, charset, headers).await?;
+    let response = send_request_with_client(client, url, method, body, charset, headers).await?;
     save_cookies(url, &response);
     let bytes = read_response_bytes(response).await?;
     let text = charset::decode_bytes(&bytes, charset)?;
-    maybe_pass_ge_ua_and_retry(url, method, body, charset, None, text).await
+    maybe_pass_ge_ua_and_retry_with_client(client, url, method, body, charset, None, text).await
 }
 
 /// HTTP 响应元数据（调试用）
@@ -1137,7 +1227,103 @@ mod source_cookie_tests {
     use serial_test::serial;
     use std::io::{Read, Write};
     use std::net::TcpListener;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc;
+    use std::sync::Arc;
     use std::thread;
+
+    struct CancellationProbe(Arc<AtomicBool>);
+
+    impl Drop for CancellationProbe {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::Release);
+        }
+    }
+
+    #[tokio::test]
+    async fn host_http_deadline_cancels_inflight_future() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let probe = CancellationProbe(cancelled.clone());
+        let result = with_host_http_deadline(Duration::from_millis(20), async move {
+            let _probe = probe;
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            Ok::<(), String>(())
+        })
+        .await;
+
+        assert_eq!(result.unwrap_err(), "JS 宿主 HTTP 请求超时（超过 20 毫秒）");
+        assert!(
+            cancelled.load(Ordering::Acquire),
+            "超时时必须 drop 请求 future，不能保留后台任务"
+        );
+    }
+
+    #[test]
+    fn host_http_deadline_closes_inflight_connection() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let (connection_closed_tx, connection_closed_rx) = mpsc::channel();
+        let fixture = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0_u8; 2048];
+            let size = stream.read(&mut request).unwrap();
+            assert!(
+                String::from_utf8_lossy(&request[..size]).starts_with("GET /slow HTTP/1.1"),
+                "fixture received an unexpected request"
+            );
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut probe = [0_u8; 1];
+            let observed = stream.read(&mut probe);
+            let closed = matches!(observed, Ok(0));
+            if !closed {
+                eprintln!("slow fixture connection observation: {observed:?}");
+            }
+            let _ = connection_closed_tx.send(closed);
+        });
+        let error = thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            runtime.block_on(async move {
+                with_host_http_deadline(Duration::from_millis(250), async move {
+                    // Keep the client inside the deadline future, mirroring java.ajax.
+                    // Timing out must drop both the request and its dedicated client.
+                    let client = Client::builder()
+                        .no_proxy()
+                        .pool_max_idle_per_host(0)
+                        .resolve("public.example", address)
+                        .build()
+                        .unwrap();
+                    client
+                        .get(format!("http://public.example:{}/slow", address.port()))
+                        .timeout(Duration::from_millis(100))
+                        .send()
+                        .await
+                        .map(|_| ())
+                        .map_err(|error| format!("fixture request failed: {error}"))
+                })
+                .await
+            })
+        })
+        .join()
+        .unwrap()
+        .unwrap_err();
+
+        assert!(
+            error.contains("fixture request failed"),
+            "请求级 timeout 应在外层 deadline 前中断连接: {error}"
+        );
+        assert!(
+            connection_closed_rx
+                .recv_timeout(Duration::from_secs(3))
+                .unwrap(),
+            "deadline 后不得保留未关闭的 HTTP 连接"
+        );
+        fixture.join().unwrap();
+    }
 
     fn cookie_header(headers: &HeaderMap) -> &str {
         headers
@@ -1439,8 +1625,30 @@ async fn fetch_with_source_meta_once(
     source_json: &str,
     extra_headers: Option<&std::collections::HashMap<String, String>>,
 ) -> Result<FetchResponse, String> {
+    let client = http_client()?;
+    fetch_with_source_meta_once_with_client(
+        &client,
+        url,
+        method,
+        body,
+        charset,
+        source_json,
+        extra_headers,
+    )
+    .await
+}
+
+async fn fetch_with_source_meta_once_with_client(
+    client: &Client,
+    url: &str,
+    method: &str,
+    body: Option<&str>,
+    charset: &str,
+    source_json: &str,
+    extra_headers: Option<&std::collections::HashMap<String, String>>,
+) -> Result<FetchResponse, String> {
     let headers = prepare_source_headers(url, source_json, extra_headers);
-    let response = send_request(url, method, body, charset, headers).await?;
+    let response = send_request_with_client(client, url, method, body, charset, headers).await?;
     let status_code = response.status().as_u16();
     if source_cookie_jar_enabled_json(source_json) {
         save_cookies(url, &response);
@@ -1464,12 +1672,26 @@ async fn maybe_pass_ge_ua_and_retry(
     source_json: Option<&str>,
     text: String,
 ) -> Result<String, String> {
+    let client = http_client()?;
+    maybe_pass_ge_ua_and_retry_with_client(&client, url, method, body, charset, source_json, text)
+        .await
+}
+
+async fn maybe_pass_ge_ua_and_retry_with_client(
+    client: &Client,
+    url: &str,
+    method: &str,
+    body: Option<&str>,
+    charset: &str,
+    source_json: Option<&str>,
+    text: String,
+) -> Result<String, String> {
     if !super::ge_ua::is_challenge(&text) {
         return Ok(text);
     }
-    pass_ge_ua_challenge(url, &text).await?;
+    pass_ge_ua_challenge_with_client(client, url, &text).await?;
     let retry = if let Some(sj) = source_json {
-        fetch_with_source_meta_once(url, method, body, charset, sj, None)
+        fetch_with_source_meta_once_with_client(client, url, method, body, charset, sj, None)
             .await?
             .body
     } else {
@@ -1480,7 +1702,8 @@ async fn maybe_pass_ge_ua_and_retry(
                 headers.insert("Cookie", v);
             }
         }
-        let response = send_request(url, method, body, charset, headers).await?;
+        let response =
+            send_request_with_client(client, url, method, body, charset, headers).await?;
         save_cookies(url, &response);
         let bytes = read_response_bytes(response).await?;
         charset::decode_bytes(&bytes, charset)?
@@ -1493,6 +1716,15 @@ async fn maybe_pass_ge_ua_and_retry(
 
 /// 完成一次 GE-UA POST 校验，写入 `ge_ua_key` 等 Cookie
 async fn pass_ge_ua_challenge(url: &str, challenge_html: &str) -> Result<(), String> {
+    let client = http_client()?;
+    pass_ge_ua_challenge_with_client(&client, url, challenge_html).await
+}
+
+async fn pass_ge_ua_challenge_with_client(
+    client: &Client,
+    url: &str,
+    challenge_html: &str,
+) -> Result<(), String> {
     let params = super::ge_ua::parse_challenge(challenge_html)
         .ok_or_else(|| "命中 WAF 验证页，但无法解析 GE-UA 参数".to_string())?;
 
@@ -1537,7 +1769,8 @@ async fn pass_ge_ua_challenge(url: &str, challenge_html: &str) -> Result<(), Str
         headers.insert("Cookie", v);
     }
 
-    let response = send_request(url, "POST", Some(&post_body), "UTF-8", headers).await?;
+    let response =
+        send_request_with_client(client, url, "POST", Some(&post_body), "UTF-8", headers).await?;
     save_cookies(url, &response);
     let bytes = read_response_bytes(response).await?;
     let text = String::from_utf8_lossy(&bytes).to_string();
@@ -1572,6 +1805,18 @@ async fn send_request(
     charset: &str,
     mut headers: HeaderMap,
 ) -> Result<reqwest::Response, String> {
+    let client = http_client()?;
+    send_request_with_client(&client, url, method, body, charset, headers).await
+}
+
+async fn send_request_with_client(
+    client: &Client,
+    url: &str,
+    method: &str,
+    body: Option<&str>,
+    charset: &str,
+    mut headers: HeaderMap,
+) -> Result<reqwest::Response, String> {
     super::ssrf::assert_public_http_url(url)?;
     let _permit = super::rate_limit::acquire_host_permit(url).await?;
     let started = Instant::now();
@@ -1583,14 +1828,9 @@ async fn send_request(
             "Content-Type",
             HeaderValue::from_static("application/x-www-form-urlencoded"),
         );
-        http_client()?
-            .post(url)
-            .headers(headers)
-            .body(encoded)
-            .send()
-            .await
+        client.post(url).headers(headers).body(encoded).send().await
     } else {
-        http_client()?.get(url).headers(headers).send().await
+        client.get(url).headers(headers).send().await
     };
     let response = match response {
         Ok(response) => response,

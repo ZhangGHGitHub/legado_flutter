@@ -1,21 +1,17 @@
-class NoteSnapshot {
-  const NoteSnapshot({
-    required this.id,
-    required this.bookId,
-    required this.chapterTitle,
-    required this.selectedText,
-    required this.noteContent,
-    required this.position,
-    required this.chapterPos,
-    required this.createdAt,
-  });
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-  final String id;
-  final String bookId;
-  final String chapterTitle;
-  final String selectedText;
-  final String noteContent;
-  final int position;
-  final int chapterPos;
-  final String createdAt;
+part 'note_snapshot.freezed.dart';
+
+@freezed
+class NoteSnapshot with _$NoteSnapshot {
+  const factory NoteSnapshot({
+    required String id,
+    required String bookId,
+    required String chapterTitle,
+    required String selectedText,
+    required String noteContent,
+    required int position,
+    required int chapterPos,
+    required String createdAt,
+  }) = _NoteSnapshot;
 }

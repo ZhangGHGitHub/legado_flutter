@@ -1929,7 +1929,7 @@ fn wire__crate__api__init_engine_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
+            transform_result_sse::<_, crate::api::error::AppError>((move || {
                 let output_ok = crate::api::init_engine()?;
                 Ok(output_ok)
             })())

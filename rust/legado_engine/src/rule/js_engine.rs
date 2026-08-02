@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 const STDLIB: &str = include_str!("js_assets/stdlib.js");
 const JSOUP: &str = include_str!("js_assets/jsoup.js");
 const JS_EXECUTION_TIMEOUT: Duration = Duration::from_secs(5);
+const JS_HOST_HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_JS_INPUT_BYTES: usize = 256 * 1024;
 
 thread_local! {
@@ -167,7 +168,7 @@ fn register_host_apis(ctx: &Ctx<'_>) -> Result<(), String> {
             let referer = AJAX_REFERER.with(|r| r.borrow().clone());
             let source_json = AJAX_SOURCE_JSON.with(|r| r.borrow().clone());
             let login_header = AJAX_LOGIN_HEADER.with(|r| r.borrow().clone());
-            match crate::http::client::ajax_blocking(
+            match crate::http::client::ajax_blocking_with_deadline(
                 &url,
                 if referer.is_empty() {
                     None
@@ -184,6 +185,7 @@ fn register_host_apis(ctx: &Ctx<'_>) -> Result<(), String> {
                 } else {
                     Some(login_header.as_str())
                 },
+                JS_HOST_HTTP_TIMEOUT,
             ) {
                 Ok(body) => Ok(body),
                 Err(_) => Ok(String::new()),

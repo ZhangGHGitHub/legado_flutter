@@ -1,50 +1,35 @@
-/// 阅读排版和主题色持久化配置，对齐 legado ReadBookConfig.Config 子集。
-class ReadStyleConfig {
-  const ReadStyleConfig({
-    this.name = '',
-    this.bgStr = '#EEEEEE',
-    this.bgStrNight = '#000000',
-    this.bgType = 0,
-    this.bgTypeNight = 0,
-    this.bgAlpha = 100,
-    this.textColor = '#3E3D3B',
-    this.textColorNight = '#ADADAD',
-    this.textAccentColor = '#F44336',
-    this.textAccentColorNight = '#F44336',
-    this.textFont = '',
-    this.textBold = 0,
-    this.textSize = 20,
-    this.letterSpacing = 0,
-    this.lineSpacingExtra = 12,
-    this.paragraphSpacing = 2,
-    this.paddingLeft = 16,
-    this.paddingRight = 16,
-    this.paddingTop = 0,
-    this.paddingBottom = 0,
-    this.darkStatusIcon = true,
-  });
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-  final String name;
-  final String bgStr;
-  final String bgStrNight;
-  final int bgType;
-  final int bgTypeNight;
-  final int bgAlpha;
-  final String textColor;
-  final String textColorNight;
-  final String textAccentColor;
-  final String textAccentColorNight;
-  final String textFont;
-  final int textBold;
-  final int textSize;
-  final double letterSpacing;
-  final int lineSpacingExtra;
-  final int paragraphSpacing;
-  final int paddingLeft;
-  final int paddingRight;
-  final int paddingTop;
-  final int paddingBottom;
-  final bool darkStatusIcon;
+part 'read_style_config.freezed.dart';
+
+/// 阅读排版和主题色持久化配置，对齐 legado ReadBookConfig.Config 子集。
+@freezed
+class ReadStyleConfig with _$ReadStyleConfig {
+  const ReadStyleConfig._();
+
+  const factory ReadStyleConfig({
+    @Default('') String name,
+    @Default('#EEEEEE') String bgStr,
+    @Default('#000000') String bgStrNight,
+    @Default(0) int bgType,
+    @Default(0) int bgTypeNight,
+    @Default(100) int bgAlpha,
+    @Default('#3E3D3B') String textColor,
+    @Default('#ADADAD') String textColorNight,
+    @Default('#F44336') String textAccentColor,
+    @Default('#F44336') String textAccentColorNight,
+    @Default('') String textFont,
+    @Default(0) int textBold,
+    @Default(20) int textSize,
+    @Default(0) double letterSpacing,
+    @Default(12) int lineSpacingExtra,
+    @Default(2) int paragraphSpacing,
+    @Default(16) int paddingLeft,
+    @Default(16) int paddingRight,
+    @Default(0) int paddingTop,
+    @Default(0) int paddingBottom,
+    @Default(true) bool darkStatusIcon,
+  }) = _ReadStyleConfig;
 
   factory ReadStyleConfig.fromJson(Map<String, dynamic> json) {
     return ReadStyleConfig(
@@ -96,52 +81,4 @@ class ReadStyleConfig {
     'paddingBottom': paddingBottom,
     'darkStatusIcon': darkStatusIcon,
   };
-
-  ReadStyleConfig copyWith({
-    String? name,
-    String? bgStr,
-    String? bgStrNight,
-    int? bgType,
-    int? bgTypeNight,
-    int? bgAlpha,
-    String? textColor,
-    String? textColorNight,
-    String? textAccentColor,
-    String? textAccentColorNight,
-    String? textFont,
-    int? textBold,
-    int? textSize,
-    double? letterSpacing,
-    int? lineSpacingExtra,
-    int? paragraphSpacing,
-    int? paddingLeft,
-    int? paddingRight,
-    int? paddingTop,
-    int? paddingBottom,
-    bool? darkStatusIcon,
-  }) {
-    return ReadStyleConfig(
-      name: name ?? this.name,
-      bgStr: bgStr ?? this.bgStr,
-      bgStrNight: bgStrNight ?? this.bgStrNight,
-      bgType: bgType ?? this.bgType,
-      bgTypeNight: bgTypeNight ?? this.bgTypeNight,
-      bgAlpha: bgAlpha ?? this.bgAlpha,
-      textColor: textColor ?? this.textColor,
-      textColorNight: textColorNight ?? this.textColorNight,
-      textAccentColor: textAccentColor ?? this.textAccentColor,
-      textAccentColorNight: textAccentColorNight ?? this.textAccentColorNight,
-      textFont: textFont ?? this.textFont,
-      textBold: textBold ?? this.textBold,
-      textSize: textSize ?? this.textSize,
-      letterSpacing: letterSpacing ?? this.letterSpacing,
-      lineSpacingExtra: lineSpacingExtra ?? this.lineSpacingExtra,
-      paragraphSpacing: paragraphSpacing ?? this.paragraphSpacing,
-      paddingLeft: paddingLeft ?? this.paddingLeft,
-      paddingRight: paddingRight ?? this.paddingRight,
-      paddingTop: paddingTop ?? this.paddingTop,
-      paddingBottom: paddingBottom ?? this.paddingBottom,
-      darkStatusIcon: darkStatusIcon ?? this.darkStatusIcon,
-    );
-  }
 }
