@@ -6,6 +6,7 @@ import '../application/book/batch_book_progress_sync_port.dart';
 import '../application/book/chapter_progress_migrator.dart';
 import '../application/book/local_book_import_port.dart';
 import '../application/book/book_provider_source_port.dart';
+import '../application/bookshelf/bookshelf_book_group_controller.dart';
 import '../domain/repositories/book_repository.dart';
 import '../domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -40,11 +41,15 @@ class BookProvider extends ChangeNotifier {
     required BookRepository repository,
     required BookProviderSourcePort sourceService,
     LocalBookImportPort? localBookPort,
+    BookshelfBookGroupController? bookshelfGroupController,
     required ChapterContentCachePort contentCache,
   }) : _repository = repository,
        _sourceService = sourceService,
        _localBookPort = localBookPort ?? const UnavailableLocalBookImportPort(),
-       _contentCache = contentCache {
+       _contentCache = contentCache,
+       _bookshelfGroupController =
+           bookshelfGroupController ??
+           BookshelfBookGroupController(repository: repository) {
     ReadBook.instance.configure(
       sourceService: _sourceService,
       repository: _repository,
@@ -56,6 +61,7 @@ class BookProvider extends ChangeNotifier {
   final BookProviderSourcePort _sourceService;
   final ChapterContentCachePort _contentCache;
   final LocalBookImportPort _localBookPort;
+  final BookshelfBookGroupController _bookshelfGroupController;
 
   List<Book> _books = [];
   List<Chapter> _currentChapters = [];
@@ -1135,10 +1141,7 @@ class BookProvider extends ChangeNotifier {
 
   /// 批量更新分组
   Future<void> updateBooksGroup(Iterable<String> bookIds, String group) async {
-    for (final id in bookIds) {
-      await _repository.updateGroup(id, group);
-    }
-    _books = await _repository.getAll();
+    _books = await _bookshelfGroupController.updateBooksGroup(bookIds, group);
     notifyListeners();
   }
 
@@ -1204,8 +1207,7 @@ class BookProvider extends ChangeNotifier {
 
   /// 更新书籍分组
   Future<void> updateBookGroup(String bookId, String group) async {
-    await _repository.updateGroup(bookId, group);
-    _books = await _repository.getAll();
+    _books = await _bookshelfGroupController.updateBookGroup(bookId, group);
     notifyListeners();
   }
 

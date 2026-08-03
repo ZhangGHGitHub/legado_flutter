@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'book/batch_book_progress_sync_port.dart';
 import 'book/local_book_import_port.dart';
 import 'book/book_provider_source_port.dart';
+import 'bookshelf/bookshelf_book_group_controller.dart';
 import 'database/legacy_room_import_service.dart';
 import 'startup/startup_task_runner.dart';
 import '../domain/ports/chapter_content_cache_port.dart';
@@ -160,6 +161,9 @@ class AppBootstrap {
       repository: _bookRepository,
       sourceService: _bookProviderSourcePort,
       localBookPort: _localBookImportPort,
+      bookshelfGroupController: BookshelfBookGroupController(
+        repository: _bookRepository,
+      ),
       contentCache: _contentCache,
     );
     _reportStartupStage?.call('主题配置加载');

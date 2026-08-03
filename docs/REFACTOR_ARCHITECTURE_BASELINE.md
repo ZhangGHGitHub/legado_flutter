@@ -1,10 +1,12 @@
 # Legado Flutter 架构重构基线
 
-> **当前权威状态（2026-08-03）：** R1-12 已按 archive-only 产品边界完成：六张核心表映射后可直接使用，23 张 Room 实体表无损归档，JSON 备份、事务回滚和幂等导入通过；不宣称 `readRecord` 统计语义、非核心表 Rust v17 业务化或真实原版非空数据库证据完成。历史段落中的“R1 重新打开/部分完成”保留为当时证据链，不覆盖本条当前判定；真实原版非空证据补齐前不新增 R2-R6 生产实现。
+> **当前权威状态（2026-08-03）：** R1-12 已按 archive-only 产品边界完成：六张核心表映射后可直接使用，23 张 Room 实体表无损归档，JSON 备份、事务回滚和幂等导入通过；`.tmp/r1-device-room/original_legado.db` 已确认 Room v99、identity hash 与原版基线一致，非空行数为 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`，既有 `emulator-5556` all-phase smoke `1/1` 通过。不宣称 `readRecord` 统计语义或非核心表 Rust v17 业务化完成。历史段落中的“R1 重新打开/部分完成”保留为当时证据链，不覆盖本条当前判定。
 
-> 2026-08-02 当前 owner 状态：R1-12 已按产品决策完成 Room v99 探针、六张核心业务表映射、`readRecord` archive-only 保存、23 表原始归档、事务/JSON 备份/回滚/幂等和 `emulator-5556` 真实非空 Android smoke。Room 定向 `29/29`、Rust 全量 `262/262`、Flutter 导入/备份定向 `17/17`、analyze、架构边界检查和 `git diff --check` 通过。旧版数据必须可导入，已映射数据导入后直接可用，未业务化数据无损归档；备份保持 JSON，不增加文件级 SQLite 备份要求。
+> 2026-08-03 当前 owner 状态：R1-12 已按产品决策完成 Room v99 探针、六张核心业务表映射、`readRecord` archive-only 保存、23 表原始归档、事务/JSON 备份/回滚/幂等和真实非空证据。副本 `.tmp/r1-device-room/original_legado.db` 的计数为 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`，`emulator-5556` all-phase smoke `1/1` 通过。旧版数据必须可导入，已映射数据导入后直接可用，未业务化数据无损归档；备份保持 JSON，不增加文件级 SQLite 备份要求。
 
 > 2026-08-02 Phase 3 当前 owner 状态：Flutter `Book`/`BookSource`/`ReplaceRule`/阅读统计模型已改为 Freezed 领域模型，生成不可变值语义和 `copyWith`，同时保留旧版 JSON、`readConfig` 和嵌套书源规则兼容。Rust `BookDto`、`BookSourceDto` 均已提供 camelCase serde 投影；Rust `BookReadingStats.readingDays` 现已透传至 Dart。模型契约及书架/书源仓储、替换规则和统计链路定向回归通过，Rust 当前全量 `265/265`、Flutter 全量 `925`（`3` 项既有条件跳过）通过。Riverpod 生产页面和其余手写模型仍是后续批次。
+
+> 2026-08-03 Phase 4/R6 书架分组写入边界：新增 `BookshelfBookGroupController`，将单本/批量分组写入、刷新和异常顺序收口到 application 层；`BookProvider` 保留旧兼容入口，组合根显式注入同一控制器。控制器/Provider 定向 `9/9`、书架相关定向 `12/12`、Flutter 全量 `1113`（`3` 项既有条件跳过）、`flutter analyze`、架构边界、Rust 全量 `268/268`、`cargo fmt -p legado_engine -- --check` 和 `git diff --check` 通过。未修改 `legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
 
 > 2026-08-02 Phase 3 Rust DTO 状态：Rust `BookSourceDto` 已提供与 Flutter `BookSource` 对齐的 camelCase serde 投影，`rawSourceJson` 完整保留，`rulePageNext` 回退顺序由测试固定。`BookDto` 已接入 `get_books_json()`，完整字段、默认值、`readConfig`、阅读位置和时间输出由定向测试固定；两者均未新增 FFI 入口，现有 `db_get_books()` 继续输出 `Vec<String>`。DTO 定向 `3/3`、Rust 全量 `265/265` 通过；生产 typed FFI 联调和其余手写模型仍未完成。
 
@@ -23,6 +25,12 @@
 - 未修改 `legado-main/`、Rust、正文算法、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则或 R1-12 数据库迁移边界；R6、Web/WASM/PWA 和真实 Android TTS 仍未退出。
 
 验证记录：受影响页面/管理定向 `19/19`、补充测试宿主 `2/2`、Flutter 串行全量 `1104`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 均通过。
+
+## 194. 2026-08-03：R1-12 真实非空 Room 副本证据补录
+
+- 纳入只读副本 `.tmp/r1-device-room/original_legado.db`，确认 Room v99、identity hash 与原版基线一致；非空行数为 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`。
+- 既有 `emulator-5556` all-phase smoke 命令为 `flutter test --no-pub integration_test/r1_android_room_import_smoke_test.dart -d emulator-5556`，结果 `1/1` 通过，覆盖真实文件导入、章节 ID、持久化、重复导入、空备份路径和备份恢复。
+- 本证据关闭真实非空 Room 数据库缺失子项；`readRecord` 仍为 archive-only，统计语义未声明，非核心 Room 表仍不宣称已完成 Rust v17 业务化。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 
 ## 192. 2026-08-03：AppConfig 与 SourceController 根级状态边界
 
