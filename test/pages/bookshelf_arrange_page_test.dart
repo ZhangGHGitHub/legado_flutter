@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:legado_flutter/features/bookshelf/bookshelf_arrange_page.dart';
 import 'package:legado_flutter/application/bookshelf/book_group_management_port.dart';
 import 'package:legado_flutter/application/bookshelf/book_group_store_port.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_delete_command_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_group_command_port.dart';
 import 'package:legado_flutter/application/book/book_group_policy.dart';
@@ -33,6 +34,7 @@ class _FakeBookshelfArrangePrefs implements BookshelfArrangePort {
   int saveCount = 0;
   int sortMode = 0;
   List<String> order = const [];
+  int orderSaveCount = 0;
 
   @override
   Future<bool> loadOpenBookInfoByTitle() async {
@@ -53,7 +55,10 @@ class _FakeBookshelfArrangePrefs implements BookshelfArrangePort {
   Future<List<String>> loadBookOrder() async => List.of(order);
 
   @override
-  Future<void> saveBookOrder(List<String> ids) async => order = List.of(ids);
+  Future<void> saveBookOrder(List<String> ids) async {
+    orderSaveCount++;
+    order = List.of(ids);
+  }
 
   @override
   Future<void> saveSortMode(int mode) async => sortMode = mode;
@@ -100,6 +105,25 @@ class _FakeGroupCommands implements BookshelfArrangeGroupCommandPort {
     batchCalls.add((List<String>.of(bookIds), group));
     if (error case final error?) throw error;
     return List<Book>.unmodifiable(snapshot);
+  }
+}
+
+class _FakeDeleteCommands implements BookshelfArrangeDeleteCommandPort {
+  final singleCalls = <String>[];
+  final batchCalls = <List<String>>[];
+  Object? singleError;
+  Object? batchError;
+
+  @override
+  Future<void> removeBook(String bookId) async {
+    singleCalls.add(bookId);
+    if (singleError case final error?) throw error;
+  }
+
+  @override
+  Future<void> removeBooks(Iterable<String> bookIds) async {
+    batchCalls.add(List<String>.of(bookIds));
+    if (batchError case final error?) throw error;
   }
 }
 
@@ -167,6 +191,7 @@ void main() {
             preferences: preferences,
             groupStore: groupStore,
             groupCommands: _FakeGroupCommands(),
+            deleteCommands: _FakeDeleteCommands(),
           ),
         ),
       ),
@@ -237,6 +262,7 @@ void main() {
             preferences: _FakeBookshelfArrangePrefs(),
             groupStore: _FakeBookGroupStore(),
             groupCommands: _FakeGroupCommands(),
+            deleteCommands: _FakeDeleteCommands(),
           ),
         ),
       ),
@@ -487,6 +513,200 @@ void main() {
     expect(find.text('全选 (1/2)'), findsOneWidget);
   });
 
+  testWidgets('single delete updates the local list and saved order', (
+    tester,
+  ) async {
+    final bookProvider = await _bookProviderWith([
+      const Book(id: 'one', name: '第一本'),
+      const Book(id: 'two', name: '第二本'),
+    ]);
+    final preferences = _FakeBookshelfArrangePrefs();
+    final deleteCommands = _FakeDeleteCommands();
+
+    await _pumpArrangePage(
+      tester,
+      bookProvider,
+      _FakeGroupCommands(),
+      preferences: preferences,
+      deleteCommands: deleteCommands,
+    );
+    await tester.tap(_inlineDeleteFor('one'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '删除'));
+    await tester.pumpAndSettle();
+
+    expect(deleteCommands.singleCalls, ['one']);
+    expect(deleteCommands.batchCalls, isEmpty);
+    expect(find.text('第一本'), findsNothing);
+    expect(find.text('第二本'), findsOneWidget);
+    expect(preferences.orderSaveCount, 1);
+    expect(preferences.order, ['two']);
+    expect(preferences.sortMode, 3);
+  });
+
+  testWidgets('canceling single delete skips command and persistence', (
+    tester,
+  ) async {
+    final bookProvider = await _bookProviderWith([
+      const Book(id: 'one', name: '第一本'),
+    ]);
+    final preferences = _FakeBookshelfArrangePrefs();
+    final deleteCommands = _FakeDeleteCommands();
+
+    await _pumpArrangePage(
+      tester,
+      bookProvider,
+      _FakeGroupCommands(),
+      preferences: preferences,
+      deleteCommands: deleteCommands,
+    );
+    await tester.tap(_inlineDeleteFor('one'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, '取消'));
+    await tester.pumpAndSettle();
+
+    expect(deleteCommands.singleCalls, isEmpty);
+    expect(find.text('第一本'), findsOneWidget);
+    expect(preferences.orderSaveCount, 0);
+  });
+
+  testWidgets('single delete failure keeps list selection and saved order', (
+    tester,
+  ) async {
+    final bookProvider = await _bookProviderWith([
+      const Book(id: 'one', name: '第一本'),
+      const Book(id: 'two', name: '第二本'),
+    ]);
+    final preferences = _FakeBookshelfArrangePrefs();
+    final failure = StateError('单本删除失败');
+    final deleteCommands = _FakeDeleteCommands()..singleError = failure;
+    Object? reportedError;
+
+    await runZonedGuarded(() async {
+      await _pumpArrangePage(
+        tester,
+        bookProvider,
+        _FakeGroupCommands(),
+        preferences: preferences,
+        deleteCommands: deleteCommands,
+      );
+      await tester.tap(find.text('第二本'));
+      await tester.pump();
+      await tester.tap(_inlineDeleteFor('one'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '删除'));
+      await tester.pumpAndSettle();
+    }, (error, _) => reportedError = error);
+
+    expect(reportedError, same(failure));
+    expect(deleteCommands.singleCalls, ['one']);
+    expect(find.text('第一本'), findsOneWidget);
+    expect(find.text('第二本'), findsOneWidget);
+    expect(find.text('全选 (1/2)'), findsOneWidget);
+    expect(preferences.orderSaveCount, 0);
+  });
+
+  testWidgets('batch delete keeps selected id order and saves the remainder', (
+    tester,
+  ) async {
+    final bookProvider = await _bookProviderWith([
+      const Book(id: 'one', name: '第一本'),
+      const Book(id: 'two', name: '第二本'),
+      const Book(id: 'three', name: '第三本'),
+    ]);
+    final preferences = _FakeBookshelfArrangePrefs();
+    final deleteCommands = _FakeDeleteCommands();
+
+    await _pumpArrangePage(
+      tester,
+      bookProvider,
+      _FakeGroupCommands(),
+      preferences: preferences,
+      deleteCommands: deleteCommands,
+    );
+    await tester.tap(find.text('第二本'));
+    await tester.tap(find.text('第一本'));
+    await tester.pump();
+    await _openBottomAction(tester, '删除');
+    await tester.tap(find.widgetWithText(FilledButton, '删除'));
+    await tester.pumpAndSettle();
+
+    expect(deleteCommands.batchCalls, hasLength(1));
+    expect(deleteCommands.batchCalls.single, ['two', 'one']);
+    expect(deleteCommands.singleCalls, isEmpty);
+    expect(find.text('第一本'), findsNothing);
+    expect(find.text('第二本'), findsNothing);
+    expect(find.text('第三本'), findsOneWidget);
+    expect(find.text('全选 (0/1)'), findsOneWidget);
+    expect(preferences.orderSaveCount, 1);
+    expect(preferences.order, ['three']);
+  });
+
+  testWidgets('canceling batch delete keeps selection and skips persistence', (
+    tester,
+  ) async {
+    final bookProvider = await _bookProviderWith([
+      const Book(id: 'one', name: '第一本'),
+    ]);
+    final preferences = _FakeBookshelfArrangePrefs();
+    final deleteCommands = _FakeDeleteCommands();
+
+    await _pumpArrangePage(
+      tester,
+      bookProvider,
+      _FakeGroupCommands(),
+      preferences: preferences,
+      deleteCommands: deleteCommands,
+    );
+    await tester.tap(find.text('第一本'));
+    await tester.pump();
+    await _openBottomAction(tester, '删除');
+    await tester.tap(find.widgetWithText(TextButton, '取消'));
+    await tester.pumpAndSettle();
+
+    expect(deleteCommands.batchCalls, isEmpty);
+    expect(find.text('第一本'), findsOneWidget);
+    expect(find.text('全选 (1/1)'), findsOneWidget);
+    expect(preferences.orderSaveCount, 0);
+  });
+
+  testWidgets('batch delete failure keeps list selection and saved order', (
+    tester,
+  ) async {
+    final bookProvider = await _bookProviderWith([
+      const Book(id: 'one', name: '第一本'),
+      const Book(id: 'two', name: '第二本'),
+    ]);
+    final preferences = _FakeBookshelfArrangePrefs();
+    final failure = StateError('批量删除失败');
+    final deleteCommands = _FakeDeleteCommands()..batchError = failure;
+    Object? reportedError;
+
+    await runZonedGuarded(() async {
+      await _pumpArrangePage(
+        tester,
+        bookProvider,
+        _FakeGroupCommands(),
+        preferences: preferences,
+        deleteCommands: deleteCommands,
+      );
+      await tester.tap(find.text('第一本'));
+      await tester.pump();
+      await _openBottomAction(tester, '删除');
+      await tester.tap(find.widgetWithText(FilledButton, '删除'));
+      await tester.pumpAndSettle();
+    }, (error, _) => reportedError = error);
+
+    expect(reportedError, same(failure));
+    expect(deleteCommands.batchCalls, [
+      ['one'],
+    ]);
+    expect(find.text('第一本'), findsOneWidget);
+    expect(find.text('第二本'), findsOneWidget);
+    expect(find.text('全选 (1/2)'), findsOneWidget);
+    expect(preferences.orderSaveCount, 0);
+  });
+
   testWidgets('manual reorder does not mutate BookProvider books', (
     tester,
   ) async {
@@ -515,6 +735,7 @@ void main() {
             preferences: preferences,
             groupStore: _FakeBookGroupStore(),
             groupCommands: _FakeGroupCommands(),
+            deleteCommands: _FakeDeleteCommands(),
           ),
         ),
       ),
@@ -553,8 +774,10 @@ Future<BookProvider> _bookProviderWith(Iterable<Book> books) async {
 Future<void> _pumpArrangePage(
   WidgetTester tester,
   BookProvider bookProvider,
-  _FakeGroupCommands commands,
-) async {
+  _FakeGroupCommands commands, {
+  _FakeBookshelfArrangePrefs? preferences,
+  _FakeDeleteCommands? deleteCommands,
+}) async {
   final groupManagement = _FakeBookGroupManagementPort()
     ..selectGroups = const [BookGroup(groupId: 1, groupName: '目标分组', order: 1)];
   await tester.pumpWidget(
@@ -572,9 +795,10 @@ Future<void> _pumpArrangePage(
       ],
       child: MaterialApp(
         home: BookshelfArrangePage(
-          preferences: _FakeBookshelfArrangePrefs(),
+          preferences: preferences ?? _FakeBookshelfArrangePrefs(),
           groupStore: _FakeBookGroupStore(),
           groupCommands: commands,
+          deleteCommands: deleteCommands ?? _FakeDeleteCommands(),
         ),
       ),
     ),
@@ -593,6 +817,11 @@ Future<void> _openBottomAction(WidgetTester tester, String action) async {
   await tester.tap(find.widgetWithText(PopupMenuItem<String>, action));
   await tester.pumpAndSettle();
 }
+
+Finder _inlineDeleteFor(String bookId) => find.descendant(
+  of: find.byKey(ValueKey(bookId)),
+  matching: find.widgetWithText(TextButton, '删除'),
+);
 
 final class _MemoryBookSourceRepository implements BookSourceRepository {
   _MemoryBookSourceRepository(Iterable<BookSource> initial)

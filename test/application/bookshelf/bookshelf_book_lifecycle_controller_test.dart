@@ -7,6 +7,7 @@ import 'package:legado_flutter/domain/repositories/book_repository.dart';
 
 final class _RecordingRepository implements BookRepository {
   final List<String> calls = [];
+  Object? deleteError;
 
   @override
   Future<void> insert(Book book) async => calls.add('insert:${book.id}');
@@ -23,7 +24,10 @@ final class _RecordingRepository implements BookRepository {
   }) async {}
 
   @override
-  Future<void> delete(String bookId) async => calls.add('delete:$bookId');
+  Future<void> delete(String bookId) async {
+    calls.add('delete:$bookId');
+    if (deleteError case final error?) throw error;
+  }
 
   @override
   Future<void> updateCover(String bookId, String coverUrl) async {}
@@ -56,9 +60,10 @@ final class _RecordingRepository implements BookRepository {
 }
 
 final class _RecordingCache implements ChapterContentCachePort {
-  _RecordingCache(this.repository);
+  _RecordingCache(this.repository, {this.clearError});
 
   final _RecordingRepository repository;
+  final Object? clearError;
 
   @override
   Future<String?> get(String bookId, String chapterId) async => null;
@@ -73,8 +78,10 @@ final class _RecordingCache implements ChapterContentCachePort {
   Future<void> clearAll() async {}
 
   @override
-  Future<void> clearBook(String bookId) async =>
-      repository.calls.add('clearBook:$bookId');
+  Future<void> clearBook(String bookId) async {
+    repository.calls.add('clearBook:$bookId');
+    if (clearError case final error?) throw error;
+  }
 
   @override
   Future<int> clearInvalid(Set<String> validBookIds) async => 0;
@@ -122,6 +129,32 @@ void main() {
     );
 
     await controller.removeBook('book-1');
+
+    expect(repository.calls, ['delete:book-1', 'clearBook:book-1']);
+  });
+
+  test('仓储删除失败原样传播且不清理章节缓存', () async {
+    final error = StateError('仓储删除失败');
+    final repository = _RecordingRepository()..deleteError = error;
+    final controller = BookshelfBookLifecycleController(
+      repository: repository,
+      contentCache: _RecordingCache(repository),
+    );
+
+    await expectLater(controller.removeBook('book-1'), throwsA(same(error)));
+
+    expect(repository.calls, ['delete:book-1']);
+  });
+
+  test('缓存清理失败原样传播且不回滚仓储删除', () async {
+    final error = StateError('缓存清理失败');
+    final repository = _RecordingRepository();
+    final controller = BookshelfBookLifecycleController(
+      repository: repository,
+      contentCache: _RecordingCache(repository, clearError: error),
+    );
+
+    await expectLater(controller.removeBook('book-1'), throwsA(same(error)));
 
     expect(repository.calls, ['delete:book-1', 'clearBook:book-1']);
   });

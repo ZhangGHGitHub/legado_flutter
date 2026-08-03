@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-04
 
+2026-08-04 Phase 4/R6 书架整理删除命令追溯：三条 lane 分别核对完整删除调用链、设计交互/Provider 测试矩阵和复核独立端口边界；owner 采用 `Future<void>` application 命令以保持原页面局部列表与排序持久化语义，组合根适配现有 Provider。测试先覆盖适配器 ID 固化和异常传播，再覆盖单本/批量成功、取消、失败及排序保存；生命周期测试固定仓储失败不清缓存、缓存失败不回滚仓储；真实 Provider 测试固定批量成功只统一刷新/发布/通知一次，以及第二项仓储失败、缓存失败、最终刷新失败的部分副作用和旧快照。受影响定向 `35/35`、Flutter 全量 `1220`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。只提交本批代码、测试和四份追溯文档，排除本地工具文件。
+
 2026-08-04 Phase 4/R6 书架整理“移除分组”追溯：三条 lane 分别实现适配器契约测试、审查 Widget Finder/失败捕获和复核 Provider/ChangeBus 副作用；owner 扩展既有分组命令端口与适配器，并将页面原逐本 Provider 循环替换为 application 命令。测试先固定 ID 固化、逐项最新快照、精确匹配、空选择通配、缺失跳过、不可变最终快照和第二项失败；再用真实 Provider 验证每本各执行一次仓储刷新、总线发布与 listener 通知，并覆盖成功、通配、取消和失败四类 UI 交互。受影响定向 `37/37`、Flutter 全量 `1205`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。只提交本批代码、测试和四份追溯文档，排除本地工具文件。
 
 2026-08-04 Phase 4/R6 书架整理分组命令追溯：三条只读 lane 分别审查 Widget 行为、架构/文档落点和下一批条件式“移除分组”语义；owner 新增 application port、Provider 回调兼容适配器、组合根接线及三个真实 UI 入口回归。定向验证覆盖委托次数、ID 顺序、不可变快照、成功刷新、选择清理、单/批异常传播和失败保持，结果 `25/25`；随后 Flutter 全量 `1196` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。底层仍由 `BookProvider` 保留 mutation version、变更总线和通知，“移除分组”与删除未混迁。只提交本批代码、测试和四份追溯文档，排除 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`。

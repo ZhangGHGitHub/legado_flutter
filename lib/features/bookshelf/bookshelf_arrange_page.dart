@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../application/bookshelf/book_group_store_port.dart';
+import '../../application/bookshelf/bookshelf_arrange_delete_command_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_group_command_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_port.dart';
 import '../../application/source_management/source_notifier.dart';
@@ -28,6 +29,7 @@ class BookshelfArrangePage extends StatelessWidget {
     this.preferences,
     this.groupStore,
     this.groupCommands,
+    this.deleteCommands,
   });
 
   /// `null` = 全部；`''` = 未分组；其它 = 分组名
@@ -46,6 +48,9 @@ class BookshelfArrangePage extends StatelessWidget {
   /// 分组命令边界；生产由组合根注入 Provider 回调适配器。
   final BookshelfArrangeGroupCommandPort? groupCommands;
 
+  /// 删除命令边界；生产由组合根注入 Provider 回调适配器。
+  final BookshelfArrangeDeleteCommandPort? deleteCommands;
+
   @override
   Widget build(BuildContext context) {
     final sourceProvider = context.read<SourceProvider>();
@@ -60,6 +65,7 @@ class BookshelfArrangePage extends StatelessWidget {
         preferences: preferences,
         groupStore: groupStore,
         groupCommands: groupCommands,
+        deleteCommands: deleteCommands,
       ),
     );
   }
@@ -73,6 +79,7 @@ class _BookshelfArrangePageBody extends riverpod.ConsumerStatefulWidget {
     this.preferences,
     this.groupStore,
     this.groupCommands,
+    this.deleteCommands,
   });
 
   final String? groupFilter;
@@ -81,6 +88,7 @@ class _BookshelfArrangePageBody extends riverpod.ConsumerStatefulWidget {
   final BookshelfArrangePort? preferences;
   final BookGroupStorePort? groupStore;
   final BookshelfArrangeGroupCommandPort? groupCommands;
+  final BookshelfArrangeDeleteCommandPort? deleteCommands;
 
   @override
   riverpod.ConsumerState<_BookshelfArrangePageBody> createState() =>
@@ -104,6 +112,7 @@ class _BookshelfArrangePageState
   late final BookshelfArrangePort _preferences;
   late final BookGroupStorePort _groupStore;
   late final BookshelfArrangeGroupCommandPort _groupCommands;
+  late final BookshelfArrangeDeleteCommandPort _deleteCommands;
 
   /// 当前筛选：全部 / 本地 / 未分组 / 自定义分组名
   late String _filterKey;
@@ -117,6 +126,9 @@ class _BookshelfArrangePageState
     _groupCommands =
         widget.groupCommands ??
         context.read<BookshelfArrangeGroupCommandPort>();
+    _deleteCommands =
+        widget.deleteCommands ??
+        context.read<BookshelfArrangeDeleteCommandPort>();
     _filterKey = _filterKeyFromWidget(widget.groupFilter);
     _groupLabel = widget.groupLabel;
     _loadSortMode();
@@ -388,7 +400,7 @@ class _BookshelfArrangePageState
       ),
     );
     if (ok != true || !mounted) return;
-    await context.read<BookProvider>().removeBooks(ids);
+    await _deleteCommands.removeBooks(ids);
     setState(() {
       _books.removeWhere((b) => ids.contains(b.id));
       _selected.removeWhere((id) => ids.contains(id));
@@ -417,7 +429,7 @@ class _BookshelfArrangePageState
       ),
     );
     if (ok != true || !mounted) return;
-    await context.read<BookProvider>().removeBook(book.id);
+    await _deleteCommands.removeBook(book.id);
     setState(() {
       _books.removeWhere((b) => b.id == book.id);
       _selected.remove(book.id);

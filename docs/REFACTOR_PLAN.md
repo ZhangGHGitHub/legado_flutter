@@ -20,6 +20,8 @@
 
 > **R1-12 当前权威状态（2026-08-03）：** 上述产品边界已完成：六张核心表导入后可直接使用，`readRecord` 与非核心 Room 表无损 archive-only 保存，JSON 备份、事务回滚和幂等导入通过。真实非空副本 `.tmp/r1-device-room/original_legado.db` 已确认 Room v99、identity hash 与原版基线一致，包含 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`；`emulator-5556` all-phase smoke 已通过 `1/1`。仍不宣称 `readRecord` 统计语义或非核心表 Rust v17 业务化完成。
 
+2026-08-04 Phase 4/R6 书架整理删除命令边界：新增独立 application `BookshelfArrangeDeleteCommandPort`，组合根以 infrastructure 回调适配器委托现有 `BookProvider.removeBook/removeBooks`；整理页两个删除入口成功后仍按旧局部列表删除、清选择、标记 dirty 并依次保存顺序和手动排序模式，取消或失败时不改页面/排序。批量删除保持逐本 `repository.delete → cache.clearBook → meta remove`，全部成功后才统一 `getAll`、mutation、总线与通知；仓储/缓存/刷新失败保留既有部分副作用和 Provider 旧快照。适配器、六类 Widget 交互、生命周期异常及真实 Provider 四种批量路径均有回归，受影响定向 `35/35`、Flutter 全量 `1220`（`3` 项既有条件跳过）、analyze、架构、格式和 diff 门禁通过。BookInfo/Style1/Style2 等其他删除入口未迁移；正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
+
 2026-08-04 Phase 4/R6 书架整理“移除分组”命令边界：现有 `BookshelfArrangeGroupCommandPort` 增加条件式清空命令，页面将空分组选择映射为无条件通配，非空选择按区分大小写的精确名称匹配。适配器按输入顺序逐本读取最新 Provider 快照并调用单本分组更新，保留每本独立刷新、mutation version、变更总线、通知和 partial failure；成功后返回不可变最终快照，失败时页面不刷新局部列表、不清空选择。适配器、真实 Provider/ChangeBus 和四种 Widget 交互均有回归，受影响定向 `37/37`、Flutter 全量 `1205`（`3` 项既有条件跳过）、analyze、架构边界、Dart 格式和 diff 门禁通过。删除命令未迁移；正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 和暂停平台门禁不变，R6 尚未退出。
 
 2026-08-04 Phase 4/R6 书架整理分组命令边界：整理页行内单本“分组”、批量“移入分组”和更多菜单“加入分组”改用 `BookshelfArrangeGroupCommandPort`；组合根通过 infrastructure 兼容适配器委托现有 `BookProvider`，并把写入后的不可变完整书架快照返回页面。Provider 继续承担完整书架刷新、mutation version、变更总线和通知；条件式“移除分组”及删除未迁移。三个 UI 入口、成功快照、选择清理和失败保持均有 Widget 回归，受影响定向 `25/25`、Flutter 全量 `1196`（`3` 项既有条件跳过）、analyze、架构边界、Dart 格式和 diff 门禁通过。本批不改变 Room 导入、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则或暂停平台门禁；R6 尚未退出。
