@@ -148,10 +148,11 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
       if (foundCover != null && mounted) {
         setState(() => _coverUrl = foundCover!);
         if (_isInShelf && foundCover.isNotEmpty) {
-          await context.read<BookProvider>().repository.updateCover(
-            _book.id,
+          final next = await context.read<BookProvider>().updateBookCover(
+            _book,
             foundCover,
           );
+          if (mounted) setState(() => _book = next);
         }
       }
     } catch (_) {}

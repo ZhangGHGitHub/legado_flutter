@@ -6,6 +6,7 @@ import '../application/book/batch_book_progress_sync_port.dart';
 import '../application/book/chapter_progress_migrator.dart';
 import '../application/book/local_book_import_port.dart';
 import '../application/book/book_provider_source_port.dart';
+import '../application/book/book_metadata_controller.dart';
 import '../application/book/book_record_controller.dart';
 import '../application/book/book_progress_controller.dart';
 import '../application/bookshelf/bookshelf_book_group_controller.dart';
@@ -47,6 +48,7 @@ class BookProvider extends ChangeNotifier {
     required BookRepository repository,
     required BookProviderSourcePort sourceService,
     LocalBookImportPort? localBookPort,
+    BookMetadataController? bookMetadataController,
     BookRecordController? bookRecordController,
     BookProgressController? bookProgressController,
     BookshelfBookGroupController? bookshelfGroupController,
@@ -59,6 +61,9 @@ class BookProvider extends ChangeNotifier {
        _sourceService = sourceService,
        _localBookPort = localBookPort ?? const UnavailableLocalBookImportPort(),
        _contentCache = contentCache,
+       _bookMetadataController =
+           bookMetadataController ??
+           BookMetadataController(repository: repository),
        _bookRecordController =
            bookRecordController ?? BookRecordController(repository: repository),
        _bookProgressController =
@@ -92,6 +97,7 @@ class BookProvider extends ChangeNotifier {
   final BookProviderSourcePort _sourceService;
   final ChapterContentCachePort _contentCache;
   final LocalBookImportPort _localBookPort;
+  final BookMetadataController _bookMetadataController;
   final BookRecordController _bookRecordController;
   final BookProgressController _bookProgressController;
   final BookshelfBookGroupController _bookshelfGroupController;
@@ -1270,6 +1276,19 @@ class BookProvider extends ChangeNotifier {
     );
     _bookshelfChangePort.notifyChanged(_books);
     notifyListeners();
+  }
+
+  /// 更新书籍封面，写入后同步最新书架快照。
+  Future<Book> updateBookCover(Book book, String coverUrl) async {
+    await _bookMetadataController.updateCover(book.id, coverUrl);
+    final index = _books.indexWhere((item) => item.id == book.id);
+    final next = (index >= 0 ? _books[index] : book).copyWith(
+      coverUrl: coverUrl,
+    );
+    if (index >= 0) _replaceBookAt(index, next);
+    _bookshelfChangePort.notifyChanged(_books);
+    notifyListeners();
+    return next;
   }
 
   /// 更新读完/N刷轮次（upsert 整书字段）

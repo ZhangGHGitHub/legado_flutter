@@ -87,6 +87,43 @@ void main() {
       expect(provider.isLoading, isFalse);
     },
   );
+
+  test('a stale load cannot replace a newer cover write', () async {
+    final controller = _DeferredBookshelfController();
+    final changes = BookshelfChangeBus();
+    final original = const Book(
+      id: 'book-1',
+      name: '测试书',
+      coverUrl: 'https://cover/old',
+      currentPageIndex: 65537,
+    );
+    final provider = BookProvider(
+      repository: _CoverBookDao(),
+      contentCache: const FileChapterContentCache(),
+      sourceService: TestBookSourceService(),
+      bookshelfController: controller,
+      bookshelfChangePort: changes,
+    );
+    addTearDown(changes.dispose);
+
+    final initialLoad = provider.loadBooks(runMaintenance: false);
+    controller.complete(0, [original]);
+    await initialLoad;
+
+    final staleLoad = provider.loadBooks(runMaintenance: false);
+    final updated = await provider.updateBookCover(
+      original,
+      'https://cover/new',
+    );
+    controller.complete(1, [original]);
+    await staleLoad;
+
+    expect(updated.coverUrl, 'https://cover/new');
+    expect(updated.currentPageIndex, 65537);
+    expect(provider.books, [updated]);
+    expect(changes.latest?.books, [updated]);
+    expect(provider.isLoading, isFalse);
+  });
 }
 
 class _DeferredBookshelfController extends BookshelfController {
@@ -133,4 +170,9 @@ class _MutationBookDao extends BookDao {
 
   @override
   Future<List<Chapter>> getChapters(String bookId) async => const [];
+}
+
+class _CoverBookDao extends BookDao {
+  @override
+  Future<void> updateCover(String bookId, String coverUrl) async {}
 }

@@ -72,6 +72,96 @@ void main() {
 
     expect(find.textContaining('共享书源'), findsOneWidget);
   });
+
+  testWidgets('书架内自动补全封面后同步 Provider 快照', (tester) async {
+    final fixture = await _pumpCoverPage(tester, inShelf: true);
+
+    expect(fixture.repository.coverUpdates, [
+      ('book-1', 'https://cover.example/new.jpg'),
+    ]);
+    expect(
+      fixture.provider.books.single.coverUrl,
+      'https://cover.example/new.jpg',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('非书架书籍自动补全封面不落库', (tester) async {
+    final fixture = await _pumpCoverPage(tester, inShelf: false);
+
+    expect(fixture.repository.coverUpdates, isEmpty);
+    expect(fixture.provider.books, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('封面写入失败保持原有静默降级且不修改 Provider 快照', (tester) async {
+    final fixture = await _pumpCoverPage(
+      tester,
+      inShelf: true,
+      failCoverWrite: true,
+    );
+
+    expect(fixture.repository.coverUpdates, [
+      ('book-1', 'https://cover.example/new.jpg'),
+    ]);
+    expect(fixture.provider.books.single.coverUrl, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+Future<({BookProvider provider, _MemoryBookRepository repository})>
+_pumpCoverPage(
+  WidgetTester tester, {
+  required bool inShelf,
+  bool failCoverWrite = false,
+}) async {
+  final source = BookSource(
+    bookSourceUrl: 'https://source.example',
+    bookSourceName: '封面书源',
+  );
+  final sourceRepository = _MemorySourceRepository([source]);
+  final sourceService = _createSourceService();
+  final sourceProvider = SourceProvider(
+    repository: sourceRepository,
+    validationPort: source_fixtures.createValidationPortForNotifierTest(),
+    sourceService: sourceService,
+  );
+  await sourceProvider.loadSources();
+
+  final repository = _MemoryBookRepository()..failCoverWrite = failCoverWrite;
+  final book = Book(
+    id: 'book-1',
+    name: '测试书',
+    author: '作者',
+    sourceUrl: 'https://source.example/book',
+    bookSourceUrl: source.bookSourceUrl,
+    currentPageIndex: 65537,
+  );
+  if (inShelf) await repository.insert(book);
+  final bookProvider = BookProvider(
+    repository: repository,
+    sourceService: sourceService,
+    contentCache: const _NoopChapterCache(),
+  );
+  await bookProvider.loadBooks(runMaintenance: false);
+
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
+        ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+        Provider<BookSourceSearchPort>.value(value: const _CoverSearchPort()),
+      ],
+      child: riverpod.ProviderScope(
+        overrides: [
+          sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+        ],
+        child: MaterialApp(home: BookInfoPage(book: book)),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return (provider: bookProvider, repository: repository);
 }
 
 BookSourceService _createSourceService() {
@@ -137,6 +227,8 @@ final class _MemorySourceRepository implements BookSourceRepository {
 final class _MemoryBookRepository implements BookRepository {
   final books = <String, Book>{};
   final chapters = <String, List<Chapter>>{};
+  final coverUpdates = <(String, String)>[];
+  bool failCoverWrite = false;
 
   @override
   Future<void> insert(Book book) async => books[book.id] = book;
@@ -156,7 +248,12 @@ final class _MemoryBookRepository implements BookRepository {
   Future<void> delete(String bookId) async => books.remove(bookId);
 
   @override
-  Future<void> updateCover(String bookId, String coverUrl) async {}
+  Future<void> updateCover(String bookId, String coverUrl) async {
+    coverUpdates.add((bookId, coverUrl));
+    if (failCoverWrite) throw StateError('封面写入失败');
+    final book = books[bookId];
+    if (book != null) books[bookId] = book.copyWith(coverUrl: coverUrl);
+  }
 
   @override
   Future<void> updateGroup(String bookId, String group) async {}
@@ -229,6 +326,18 @@ final class _EmptySearchPort implements BookSourceSearchPort {
     BookSource source,
     String keyword,
   ) async => const [];
+}
+
+final class _CoverSearchPort implements BookSourceSearchPort {
+  const _CoverSearchPort();
+
+  @override
+  Future<List<Map<String, String>>> search(
+    BookSource source,
+    String keyword,
+  ) async => const [
+    {'name': '测试书', 'coverUrl': 'https://cover.example/new.jpg'},
+  ];
 }
 
 final class _EmptyBookInfoPort implements BookSourceBookInfoPort {
