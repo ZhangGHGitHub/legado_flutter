@@ -6,7 +6,7 @@
 > **重构来源与基线：** [Jingshiro/legado](https://github.com/Jingshiro/legado)；UI 1:1 对齐和行为兼容是重构验收子目标，不是独立产品定位。
 > **本地原版基线：** 根目录 `legado-main/` 是只读的原版行为、数据结构、UI 和错误语义核对目录，不是本项目的主源码目录，也不参与 Flutter/Rust 构建。
 > 目标平台：Android / iOS / Windows / macOS / Linux / Web (WASM)  
-> 最后更新：2026-08-03
+> 最后更新：2026-08-04
 > 引擎版本：**v0.5.6** | Rust DB Schema：**v17** | 原版 Room：**v99** | FRB：**2.11.1**
 >
 > 当前暂停项（2026-07-26）：Web 平台/WASM/PWA 构建、Web 平台适配和相关验收；TTS 真实 Android 引擎验收。除这两类门禁外，Android/Windows 重构继续按固定顺序推进。
@@ -19,6 +19,8 @@
 > **R1-12 产品决策（2026-08-02）：** 旧版 Legado 数据必须能够导入，已完成业务映射的数据导入后立即可用；`readRecord` 和非核心 Room 表暂不业务化，但必须无损 archive-only 保存，不得因未映射而拒绝旧数据导入或丢弃原始行。导入前备份沿用原版 JSON 逻辑备份，不新增文件级 SQLite 备份要求。
 
 > **R1-12 当前权威状态（2026-08-03）：** 上述产品边界已完成：六张核心表导入后可直接使用，`readRecord` 与非核心 Room 表无损 archive-only 保存，JSON 备份、事务回滚和幂等导入通过。真实非空副本 `.tmp/r1-device-room/original_legado.db` 已确认 Room v99、identity hash 与原版基线一致，包含 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`；`emulator-5556` all-phase smoke 已通过 `1/1`。仍不宣称 `readRecord` 统计语义或非核心表 Rust v17 业务化完成。
+
+2026-08-04 Phase 4/R6 书架整理分组命令边界：整理页行内单本“分组”、批量“移入分组”和更多菜单“加入分组”改用 `BookshelfArrangeGroupCommandPort`；组合根通过 infrastructure 兼容适配器委托现有 `BookProvider`，并把写入后的不可变完整书架快照返回页面。Provider 继续承担完整书架刷新、mutation version、变更总线和通知；条件式“移除分组”及删除未迁移。三个 UI 入口、成功快照、选择清理和失败保持均有 Widget 回归，受影响定向 `25/25`、Flutter 全量 `1196`（`3` 项既有条件跳过）、analyze、架构边界、Dart 格式和 diff 门禁通过。本批不改变 Room 导入、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则或暂停平台门禁；R6 尚未退出。
 
 2026-08-04 Phase 4/R6 书籍基础信息字段级写入批次：三条 lane 分别实现 Rust SQL/API、Dart 数据端口和 application/Provider/page。新增 `updateBookDetails` 从 Rust 到 `BookRepository` 的完整链路，Rust SQL 只更新 `name/author/description`；详情页移除旧快照整书 `insert`，Provider 以最新书架对象合并字段、递增 mutation version 并发布完整快照。定向覆盖 trim、空书名、非书架、失败、旧 load 失效，以及封面、来源、readConfig、进度、章节索引和 UTF-16 章内位置不变。Rust 定向 `2/2`、全量 `270/270`，Flutter 定向 `20/20`、全量 `1188`（`3` 项既有条件跳过）通过；FRB 2.11.1 生成后重建 release DLL，真实 FRB 定向 `7/7` 通过。本批不改变 Room 导入、正文、目录、分页、章节身份、第 3 条断行规则或暂停平台门禁；R6 尚未退出。
 

@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/Phase 4/R6 书架整理分组命令边界：新增 `BookshelfArrangeGroupCommandPort` 及 Provider 回调适配器，行内单本“分组”、批量“移入分组”和“加入分组”经组合根注入的 application 端口执行，并使用写入后的不可变完整书架快照刷新页面。底层仍委托 `BookProvider`，保留 mutation version、`BookshelfChangeBus`、通知和异常传播；条件式“移除分组”与删除继续保留兼容入口。受影响定向 `25/25`、Flutter 全量 `1196` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。未修改 Rust、数据库、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。
 - 架构/Phase 4/R6 书籍基础信息字段级写入：新增 Rust/FRB/Dart `updateBookDetails` 链路，SQL 仅更新书名、作者、简介；详情页不再用旧页面快照整书 upsert，application 统一 trim/空书名回退，Provider 以最新书架记录合并三字段并发布快照。封面、来源、阅读配置、进度、章节索引和 UTF-16 章内位置保持不变；非书架不落库、失败不发布。Rust 定向 `2/2`、Rust 全量 `270/270`、Flutter 定向 `20/20`、Flutter 全量 `1188` 通过（`3` 项既有条件跳过）。FRB 生成后重建 release DLL，修复绑定内容哈希不一致，不改变业务测试。
 - 修复/Phase 4/R6 书架整理排序隔离：`BookshelfArrangeOrderPolicy` 在没有已保存顺序时也返回独立列表，避免“全部分组 + 首次手动排序”直接修改 `BookProvider.books` 内部集合而绕过 mutation version、变更总线和通知。策略与真实拖动定向 `6/6`，Widget 回归同时证明页面顺序已改变且 Provider 顺序/数量不变；Flutter 全量 `1177` 通过（`3` 项既有条件跳过）。不改变排序持久化、分组、删除或书架快照语义。
 - 架构/Phase 4/R6 书籍封面写入边界：新增 `BookMetadataController`，将详情页自动补全封面的字段级写入收口到 application 层；`BookProvider.updateBookCover()` 原位更新最新书架记录、递增 mutation version、发布完整快照并通知，防止在途旧 `loadBooks()` 覆盖新封面。页面保留非书架不落库和异常静默降级语义。定向 `12/12`，Flutter 全量 `1175` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub` 和架构边界通过。未修改 Rust、数据库 schema、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；整书基础信息保存留待下一独立批次。

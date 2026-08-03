@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../application/bookshelf/book_group_store_port.dart';
+import '../../application/bookshelf/bookshelf_arrange_group_command_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_port.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../domain/book/book_group.dart';
@@ -26,6 +27,7 @@ class BookshelfArrangePage extends StatelessWidget {
     this.gridLayout = false,
     this.preferences,
     this.groupStore,
+    this.groupCommands,
   });
 
   /// `null` = 全部；`''` = 未分组；其它 = 分组名
@@ -41,6 +43,9 @@ class BookshelfArrangePage extends StatelessWidget {
   /// 书架分组目录边界；测试宿主可显式注入 fake。
   final BookGroupStorePort? groupStore;
 
+  /// 分组命令边界；生产由组合根注入 Provider 回调适配器。
+  final BookshelfArrangeGroupCommandPort? groupCommands;
+
   @override
   Widget build(BuildContext context) {
     final sourceProvider = context.read<SourceProvider>();
@@ -54,6 +59,7 @@ class BookshelfArrangePage extends StatelessWidget {
         gridLayout: gridLayout,
         preferences: preferences,
         groupStore: groupStore,
+        groupCommands: groupCommands,
       ),
     );
   }
@@ -66,6 +72,7 @@ class _BookshelfArrangePageBody extends riverpod.ConsumerStatefulWidget {
     this.gridLayout = false,
     this.preferences,
     this.groupStore,
+    this.groupCommands,
   });
 
   final String? groupFilter;
@@ -73,6 +80,7 @@ class _BookshelfArrangePageBody extends riverpod.ConsumerStatefulWidget {
   final bool gridLayout;
   final BookshelfArrangePort? preferences;
   final BookGroupStorePort? groupStore;
+  final BookshelfArrangeGroupCommandPort? groupCommands;
 
   @override
   riverpod.ConsumerState<_BookshelfArrangePageBody> createState() =>
@@ -95,6 +103,7 @@ class _BookshelfArrangePageState
   bool _openInfoByTitle = false;
   late final BookshelfArrangePort _preferences;
   late final BookGroupStorePort _groupStore;
+  late final BookshelfArrangeGroupCommandPort _groupCommands;
 
   /// 当前筛选：全部 / 本地 / 未分组 / 自定义分组名
   late String _filterKey;
@@ -105,6 +114,9 @@ class _BookshelfArrangePageState
     super.initState();
     _preferences = widget.preferences ?? context.read<BookshelfArrangePort>();
     _groupStore = widget.groupStore ?? context.read<BookGroupStorePort>();
+    _groupCommands =
+        widget.groupCommands ??
+        context.read<BookshelfArrangeGroupCommandPort>();
     _filterKey = _filterKeyFromWidget(widget.groupFilter);
     _groupLabel = widget.groupLabel;
     _loadSortMode();
@@ -143,8 +155,8 @@ class _BookshelfArrangePageState
     setState(() => _openInfoByTitle = v);
   }
 
-  void _reloadBooks() {
-    var all = context.read<BookProvider>().books;
+  void _reloadBooks([List<Book>? snapshot]) {
+    var all = snapshot ?? context.read<BookProvider>().books;
     all = _applyGroupFilter(all);
     _books = BookshelfArrangeOrderPolicy.apply(all, _cachedOrder, (b) => b.id);
     _selected.removeWhere((id) => !_books.any((b) => b.id == id));
@@ -290,10 +302,10 @@ class _BookshelfArrangePageState
     if (ids.isEmpty) return;
     final chosen = await _pickGroup();
     if (chosen == null || !mounted) return;
-    await context.read<BookProvider>().updateBooksGroup(ids, chosen);
+    final books = await _groupCommands.updateBooksGroup(ids, chosen);
     if (!mounted) return;
     setState(() {
-      _reloadBooks();
+      _reloadBooks(books);
       _selected.clear();
     });
   }
@@ -302,9 +314,9 @@ class _BookshelfArrangePageState
   Future<void> _moveOneToGroup(Book book) async {
     final chosen = await _pickGroup(current: book.group);
     if (chosen == null || !mounted) return;
-    await context.read<BookProvider>().updateBookGroup(book.id, chosen);
+    final books = await _groupCommands.updateBookGroup(book.id, chosen);
     if (!mounted) return;
-    setState(_reloadBooks);
+    setState(() => _reloadBooks(books));
   }
 
   /// 加入分组（字符串模型下等同设为目标分组）
@@ -313,10 +325,10 @@ class _BookshelfArrangePageState
     if (ids.isEmpty) return;
     final chosen = await _pickGroup();
     if (chosen == null || !mounted) return;
-    await context.read<BookProvider>().updateBooksGroup(ids, chosen);
+    final books = await _groupCommands.updateBooksGroup(ids, chosen);
     if (!mounted) return;
     setState(() {
-      _reloadBooks();
+      _reloadBooks(books);
       _selected.clear();
     });
   }

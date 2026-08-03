@@ -17,6 +17,7 @@ import '../application/annotation/note_editor_port.dart';
 import '../application/bookmark/bookmark_page_port.dart';
 import '../application/bookshelf/book_group_management_port.dart';
 import '../application/bookshelf/book_group_store_port.dart';
+import '../application/bookshelf/bookshelf_arrange_group_command_port.dart';
 import '../application/bookshelf/bookshelf_arrange_port.dart';
 import '../application/bookshelf/bookshelf_change_port.dart';
 import '../application/bookshelf/bookshelf_controller.dart';
@@ -137,6 +138,7 @@ import '../infrastructure/book/local_book_import_port_adapter.dart';
 import '../infrastructure/bookshelf/book_group_management_port_adapter.dart';
 import '../infrastructure/bookshelf/book_group_store_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_arrange_port_adapter.dart';
+import '../infrastructure/bookshelf/bookshelf_arrange_group_command_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_config_dialog_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_display_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_list_port_adapter.dart';
@@ -647,6 +649,13 @@ abstract final class AppCompositionRoot {
           ),
           Provider<BookshelfArrangePort>.value(
             value: const SharedPreferencesBookshelfArrangePortAdapter(),
+          ),
+          Provider<BookshelfArrangeGroupCommandPort>.value(
+            value: BookshelfArrangeGroupCommandPortAdapter(
+              updateBookGroup: bootstrap.bookProvider.updateBookGroup,
+              updateBooksGroup: bootstrap.bookProvider.updateBooksGroup,
+              books: () => bootstrap.bookProvider.books,
+            ),
           ),
           Provider<BookGroupStorePort>.value(
             value: const BookGroupStorePortAdapter(),

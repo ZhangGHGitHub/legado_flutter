@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:legado_flutter/features/bookshelf/bookshelf_arrange_page.dart';
+import 'package:legado_flutter/application/bookshelf/book_group_management_port.dart';
 import 'package:legado_flutter/application/bookshelf/book_group_store_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_port.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_group_command_port.dart';
 import 'package:legado_flutter/application/book/book_group_policy.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -62,6 +66,58 @@ class _FakeBookGroupStore implements BookGroupStorePort {
   Future<void> syncNamesFromBooks(Iterable<String> names) async {}
 }
 
+class _FakeGroupCommands implements BookshelfArrangeGroupCommandPort {
+  final singleCalls = <(String, String)>[];
+  final batchCalls = <(List<String>, String)>[];
+  List<Book> snapshot = const [];
+  Object? error;
+
+  @override
+  Future<List<Book>> updateBookGroup(String bookId, String group) async {
+    singleCalls.add((bookId, group));
+    if (error case final error?) throw error;
+    return List<Book>.unmodifiable(snapshot);
+  }
+
+  @override
+  Future<List<Book>> updateBooksGroup(
+    Iterable<String> bookIds,
+    String group,
+  ) async {
+    batchCalls.add((List<String>.of(bookIds), group));
+    if (error case final error?) throw error;
+    return List<Book>.unmodifiable(snapshot);
+  }
+}
+
+class _FakeBookGroupManagementPort implements BookGroupManagementPort {
+  List<BookGroup> selectGroups = const [];
+
+  @override
+  Future<bool> canAddGroup() async => true;
+
+  @override
+  Future<void> delete(BookGroup group) async {}
+
+  @override
+  Future<List<BookGroup>> load() async => const [];
+
+  @override
+  Future<List<BookGroup>> loadSelectGroups() async => List.of(selectGroups);
+
+  @override
+  Future<int> maxOrder() async => 0;
+
+  @override
+  Future<void> syncNamesFromBooks(Iterable<String> names) async {}
+
+  @override
+  Future<int> unusedId() async => 1;
+
+  @override
+  Future<void> update(BookGroup group) async {}
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -97,6 +153,7 @@ void main() {
           home: BookshelfArrangePage(
             preferences: preferences,
             groupStore: groupStore,
+            groupCommands: _FakeGroupCommands(),
           ),
         ),
       ),
@@ -166,6 +223,7 @@ void main() {
           home: BookshelfArrangePage(
             preferences: _FakeBookshelfArrangePrefs(),
             groupStore: _FakeBookGroupStore(),
+            groupCommands: _FakeGroupCommands(),
           ),
         ),
       ),
@@ -180,6 +238,134 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('更新后的书源'), findsOneWidget);
+  });
+
+  testWidgets('batch move uses the command snapshot and clears selection', (
+    tester,
+  ) async {
+    final bookProvider = await _bookProviderWith([
+      const Book(id: 'one', name: '第一本'),
+      const Book(id: 'two', name: '第二本'),
+    ]);
+    final commands = _FakeGroupCommands()
+      ..snapshot = const [
+        Book(id: 'one', name: '快照第一本', group: '目标分组'),
+        Book(id: 'two', name: '快照第二本', group: '目标分组'),
+      ];
+
+    await _pumpArrangePage(tester, bookProvider, commands);
+    await tester.tap(find.text('第二本'));
+    await tester.tap(find.text('第一本'));
+    await tester.pump();
+
+    expect(find.text('全选 (2/2)'), findsOneWidget);
+    await tester.tap(find.text('移入分组'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.tap(find.text('确认'));
+    await tester.pumpAndSettle();
+
+    expect(commands.batchCalls, hasLength(1));
+    expect(commands.batchCalls.single.$1, ['two', 'one']);
+    expect(commands.batchCalls.single.$2, '目标分组');
+    expect(commands.singleCalls, isEmpty);
+    expect(find.text('快照第一本'), findsOneWidget);
+    expect(find.text('快照第二本'), findsOneWidget);
+    expect(find.text('第一本'), findsNothing);
+    expect(find.text('第二本'), findsNothing);
+    expect(find.text('全选 (0/2)'), findsOneWidget);
+    expect(bookProvider.books.map((book) => book.name), ['第一本', '第二本']);
+  });
+
+  testWidgets('inline group command uses the selected book and snapshot', (
+    tester,
+  ) async {
+    final bookProvider = await _bookProviderWith([
+      const Book(id: 'one', name: '第一本'),
+    ]);
+    final commands = _FakeGroupCommands()
+      ..snapshot = const [Book(id: 'one', name: '单本快照', group: '目标分组')];
+
+    await _pumpArrangePage(tester, bookProvider, commands);
+    await tester.tap(find.text('分组'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.tap(find.text('确认'));
+    await tester.pumpAndSettle();
+
+    expect(commands.singleCalls, [('one', '目标分组')]);
+    expect(commands.batchCalls, isEmpty);
+    expect(find.text('单本快照'), findsOneWidget);
+    expect(find.text('第一本'), findsNothing);
+  });
+
+  testWidgets('add to group menu routes the selected ids through the command', (
+    tester,
+  ) async {
+    final bookProvider = await _bookProviderWith([
+      const Book(id: 'one', name: '第一本'),
+      const Book(id: 'two', name: '第二本'),
+    ]);
+    final commands = _FakeGroupCommands()
+      ..snapshot = const [
+        Book(id: 'one', name: '加入后第一本', group: '目标分组'),
+        Book(id: 'two', name: '第二本'),
+      ];
+
+    await _pumpArrangePage(tester, bookProvider, commands);
+    await tester.tap(find.text('第一本'));
+    await tester.pump();
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.more_vert).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('加入分组'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.tap(find.text('确认'));
+    await tester.pumpAndSettle();
+
+    expect(commands.batchCalls, hasLength(1));
+    expect(commands.batchCalls.single.$1, ['one']);
+    expect(commands.batchCalls.single.$2, '目标分组');
+    expect(commands.singleCalls, isEmpty);
+    expect(find.text('加入后第一本'), findsOneWidget);
+    expect(find.text('全选 (0/2)'), findsOneWidget);
+  });
+
+  testWidgets('batch move failure preserves the list and selection', (
+    tester,
+  ) async {
+    final bookProvider = await _bookProviderWith([
+      const Book(id: 'one', name: '第一本'),
+      const Book(id: 'two', name: '第二本'),
+    ]);
+    final failure = StateError('分组写入失败');
+    final commands = _FakeGroupCommands()
+      ..snapshot = const [Book(id: 'one', name: '不应显示')]
+      ..error = failure;
+
+    Object? reportedError;
+    await runZonedGuarded(() async {
+      await _pumpArrangePage(tester, bookProvider, commands);
+      await tester.tap(find.text('第一本'));
+      await tester.pump();
+
+      await tester.tap(find.text('移入分组'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.tap(find.text('确认'));
+      await tester.pumpAndSettle();
+    }, (error, _) => reportedError = error);
+
+    expect(reportedError, same(failure));
+
+    expect(commands.batchCalls, hasLength(1));
+    expect(commands.batchCalls.single.$1, ['one']);
+    expect(commands.batchCalls.single.$2, '目标分组');
+    expect(commands.singleCalls, isEmpty);
+    expect(find.text('第一本'), findsOneWidget);
+    expect(find.text('第二本'), findsOneWidget);
+    expect(find.text('不应显示'), findsNothing);
+    expect(find.text('全选 (1/2)'), findsOneWidget);
   });
 
   testWidgets('manual reorder does not mutate BookProvider books', (
@@ -209,6 +395,7 @@ void main() {
           home: BookshelfArrangePage(
             preferences: preferences,
             groupStore: _FakeBookGroupStore(),
+            groupCommands: _FakeGroupCommands(),
           ),
         ),
       ),
@@ -230,6 +417,50 @@ void main() {
     expect(find.text('第一本'), findsOneWidget);
     expect(find.text('第二本'), findsOneWidget);
   });
+}
+
+Future<BookProvider> _bookProviderWith(Iterable<Book> books) async {
+  final provider = BookProvider(
+    repository: _MemoryBookRepository(),
+    contentCache: const FileChapterContentCache(),
+    sourceService: createTestBookSourceService(),
+  );
+  for (final book in books) {
+    await provider.addBook(book);
+  }
+  return provider;
+}
+
+Future<void> _pumpArrangePage(
+  WidgetTester tester,
+  BookProvider bookProvider,
+  _FakeGroupCommands commands,
+) async {
+  final groupManagement = _FakeBookGroupManagementPort()
+    ..selectGroups = const [BookGroup(groupId: 1, groupName: '目标分组', order: 1)];
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+        ChangeNotifierProvider(
+          create: (_) => SourceProvider(
+            repository: _MemoryBookSourceRepository(const []),
+            validationPort: FrbBookSourceValidationPort(),
+            sourceService: createTestBookSourceService(),
+          ),
+        ),
+        Provider<BookGroupManagementPort>.value(value: groupManagement),
+      ],
+      child: MaterialApp(
+        home: BookshelfArrangePage(
+          preferences: _FakeBookshelfArrangePrefs(),
+          groupStore: _FakeBookGroupStore(),
+          groupCommands: commands,
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
 }
 
 final class _MemoryBookSourceRepository implements BookSourceRepository {

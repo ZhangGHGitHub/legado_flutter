@@ -1,7 +1,9 @@
 # Legado Flutter — Jingshiro/legado Rust + Flutter 重构开发流程
 
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
-> 最后更新：2026-08-03
+> 最后更新：2026-08-04
+
+2026-08-04 Phase 4/R6 书架整理分组命令追溯：三条只读 lane 分别审查 Widget 行为、架构/文档落点和下一批条件式“移除分组”语义；owner 新增 application port、Provider 回调兼容适配器、组合根接线及三个真实 UI 入口回归。定向验证覆盖委托次数、ID 顺序、不可变快照、成功刷新、选择清理、单/批异常传播和失败保持，结果 `25/25`；随后 Flutter 全量 `1196` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。底层仍由 `BookProvider` 保留 mutation version、变更总线和通知，“移除分组”与删除未混迁。只提交本批代码、测试和四份追溯文档，排除 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`。
 
 2026-08-04 Phase 4/R6 书籍基础信息字段级写入追溯：三条不重叠写集分别实现 Rust、Dart 数据端口和上层接线；Rust lane 先提交底层 `82a860b`，owner 使用 FRB 2.11.1 生成绑定，恢复生成器无关的 lockfile 漂移，并机械补齐 16 个测试 fake。先通过 Rust 定向 `2/2`、Flutter 跨层定向 `20/20` 和 analyze；Rust 全量 `270/270`。Flutter 全量首次因新绑定与旧 release DLL 内容哈希不一致导致 12 个真实 FRB 初始化失败，按现有流程执行 release 重建后原失败定向 `7/7`、第二次全量 `1188`（`3` 项既有条件跳过）通过，未跳过或放宽测试。提交前继续执行架构、格式和 diff 门禁；不提交本地工具文件。
 

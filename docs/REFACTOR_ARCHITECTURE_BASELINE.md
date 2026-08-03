@@ -2,6 +2,8 @@
 
 > **当前权威状态（2026-08-03）：** R1-12 已按 archive-only 产品边界完成：六张核心表映射后可直接使用，23 张 Room 实体表无损归档，JSON 备份、事务回滚和幂等导入通过；`.tmp/r1-device-room/original_legado.db` 已确认 Room v99、identity hash 与原版基线一致，非空行数为 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`，既有 `emulator-5556` all-phase smoke `1/1` 通过。不宣称 `readRecord` 统计语义或非核心表 Rust v17 业务化完成。历史段落中的“R1 重新打开/部分完成”保留为当时证据链，不覆盖本条当前判定。
 
+> 2026-08-04 Phase 4/R6 书架整理分组命令边界：迁移前整理页直接调用 `BookProvider.updateBookGroup/updateBooksGroup`；迁移后行内“分组”、批量“移入分组”和“加入分组”依赖 application `BookshelfArrangeGroupCommandPort`，组合根通过 infrastructure 兼容适配器委托现有 Provider，并返回不可变完整书架快照。该桥接保留 Provider 的 mutation version、`BookshelfChangeBus` 和通知，是过渡边界，不代表 Provider/Riverpod 状态迁移完成；条件式“移除分组”和删除仍保留原路径。受影响定向 `25/25`、Flutter 全量 `1196`（`3` 项既有条件跳过）、analyze、架构边界、Dart 格式和 diff 门禁通过；R6 尚未退出。
+
 > 2026-08-04 Phase 4/R6 书籍基础信息字段级边界：Rust v17 新增只更新 `name/author/description` 的 SQL 与 FRB API，Dart 经 `RustDatabasePort`、`DatabaseHelper`、`BookRepository` 和 `BookMetadataController` 逐层委托。`BookProvider` 仍是书架事实源，写入成功后只将三字段合并到最新对象并发布快照；页面不再整书 upsert。契约固定封面、来源、readConfig、进度、章节索引、UTF-16 位置和旧导入字段不受影响。Rust 全量 `270/270`、Flutter 全量 `1188`（`3` 项既有条件跳过）通过；R6 尚未退出。
 
 > 2026-08-03 Phase 4/R6 书架整理排序隔离：整理页的本地 `_books` 必须与 `BookProvider.books` 内部集合隔离；空保存顺序分支现由 `BookshelfArrangeOrderPolicy` 返回副本，拖动只改变页面局部顺序，不能绕过 Provider mutation version、变更总线或通知。策略/Widget 定向 `6/6`、Flutter 全量 `1177`（`3` 项既有条件跳过）通过。分组与删除仍通过 Provider 兼容命令，R6 尚未退出。
