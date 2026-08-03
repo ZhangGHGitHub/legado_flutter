@@ -72,23 +72,30 @@ class BookshelfNotifier extends Notifier<BookshelfState> {
   BookshelfState build() {
     _controller = ref.watch(bookshelfControllerProvider);
     _changePort = ref.watch(bookshelfChangePortProvider);
-    final subscription = _changePort.changes.listen((change) {
-      _publishSnapshot(change.books);
-    });
+    final subscription = _changePort.changes.listen(_publishChange);
     ref.onDispose(subscription.cancel);
     final latest = _changePort.latest;
-    return latest == null
-        ? BookshelfState.initial()
-        : BookshelfState.success(latest.books);
+    return latest == null ? BookshelfState.initial() : _stateForChange(latest);
   }
 
   Future<void> load() => _fetch(refreshing: false);
 
   Future<void> refresh() => _fetch(refreshing: true);
 
-  void _publishSnapshot(List<Book> books) {
+  BookshelfState _stateForChange(BookshelfChange change) {
+    if (change.hasError) {
+      return BookshelfState.failure(
+        change.error!,
+        change.stackTrace ?? StackTrace.current,
+        books: change.books,
+      );
+    }
+    return BookshelfState.success(change.books);
+  }
+
+  void _publishChange(BookshelfChange change) {
     _requestId++;
-    state = BookshelfState.success(books);
+    state = _stateForChange(change);
   }
 
   Future<void> _fetch({required bool refreshing}) async {

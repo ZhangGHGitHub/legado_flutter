@@ -11,14 +11,28 @@ abstract interface class BookshelfChangePort {
   BookshelfChange? get latest;
 
   void notifyChanged(List<Book> books);
+
+  void notifyFailed(
+    Object error,
+    StackTrace stackTrace, {
+    List<Book> books = const [],
+  });
 }
 
 final class BookshelfChange {
-  BookshelfChange({required this.revision, required List<Book> books})
-    : books = List.unmodifiable(books);
+  BookshelfChange({
+    required this.revision,
+    required List<Book> books,
+    this.error,
+    this.stackTrace,
+  }) : books = List.unmodifiable(books);
 
   final int revision;
   final List<Book> books;
+  final Object? error;
+  final StackTrace? stackTrace;
+
+  bool get hasError => error != null;
 }
 
 /// In-memory change bus shared by the application composition root.
@@ -46,6 +60,23 @@ final class BookshelfChangeBus implements BookshelfChangePort {
     _controller.add(change);
   }
 
+  @override
+  void notifyFailed(
+    Object error,
+    StackTrace stackTrace, {
+    List<Book> books = const [],
+  }) {
+    if (_controller.isClosed) return;
+    final change = BookshelfChange(
+      revision: ++_revision,
+      books: books,
+      error: error,
+      stackTrace: stackTrace,
+    );
+    _latest = change;
+    _controller.add(change);
+  }
+
   Future<void> dispose() => _controller.close();
 }
 
@@ -61,6 +92,13 @@ final class NoopBookshelfChangePort implements BookshelfChangePort {
 
   @override
   void notifyChanged(List<Book> books) {}
+
+  @override
+  void notifyFailed(
+    Object error,
+    StackTrace stackTrace, {
+    List<Book> books = const [],
+  }) {}
 }
 
 final bookshelfChangePortProvider = Provider<BookshelfChangePort>((ref) {

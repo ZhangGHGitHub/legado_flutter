@@ -247,6 +247,29 @@ void main() {
       expect(state.status, BookshelfStatus.success);
       expect(state.books, [book]);
     });
+
+    test(
+      'starts from the latest failed snapshot without another database read',
+      () {
+        final changes = BookshelfChangeBus();
+        final error = '加载书架失败: 数据库不可用';
+        final stackTrace = StackTrace.current;
+        final book = Book(id: 'book-1', name: '最近书架');
+        changes.notifyFailed(error, stackTrace, books: [book]);
+        final container = ProviderContainer(
+          overrides: [bookshelfChangePortProvider.overrideWithValue(changes)],
+        );
+        addTearDown(container.dispose);
+        addTearDown(changes.dispose);
+
+        final state = container.read(bookshelfNotifierProvider);
+
+        expect(state.status, BookshelfStatus.failure);
+        expect(state.error, same(error));
+        expect(state.stackTrace, same(stackTrace));
+        expect(state.books, [book]);
+      },
+    );
   });
 }
 

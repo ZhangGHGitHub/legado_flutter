@@ -412,6 +412,8 @@ Day 2  PR/Issue 模板
 2026-08-03 当前 R6 追溯记录：三个并行开发线完成 `SearchContentPage`、`BookshelfStyle1Page` 和 `BookshelfStyle2Page` 的 Riverpod/Controller 调用边界迁移，主线复核 `ReplaceController`、`SourceController`、`BookProvider` 兼容职责及书架测试宿主。受影响定向 `8/8`；Flutter 串行全量 `1086` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。RemoteBook 仅完成只读边界审查，未修改 Rust 或 `legado-main/`，正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 和暂停平台门禁保持不变。后续按 RemoteBook 审查结论单独处理页面状态，不替换 `BookProvider` 书架事实源。详见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
 2026-08-03 当前 R6 追溯记录：三个并行开发线完成 RemoteBook 与 `MyPage` 的 Riverpod/Controller 状态边界迁移，主线复核 Freezed 生成文件、WebDAV 请求失效保护、备份状态和 `BookProvider` 兼容职责。受影响定向 `11/11`；Flutter 串行全量 `1093` 通过、`3` 项既有条件跳过；Freezed 生成、`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。AppConfig 仅完成只读审查，未修改 Rust 或 `legado-main/`，正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 和暂停平台门禁保持不变。后续继续按不重叠写集推进，不直接替换书架事实源或启动配置单例。详见 `CHANGELOG.md`、`docs/REFACTOR_PLAN.md` 和 `docs/REFACTOR_ARCHITECTURE_BASELINE.md`。
 
+2026-08-03 当前 R6 追溯记录：完成 `BookshelfStyle1Page`、`BookshelfStyle2Page` 的 `BookshelfState` 只读消费迁移，并扩展 `BookshelfChangeBus` 失败快照，使生产启动书架读取失败进入 `BookshelfNotifier.failure`；目录刷新、更新中状态、缓存、删除和分组写入继续由 `BookProvider` 兼容边界承载。书架相关定向 `39/39`；Flutter 全量 `1165` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未修改 Rust、`legado-main/`、Reader、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；不宣称 BookProvider 全量迁移或 R6 退出。
+
 ---
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)

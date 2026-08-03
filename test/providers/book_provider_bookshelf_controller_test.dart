@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_change_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_controller.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -37,6 +38,8 @@ void main() {
     'loadBooks preserves the legacy error text through the controller',
     () async {
       final error = StateError('bookshelf read failed');
+      final changes = BookshelfChangeBus();
+      addTearDown(changes.dispose);
       final provider = BookProvider(
         repository: _EmptyBookDao(),
         contentCache: const FileChapterContentCache(),
@@ -45,6 +48,7 @@ void main() {
           const [],
           error: error,
         ),
+        bookshelfChangePort: changes,
       );
 
       await provider.loadBooks(runMaintenance: false);
@@ -52,6 +56,8 @@ void main() {
       expect(provider.books, isEmpty);
       expect(provider.isLoading, isFalse);
       expect(provider.loadError, '加载书架失败: $error');
+      expect(changes.latest?.error, provider.loadError);
+      expect(changes.latest?.books, isEmpty);
     },
   );
 }

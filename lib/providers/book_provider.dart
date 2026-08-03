@@ -288,12 +288,13 @@ class BookProvider extends ChangeNotifier {
         unawaited(runStartupMaintenance());
       }
       _loadError = null;
-    } catch (e) {
+    } catch (e, stackTrace) {
       if (requestId != _booksLoadRequestId ||
           mutationVersion != _booksMutationVersion) {
         return;
       }
       _loadError = '加载书架失败: $e';
+      _bookshelfChangePort.notifyFailed(_loadError!, stackTrace, books: _books);
       debugPrint(_loadError);
     } finally {
       if (requestId == _booksLoadRequestId) {
