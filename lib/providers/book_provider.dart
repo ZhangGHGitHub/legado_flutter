@@ -9,6 +9,7 @@ import '../application/book/book_provider_source_port.dart';
 import '../application/book/book_record_controller.dart';
 import '../application/book/book_progress_controller.dart';
 import '../application/bookshelf/bookshelf_book_group_controller.dart';
+import '../application/bookshelf/bookshelf_change_port.dart';
 import '../application/bookshelf/bookshelf_controller.dart';
 import '../application/bookshelf/bookshelf_chapter_meta_controller.dart';
 import '../application/bookshelf/bookshelf_book_lifecycle_controller.dart';
@@ -52,6 +53,7 @@ class BookProvider extends ChangeNotifier {
     BookshelfChapterMetaController? bookshelfChapterMetaController,
     BookshelfBookLifecycleController? bookshelfBookLifecycleController,
     BookshelfController? bookshelfController,
+    BookshelfChangePort? bookshelfChangePort,
     required ChapterContentCachePort contentCache,
   }) : _repository = repository,
        _sourceService = sourceService,
@@ -76,7 +78,9 @@ class BookProvider extends ChangeNotifier {
            ),
        _bookshelfController =
            bookshelfController ??
-           BookshelfController(RepositoryBookshelfPort(repository)) {
+           BookshelfController(RepositoryBookshelfPort(repository)),
+       _bookshelfChangePort =
+           bookshelfChangePort ?? const NoopBookshelfChangePort() {
     ReadBook.instance.configure(
       sourceService: _sourceService,
       repository: _repository,
@@ -94,9 +98,11 @@ class BookProvider extends ChangeNotifier {
   final BookshelfChapterMetaController _bookshelfChapterMetaController;
   final BookshelfBookLifecycleController _bookshelfBookLifecycleController;
   final BookshelfController _bookshelfController;
+  final BookshelfChangePort _bookshelfChangePort;
 
   List<Book> _books = [];
   List<Chapter> _currentChapters = [];
+  int _booksLoadRequestId = 0;
   bool _isLoading = false;
   String? _loadError;
 
@@ -252,22 +258,28 @@ class BookProvider extends ChangeNotifier {
 
   /// 加载书架
   Future<void> loadBooks({bool runMaintenance = true}) async {
+    final requestId = ++_booksLoadRequestId;
     _isLoading = true;
     _loadError = null;
     notifyListeners();
     try {
-      _books = await _bookshelfController.loadBookshelf();
+      final books = await _bookshelfController.loadBookshelf();
+      if (requestId != _booksLoadRequestId) return;
+      _books = books;
       if (runMaintenance) {
         // 缓存清理和章节元数据只影响维护状态，不能阻塞书架首帧。
         unawaited(runStartupMaintenance());
       }
       _loadError = null;
     } catch (e) {
+      if (requestId != _booksLoadRequestId) return;
       _loadError = '加载书架失败: $e';
       debugPrint(_loadError);
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (requestId == _booksLoadRequestId) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -286,6 +298,7 @@ class BookProvider extends ChangeNotifier {
       if (book != null) {
         _books = await _repository.getAll();
         await _refreshShelfChapterMetaFor(book.id);
+        _bookshelfChangePort.notifyChanged();
         notifyListeners();
       }
       return book;
@@ -309,6 +322,7 @@ class BookProvider extends ChangeNotifier {
       );
       _books = await _repository.getAll();
       await _refreshShelfChapterMetaFor(book.id);
+      _bookshelfChangePort.notifyChanged();
       notifyListeners();
       return book;
     } finally {
@@ -367,6 +381,7 @@ class BookProvider extends ChangeNotifier {
     if (added > 0) {
       _books = await _repository.getAll();
       await _refreshShelfChapterMeta();
+      _bookshelfChangePort.notifyChanged();
       notifyListeners();
     }
     return (added: added, skipped: skipped, failed: failed);
@@ -395,6 +410,7 @@ class BookProvider extends ChangeNotifier {
     if (added > 0) {
       _books = await _repository.getAll();
       await _refreshShelfChapterMeta();
+      _bookshelfChangePort.notifyChanged();
       notifyListeners();
     }
     return added;
@@ -439,6 +455,7 @@ class BookProvider extends ChangeNotifier {
     if (success > 0) {
       _books = await _repository.getAll();
       await _refreshShelfChapterMeta();
+      _bookshelfChangePort.notifyChanged();
       notifyListeners();
     }
     return (success: success, fail: fail);
@@ -797,6 +814,7 @@ class BookProvider extends ChangeNotifier {
     _shelfUpdateQueued = 0;
     _books = await _repository.getAll();
     await _refreshShelfChapterMeta();
+    _bookshelfChangePort.notifyChanged();
     notifyListeners();
     return ShelfTocUpdateResult(
       requested: requestedBooks.length,
@@ -990,6 +1008,7 @@ class BookProvider extends ChangeNotifier {
     if (shelf != null) {
       await _repository.insert(updated);
       _books = await _repository.getAll();
+      _bookshelfChangePort.notifyChanged();
     }
     if (_currentChapters.isNotEmpty &&
         _currentChapters.first.bookId == updated.id) {
@@ -1137,6 +1156,7 @@ class BookProvider extends ChangeNotifier {
     await _bookshelfBookLifecycleController.addBook(book);
     _books = await _repository.getAll();
     await _refreshShelfChapterMetaFor(book.id);
+    _bookshelfChangePort.notifyChanged();
     notifyListeners();
   }
 
@@ -1145,6 +1165,7 @@ class BookProvider extends ChangeNotifier {
     await _bookshelfBookLifecycleController.removeBook(bookId);
     _shelfChapterMeta.remove(bookId);
     _books = await _repository.getAll();
+    _bookshelfChangePort.notifyChanged();
     notifyListeners();
   }
 
@@ -1155,12 +1176,14 @@ class BookProvider extends ChangeNotifier {
       _shelfChapterMeta.remove(id);
     }
     _books = await _repository.getAll();
+    _bookshelfChangePort.notifyChanged();
     notifyListeners();
   }
 
   /// 批量更新分组
   Future<void> updateBooksGroup(Iterable<String> bookIds, String group) async {
     _books = await _bookshelfGroupController.updateBooksGroup(bookIds, group);
+    _bookshelfChangePort.notifyChanged();
     notifyListeners();
   }
 
@@ -1182,6 +1205,7 @@ class BookProvider extends ChangeNotifier {
     );
     _books = await _repository.getAll();
     await _refreshShelfChapterMetaFor(bookId);
+    _bookshelfChangePort.notifyChanged();
     notifyListeners();
   }
 
@@ -1211,6 +1235,7 @@ class BookProvider extends ChangeNotifier {
   /// 更新书籍分组
   Future<void> updateBookGroup(String bookId, String group) async {
     _books = await _bookshelfGroupController.updateBookGroup(bookId, group);
+    _bookshelfChangePort.notifyChanged();
     notifyListeners();
   }
 
@@ -1218,6 +1243,7 @@ class BookProvider extends ChangeNotifier {
   Future<void> updateReadIteration(Book book, int readIteration) async {
     await _bookRecordController.updateReadIteration(book, readIteration);
     _books = await _repository.getAll();
+    _bookshelfChangePort.notifyChanged();
     notifyListeners();
   }
 
@@ -1246,6 +1272,7 @@ class BookProvider extends ChangeNotifier {
       dailyChapters: dailyChapters,
     );
     _books = await _repository.getAll();
+    _bookshelfChangePort.notifyChanged();
     notifyListeners();
     return findBookById(book.id) ?? next;
   }

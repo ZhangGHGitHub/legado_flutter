@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-03
 
+2026-08-03 Phase 4/R6 书架状态同步前置追溯：先由三个 agent 分别审查 Style1、Style2/入口和 BookshelfNotifier/BookProvider 同步风险，确认页面直接切换会造成重复加载及写入后陈旧状态；owner 随后只实现同步前置，不迁移页面。`BookProvider.loadBooks` 增加 requestId 失效保护；新增 `BookshelfChangePort`/`BookshelfChangeBus`，由生产组合根共享给 Provider 和 Notifier，Provider 成功刷新书架快照后发布变更，Notifier 复用 `refresh()`。定向 `16/16`、Flutter 全量 `1151`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、脚本自测和 `git diff --check` 全部通过。书架页面继续使用 `BookProvider`，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`。
+
 2026-08-03 Phase 4/R6 BookProvider 书架读取追溯：在上一批 BookshelfController 边界通过后，将 `BookProvider.loadBooks` 改为委托可注入的 `BookshelfController`，保留 loading、error 文本、notify 顺序、维护开关和全部写入职责。先通过新增回归 `2/2`，再通过 Flutter 全量 `1145`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、其脚本自测和 `git diff --check`。生产默认仍绑定同一 `BookRepository`，测试通过替身验证委托和错误传播；只提交本批代码、测试和追溯文档，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`。
 
 2026-08-03 Phase 4/R6 书架读取边界追溯：先完成 controller/Notifier/组合根定向 `21/21`，再执行 Flutter 全量、analyze、架构边界和 diff 门禁。Flutter 3.44.8/Dart 3.12.2 的测试命令使用显式 `--enable-experiment=dot-shorthands`，不修改项目配置；缓存重建后全量 Flutter `1143` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub` 清洁通过，架构边界和 `git diff --check` 通过。`BookshelfController` 生产绑定同一 `BookRepository`，旧 CoreApi 仅作 fallback；同时以透明 `Material` 修复 Flutter 3.44 的分组选择 tile 断言，以 `onReorderItem` 保留排序结果。只提交本批代码、测试和追溯文档，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`。

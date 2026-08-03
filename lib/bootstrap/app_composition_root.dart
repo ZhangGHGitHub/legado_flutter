@@ -18,6 +18,7 @@ import '../application/bookmark/bookmark_page_port.dart';
 import '../application/bookshelf/book_group_management_port.dart';
 import '../application/bookshelf/book_group_store_port.dart';
 import '../application/bookshelf/bookshelf_arrange_port.dart';
+import '../application/bookshelf/bookshelf_change_port.dart';
 import '../application/bookshelf/bookshelf_controller.dart';
 import '../application/bookshelf/bookshelf_config_dialog_port.dart';
 import '../application/bookshelf/bookshelf_display_port.dart';
@@ -285,6 +286,7 @@ abstract final class AppCompositionRoot {
     required BookRepository bookRepository,
     required BookSourceRepository sourceRepository,
     required BookProviderSourcePort bookProviderSourcePort,
+    BookshelfChangePort? bookshelfChangePort,
     required Widget child,
   }) {
     final coreApi = RealCoreApi(
@@ -300,6 +302,9 @@ abstract final class AppCompositionRoot {
             coreApiProvider.overrideWithValue(coreApi),
             bookshelfControllerProvider.overrideWithValue(
               BookshelfController(RepositoryBookshelfPort(bookRepository)),
+            ),
+            bookshelfChangePortProvider.overrideWithValue(
+              bookshelfChangePort ?? const NoopBookshelfChangePort(),
             ),
             if (sourceProvider != null)
               sourceControllerProvider.overrideWithValue(
@@ -421,6 +426,7 @@ abstract final class AppCompositionRoot {
     );
 
     final contentProcessor = FrbContentProcessingPort();
+    final bookshelfChangePort = BookshelfChangeBus();
     final remoteArchiveImportService = RemoteArchiveImportService(
       parser: const FrbRemoteArchiveParserPort(),
     );
@@ -455,6 +461,7 @@ abstract final class AppCompositionRoot {
       bookmarkSyncService: bookmarkSyncService,
       cacheService: cacheService,
       webdavRepository: webdavRepository,
+      bookshelfChangePort: bookshelfChangePort,
       reportStartupStage: reportStartupStage,
       reportStartupTask: (report) {
         final suffix = report.error == null ? '' : ': ${report.error}';
@@ -813,6 +820,7 @@ abstract final class AppCompositionRoot {
           bookRepository: bookRepository,
           sourceRepository: sourceRepository,
           bookProviderSourcePort: bookProviderSourcePort,
+          bookshelfChangePort: bookshelfChangePort,
           child: LegadoApp(
             navigatorKey: navigatorKey,
             pendingCrashReport: pendingCrashReport,

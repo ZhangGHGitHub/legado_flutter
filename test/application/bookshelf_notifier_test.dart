@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_notifier.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_change_port.dart';
 import 'package:legado_flutter/application/core_api.dart';
 import 'package:legado_flutter/application/core_api_provider.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -201,6 +202,36 @@ void main() {
         () => container.read(bookshelfNotifierProvider).books.add(book),
         throwsUnsupportedError,
       );
+    });
+
+    test('refreshes after an external bookshelf change signal', () async {
+      final api = _FakeCoreApi();
+      final changes = BookshelfChangeBus();
+      final container = ProviderContainer(
+        overrides: [
+          coreApiProvider.overrideWithValue(api),
+          bookshelfChangePortProvider.overrideWithValue(changes),
+        ],
+      );
+      addTearDown(container.dispose);
+      addTearDown(changes.dispose);
+      final notifier = container.read(bookshelfNotifierProvider.notifier);
+      final oldBook = Book(id: 'old', name: '旧书');
+      final newBook = Book(id: 'new', name: '新书');
+
+      final initial = notifier.load();
+      api.completeNext([oldBook]);
+      await initial;
+
+      changes.notifyChanged();
+      await Future<void>.delayed(Duration.zero);
+      expect(api.getBookshelfCalls, 1);
+      api.completeNext([newBook]);
+      await Future<void>.delayed(Duration.zero);
+
+      final state = container.read(bookshelfNotifierProvider);
+      expect(state.books, [newBook]);
+      expect(state.status, BookshelfStatus.success);
     });
   });
 }

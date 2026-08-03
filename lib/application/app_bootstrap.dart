@@ -8,6 +8,7 @@ import 'book/book_provider_source_port.dart';
 import 'book/book_record_controller.dart';
 import 'book/book_progress_controller.dart';
 import 'bookshelf/bookshelf_book_group_controller.dart';
+import 'bookshelf/bookshelf_change_port.dart';
 import 'bookshelf/bookshelf_chapter_meta_controller.dart';
 import 'bookshelf/bookshelf_book_lifecycle_controller.dart';
 import 'database/legacy_room_import_service.dart';
@@ -107,6 +108,7 @@ class AppBootstrap {
     required BookmarkSyncService bookmarkSyncService,
     required CacheService cacheService,
     required WebDavRepository webdavRepository,
+    BookshelfChangePort? bookshelfChangePort,
     void Function(String stage)? reportStartupStage,
     void Function(StartupTaskReport report)? reportStartupTask,
   }) : _initializePlatform = initializePlatform,
@@ -127,6 +129,8 @@ class AppBootstrap {
        _bookmarkSyncService = bookmarkSyncService,
        _cacheService = cacheService,
        _webdavRepository = webdavRepository,
+       _bookshelfChangePort =
+           bookshelfChangePort ?? const NoopBookshelfChangePort(),
        _reportStartupStage = reportStartupStage,
        _reportStartupTask = reportStartupTask;
 
@@ -148,6 +152,7 @@ class AppBootstrap {
   final BookmarkSyncService _bookmarkSyncService;
   final CacheService _cacheService;
   final WebDavRepository _webdavRepository;
+  final BookshelfChangePort _bookshelfChangePort;
   final void Function(String stage)? _reportStartupStage;
   final void Function(StartupTaskReport report)? _reportStartupTask;
 
@@ -175,6 +180,7 @@ class AppBootstrap {
       bookshelfChapterMetaController: BookshelfChapterMetaController(
         repository: _bookRepository,
       ),
+      bookshelfChangePort: _bookshelfChangePort,
       bookshelfBookLifecycleController: BookshelfBookLifecycleController(
         repository: _bookRepository,
         contentCache: _contentCache,

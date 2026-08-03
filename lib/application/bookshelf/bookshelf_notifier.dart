@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../domain/book/book.dart';
+import 'bookshelf_change_port.dart';
 import 'bookshelf_controller.dart';
 
 part 'bookshelf_notifier.freezed.dart';
@@ -69,6 +72,11 @@ class BookshelfNotifier extends Notifier<BookshelfState> {
   @override
   BookshelfState build() {
     _controller = ref.watch(bookshelfControllerProvider);
+    final changes = ref.watch(bookshelfChangePortProvider).changes;
+    final subscription = changes.listen((_) {
+      unawaited(refresh());
+    });
+    ref.onDispose(subscription.cancel);
     return BookshelfState.initial();
   }
 

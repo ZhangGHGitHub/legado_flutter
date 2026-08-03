@@ -4,6 +4,8 @@
 
 > 2026-08-03 当前 owner 状态：R1-12 已按产品决策完成 Room v99 探针、六张核心业务表映射、`readRecord` archive-only 保存、23 表原始归档、事务/JSON 备份/回滚/幂等和真实非空证据。副本 `.tmp/r1-device-room/original_legado.db` 的计数为 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`，`emulator-5556` all-phase smoke `1/1` 通过。旧版数据必须可导入，已映射数据导入后直接可用，未业务化数据无损归档；备份保持 JSON，不增加文件级 SQLite 备份要求。
 
+> 2026-08-03 Phase 4/R6 书架同步前置：`BookProvider.loadBooks` 使用 requestId 防止旧并发结果覆盖新列表；application 新增 `BookshelfChangePort`/`BookshelfChangeBus`，生产组合根把同一总线注入 Provider 和 `BookshelfNotifier`，Provider 成功书架写入后发布 revision，Notifier 触发既有 `refresh()`。定向 `16/16`、Flutter 全量 `1151`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界/脚本自测和 `git diff --check` 均通过。当前书架样式页仍以 `BookProvider` 为展示事实源，避免重复初始化；未扩展到 Reader、正文、目录、分页、章节身份、UTF-16 阅读位置或 R1-12。
+
 > 2026-08-03 Phase 4/R6 BookProvider 读取边界：`BookProvider.loadBooks` 通过可选注入的 `BookshelfController` 读取书架，默认构造仍使用同一 `BookRepository` 的 `RepositoryBookshelfPort`；controller 只承担读取，Provider 继续负责 loading、错误文本、通知、维护开关和全部写入动作。新增委托与错误传播回归 `2/2`，Flutter 全量 `1145`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界及脚本自测和 `git diff --check` 均通过；书架页面、Reader、正文、目录、分页、章节身份、UTF-16 阅读位置及 R1-12 不在本批范围。
 
 > 2026-08-03 Phase 4/R6 书架读取边界：`BookshelfNotifier` 的读取职责收口到 application `BookshelfController`，controller 只依赖 `BookshelfPort`；生产组合根以与 `RealCoreApi` 相同的 `BookRepository` 构造 `RepositoryBookshelfPort`，`CoreApiBookshelfPort` 仅作为兼容 fallback。Notifier 继续保留刷新旧值、requestId、异常堆栈和不可变列表契约，BookProvider 的其他状态、写入动作和书架页面不在本批范围。controller/Notifier/组合根定向 `21/21`、Flutter 全量 `1143`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 均通过；R6 尚未全量退出。
