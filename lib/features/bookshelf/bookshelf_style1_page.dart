@@ -8,6 +8,7 @@ import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../application/bookshelf/book_group_store_port.dart';
 import '../../application/bookshelf/bookshelf_display_port.dart';
 import '../../application/bookshelf/bookshelf_local_book_port.dart';
+import '../../application/bookshelf/bookshelf_notifier.dart';
 import '../../application/preferences/bookshelf_display_prefs_port.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../providers/book_provider.dart';
@@ -109,8 +110,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
   Set<String> _getAllGroups(List<Book> books) =>
       books.map((b) => b.group).where((g) => g.isNotEmpty).toSet();
 
-  Future<void> _showGroupManagement() async {
-    final books = context.read<BookProvider>().books;
+  Future<void> _showGroupManagement(List<Book> books) async {
     await _groupStorePort.syncNamesFromBooks(
       books.map((b) => b.group).where((g) => g.isNotEmpty),
     );
@@ -161,9 +161,9 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     }
   }
 
-  void _updateToc(SourceNotifier sourceNotifier) {
+  void _updateToc(List<Book> bookshelfBooks, SourceNotifier sourceNotifier) {
     final provider = context.read<BookProvider>();
-    final books = _processBooks(provider.books);
+    final books = _processBooks(bookshelfBooks);
     if (books.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -205,12 +205,16 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     ).showSnackBar(SnackBar(content: Text('「$label」暂未实现')));
   }
 
-  void _onOverflowSelected(String a, SourceNotifier sourceNotifier) async {
+  void _onOverflowSelected(
+    String a,
+    SourceNotifier sourceNotifier,
+    List<Book> bookshelfBooks,
+  ) async {
     if (await BookshelfMenuActions.handle(context, a)) return;
     if (!mounted) return;
     switch (a) {
       case BookshelfOverflowMenu.updateToc:
-        _updateToc(sourceNotifier);
+        _updateToc(bookshelfBooks, sourceNotifier);
       case BookshelfOverflowMenu.addLocal:
         _addLocalBook();
       case BookshelfOverflowMenu.arrange:
@@ -225,7 +229,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
           ),
         );
       case BookshelfOverflowMenu.groupMgmt:
-        _showGroupManagement();
+        _showGroupManagement(bookshelfBooks);
       case BookshelfOverflowMenu.layout:
         _openLayoutConfig();
       case 'show_grouped':
@@ -251,17 +255,19 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     return riverpod.Consumer(
       builder: (context, ref, _) {
         final sourceNotifier = ref.read(sourceNotifierProvider.notifier);
+        final bookshelfState = ref.watch(bookshelfNotifierProvider);
         return Consumer<BookProvider>(
           builder: (context, provider, _) {
             return Scaffold(
               appBar: AppBar(
                 titleSpacing: LegadoChrome.appBarTitleStartPaddingOf(context),
-                title: _buildGroupTabs(provider.books),
+                title: _buildGroupTabs(bookshelfState.books),
                 actions: [
                   IconButton(
                     icon: const Icon(Icons.refresh),
                     tooltip: '刷新',
-                    onPressed: () => _updateToc(sourceNotifier),
+                    onPressed: () =>
+                        _updateToc(bookshelfState.books, sourceNotifier),
                   ),
                   IconButton(
                     icon: const Icon(Icons.search),
@@ -274,8 +280,11 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                   PopupMenuButton<String>(
                     offset: legadoAppBarPopupOffset(context),
                     icon: const Icon(Icons.more_vert),
-                    onSelected: (value) =>
-                        _onOverflowSelected(value, sourceNotifier),
+                    onSelected: (value) => _onOverflowSelected(
+                      value,
+                      sourceNotifier,
+                      bookshelfState.books,
+                    ),
                     itemBuilder: (ctx) => [
                       ...BookshelfOverflowMenu.items(ctx),
                       CheckedPopupMenuItem(
@@ -287,7 +296,13 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                   ),
                 ],
               ),
-              body: _buildBody(provider, sourceNotifier),
+              body: _buildBody(
+                bookshelfState,
+                provider,
+                sourceNotifier,
+                onRetry: () =>
+                    ref.read(bookshelfNotifierProvider.notifier).load(),
+              ),
             );
           },
         );
@@ -295,18 +310,23 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     );
   }
 
-  Widget _buildBody(BookProvider provider, SourceNotifier sourceNotifier) {
-    if (provider.isLoading && provider.books.isEmpty) {
+  Widget _buildBody(
+    BookshelfState bookshelfState,
+    BookProvider provider,
+    SourceNotifier sourceNotifier, {
+    required VoidCallback onRetry,
+  }) {
+    if (bookshelfState.isLoading && bookshelfState.books.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (provider.loadError != null && provider.books.isEmpty) {
+    if (bookshelfState.hasError && bookshelfState.books.isEmpty) {
       return ErrorView(
-        message: provider.loadError!,
-        onRetry: () => provider.loadBooks(),
+        message: bookshelfState.error?.toString() ?? '加载书架失败',
+        onRetry: onRetry,
       );
     }
-    final books = _processBooks(provider.books);
-    if (provider.books.isEmpty) return _buildEmpty();
+    final books = _processBooks(bookshelfState.books);
+    if (bookshelfState.books.isEmpty) return _buildEmpty();
     if (books.isEmpty) {
       return Center(
         child: Text(
@@ -329,7 +349,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
           overscrollColor: Theme.of(context).colorScheme.primary,
         ).copyWith(scrollbars: false),
         child: _showGrouped && _selectedGroup == '__all__'
-            ? _buildGrouped(books, provider)
+            ? _buildGrouped(books, provider, bookshelfState.books)
             : BookshelfBooksView(
                 config: widget.config,
                 books: books,
@@ -337,7 +357,8 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                 scrollController: widget.scrollController,
                 isUpdating: provider.isBookShelfUpdating,
                 onTap: _openBook,
-                onLongPress: _showBookActions,
+                onLongPress: (book) =>
+                    _showBookActions(book, bookshelfState.books),
               ),
       ),
     );
@@ -426,7 +447,11 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     );
   }
 
-  Widget _buildGrouped(List<Book> books, BookProvider provider) {
+  Widget _buildGrouped(
+    List<Book> books,
+    BookProvider provider,
+    List<Book> bookshelfBooks,
+  ) {
     final groups = <String, List<Book>>{};
     for (final b in books) {
       groups.putIfAbsent(b.group.isNotEmpty ? b.group : '未分组', () => []).add(b);
@@ -482,7 +507,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                   config: cfg,
                   isUpdating: provider.isBookShelfUpdating(b.id),
                   onTap: () => _openBook(b),
-                  onLongPress: () => _showBookActions(b),
+                  onLongPress: () => _showBookActions(b, bookshelfBooks),
                 );
               }, childCount: list.length),
             ),
@@ -502,7 +527,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                   isUpdating: provider.isBookShelfUpdating(b.id),
                   compact: cfg.isCompactList,
                   onTap: () => _openBook(b),
-                  onLongPress: () => _showBookActions(b),
+                  onLongPress: () => _showBookActions(b, bookshelfBooks),
                 );
               }, childCount: list.length),
             ),
@@ -549,9 +574,8 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     );
   }
 
-  Future<void> _moveBookGroup(Book book) async {
-    final groups = _getAllGroups(context.read<BookProvider>().books).toList()
-      ..sort();
+  Future<void> _moveBookGroup(Book book, List<Book> bookshelfBooks) async {
+    final groups = _getAllGroups(bookshelfBooks).toList()..sort();
     final chosen = await showModalBottomSheet<String>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -604,7 +628,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     await context.read<BookProvider>().updateBookGroup(book.id, chosen);
   }
 
-  void _showBookActions(Book book) {
+  void _showBookActions(Book book, List<Book> bookshelfBooks) {
     final pinned = _pinnedIds.contains(book.id);
     showModalBottomSheet(
       context: context,
@@ -644,7 +668,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
               title: const Text('移动分组'),
               onTap: () {
                 Navigator.pop(ctx);
-                _moveBookGroup(book);
+                _moveBookGroup(book, bookshelfBooks);
               },
             ),
             ListTile(
