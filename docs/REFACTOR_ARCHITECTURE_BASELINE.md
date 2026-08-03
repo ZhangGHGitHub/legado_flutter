@@ -8,6 +8,8 @@
 
 > 2026-08-03 Phase 4/R6 书架分组写入边界：新增 `BookshelfBookGroupController`，将单本/批量分组写入、刷新和异常顺序收口到 application 层；`BookProvider` 保留旧兼容入口，组合根显式注入同一控制器。控制器/Provider 定向 `9/9`、书架相关定向 `12/12`、Flutter 全量 `1113`（`3` 项既有条件跳过）、`flutter analyze`、架构边界、Rust 全量 `268/268`、`cargo fmt -p legado_engine -- --check` 和 `git diff --check` 通过。未修改 `legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
 
+> 2026-08-03 Phase 4/R6 书架书籍生命周期边界：新增 `BookshelfBookLifecycleController`，将新增/删除书籍的仓储写入和章节缓存清理顺序收口到 application 层；`BookProvider` 保留列表刷新、未读元数据、批量失败和通知职责，组合根显式注入 controller。生命周期/书架/缓存定向 `16/16`、Flutter 全量 `1115`（`3` 项既有外部网络条件跳过）、`flutter analyze`、架构边界和 `git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
 > 2026-08-02 Phase 3 Rust DTO 状态：Rust `BookSourceDto` 已提供与 Flutter `BookSource` 对齐的 camelCase serde 投影，`rawSourceJson` 完整保留，`rulePageNext` 回退顺序由测试固定。`BookDto` 已接入 `get_books_json()`，完整字段、默认值、`readConfig`、阅读位置和时间输出由定向测试固定；两者均未新增 FFI 入口，现有 `db_get_books()` 继续输出 `Vec<String>`。DTO 定向 `3/3`、Rust 全量 `265/265` 通过；生产 typed FFI 联调和其余手写模型仍未完成。
 
 > 2026-08-03 Phase 4/R6 当前 owner 状态：SourceProvider 第三批已完成共享 application 状态层和 SourcesPage 状态订阅迁移。`SourceState` 使用 Freezed 并对列表、Map 及嵌套结果做防御性不可变快照；`SourceController` 统一承载书源 CRUD、分组、JSON/URL 导入、搜索、图片请求头和校验，并以请求序号阻止旧 load/search/validate 结果覆盖新状态，内置源初始化使用 single-flight。旧 `SourceProvider` 仅作为共享 controller 的 ChangeNotifier 兼容外观，`importSourcesFromFile` 的平台文件选择仍留在兼容入口；`SourcesPage` 通过局部 `ProviderScope` 读取 Riverpod 状态，选择/排序/分享和未迁移子页不变。controller/Notifier/Provider 兼容定向 `25/25`、source Feature/Widget `10/10`、Flutter 全量 `1066`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界检查和 `git diff --check` 通过。`SearchPage`、探索、书架/阅读器、启动任务和规则订阅仍使用兼容外观，R6 尚未全量退出。
@@ -3469,3 +3471,11 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：受影响定向 `8/8`；Flutter 串行全量 `1086` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub` 无诊断；架构边界脚本和 `git diff --check` 通过。
 
 边界结论：本批完成搜索内容页与两种书架样式的 Provider 消费边界；RemoteBook 状态 Controller、`BookProvider` 生产状态迁移及正文阅读会话继续作为后续独立批次，不据此宣称 Riverpod 全量迁移完成。
+
+## 178. 2026-08-03：R6 BookProvider 书架书籍生命周期写入边界
+
+- 新增 `BookshelfBookLifecycleController`，负责书籍新增和删除时的 `BookRepository` 写入、`ChapterContentCachePort.clearBook` 清理及其固定顺序。
+- `BookProvider` 继续负责书架列表刷新、`_shelfChapterMeta` 清理、批量删除的逐项失败语义和通知；组合根显式注入 controller，旧构造调用保留默认兼容组装。
+- 生命周期/书架/缓存定向 `16/16`，Flutter 全量 `1115` 通过、`3` 项既有外部网络条件跳过；`flutter analyze`、架构边界和 `git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+
+边界结论：本批仅收口 `BookProvider` 的新增/删除写入副作用，不迁移 Provider 状态、不改变书籍导入、阅读进度、目录刷新、换源和正文链路；R6、真实 Android TTS、Web/WASM/PWA、正式/主流 WebDAV 仍按各自门禁推进。

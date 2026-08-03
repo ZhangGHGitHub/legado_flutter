@@ -7,6 +7,7 @@ import '../application/book/chapter_progress_migrator.dart';
 import '../application/book/local_book_import_port.dart';
 import '../application/book/book_provider_source_port.dart';
 import '../application/bookshelf/bookshelf_book_group_controller.dart';
+import '../application/bookshelf/bookshelf_book_lifecycle_controller.dart';
 import '../domain/repositories/book_repository.dart';
 import '../domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -42,6 +43,7 @@ class BookProvider extends ChangeNotifier {
     required BookProviderSourcePort sourceService,
     LocalBookImportPort? localBookPort,
     BookshelfBookGroupController? bookshelfGroupController,
+    BookshelfBookLifecycleController? bookshelfBookLifecycleController,
     required ChapterContentCachePort contentCache,
   }) : _repository = repository,
        _sourceService = sourceService,
@@ -49,7 +51,13 @@ class BookProvider extends ChangeNotifier {
        _contentCache = contentCache,
        _bookshelfGroupController =
            bookshelfGroupController ??
-           BookshelfBookGroupController(repository: repository) {
+           BookshelfBookGroupController(repository: repository),
+       _bookshelfBookLifecycleController =
+           bookshelfBookLifecycleController ??
+           BookshelfBookLifecycleController(
+             repository: repository,
+             contentCache: contentCache,
+           ) {
     ReadBook.instance.configure(
       sourceService: _sourceService,
       repository: _repository,
@@ -62,6 +70,7 @@ class BookProvider extends ChangeNotifier {
   final ChapterContentCachePort _contentCache;
   final LocalBookImportPort _localBookPort;
   final BookshelfBookGroupController _bookshelfGroupController;
+  final BookshelfBookLifecycleController _bookshelfBookLifecycleController;
 
   List<Book> _books = [];
   List<Chapter> _currentChapters = [];
@@ -1113,7 +1122,7 @@ class BookProvider extends ChangeNotifier {
 
   /// 添加书籍到书架
   Future<void> addBook(Book book) async {
-    await _repository.insert(book);
+    await _bookshelfBookLifecycleController.addBook(book);
     _books = await _repository.getAll();
     await _refreshShelfChapterMetaFor(book.id);
     notifyListeners();
@@ -1121,8 +1130,7 @@ class BookProvider extends ChangeNotifier {
 
   /// 从书架移除
   Future<void> removeBook(String bookId) async {
-    await _repository.delete(bookId);
-    await _contentCache.clearBook(bookId);
+    await _bookshelfBookLifecycleController.removeBook(bookId);
     _shelfChapterMeta.remove(bookId);
     _books = await _repository.getAll();
     notifyListeners();
@@ -1131,8 +1139,7 @@ class BookProvider extends ChangeNotifier {
   /// 批量从书架移除
   Future<void> removeBooks(Iterable<String> bookIds) async {
     for (final id in bookIds) {
-      await _repository.delete(id);
-      await _contentCache.clearBook(id);
+      await _bookshelfBookLifecycleController.removeBook(id);
       _shelfChapterMeta.remove(id);
     }
     _books = await _repository.getAll();
