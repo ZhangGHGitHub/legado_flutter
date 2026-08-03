@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../domain/book/book.dart';
-import '../core_api_provider.dart';
+import 'bookshelf_controller.dart';
 
 part 'bookshelf_notifier.freezed.dart';
 
@@ -57,13 +57,20 @@ class BookshelfState with _$BookshelfState {
 }
 
 final bookshelfNotifierProvider =
-    NotifierProvider<BookshelfNotifier, BookshelfState>(BookshelfNotifier.new);
+    NotifierProvider<BookshelfNotifier, BookshelfState>(
+      BookshelfNotifier.new,
+      dependencies: [bookshelfControllerProvider],
+    );
 
 class BookshelfNotifier extends Notifier<BookshelfState> {
   var _requestId = 0;
+  late BookshelfController _controller;
 
   @override
-  BookshelfState build() => BookshelfState.initial();
+  BookshelfState build() {
+    _controller = ref.watch(bookshelfControllerProvider);
+    return BookshelfState.initial();
+  }
 
   Future<void> load() => _fetch(refreshing: false);
 
@@ -78,7 +85,7 @@ class BookshelfNotifier extends Notifier<BookshelfState> {
     );
 
     try {
-      final books = await ref.read(coreApiProvider).getBookshelf();
+      final books = await _controller.loadBookshelf();
       if (requestId != _requestId) {
         return;
       }

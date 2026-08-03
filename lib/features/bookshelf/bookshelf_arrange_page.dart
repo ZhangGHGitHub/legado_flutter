@@ -278,7 +278,6 @@ class _BookshelfArrangePageState
   void _reorder(int oldIndex, int newIndex) {
     if (!_dragEnabled) return;
     setState(() {
-      if (newIndex > oldIndex) newIndex -= 1;
       final item = _books.removeAt(oldIndex);
       _books.insert(newIndex, item);
       _dirty = true;
@@ -768,7 +767,7 @@ class _BookshelfArrangePageState
     return ReorderableListView.builder(
       padding: const EdgeInsets.only(bottom: 8),
       buildDefaultDragHandles: false,
-      onReorder: _reorder,
+      onReorderItem: _reorder,
       itemCount: _books.length,
       proxyDecorator: (child, index, animation) =>
           Material(elevation: 2, child: child),

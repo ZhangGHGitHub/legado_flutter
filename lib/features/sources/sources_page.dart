@@ -1214,12 +1214,10 @@ class _SourcesPageState extends riverpod.ConsumerState<SourcesPage> {
           scrollController: _listScrollController,
           buildDefaultDragHandles: false,
           itemCount: visible.length,
-          onReorder: (oldIndex, newIndex) async {
-            var target = newIndex;
-            if (oldIndex < target) target--;
+          onReorderItem: (oldIndex, newIndex) async {
             final items = List<BookSource>.from(visible);
             final moved = items.removeAt(oldIndex);
-            items.insert(target, moved);
+            items.insert(newIndex, moved);
             final urls = items.map((s) => s.bookSourceUrl).toList();
             await notifier.reorderSources(urls);
           },

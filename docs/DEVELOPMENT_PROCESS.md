@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-03
 
+2026-08-03 Phase 4/R6 书架读取边界追溯：先完成 controller/Notifier/组合根定向 `21/21`，再执行 Flutter 全量、analyze、架构边界和 diff 门禁。Flutter 3.44.8/Dart 3.12.2 的测试命令使用显式 `--enable-experiment=dot-shorthands`，不修改项目配置；缓存重建后全量 Flutter `1143` 通过、`3` 项既有条件跳过，`flutter analyze --no-pub` 清洁通过，架构边界和 `git diff --check` 通过。`BookshelfController` 生产绑定同一 `BookRepository`，旧 CoreApi 仅作 fallback；同时以透明 `Material` 修复 Flutter 3.44 的分组选择 tile 断言，以 `onReorderItem` 保留排序结果。只提交本批代码、测试和追溯文档，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`。
+
 2026-08-03 Phase 4/R6 阅读进度写入边界追溯：先由三个不重叠 lane 完成进度/迁移/同步定向测试、application 分层审查和变更范围审查；owner 随后修正 `bookId` 与 `existingBook.id` 不一致时不得整书 upsert，并补充防误写回归。最终定向 `34/34`、Flutter 全量 `1129`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 全部通过。`BookProgressController` 仅依赖 `BookRepository`，`BookProvider` 继续负责刷新和通知；`pageIndex`、异常传播、UTF-16 章内阅读位置及 R1-12/原版 UI/暂停平台边界不变。本批不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`。
 
 2026-08-03 Phase 4/R6 书架章节元数据边界追溯：三个 agent 分别完成 controller/纯 application 测试、Provider 集成回归和只读并发审查；owner 将 `BookshelfChapterMetaController` 接入 `BookProvider` 与 `AppBootstrap`，并在章节读取期间重新获取最新书籍快照，避免元数据 upsert 覆盖并发阅读进度。先通过定向 `29/29`，再通过 Flutter 全量 `1137`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check`。空章节、标题不匹配、异常隔离、通知顺序和 UTF-16 页内位置保持不变；本批不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`。

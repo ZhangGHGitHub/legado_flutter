@@ -187,7 +187,6 @@ class _RuleSubPageState extends State<_RuleSubPageBody> {
 
   Future<void> _onReorder(int oldIndex, int newIndex) async {
     setState(() {
-      if (newIndex > oldIndex) newIndex -= 1;
       final item = _subs.removeAt(oldIndex);
       _subs.insert(newIndex, item);
       _subs = [
@@ -232,7 +231,7 @@ class _RuleSubPageState extends State<_RuleSubPageBody> {
                   ReorderableListView.builder(
                     padding: const EdgeInsets.only(bottom: 24),
                     itemCount: _subs.length,
-                    onReorder: _onReorder,
+                    onReorderItem: _onReorder,
                     itemBuilder: (context, index) {
                       final sub = _subs[index];
                       return _RuleSubTile(

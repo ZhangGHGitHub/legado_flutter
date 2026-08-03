@@ -157,22 +157,25 @@ class _BookGroupSelectDialogState extends State<_BookGroupSelectDialog> {
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: CheckboxListTile(
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    controlAffinity:
-                                        ListTileControlAffinity.leading,
-                                    title: Text(g.groupName),
-                                    value: checked,
-                                    onChanged: (v) {
-                                      setState(() {
-                                        if (v == true) {
-                                          _checked.add(g.groupId);
-                                        } else {
-                                          _checked.remove(g.groupId);
-                                        }
-                                      });
-                                    },
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: CheckboxListTile(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                      title: Text(g.groupName),
+                                      value: checked,
+                                      onChanged: (v) {
+                                        setState(() {
+                                          if (v == true) {
+                                            _checked.add(g.groupId);
+                                          } else {
+                                            _checked.remove(g.groupId);
+                                          }
+                                        });
+                                      },
+                                    ),
                                   ),
                                 ),
                                 TextButton(

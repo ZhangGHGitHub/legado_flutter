@@ -4,6 +4,8 @@
 
 > 2026-08-03 当前 owner 状态：R1-12 已按产品决策完成 Room v99 探针、六张核心业务表映射、`readRecord` archive-only 保存、23 表原始归档、事务/JSON 备份/回滚/幂等和真实非空证据。副本 `.tmp/r1-device-room/original_legado.db` 的计数为 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`，`emulator-5556` all-phase smoke `1/1` 通过。旧版数据必须可导入，已映射数据导入后直接可用，未业务化数据无损归档；备份保持 JSON，不增加文件级 SQLite 备份要求。
 
+> 2026-08-03 Phase 4/R6 书架读取边界：`BookshelfNotifier` 的读取职责收口到 application `BookshelfController`，controller 只依赖 `BookshelfPort`；生产组合根以与 `RealCoreApi` 相同的 `BookRepository` 构造 `RepositoryBookshelfPort`，`CoreApiBookshelfPort` 仅作为兼容 fallback。Notifier 继续保留刷新旧值、requestId、异常堆栈和不可变列表契约，BookProvider 的其他状态、写入动作和书架页面不在本批范围。controller/Notifier/组合根定向 `21/21`、Flutter 全量 `1143`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 均通过；R6 尚未全量退出。
+
 > 2026-08-03 Phase 4/R6 阅读进度写入边界：新增 `BookProgressController`，application 层只依赖 `BookRepository` 和领域 `Book`；`durChapterIndex` 非空且 `bookId == existingBook.id` 时执行整书 upsert，否则调用仓储局部 `updateProgress`。`BookProvider` 保留刷新书籍、章节元数据和通知职责，`pageIndex` 原样传递，异常不吞掉；身份不一致回归确保不会写入错误书籍。进度/迁移/同步定向 `34/34`、Flutter 全量 `1129`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 全部通过。该批不改变正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
 
 > 2026-08-03 Phase 4/R6 书架章节元数据边界：新增 `BookshelfChapterMetaController`，application 层只依赖 `BookRepository` 和领域 `Book`；章节数量与当前章节标题索引按仓储列表顺序计算，变更时仅 upsert `totalChapterNum`/`durChapterIndex`，其他书籍字段完整保留。`BookProvider` 继续负责元数据缓存、书籍列表、后台异常隔离和通知；空章节、标题不匹配、异常传播和 UTF-16 页内位置契约不变。章节读取完成后重新取最新书籍快照，避免并发进度更新被旧元数据快照覆盖。定向 `29/29`、Flutter 全量 `1137`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 全部通过。该批不改变正文、目录顺序、分页、章节身份、第 3 条断行规则、R1-12 或暂停平台门禁。

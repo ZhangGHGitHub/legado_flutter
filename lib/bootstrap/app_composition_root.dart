@@ -18,6 +18,7 @@ import '../application/bookmark/bookmark_page_port.dart';
 import '../application/bookshelf/book_group_management_port.dart';
 import '../application/bookshelf/book_group_store_port.dart';
 import '../application/bookshelf/bookshelf_arrange_port.dart';
+import '../application/bookshelf/bookshelf_controller.dart';
 import '../application/bookshelf/bookshelf_config_dialog_port.dart';
 import '../application/bookshelf/bookshelf_display_port.dart';
 import '../application/bookshelf/bookshelf_list_port.dart';
@@ -297,6 +298,9 @@ abstract final class AppCompositionRoot {
         return riverpod.ProviderScope(
           overrides: [
             coreApiProvider.overrideWithValue(coreApi),
+            bookshelfControllerProvider.overrideWithValue(
+              BookshelfController(RepositoryBookshelfPort(bookRepository)),
+            ),
             if (sourceProvider != null)
               sourceControllerProvider.overrideWithValue(
                 sourceProvider.controller,
