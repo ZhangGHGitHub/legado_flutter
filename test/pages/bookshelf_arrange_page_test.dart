@@ -181,6 +181,55 @@ void main() {
 
     expect(find.text('更新后的书源'), findsOneWidget);
   });
+
+  testWidgets('manual reorder does not mutate BookProvider books', (
+    tester,
+  ) async {
+    final sourceProvider = SourceProvider(
+      repository: _MemoryBookSourceRepository(const []),
+      validationPort: FrbBookSourceValidationPort(),
+      sourceService: createTestBookSourceService(),
+    );
+    final bookProvider = BookProvider(
+      repository: _MemoryBookRepository(),
+      contentCache: const FileChapterContentCache(),
+      sourceService: createTestBookSourceService(),
+    );
+    await bookProvider.addBook(const Book(id: 'one', name: '第一本'));
+    await bookProvider.addBook(const Book(id: 'two', name: '第二本'));
+    final preferences = _FakeBookshelfArrangePrefs()..sortMode = 3;
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+          ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
+        ],
+        child: MaterialApp(
+          home: BookshelfArrangePage(
+            preferences: preferences,
+            groupStore: _FakeBookGroupStore(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(bookProvider.books.map((book) => book.id), ['one', 'two']);
+    await tester.drag(
+      find.byIcon(Icons.drag_handle).first,
+      const Offset(0, 160),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getTopLeft(find.text('第一本')).dy,
+      greaterThan(tester.getTopLeft(find.text('第二本')).dy),
+    );
+    expect(bookProvider.books.map((book) => book.id), ['one', 'two']);
+    expect(find.text('第一本'), findsOneWidget);
+    expect(find.text('第二本'), findsOneWidget);
+  });
 }
 
 final class _MemoryBookSourceRepository implements BookSourceRepository {

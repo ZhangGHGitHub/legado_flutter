@@ -2,6 +2,8 @@
 
 > **当前权威状态（2026-08-03）：** R1-12 已按 archive-only 产品边界完成：六张核心表映射后可直接使用，23 张 Room 实体表无损归档，JSON 备份、事务回滚和幂等导入通过；`.tmp/r1-device-room/original_legado.db` 已确认 Room v99、identity hash 与原版基线一致，非空行数为 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`，既有 `emulator-5556` all-phase smoke `1/1` 通过。不宣称 `readRecord` 统计语义或非核心表 Rust v17 业务化完成。历史段落中的“R1 重新打开/部分完成”保留为当时证据链，不覆盖本条当前判定。
 
+> 2026-08-03 Phase 4/R6 书架整理排序隔离：整理页的本地 `_books` 必须与 `BookProvider.books` 内部集合隔离；空保存顺序分支现由 `BookshelfArrangeOrderPolicy` 返回副本，拖动只改变页面局部顺序，不能绕过 Provider mutation version、变更总线或通知。策略/Widget 定向 `6/6`、Flutter 全量 `1177`（`3` 项既有条件跳过）通过。分组与删除仍通过 Provider 兼容命令，R6 尚未退出。
+
 > 2026-08-03 Phase 4/R6 书籍封面写入边界：`BookMetadataController` 只依赖 `BookRepository.updateCover` 字段级接口；`BookProvider` 保留最新书架事实源、mutation version、变更总线和 ChangeNotifier 通知职责，成功后只替换目标书籍封面，失败不改内存或发布快照。`BookInfoPage` 不再直接写封面仓储，非书架和异常静默语义保持。定向 `12/12`、Flutter 全量 `1175`（`3` 项既有条件跳过）、`flutter analyze --no-pub` 和架构边界通过。整书基础信息保存仍是下一独立边界，不能用页面旧快照覆盖阅读进度、UTF-16 章内位置、来源或导入字段；R6 尚未退出。
 
 > 2026-08-03 当前 owner 状态：R1-12 已按产品决策完成 Room v99 探针、六张核心业务表映射、`readRecord` archive-only 保存、23 表原始归档、事务/JSON 备份/回滚/幂等和真实非空证据。副本 `.tmp/r1-device-room/original_legado.db` 的计数为 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`，`emulator-5556` all-phase smoke `1/1` 通过。旧版数据必须可导入，已映射数据导入后直接可用，未业务化数据无损归档；备份保持 JSON，不增加文件级 SQLite 备份要求。

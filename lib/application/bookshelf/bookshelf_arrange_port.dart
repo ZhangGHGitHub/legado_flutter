@@ -24,7 +24,7 @@ abstract final class BookshelfArrangeOrderPolicy {
     List<String> orderIds,
     String Function(T) idOf,
   ) {
-    if (orderIds.isEmpty) return books;
+    if (orderIds.isEmpty) return List<T>.of(books);
     final rank = <String, int>{};
     for (var i = 0; i < orderIds.length; i++) {
       rank[orderIds[i]] = i;
