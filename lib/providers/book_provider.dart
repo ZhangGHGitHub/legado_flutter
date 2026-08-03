@@ -9,6 +9,7 @@ import '../application/book/book_provider_source_port.dart';
 import '../application/book/book_record_controller.dart';
 import '../application/book/book_progress_controller.dart';
 import '../application/bookshelf/bookshelf_book_group_controller.dart';
+import '../application/bookshelf/bookshelf_chapter_meta_controller.dart';
 import '../application/bookshelf/bookshelf_book_lifecycle_controller.dart';
 import '../domain/repositories/book_repository.dart';
 import '../domain/ports/chapter_content_cache_port.dart';
@@ -47,6 +48,7 @@ class BookProvider extends ChangeNotifier {
     BookRecordController? bookRecordController,
     BookProgressController? bookProgressController,
     BookshelfBookGroupController? bookshelfGroupController,
+    BookshelfChapterMetaController? bookshelfChapterMetaController,
     BookshelfBookLifecycleController? bookshelfBookLifecycleController,
     required ChapterContentCachePort contentCache,
   }) : _repository = repository,
@@ -61,6 +63,9 @@ class BookProvider extends ChangeNotifier {
        _bookshelfGroupController =
            bookshelfGroupController ??
            BookshelfBookGroupController(repository: repository),
+       _bookshelfChapterMetaController =
+           bookshelfChapterMetaController ??
+           BookshelfChapterMetaController(repository: repository),
        _bookshelfBookLifecycleController =
            bookshelfBookLifecycleController ??
            BookshelfBookLifecycleController(
@@ -81,6 +86,7 @@ class BookProvider extends ChangeNotifier {
   final BookRecordController _bookRecordController;
   final BookProgressController _bookProgressController;
   final BookshelfBookGroupController _bookshelfGroupController;
+  final BookshelfChapterMetaController _bookshelfChapterMetaController;
   final BookshelfBookLifecycleController _bookshelfBookLifecycleController;
 
   List<Book> _books = [];
@@ -825,36 +831,25 @@ class BookProvider extends ChangeNotifier {
       _shelfChapterMeta.remove(bookId);
       return;
     }
-    final chapters = await _repository.getChapters(bookId);
-    if (chapters.isEmpty) {
-      _shelfChapterMeta.remove(bookId);
-      return;
-    }
-    int? durIdx;
-    final cur = book.currentChapter;
-    if (cur != null && cur.isNotEmpty) {
-      durIdx = chapters.indexWhere((c) => c.title == cur);
-      if (durIdx < 0) durIdx = null;
-    }
-    final total = chapters.length;
-    final metaDur = durIdx ?? book.durChapterIndex;
-    _shelfChapterMeta[bookId] = (count: total, durIndex: metaDur);
-
-    // 升级/TOC 后回填持久化字段，重启后仍可精确算未读
-    var next = book;
-    var dirty = false;
-    if (book.totalChapterNum != total) {
-      next = next.copyWith(totalChapterNum: total);
-      dirty = true;
-    }
-    if (durIdx != null && book.durChapterIndex != durIdx) {
-      next = next.copyWith(durChapterIndex: durIdx);
-      dirty = true;
-    }
-    if (dirty) {
-      await _repository.insert(next);
+    final shelfBook = book;
+    final result = await _bookshelfChapterMetaController.refresh(
+      shelfBook,
+      onResolved: (resolved) {
+        if (resolved.totalChapterNum == 0) {
+          _shelfChapterMeta.remove(bookId);
+          return;
+        }
+        final currentBook = findBookById(bookId) ?? shelfBook;
+        _shelfChapterMeta[bookId] = (
+          count: resolved.totalChapterNum,
+          durIndex: resolved.durChapterIndex ?? currentBook.durChapterIndex,
+        );
+      },
+      latestBook: () => findBookById(bookId),
+    );
+    if (result.updatedBook != null) {
       final i = _books.indexWhere((b) => b.id == bookId);
-      if (i >= 0) _books[i] = next;
+      if (i >= 0) _books[i] = result.updatedBook!;
     }
   }
 

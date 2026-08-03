@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/Phase 4/R6 书架章节元数据 application 边界：新增 `BookshelfChapterMetaController`，统一章节数量与当前章节标题索引计算及最小字段 upsert；`BookProvider` 继续负责元数据缓存、书籍列表、后台异常隔离和通知。空章节仍清除公开缓存且不写入 `0`，标题不匹配仍回退持久化 `durChapterIndex`；写入前重新取当前书籍快照，防止启动维护覆盖并发更新的进度、页内 UTF-16 位置和正文相关字段。定向 `29/29`，Flutter 全量 `1137` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未修改 `legado-main/`、Rust、目录刷新、正文、分页、章节身份、第 3 条断行规则、R1-12 和暂停平台门禁。
 - 架构/Phase 4/R6 阅读进度写入 application 边界：新增 `BookProgressController`，当 `durChapterIndex` 非空且 `bookId` 与现有书籍一致时整书 upsert，否则调用仓储局部 `updateProgress`；`BookProvider` 继续负责列表刷新、章节元数据刷新和通知。`pageIndex` 原样保留，异常传播和 UTF-16 章内阅读位置语义不变；新增不一致身份回归，防止 upsert 错误书籍。进度/迁移/同步定向 `34/34`，Flutter 全量 `1129` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、第 3 条断行规则、R1-12 和暂停平台门禁。
 - 架构/Phase 4/R6 书籍阅读元数据写入边界：新增 `BookRecordController`，统一 `readIteration` 和模拟追读字段的 Book 复制与仓储 upsert；`BookProvider` 保留当前书选择、列表刷新、通知和兼容返回值。书籍记录/书架/缓存定向 `20/20`，Flutter 全量 `1117` 通过（`3` 项既有外部网络条件跳过），`flutter analyze`、架构边界和 `git diff --check` 通过。契约验证阅读位置保持不变，未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、第 3 条断行规则、R1-12 和暂停平台门禁。
 - 架构/Phase 4/R6 书架书籍生命周期边界：新增 `BookshelfBookLifecycleController`，统一书籍新增、删除时的仓储写入和章节缓存清理顺序；`BookProvider` 保留列表刷新、未读元数据清理、批量失败语义和通知职责，组合根显式注入 controller。生命周期/书架/缓存定向 `16/16`，Flutter 全量 `1115` 通过（`3` 项既有外部网络条件跳过），`flutter analyze`、架构边界和 `git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 和暂停平台门禁。

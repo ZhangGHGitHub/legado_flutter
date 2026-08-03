@@ -8,6 +8,7 @@ import 'book/book_provider_source_port.dart';
 import 'book/book_record_controller.dart';
 import 'book/book_progress_controller.dart';
 import 'bookshelf/bookshelf_book_group_controller.dart';
+import 'bookshelf/bookshelf_chapter_meta_controller.dart';
 import 'bookshelf/bookshelf_book_lifecycle_controller.dart';
 import 'database/legacy_room_import_service.dart';
 import 'startup/startup_task_runner.dart';
@@ -169,6 +170,9 @@ class AppBootstrap {
         repository: _bookRepository,
       ),
       bookshelfGroupController: BookshelfBookGroupController(
+        repository: _bookRepository,
+      ),
+      bookshelfChapterMetaController: BookshelfChapterMetaController(
         repository: _bookRepository,
       ),
       bookshelfBookLifecycleController: BookshelfBookLifecycleController(

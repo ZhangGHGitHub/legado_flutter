@@ -6,6 +6,8 @@
 
 > 2026-08-03 Phase 4/R6 阅读进度写入边界：新增 `BookProgressController`，application 层只依赖 `BookRepository` 和领域 `Book`；`durChapterIndex` 非空且 `bookId == existingBook.id` 时执行整书 upsert，否则调用仓储局部 `updateProgress`。`BookProvider` 保留刷新书籍、章节元数据和通知职责，`pageIndex` 原样传递，异常不吞掉；身份不一致回归确保不会写入错误书籍。进度/迁移/同步定向 `34/34`、Flutter 全量 `1129`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 全部通过。该批不改变正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
 
+> 2026-08-03 Phase 4/R6 书架章节元数据边界：新增 `BookshelfChapterMetaController`，application 层只依赖 `BookRepository` 和领域 `Book`；章节数量与当前章节标题索引按仓储列表顺序计算，变更时仅 upsert `totalChapterNum`/`durChapterIndex`，其他书籍字段完整保留。`BookProvider` 继续负责元数据缓存、书籍列表、后台异常隔离和通知；空章节、标题不匹配、异常传播和 UTF-16 页内位置契约不变。章节读取完成后重新取最新书籍快照，避免并发进度更新被旧元数据快照覆盖。定向 `29/29`、Flutter 全量 `1137`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 全部通过。该批不改变正文、目录顺序、分页、章节身份、第 3 条断行规则、R1-12 或暂停平台门禁。
+
 > 2026-08-02 Phase 3 当前 owner 状态：Flutter `Book`/`BookSource`/`ReplaceRule`/阅读统计模型已改为 Freezed 领域模型，生成不可变值语义和 `copyWith`，同时保留旧版 JSON、`readConfig` 和嵌套书源规则兼容。Rust `BookDto`、`BookSourceDto` 均已提供 camelCase serde 投影；Rust `BookReadingStats.readingDays` 现已透传至 Dart。模型契约及书架/书源仓储、替换规则和统计链路定向回归通过，Rust 当前全量 `265/265`、Flutter 全量 `925`（`3` 项既有条件跳过）通过。Riverpod 生产页面和其余手写模型仍是后续批次。
 
 > 2026-08-03 Phase 4/R6 书架分组写入边界：新增 `BookshelfBookGroupController`，将单本/批量分组写入、刷新和异常顺序收口到 application 层；`BookProvider` 保留旧兼容入口，组合根显式注入同一控制器。控制器/Provider 定向 `9/9`、书架相关定向 `12/12`、Flutter 全量 `1113`（`3` 项既有条件跳过）、`flutter analyze`、架构边界、Rust 全量 `268/268`、`cargo fmt -p legado_engine -- --check` 和 `git diff --check` 通过。未修改 `legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
