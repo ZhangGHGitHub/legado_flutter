@@ -41,6 +41,21 @@ class FrbRustDatabasePort implements RustDatabasePort {
   }
 
   @override
+  void updateBookDetails(
+    String bookId,
+    String name,
+    String author,
+    String description,
+  ) {
+    rust_db.dbUpdateBookDetails(
+      bookId: bookId,
+      name: name,
+      author: author,
+      description: description,
+    );
+  }
+
+  @override
   void updateBookGroup({required String bookId, required String group}) {
     rust_db.dbUpdateBookGroup(bookId: bookId, group: group);
   }

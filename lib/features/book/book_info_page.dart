@@ -600,9 +600,9 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   }
 
   Future<void> _editBookInfo() async {
-    final nameCtrl = TextEditingController(text: _book.name);
-    final authorCtrl = TextEditingController(text: _book.author);
-    final introCtrl = TextEditingController(text: _book.description);
+    var name = _book.name;
+    var author = _book.author;
+    var description = _book.description;
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -611,16 +611,19 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: nameCtrl,
+              TextFormField(
+                initialValue: name,
+                onChanged: (value) => name = value,
                 decoration: const InputDecoration(labelText: '书名'),
               ),
-              TextField(
-                controller: authorCtrl,
+              TextFormField(
+                initialValue: author,
+                onChanged: (value) => author = value,
                 decoration: const InputDecoration(labelText: '作者'),
               ),
-              TextField(
-                controller: introCtrl,
+              TextFormField(
+                initialValue: description,
+                onChanged: (value) => description = value,
                 decoration: const InputDecoration(labelText: '简介'),
                 maxLines: 4,
               ),
@@ -641,21 +644,25 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
       ),
     );
     if (saved == true && mounted) {
-      final next = _book.copyWith(
-        name: nameCtrl.text.trim().isEmpty ? _book.name : nameCtrl.text.trim(),
-        author: authorCtrl.text.trim(),
-        description: introCtrl.text.trim(),
-      );
-      setState(() => _book = next);
       if (_isInShelf) {
-        final bookProvider = context.read<BookProvider>();
-        await bookProvider.repository.insert(next);
-        await bookProvider.loadBooks();
+        final next = await context.read<BookProvider>().updateBookDetails(
+          _book.id,
+          name: name,
+          author: author,
+          description: description,
+        );
+        if (next != null && mounted) setState(() => _book = next);
+      } else {
+        final trimmedName = name.trim();
+        setState(
+          () => _book = _book.copyWith(
+            name: trimmedName.isEmpty ? _book.name : trimmedName,
+            author: author.trim(),
+            description: description.trim(),
+          ),
+        );
       }
     }
-    nameCtrl.dispose();
-    authorCtrl.dispose();
-    introCtrl.dispose();
   }
 
   Future<void> _shareBook() async {

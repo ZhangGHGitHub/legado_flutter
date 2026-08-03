@@ -58,6 +58,18 @@ void dbUpdateBookCover({required String bookId, required String coverUrl}) =>
       coverUrl: coverUrl,
     );
 
+void dbUpdateBookDetails({
+  required String bookId,
+  required String name,
+  required String author,
+  required String description,
+}) => LegadoEngine.instance.api.crateApiDbDbUpdateBookDetails(
+  bookId: bookId,
+  name: name,
+  author: author,
+  description: description,
+);
+
 void dbUpdateBookGroup({required String bookId, required String group}) =>
     LegadoEngine.instance.api.crateApiDbDbUpdateBookGroup(
       bookId: bookId,

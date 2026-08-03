@@ -62,6 +62,14 @@ final class _RecordingRepository implements BookRepository {
   Future<void> updateCover(String bookId, String coverUrl) async {}
 
   @override
+  Future<void> updateBookDetails(
+    String bookId,
+    String name,
+    String author,
+    String description,
+  ) async {}
+
+  @override
   Future<void> updateGroup(String bookId, String group) async {}
 
   @override

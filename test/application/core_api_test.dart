@@ -91,6 +91,14 @@ class _FakeBookRepository implements BookRepository {
   Future<void> saveChapterContent(String chapterId, String content) async {}
   @override
   Future<void> updateCover(String bookId, String coverUrl) async {}
+
+  @override
+  Future<void> updateBookDetails(
+    String bookId,
+    String name,
+    String author,
+    String description,
+  ) async {}
   @override
   Future<void> updateGroup(String bookId, String group) async {}
   @override

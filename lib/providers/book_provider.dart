@@ -1291,6 +1291,37 @@ class BookProvider extends ChangeNotifier {
     return next;
   }
 
+  /// 字段级更新书籍基础信息，始终合并到最新书架记录。
+  Future<Book?> updateBookDetails(
+    String bookId, {
+    required String name,
+    required String author,
+    required String description,
+  }) async {
+    final initialIndex = _books.indexWhere((book) => book.id == bookId);
+    if (initialIndex < 0) return null;
+
+    final details = await _bookMetadataController.updateBookDetails(
+      bookId: bookId,
+      fallbackName: _books[initialIndex].name,
+      name: name,
+      author: author,
+      description: description,
+    );
+    final latestIndex = _books.indexWhere((book) => book.id == bookId);
+    if (latestIndex < 0) return null;
+
+    final next = _books[latestIndex].copyWith(
+      name: details.name,
+      author: details.author,
+      description: details.description,
+    );
+    _replaceBookAt(latestIndex, next);
+    _bookshelfChangePort.notifyChanged(_books);
+    notifyListeners();
+    return next;
+  }
+
   /// 更新读完/N刷轮次（upsert 整书字段）
   Future<void> updateReadIteration(Book book, int readIteration) async {
     await _bookRecordController.updateReadIteration(book, readIteration);

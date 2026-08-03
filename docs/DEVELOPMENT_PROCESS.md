@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-03
 
+2026-08-04 Phase 4/R6 书籍基础信息字段级写入追溯：三条不重叠写集分别实现 Rust、Dart 数据端口和上层接线；Rust lane 先提交底层 `82a860b`，owner 使用 FRB 2.11.1 生成绑定，恢复生成器无关的 lockfile 漂移，并机械补齐 16 个测试 fake。先通过 Rust 定向 `2/2`、Flutter 跨层定向 `20/20` 和 analyze；Rust 全量 `270/270`。Flutter 全量首次因新绑定与旧 release DLL 内容哈希不一致导致 12 个真实 FRB 初始化失败，按现有流程执行 release 重建后原失败定向 `7/7`、第二次全量 `1188`（`3` 项既有条件跳过）通过，未跳过或放宽测试。提交前继续执行架构、格式和 diff 门禁；不提交本地工具文件。
+
 2026-08-03 Phase 4/R6 书架整理排序隔离追溯：三条只读 lane 审查策略别名、Widget 交互和下一批字段级写入；owner 将空保存顺序分支改为复制列表，未调整 Provider getter 或排序持久化。先通过策略/页面定向 `6/6`，再通过 Flutter 全量 `1177`（`3` 项既有条件跳过）；Widget 测试额外断言页面视觉顺序确实改变，排除假阳性。提交前继续执行 analyze、架构边界、格式和 diff 检查，只提交本批策略、测试和追溯文档。
 
 2026-08-03 Phase 4/R6 书籍封面写入追溯：三条只读 lane 分别核对详情页仓储直写、书架整理命令和计划门禁；GitNexus MCP 未提供且本地 CLI 超时，owner 使用全仓静态调用链、测试和计划文档完成同等影响检查。按“一批一个用例”只迁移自动封面保存：新增 `BookMetadataController`，组合根显式注入，`BookProvider` 原位更新最新快照并使旧在途加载失效；非书架不写入、异常静默、阅读位置和其他书籍字段保持不变。先通过定向 `12/12`，再通过 Flutter 全量 `1175`（`3` 项既有条件跳过）、`flutter analyze --no-pub` 和 `scripts/check_architecture_boundaries.ps1`。最终格式与 `git diff --check` 在提交前执行；只提交本批代码、测试和四份追溯文档，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`。

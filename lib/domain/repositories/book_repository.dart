@@ -21,6 +21,13 @@ abstract interface class BookRepository {
 
   Future<void> updateCover(String bookId, String coverUrl);
 
+  Future<void> updateBookDetails(
+    String bookId,
+    String name,
+    String author,
+    String description,
+  );
+
   Future<void> updateGroup(String bookId, String group);
 
   Future<void> insertChapters(List<Chapter> chapters);

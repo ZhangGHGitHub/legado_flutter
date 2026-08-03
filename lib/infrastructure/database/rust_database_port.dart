@@ -19,6 +19,13 @@ abstract interface class RustDatabasePort {
 
   void updateBookCover({required String bookId, required String coverUrl});
 
+  void updateBookDetails(
+    String bookId,
+    String name,
+    String author,
+    String description,
+  );
+
   void updateBookGroup({required String bookId, required String group});
 
   void upsertSource({required String sourceJson});

@@ -144,6 +144,14 @@ class _FakeBookRepository implements BookRepository {
       throw UnimplementedError();
 
   @override
+  Future<void> updateBookDetails(
+    String bookId,
+    String name,
+    String author,
+    String description,
+  ) async {}
+
+  @override
   Future<void> updateGroup(String bookId, String group) =>
       throw UnimplementedError();
 

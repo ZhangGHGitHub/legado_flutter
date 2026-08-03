@@ -32,6 +32,14 @@ class BookDao implements BookRepository {
       _db.updateBookCover(bookId, coverUrl);
 
   @override
+  Future<void> updateBookDetails(
+    String bookId,
+    String name,
+    String author,
+    String description,
+  ) => _db.updateBookDetails(bookId, name, author, description);
+
+  @override
   Future<void> updateGroup(String bookId, String group) =>
       _db.updateBookGroup(bookId, group);
 

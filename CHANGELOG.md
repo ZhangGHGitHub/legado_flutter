@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/Phase 4/R6 书籍基础信息字段级写入：新增 Rust/FRB/Dart `updateBookDetails` 链路，SQL 仅更新书名、作者、简介；详情页不再用旧页面快照整书 upsert，application 统一 trim/空书名回退，Provider 以最新书架记录合并三字段并发布快照。封面、来源、阅读配置、进度、章节索引和 UTF-16 章内位置保持不变；非书架不落库、失败不发布。Rust 定向 `2/2`、Rust 全量 `270/270`、Flutter 定向 `20/20`、Flutter 全量 `1188` 通过（`3` 项既有条件跳过）。FRB 生成后重建 release DLL，修复绑定内容哈希不一致，不改变业务测试。
 - 修复/Phase 4/R6 书架整理排序隔离：`BookshelfArrangeOrderPolicy` 在没有已保存顺序时也返回独立列表，避免“全部分组 + 首次手动排序”直接修改 `BookProvider.books` 内部集合而绕过 mutation version、变更总线和通知。策略与真实拖动定向 `6/6`，Widget 回归同时证明页面顺序已改变且 Provider 顺序/数量不变；Flutter 全量 `1177` 通过（`3` 项既有条件跳过）。不改变排序持久化、分组、删除或书架快照语义。
 - 架构/Phase 4/R6 书籍封面写入边界：新增 `BookMetadataController`，将详情页自动补全封面的字段级写入收口到 application 层；`BookProvider.updateBookCover()` 原位更新最新书架记录、递增 mutation version、发布完整快照并通知，防止在途旧 `loadBooks()` 覆盖新封面。页面保留非书架不落库和异常静默降级语义。定向 `12/12`，Flutter 全量 `1175` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub` 和架构边界通过。未修改 Rust、数据库 schema、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；整书基础信息保存留待下一独立批次。
 - 架构/Phase 4/R6 书架重试命令统一：Style1/Style2 错误态重试统一调用 `BookProvider.loadBooks()`，通过共享快照回流 `BookshelfNotifier`，避免页面只更新 Riverpod 状态而留下 Provider 旧列表；重试期间页面同时观察 `BookProvider.isLoading`，保留原 loading 视觉语义。新增 Style1/Style2 延迟重试 loading 回归，书架相关定向 `41/41`，Flutter 全量 `1167` 通过（`3` 项既有条件跳过）。未改变目录刷新、缓存、删除、分组写入、Reader、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁。

@@ -107,6 +107,116 @@ void main() {
     expect(fixture.provider.books.single.coverUrl, isEmpty);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('书架内编辑基础信息走 Provider 字段级写入', (tester) async {
+    final fixture = await _pumpEditPage(tester, inShelf: true);
+
+    await _editBookInfo(
+      tester,
+      name: ' 新书名 ',
+      author: ' 新作者 ',
+      description: ' 新简介 ',
+    );
+
+    expect(fixture.repository.detailsUpdates, [
+      ('book-1', '新书名', '新作者', '新简介'),
+    ]);
+    final updated = fixture.provider.books.single;
+    expect(updated.name, '新书名');
+    expect(updated.author, '新作者');
+    expect(updated.description, '新简介');
+    expect(updated.currentPageIndex, 65537);
+    expect(updated.coverUrl, 'https://cover.example/current.jpg');
+    expect(updated.sourceUrl, 'https://source.example/book');
+  });
+
+  testWidgets('非书架书籍编辑基础信息只更新页面且不落库', (tester) async {
+    final fixture = await _pumpEditPage(tester, inShelf: false);
+
+    await _editBookInfo(
+      tester,
+      name: ' 新书名 ',
+      author: ' 新作者 ',
+      description: ' 新简介 ',
+    );
+
+    expect(fixture.repository.detailsUpdates, isEmpty);
+    expect(fixture.provider.books, isEmpty);
+    expect(find.text('新书名'), findsOneWidget);
+  });
+}
+
+Future<void> _editBookInfo(
+  WidgetTester tester, {
+  required String name,
+  required String author,
+  required String description,
+}) async {
+  await tester.tap(find.byType(PopupMenuButton<String>));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('编辑'));
+  await tester.pumpAndSettle();
+
+  final fields = find.byType(TextFormField);
+  expect(fields, findsNWidgets(3));
+  await tester.enterText(fields.at(0), name);
+  await tester.enterText(fields.at(1), author);
+  await tester.enterText(fields.at(2), description);
+  await tester.tap(find.widgetWithText(FilledButton, '保存'));
+  await tester.pumpAndSettle();
+}
+
+Future<({BookProvider provider, _MemoryBookRepository repository})>
+_pumpEditPage(WidgetTester tester, {required bool inShelf}) async {
+  final source = BookSource(
+    bookSourceUrl: 'https://source.example',
+    bookSourceName: '编辑书源',
+  );
+  final sourceRepository = _MemorySourceRepository([source]);
+  final sourceService = _createSourceService();
+  final sourceProvider = SourceProvider(
+    repository: sourceRepository,
+    validationPort: source_fixtures.createValidationPortForNotifierTest(),
+    sourceService: sourceService,
+  );
+  await sourceProvider.loadSources();
+
+  final repository = _MemoryBookRepository();
+  final book = Book(
+    id: 'book-1',
+    name: '旧书名',
+    author: '旧作者',
+    coverUrl: 'https://cover.example/current.jpg',
+    description: '旧简介',
+    sourceUrl: 'https://source.example/book',
+    bookSourceUrl: source.bookSourceUrl,
+    currentPageIndex: 65537,
+  );
+  if (inShelf) await repository.insert(book);
+  final bookProvider = BookProvider(
+    repository: repository,
+    sourceService: sourceService,
+    contentCache: const _NoopChapterCache(),
+  );
+  await bookProvider.loadBooks(runMaintenance: false);
+
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
+        ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+        Provider<BookSourceSearchPort>.value(value: const _EmptySearchPort()),
+      ],
+      child: riverpod.ProviderScope(
+        overrides: [
+          sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+        ],
+        child: MaterialApp(home: BookInfoPage(book: book)),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return (provider: bookProvider, repository: repository);
 }
 
 Future<({BookProvider provider, _MemoryBookRepository repository})>
@@ -228,6 +338,7 @@ final class _MemoryBookRepository implements BookRepository {
   final books = <String, Book>{};
   final chapters = <String, List<Chapter>>{};
   final coverUpdates = <(String, String)>[];
+  final detailsUpdates = <(String, String, String, String)>[];
   bool failCoverWrite = false;
 
   @override
@@ -253,6 +364,24 @@ final class _MemoryBookRepository implements BookRepository {
     if (failCoverWrite) throw StateError('封面写入失败');
     final book = books[bookId];
     if (book != null) books[bookId] = book.copyWith(coverUrl: coverUrl);
+  }
+
+  @override
+  Future<void> updateBookDetails(
+    String bookId,
+    String name,
+    String author,
+    String description,
+  ) async {
+    detailsUpdates.add((bookId, name, author, description));
+    final book = books[bookId];
+    if (book != null) {
+      books[bookId] = book.copyWith(
+        name: name,
+        author: author,
+        description: description,
+      );
+    }
   }
 
   @override

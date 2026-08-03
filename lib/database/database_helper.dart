@@ -56,6 +56,16 @@ class DatabaseHelper {
     _port.updateBookCover(bookId: bookId, coverUrl: coverUrl);
   }
 
+  Future<void> updateBookDetails(
+    String bookId,
+    String name,
+    String author,
+    String description,
+  ) async {
+    _requireReady();
+    _port.updateBookDetails(bookId, name, author, description);
+  }
+
   Future<void> updateBookGroup(String bookId, String group) async {
     _requireReady();
     _port.updateBookGroup(bookId: bookId, group: group);

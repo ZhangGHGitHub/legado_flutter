@@ -9,6 +9,7 @@ class _FakeRustDatabasePort implements RustDatabasePort {
   int readyChecks = 0;
   final List<String> books = [];
   String? insertedBook;
+  (String, String, String, String)? updatedBookDetails;
 
   @override
   void requireReady() => readyChecks++;
@@ -18,6 +19,16 @@ class _FakeRustDatabasePort implements RustDatabasePort {
 
   @override
   List<String> getBooks() => List<String>.from(books);
+
+  @override
+  void updateBookDetails(
+    String bookId,
+    String name,
+    String author,
+    String description,
+  ) {
+    updatedBookDetails = (bookId, name, author, description);
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -38,6 +49,19 @@ void main() {
       expect(port.readyChecks, 2);
       expect(books.single.id, 'book-1');
       expect(jsonDecode(port.insertedBook!)['name'], '测试书');
+    },
+  );
+
+  test(
+    'DatabaseHelper forwards book details through the database port',
+    () async {
+      final port = _FakeRustDatabasePort();
+      final database = DatabaseHelper.forPort(port);
+
+      await database.updateBookDetails('book-1', '新书名', '新作者', '新简介');
+
+      expect(port.readyChecks, 1);
+      expect(port.updatedBookDetails, ('book-1', '新书名', '新作者', '新简介'));
     },
   );
 }

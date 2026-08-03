@@ -20,6 +20,8 @@
 
 > **R1-12 当前权威状态（2026-08-03）：** 上述产品边界已完成：六张核心表导入后可直接使用，`readRecord` 与非核心 Room 表无损 archive-only 保存，JSON 备份、事务回滚和幂等导入通过。真实非空副本 `.tmp/r1-device-room/original_legado.db` 已确认 Room v99、identity hash 与原版基线一致，包含 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`；`emulator-5556` all-phase smoke 已通过 `1/1`。仍不宣称 `readRecord` 统计语义或非核心表 Rust v17 业务化完成。
 
+2026-08-04 Phase 4/R6 书籍基础信息字段级写入批次：三条 lane 分别实现 Rust SQL/API、Dart 数据端口和 application/Provider/page。新增 `updateBookDetails` 从 Rust 到 `BookRepository` 的完整链路，Rust SQL 只更新 `name/author/description`；详情页移除旧快照整书 `insert`，Provider 以最新书架对象合并字段、递增 mutation version 并发布完整快照。定向覆盖 trim、空书名、非书架、失败、旧 load 失效，以及封面、来源、readConfig、进度、章节索引和 UTF-16 章内位置不变。Rust 定向 `2/2`、全量 `270/270`，Flutter 定向 `20/20`、全量 `1188`（`3` 项既有条件跳过）通过；FRB 2.11.1 生成后重建 release DLL，真实 FRB 定向 `7/7` 通过。本批不改变 Room 导入、正文、目录、分页、章节身份、第 3 条断行规则或暂停平台门禁；R6 尚未退出。
+
 2026-08-03 Phase 4/R6 书架整理排序隔离批次：审查确认“全部分组 + 无保存顺序”会让页面 `_books` 与 `BookProvider.books` 内部列表别名，拖动排序因而绕过 mutation version、变更总线和通知。`BookshelfArrangeOrderPolicy.apply()` 现对空顺序也返回副本；纯策略和真实拖动回归证明页面顺序实际变化而 Provider 顺序/数量保持不变。定向 `6/6`、Flutter 全量 `1177` 通过（`3` 项既有条件跳过）。本批不迁移分组/删除命令，不修改排序持久化、Rust、数据库、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。
 
 2026-08-03 Phase 4/R6 书籍封面写入批次：三个 agent 分别审查 `BookInfoPage` 直写、`BookshelfArrangePage` 命令边界和阶段门禁；owner 选择单一自动封面用例，新增 `BookMetadataController` 并由组合根注入 `BookProvider`。Provider 在字段级仓储写入成功后基于最新书架记录原位更新封面、递增 mutation version、发布完整快照并通知，失败时不修改状态或发布；详情页继续保持非书架不落库和异常静默降级。定向 `12/12`、Flutter 全量 `1175` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub` 和架构边界通过。下一独立批次处理书名/作者/简介整书 upsert 的并发覆盖风险；书架整理页列表别名问题另行处理。本批未修改 Rust、数据库、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁，R6 尚未全量退出。
