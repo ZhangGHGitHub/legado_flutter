@@ -7,6 +7,7 @@ import '../application/book/chapter_progress_migrator.dart';
 import '../application/book/local_book_import_port.dart';
 import '../application/book/book_provider_source_port.dart';
 import '../application/book/book_record_controller.dart';
+import '../application/book/book_progress_controller.dart';
 import '../application/bookshelf/bookshelf_book_group_controller.dart';
 import '../application/bookshelf/bookshelf_book_lifecycle_controller.dart';
 import '../domain/repositories/book_repository.dart';
@@ -44,6 +45,7 @@ class BookProvider extends ChangeNotifier {
     required BookProviderSourcePort sourceService,
     LocalBookImportPort? localBookPort,
     BookRecordController? bookRecordController,
+    BookProgressController? bookProgressController,
     BookshelfBookGroupController? bookshelfGroupController,
     BookshelfBookLifecycleController? bookshelfBookLifecycleController,
     required ChapterContentCachePort contentCache,
@@ -53,6 +55,9 @@ class BookProvider extends ChangeNotifier {
        _contentCache = contentCache,
        _bookRecordController =
            bookRecordController ?? BookRecordController(repository: repository),
+       _bookProgressController =
+           bookProgressController ??
+           BookProgressController(repository: repository),
        _bookshelfGroupController =
            bookshelfGroupController ??
            BookshelfBookGroupController(repository: repository),
@@ -74,6 +79,7 @@ class BookProvider extends ChangeNotifier {
   final ChapterContentCachePort _contentCache;
   final LocalBookImportPort _localBookPort;
   final BookRecordController _bookRecordController;
+  final BookProgressController _bookProgressController;
   final BookshelfBookGroupController _bookshelfGroupController;
   final BookshelfBookLifecycleController _bookshelfBookLifecycleController;
 
@@ -1165,29 +1171,13 @@ class BookProvider extends ChangeNotifier {
     int pageIndex = 0,
     int? durChapterIndex,
   }) async {
-    // 有章索引时走整书 upsert（FRB updateProgress 尚未带 durChapterIndex）
-    if (durChapterIndex != null) {
-      final existing = findBookById(bookId);
-      if (existing != null) {
-        await _repository.insert(
-          existing.copyWith(
-            progress: progress,
-            currentChapter: chapter,
-            currentPageIndex: pageIndex,
-            durChapterIndex: durChapterIndex,
-          ),
-        );
-        _books = await _repository.getAll();
-        await _refreshShelfChapterMetaFor(bookId);
-        notifyListeners();
-        return;
-      }
-    }
-    await _repository.updateProgress(
+    await _bookProgressController.updateProgress(
       bookId,
       progress,
       chapter,
       pageIndex: pageIndex,
+      durChapterIndex: durChapterIndex,
+      existingBook: findBookById(bookId),
     );
     _books = await _repository.getAll();
     await _refreshShelfChapterMetaFor(bookId);

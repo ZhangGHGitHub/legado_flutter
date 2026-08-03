@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-03
 
+2026-08-03 Phase 4/R6 阅读进度写入边界追溯：先由三个不重叠 lane 完成进度/迁移/同步定向测试、application 分层审查和变更范围审查；owner 随后修正 `bookId` 与 `existingBook.id` 不一致时不得整书 upsert，并补充防误写回归。最终定向 `34/34`、Flutter 全量 `1129`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 全部通过。`BookProgressController` 仅依赖 `BookRepository`，`BookProvider` 继续负责刷新和通知；`pageIndex`、异常传播、UTF-16 章内阅读位置及 R1-12/原版 UI/暂停平台边界不变。本批不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`。
+
 设备对照约定（2026-08-02）：原版 UI/功能对照固定使用 `emulator-5556` 上的 `io.legado.app.debug`，目标版本为 `3.26.072317debug`；`com.legado.legado_flutter` 作为重构版包单独验证，不按包名混用。UI 截图、交互、主题、文字、布局和功能验收均以该版本为准，其他原版版本只能作为历史参考。Room 迁移证据现已登记，源库副本为 `.tmp/r1-device-room/original_legado.db`。
 R1-12 状态更正（2026-08-03）：archive-only 产品边界及真实非空 Room 证据均已完成登记。副本确认 Room v99、identity hash 与基线一致，包含 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`；既有 `emulator-5556` all-phase smoke `1/1` 通过。当前仍未声明的只是 `readRecord` 统计语义和非核心表 Rust v17 业务化，历史记录中“R1-12 仍不退出/真实证据缺失”仅表示当时状态。
 2026-08-03 Phase 4/R6 书架分组写入边界追溯：新增 `BookshelfBookGroupController`，将 `BookProvider` 的单本/批量分组写入和刷新委托到 application 层；组合根显式注入控制器，旧 Provider 入口、顺序写入、空输入、异常传播和通知次数保持不变。先通过控制器/Provider 定向 `9/9`，再通过书架相关定向 `12/12`、Flutter 全量 `1113`（`3` 项既有条件跳过）、`flutter analyze`、`scripts/check_architecture_boundaries.ps1`、Rust 全量 `268/268`、`cargo fmt -p legado_engine -- --check` 和 `git diff --check`。本批不改变正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12、原版 UI 基线或暂停平台门禁。

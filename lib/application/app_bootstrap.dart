@@ -6,6 +6,7 @@ import 'book/batch_book_progress_sync_port.dart';
 import 'book/local_book_import_port.dart';
 import 'book/book_provider_source_port.dart';
 import 'book/book_record_controller.dart';
+import 'book/book_progress_controller.dart';
 import 'bookshelf/bookshelf_book_group_controller.dart';
 import 'bookshelf/bookshelf_book_lifecycle_controller.dart';
 import 'database/legacy_room_import_service.dart';
@@ -164,6 +165,9 @@ class AppBootstrap {
       sourceService: _bookProviderSourcePort,
       localBookPort: _localBookImportPort,
       bookRecordController: BookRecordController(repository: _bookRepository),
+      bookProgressController: BookProgressController(
+        repository: _bookRepository,
+      ),
       bookshelfGroupController: BookshelfBookGroupController(
         repository: _bookRepository,
       ),
