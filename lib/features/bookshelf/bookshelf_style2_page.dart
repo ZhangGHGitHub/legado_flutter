@@ -334,14 +334,14 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
           ),
           body: Consumer<BookProvider>(
             builder: (context, provider, _) {
-              if (bookshelfState.isInitialLoading && bookshelfBooks.isEmpty) {
+              if ((bookshelfState.isInitialLoading || provider.isLoading) &&
+                  bookshelfBooks.isEmpty) {
                 return const Center(child: CircularProgressIndicator());
               }
               if (bookshelfState.hasError && bookshelfBooks.isEmpty) {
                 return ErrorView(
                   message: bookshelfState.error?.toString() ?? '加载书架失败',
-                  onRetry: () =>
-                      ref.read(bookshelfNotifierProvider.notifier).load(),
+                  onRetry: () => provider.loadBooks(),
                 );
               }
               if (bookshelfBooks.isEmpty) {

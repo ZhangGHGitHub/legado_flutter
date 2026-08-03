@@ -300,8 +300,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                 bookshelfState,
                 provider,
                 sourceNotifier,
-                onRetry: () =>
-                    ref.read(bookshelfNotifierProvider.notifier).load(),
+                onRetry: () => provider.loadBooks(),
               ),
             );
           },
@@ -316,7 +315,8 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     SourceNotifier sourceNotifier, {
     required VoidCallback onRetry,
   }) {
-    if (bookshelfState.isLoading && bookshelfState.books.isEmpty) {
+    if ((bookshelfState.isLoading || provider.isLoading) &&
+        bookshelfState.books.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
     if (bookshelfState.hasError && bookshelfState.books.isEmpty) {

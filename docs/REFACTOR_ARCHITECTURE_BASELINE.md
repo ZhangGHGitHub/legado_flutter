@@ -8,6 +8,8 @@
 
 > 2026-08-03 Phase 4/R6 书架只读状态与启动失败同步：`BookshelfStyle1Page`、`BookshelfStyle2Page` 的列表、分组、加载、错误、重试和空态改用共享 `BookshelfState`；目录刷新、更新中状态、缓存、删除和分组写入继续保留在 `BookProvider`。`BookshelfChangeBus` 增加失败快照事件，生产启动加载失败同步进入 `BookshelfNotifier.failure`，同时保留旧 `BookProvider.loadError` 和启动任务报告。书架相关定向 `39/39`、Flutter 全量 `1165`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。该批不代表 `BookProvider` 写入/目录职责或 R6 全量迁移完成，也不改变 Reader、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12、严格 UI 1:1、Web/WASM/PWA 或真实 Android TTS 门禁。
 
+> 2026-08-03 Phase 4/R6 书架重试命令统一：Style1/Style2 错误态重试统一调用 `BookProvider.loadBooks()`，通过共享变更总线同步 `BookshelfNotifier`，同时观察 `BookProvider.isLoading` 保持重试 loading 语义。书架相关定向 `41/41`、Flutter 全量 `1167`（`3` 项既有条件跳过）通过；本批不代表目录/正文/缓存/Reader 或 R6 全量迁移完成，也不改变 R1-12、严格 UI 1:1、Web/WASM/PWA 或真实 Android TTS 门禁。
+
 > 2026-08-03 Phase 4/R6 BookProvider 读取边界：`BookProvider.loadBooks` 通过可选注入的 `BookshelfController` 读取书架，默认构造仍使用同一 `BookRepository` 的 `RepositoryBookshelfPort`；controller 只承担读取，Provider 继续负责 loading、错误文本、通知、维护开关和全部写入动作。新增委托与错误传播回归 `2/2`，Flutter 全量 `1145`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界及脚本自测和 `git diff --check` 均通过；书架页面、Reader、正文、目录、分页、章节身份、UTF-16 阅读位置及 R1-12 不在本批范围。
 
 > 2026-08-03 Phase 4/R6 书架读取边界：`BookshelfNotifier` 的读取职责收口到 application `BookshelfController`，controller 只依赖 `BookshelfPort`；生产组合根以与 `RealCoreApi` 相同的 `BookRepository` 构造 `RepositoryBookshelfPort`，`CoreApiBookshelfPort` 仅作为兼容 fallback。Notifier 继续保留刷新旧值、requestId、异常堆栈和不可变列表契约，BookProvider 的其他状态、写入动作和书架页面不在本批范围。controller/Notifier/组合根定向 `21/21`、Flutter 全量 `1143`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 均通过；R6 尚未全量退出。

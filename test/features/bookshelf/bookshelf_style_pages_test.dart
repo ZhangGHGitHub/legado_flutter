@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
@@ -40,7 +42,8 @@ void main() {
         final provider = _BookshelfStateBookProvider(
           BookshelfState.failure(StateError('数据库不可用'), StackTrace.current),
         );
-        await _pumpStyle(tester, style, provider);
+        final notifier = _BookshelfStateNotifier(provider);
+        await _pumpStyle(tester, style, provider, notifier: notifier);
 
         expect(find.text('加载失败'), findsOneWidget);
         expect(find.text('Bad state: 数据库不可用'), findsOneWidget);
@@ -49,9 +52,31 @@ void main() {
         await tester.pump();
 
         expect(provider.loadCalls, 1);
+        expect(notifier.loadCalls, 0);
         expect(find.text('书架空空如也'), findsOneWidget);
       },
     );
+
+    testWidgets('${style.name} shows provider loading while retrying', (
+      tester,
+    ) async {
+      final provider = _BookshelfStateBookProvider(
+        BookshelfState.failure(StateError('数据库不可用'), StackTrace.current),
+      )..loadGate = Completer<void>();
+      final notifier = _BookshelfStateNotifier(provider);
+      await _pumpStyle(tester, style, provider, notifier: notifier);
+
+      await tester.tap(find.text('重试'));
+      await tester.pump();
+
+      expect(provider.isLoading, isTrue);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(notifier.loadCalls, 0);
+
+      provider.loadGate!.complete();
+      await tester.pump();
+      expect(find.text('书架空空如也'), findsOneWidget);
+    });
 
     testWidgets('${style.name} renders an empty successful snapshot', (
       tester,
@@ -347,6 +372,8 @@ final class _BookshelfStateBookProvider extends BookProvider {
   int refreshCalls = 0;
   BookSource? resolvedSource;
   String? removedBookId;
+  VoidCallback? onSnapshotChanged;
+  Completer<void>? loadGate;
 
   @override
   List<Book> get books => snapshot.books;
@@ -371,7 +398,11 @@ final class _BookshelfStateBookProvider extends BookProvider {
   @override
   Future<void> loadBooks({bool runMaintenance = true}) async {
     loadCalls++;
+    publish(BookshelfState.loading(books: snapshot.books));
+    final gate = loadGate;
+    if (gate != null) await gate.future;
     publish(BookshelfState.success(snapshot.books));
+    onSnapshotChanged?.call();
   }
 
   @override
@@ -405,13 +436,17 @@ final class _BookshelfStateBookProvider extends BookProvider {
 }
 
 final class _BookshelfStateNotifier extends BookshelfNotifier {
-  _BookshelfStateNotifier(this.bookProvider);
+  _BookshelfStateNotifier(this.bookProvider) {
+    bookProvider.onSnapshotChanged = _syncFromProvider;
+  }
 
   final _BookshelfStateBookProvider bookProvider;
   int loadCalls = 0;
 
   @override
   BookshelfState build() => bookProvider.snapshot;
+
+  void _syncFromProvider() => state = bookProvider.snapshot;
 
   @override
   Future<void> load() async {
