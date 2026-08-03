@@ -24,6 +24,7 @@ import 'package:legado_flutter/infrastructure/engine/frb_book_source_validation_
 import 'package:legado_flutter/infrastructure/bookshelf/bookshelf_arrange_port_adapter.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
+import 'package:legado_flutter/widgets/legado_popup_menu.dart';
 import '../helpers/book_source_service_test_factory.dart';
 
 class _FakeBookshelfArrangePrefs implements BookshelfArrangePort {
@@ -69,8 +70,20 @@ class _FakeBookGroupStore implements BookGroupStorePort {
 class _FakeGroupCommands implements BookshelfArrangeGroupCommandPort {
   final singleCalls = <(String, String)>[];
   final batchCalls = <(List<String>, String)>[];
+  final clearCalls = <(List<String>, String?)>[];
   List<Book> snapshot = const [];
   Object? error;
+  Object? clearError;
+
+  @override
+  Future<List<Book>> clearBooksGroup(
+    Iterable<String> bookIds, {
+    String? onlyWhenGroupEquals,
+  }) async {
+    clearCalls.add((List<String>.of(bookIds), onlyWhenGroupEquals));
+    if (clearError case final error?) throw error;
+    return List<Book>.unmodifiable(snapshot);
+  }
 
   @override
   Future<List<Book>> updateBookGroup(String bookId, String group) async {
@@ -331,6 +344,112 @@ void main() {
     expect(find.text('全选 (0/2)'), findsOneWidget);
   });
 
+  testWidgets('remove from group passes the selected ids and exact condition', (
+    tester,
+  ) async {
+    final bookProvider = await _bookProviderWith([
+      const Book(id: 'one', name: '第一本', group: '目标分组'),
+      const Book(id: 'two', name: '第二本', group: '其他分组'),
+    ]);
+    final commands = _FakeGroupCommands()
+      ..snapshot = const [
+        Book(id: 'one', name: '移除后第一本'),
+        Book(id: 'two', name: '第二本', group: '其他分组'),
+      ];
+
+    await _pumpArrangePage(tester, bookProvider, commands);
+    await tester.tap(find.text('第二本'));
+    await tester.tap(find.text('第一本'));
+    await tester.pump();
+    await _openBottomAction(tester, '移除分组');
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.tap(find.text('确认'));
+    await tester.pumpAndSettle();
+
+    expect(commands.clearCalls, hasLength(1));
+    expect(commands.clearCalls.single.$1, ['two', 'one']);
+    expect(commands.clearCalls.single.$2, '目标分组');
+    expect(commands.singleCalls, isEmpty);
+    expect(commands.batchCalls, isEmpty);
+    expect(find.text('移除后第一本'), findsOneWidget);
+    expect(find.text('全选 (0/2)'), findsOneWidget);
+  });
+
+  testWidgets('remove from group treats an empty choice as a wildcard', (
+    tester,
+  ) async {
+    final bookProvider = await _bookProviderWith([
+      const Book(id: 'one', name: '第一本', group: '目标分组'),
+    ]);
+    final commands = _FakeGroupCommands()
+      ..snapshot = const [Book(id: 'one', name: '已移除分组')];
+
+    await _pumpArrangePage(tester, bookProvider, commands);
+    await tester.tap(find.text('第一本'));
+    await tester.pump();
+    await _openBottomAction(tester, '移除分组');
+    await tester.tap(find.text('确认'));
+    await tester.pumpAndSettle();
+
+    expect(commands.clearCalls, hasLength(1));
+    expect(commands.clearCalls.single.$1, ['one']);
+    expect(commands.clearCalls.single.$2, isNull);
+    expect(find.text('已移除分组'), findsOneWidget);
+    expect(find.text('全选 (0/1)'), findsOneWidget);
+  });
+
+  testWidgets(
+    'canceling remove from group keeps the selection and skips command',
+    (tester) async {
+      final bookProvider = await _bookProviderWith([
+        const Book(id: 'one', name: '第一本', group: '目标分组'),
+      ]);
+      final commands = _FakeGroupCommands();
+
+      await _pumpArrangePage(tester, bookProvider, commands);
+      await tester.tap(find.text('第一本'));
+      await tester.pump();
+      await _openBottomAction(tester, '移除分组');
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+
+      expect(commands.clearCalls, isEmpty);
+      expect(find.text('第一本'), findsOneWidget);
+      expect(find.text('全选 (1/1)'), findsOneWidget);
+    },
+  );
+
+  testWidgets('remove from group failure preserves the list and selection', (
+    tester,
+  ) async {
+    final bookProvider = await _bookProviderWith([
+      const Book(id: 'one', name: '第一本', group: '目标分组'),
+    ]);
+    final failure = StateError('移除分组失败');
+    final commands = _FakeGroupCommands()
+      ..snapshot = const [Book(id: 'one', name: '不应显示')]
+      ..clearError = failure;
+    Object? reportedError;
+
+    await runZonedGuarded(() async {
+      await _pumpArrangePage(tester, bookProvider, commands);
+      await tester.tap(find.text('第一本'));
+      await tester.pump();
+      await _openBottomAction(tester, '移除分组');
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.tap(find.text('确认'));
+      await tester.pumpAndSettle();
+    }, (error, _) => reportedError = error);
+
+    expect(reportedError, same(failure));
+    expect(commands.clearCalls, hasLength(1));
+    expect(commands.clearCalls.single.$1, ['one']);
+    expect(commands.clearCalls.single.$2, '目标分组');
+    expect(find.text('第一本'), findsOneWidget);
+    expect(find.text('不应显示'), findsNothing);
+    expect(find.text('全选 (1/1)'), findsOneWidget);
+  });
+
   testWidgets('batch move failure preserves the list and selection', (
     tester,
   ) async {
@@ -460,6 +579,18 @@ Future<void> _pumpArrangePage(
       ),
     ),
   );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openBottomAction(WidgetTester tester, String action) async {
+  final bottomMore = find.byType(LegadoBottomBarPopupButton<String>);
+  final moreButton = find.descendant(
+    of: bottomMore,
+    matching: find.byType(IconButton),
+  );
+  await tester.tap(moreButton);
+  await tester.pumpAndSettle();
+  await tester.tap(find.widgetWithText(PopupMenuItem<String>, action));
   await tester.pumpAndSettle();
 }
 

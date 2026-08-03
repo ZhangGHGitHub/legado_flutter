@@ -339,23 +339,13 @@ class _BookshelfArrangePageState
     if (ids.isEmpty) return;
     final chosen = await _pickGroup();
     if (chosen == null || !mounted) return;
-    final provider = context.read<BookProvider>();
-    for (final id in ids) {
-      Book? book;
-      for (final b in provider.books) {
-        if (b.id == id) {
-          book = b;
-          break;
-        }
-      }
-      if (book == null) continue;
-      if (chosen.isEmpty || book.group == chosen) {
-        await provider.updateBookGroup(id, '');
-      }
-    }
+    final books = await _groupCommands.clearBooksGroup(
+      ids,
+      onlyWhenGroupEquals: chosen.isEmpty ? null : chosen,
+    );
     if (!mounted) return;
     setState(() {
-      _reloadBooks();
+      _reloadBooks(books);
       _selected.clear();
     });
   }

@@ -33,4 +33,27 @@ final class BookshelfArrangeGroupCommandPortAdapter
     await _updateBooksGroup(ids, group);
     return List<Book>.unmodifiable(_books());
   }
+
+  @override
+  Future<List<Book>> clearBooksGroup(
+    Iterable<String> bookIds, {
+    String? onlyWhenGroupEquals,
+  }) async {
+    final ids = List<String>.of(bookIds);
+    for (final id in ids) {
+      Book? book;
+      for (final item in _books()) {
+        if (item.id == id) {
+          book = item;
+          break;
+        }
+      }
+      if (book == null) continue;
+      if (onlyWhenGroupEquals != null && book.group != onlyWhenGroupEquals) {
+        continue;
+      }
+      await _updateBookGroup(id, '');
+    }
+    return List<Book>.unmodifiable(_books());
+  }
 }

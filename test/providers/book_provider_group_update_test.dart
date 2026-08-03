@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_change_port.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/infrastructure/bookshelf/bookshelf_arrange_group_command_port_adapter.dart';
 import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import '../helpers/book_source_service_test_factory.dart';
@@ -37,10 +39,14 @@ class _GroupBookRepository extends BookDao {
 Book _book(String id, {String group = ''}) =>
     Book(id: id, name: '书籍$id', group: group);
 
-BookProvider _createProvider(_GroupBookRepository repository) => BookProvider(
+BookProvider _createProvider(
+  _GroupBookRepository repository, {
+  BookshelfChangePort? changes,
+}) => BookProvider(
   repository: repository,
   sourceService: TestBookSourceService(),
   contentCache: const FileChapterContentCache(),
+  bookshelfChangePort: changes,
 );
 
 void main() {
@@ -127,5 +133,74 @@ void main() {
     expect(repository.getAllCalls, 1);
     expect(provider.books.single.group, isEmpty);
     expect(notifications, 0);
+  });
+
+  test('条件式移除逐本刷新并逐本发布书架变更', () async {
+    final repository = _GroupBookRepository([
+      _book('one', group: '目标分组'),
+      _book('two', group: '目标分组'),
+    ]);
+    final changes = BookshelfChangeBus();
+    addTearDown(changes.dispose);
+    final provider = _createProvider(repository, changes: changes);
+    await provider.loadBooks(runMaintenance: false);
+    final initialRevision = changes.revision;
+    var notifications = 0;
+    provider.addListener(() => notifications++);
+    final adapter = BookshelfArrangeGroupCommandPortAdapter(
+      updateBookGroup: provider.updateBookGroup,
+      updateBooksGroup: provider.updateBooksGroup,
+      books: () => provider.books,
+    );
+
+    final snapshot = await adapter.clearBooksGroup([
+      'one',
+      'two',
+    ], onlyWhenGroupEquals: '目标分组');
+
+    expect(repository.updateCalls, ['one:', 'two:']);
+    expect(repository.getAllCalls, 3);
+    expect(notifications, 2);
+    expect(changes.revision, initialRevision + 2);
+    expect(snapshot.every((book) => book.group.isEmpty), isTrue);
+  });
+
+  test('条件式移除失败只保留前项刷新和变更通知', () async {
+    final repository = _GroupBookRepository([
+      _book('one', group: '目标分组'),
+      _book('two', group: '目标分组'),
+      _book('three', group: '目标分组'),
+    ])..failingBookIds.add('two');
+    final changes = BookshelfChangeBus();
+    addTearDown(changes.dispose);
+    final provider = _createProvider(repository, changes: changes);
+    await provider.loadBooks(runMaintenance: false);
+    final initialRevision = changes.revision;
+    var notifications = 0;
+    provider.addListener(() => notifications++);
+    final adapter = BookshelfArrangeGroupCommandPortAdapter(
+      updateBookGroup: provider.updateBookGroup,
+      updateBooksGroup: provider.updateBooksGroup,
+      books: () => provider.books,
+    );
+
+    await expectLater(
+      adapter.clearBooksGroup([
+        'one',
+        'two',
+        'three',
+      ], onlyWhenGroupEquals: '目标分组'),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(repository.updateCalls, ['one:', 'two:']);
+    expect(repository.getAllCalls, 2);
+    expect(notifications, 1);
+    expect(changes.revision, initialRevision + 1);
+    expect(provider.books.map((book) => '${book.id}:${book.group}'), [
+      'one:',
+      'two:目标分组',
+      'three:目标分组',
+    ]);
   });
 }
