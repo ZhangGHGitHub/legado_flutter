@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_change_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_controller.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -59,6 +60,33 @@ void main() {
     expect(provider.isLoading, isFalse);
     expect(provider.loadError, isNull);
   });
+
+  test(
+    'a stale load cannot replace a newer successful bookshelf write',
+    () async {
+      final controller = _DeferredBookshelfController();
+      final changes = BookshelfChangeBus();
+      final latestBook = const Book(id: 'latest', name: '写入后的书');
+      final provider = BookProvider(
+        repository: _MutationBookDao(latestBook),
+        contentCache: const FileChapterContentCache(),
+        sourceService: TestBookSourceService(),
+        bookshelfController: controller,
+        bookshelfChangePort: changes,
+      );
+      addTearDown(changes.dispose);
+
+      final load = provider.loadBooks(runMaintenance: false);
+      await provider.updateBookGroup('book-1', '新分组');
+
+      controller.complete(0, [const Book(id: 'stale', name: '旧读取')]);
+      await load;
+
+      expect(provider.books, [latestBook]);
+      expect(changes.latest?.books, [latestBook]);
+      expect(provider.isLoading, isFalse);
+    },
+  );
 }
 
 class _DeferredBookshelfController extends BookshelfController {
@@ -87,6 +115,21 @@ class _NoopBookshelfPort implements BookshelfPort {
 class _EmptyBookDao extends BookDao {
   @override
   Future<List<Book>> getAll() async => const [];
+
+  @override
+  Future<List<Chapter>> getChapters(String bookId) async => const [];
+}
+
+class _MutationBookDao extends BookDao {
+  _MutationBookDao(this.latestBook);
+
+  final Book latestBook;
+
+  @override
+  Future<void> updateGroup(String bookId, String group) async {}
+
+  @override
+  Future<List<Book>> getAll() async => [latestBook];
 
   @override
   Future<List<Chapter>> getChapters(String bookId) async => const [];

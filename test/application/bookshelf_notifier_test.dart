@@ -223,15 +223,29 @@ void main() {
       api.completeNext([oldBook]);
       await initial;
 
-      changes.notifyChanged();
-      await Future<void>.delayed(Duration.zero);
-      expect(api.getBookshelfCalls, 1);
-      api.completeNext([newBook]);
+      changes.notifyChanged([newBook]);
       await Future<void>.delayed(Duration.zero);
 
       final state = container.read(bookshelfNotifierProvider);
       expect(state.books, [newBook]);
       expect(state.status, BookshelfStatus.success);
+      expect(api.getBookshelfCalls, 0);
+    });
+
+    test('starts from the latest snapshot without another database read', () {
+      final changes = BookshelfChangeBus();
+      final book = Book(id: 'book-1', name: '最近书架');
+      changes.notifyChanged([book]);
+      final container = ProviderContainer(
+        overrides: [bookshelfChangePortProvider.overrideWithValue(changes)],
+      );
+      addTearDown(container.dispose);
+      addTearDown(changes.dispose);
+
+      final state = container.read(bookshelfNotifierProvider);
+
+      expect(state.status, BookshelfStatus.success);
+      expect(state.books, [book]);
     });
   });
 }

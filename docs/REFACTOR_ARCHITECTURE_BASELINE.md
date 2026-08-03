@@ -3499,3 +3499,13 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 书籍记录/书架/缓存定向 `20/20`，Flutter 全量 `1117` 通过、`3` 项既有外部网络条件跳过；`flutter analyze`、架构边界和 `git diff --check` 通过。未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份或第 3 条断行规则。
 
 边界结论：本批只收口两类书籍阅读元数据写入，不迁移 `BookProvider` 状态，不改变章节索引、页内 UTF-16 位置、正文内容、书籍导入、目录刷新或换源链路；R6 及暂停平台门禁保持原状态。
+
+## 180. 2026-08-03：R6 书架快照同步前置收口
+
+- `BookshelfChangePort`/`BookshelfChangeBus` 由 revision 信号扩展为携带不可变完整 `List<Book>` 快照，并保存总线最新快照；生产组合根将同一总线注入 `BookProvider` 与 `BookshelfNotifier`，避免 Provider 和 Notifier 各自维护第二份书架事实源。
+- `BookProvider` 在 `loadBooks` 成功或书架写入成功并重新读取完整列表后发布快照；写入失败不发布。`loadBooks` 的 requestId 失效保护保证旧并发结果不能覆盖新列表。`BookshelfNotifier` 直接应用外部快照，并在创建时从总线最新快照初始化，不重复读取数据库；其已有加载/刷新失败保留旧列表和 requestId 语义不变。
+- 本批未替换 `BookshelfStyle1Page`、`BookshelfStyle2Page` 的 `BookProvider` 只读消费，也未改变网络目录刷新按钮的语义；页面迁移必须另行验证，不能将 `BookshelfNotifier.refresh()` 当作目录刷新替代。
+
+验证结果：书架同步相关七个测试文件定向 `25/25`，命令为 `flutter test --no-pub --enable-experiment=dot-shorthands test/application/bookshelf/bookshelf_change_port_test.dart test/application/bookshelf_notifier_test.dart test/providers/book_provider_bookshelf_change_test.dart test/providers/book_provider_load_request_test.dart test/providers/book_provider_bookshelf_controller_test.dart test/providers/book_provider_group_update_test.dart test/providers/book_provider_chapter_meta_controller_test.dart`；Flutter 全量 `flutter test --no-pub --enable-experiment=dot-shorthands` 为 `1153` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过，仅保留既有 Windows LF/CRLF 提示。
+
+边界结论：本批只完成书架快照同步前置契约和并发保护，不宣称 BookshelfStyle1/Style2 UI 只读状态迁移完成，不改变 `legado-main/`、Reader、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12、Web/WASM/PWA、真实 Android TTS 或其他暂停门禁。

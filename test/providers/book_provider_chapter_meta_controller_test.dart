@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_change_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/domain/ports/chapter_content_cache_port.dart';
@@ -197,10 +198,14 @@ List<Chapter> _chapters(String bookId) => [
   ),
 ];
 
-BookProvider _provider(_ChapterMetaRepository repository) => BookProvider(
+BookProvider _provider(
+  _ChapterMetaRepository repository, {
+  BookshelfChangePort? bookshelfChangePort,
+}) => BookProvider(
   repository: repository,
   sourceService: TestBookSourceService(),
   contentCache: _ChapterMetaCache(),
+  bookshelfChangePort: bookshelfChangePort,
 );
 
 void _expectUnrelatedBookFieldsPreserved(Book book) {
@@ -236,11 +241,14 @@ void main() {
       chapters: originalChapters,
     );
     final cache = _ChapterMetaCache();
+    final changes = BookshelfChangeBus();
     final provider = BookProvider(
       repository: repository,
       sourceService: TestBookSourceService(),
       contentCache: cache,
+      bookshelfChangePort: changes,
     );
+    addTearDown(changes.dispose);
 
     await provider.loadBooks(runMaintenance: false);
     var notifications = 0;
@@ -270,6 +278,7 @@ void main() {
       ),
       ['第一章正文', '第二章正文', '第三章正文'],
     );
+    expect(changes.latest?.books, [updatedBook]);
   });
 
   test('章节元数据写入异常时后台任务隔离且不破坏书籍和章节状态', () async {

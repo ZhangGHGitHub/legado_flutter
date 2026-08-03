@@ -101,6 +101,7 @@ class BookProvider extends ChangeNotifier {
   final BookshelfChangePort _bookshelfChangePort;
 
   List<Book> _books = [];
+  int _booksMutationVersion = 0;
   List<Chapter> _currentChapters = [];
   int _booksLoadRequestId = 0;
   bool _isLoading = false;
@@ -155,6 +156,16 @@ class BookProvider extends ChangeNotifier {
   double get downloadProgress =>
       _downloadTotal > 0 ? _downloadCompleted / _downloadTotal : 0.0;
 
+  void _replaceBooks(List<Book> books) {
+    _books = books;
+    _booksMutationVersion++;
+  }
+
+  void _replaceBookAt(int index, Book book) {
+    _books[index] = book;
+    _booksMutationVersion++;
+  }
+
   @visibleForTesting
   static String tocLoadKey({
     required String bookId,
@@ -200,7 +211,7 @@ class BookProvider extends ChangeNotifier {
             shelfBook.currentChapter != next.currentChapter)) {
       await _repository.insert(next);
       final shelfIndex = _books.indexWhere((item) => item.id == book.id);
-      if (shelfIndex >= 0) _books[shelfIndex] = next;
+      if (shelfIndex >= 0) _replaceBookAt(shelfIndex, next);
     }
     return (book: next, progress: progress);
   }
@@ -250,29 +261,38 @@ class BookProvider extends ChangeNotifier {
       final next = onShelf.copyWith(totalChapterNum: list.length);
       await _repository.insert(next);
       final i = _books.indexWhere((b) => b.id == book.id);
-      if (i >= 0) _books[i] = next;
+      if (i >= 0) _replaceBookAt(i, next);
     }
     await _refreshShelfChapterMetaFor(book.id);
+    _bookshelfChangePort.notifyChanged(_books);
     notifyListeners();
   }
 
   /// 加载书架
   Future<void> loadBooks({bool runMaintenance = true}) async {
     final requestId = ++_booksLoadRequestId;
+    final mutationVersion = _booksMutationVersion;
     _isLoading = true;
     _loadError = null;
     notifyListeners();
     try {
       final books = await _bookshelfController.loadBookshelf();
-      if (requestId != _booksLoadRequestId) return;
+      if (requestId != _booksLoadRequestId ||
+          mutationVersion != _booksMutationVersion) {
+        return;
+      }
       _books = books;
+      _bookshelfChangePort.notifyChanged(_books);
       if (runMaintenance) {
         // 缓存清理和章节元数据只影响维护状态，不能阻塞书架首帧。
         unawaited(runStartupMaintenance());
       }
       _loadError = null;
     } catch (e) {
-      if (requestId != _booksLoadRequestId) return;
+      if (requestId != _booksLoadRequestId ||
+          mutationVersion != _booksMutationVersion) {
+        return;
+      }
       _loadError = '加载书架失败: $e';
       debugPrint(_loadError);
     } finally {
@@ -296,9 +316,9 @@ class BookProvider extends ChangeNotifier {
     try {
       final book = await _localBookPort.importFromFile();
       if (book != null) {
-        _books = await _repository.getAll();
+        _replaceBooks(await _repository.getAll());
         await _refreshShelfChapterMetaFor(book.id);
-        _bookshelfChangePort.notifyChanged();
+        _bookshelfChangePort.notifyChanged(_books);
         notifyListeners();
       }
       return book;
@@ -320,9 +340,9 @@ class BookProvider extends ChangeNotifier {
         path,
         displayName: displayName,
       );
-      _books = await _repository.getAll();
+      _replaceBooks(await _repository.getAll());
       await _refreshShelfChapterMetaFor(book.id);
-      _bookshelfChangePort.notifyChanged();
+      _bookshelfChangePort.notifyChanged(_books);
       notifyListeners();
       return book;
     } finally {
@@ -379,9 +399,9 @@ class BookProvider extends ChangeNotifier {
       }
     }
     if (added > 0) {
-      _books = await _repository.getAll();
+      _replaceBooks(await _repository.getAll());
       await _refreshShelfChapterMeta();
-      _bookshelfChangePort.notifyChanged();
+      _bookshelfChangePort.notifyChanged(_books);
       notifyListeners();
     }
     return (added: added, skipped: skipped, failed: failed);
@@ -408,9 +428,9 @@ class BookProvider extends ChangeNotifier {
       added++;
     }
     if (added > 0) {
-      _books = await _repository.getAll();
+      _replaceBooks(await _repository.getAll());
       await _refreshShelfChapterMeta();
-      _bookshelfChangePort.notifyChanged();
+      _bookshelfChangePort.notifyChanged(_books);
       notifyListeners();
     }
     return added;
@@ -453,9 +473,9 @@ class BookProvider extends ChangeNotifier {
       }
     }
     if (success > 0) {
-      _books = await _repository.getAll();
+      _replaceBooks(await _repository.getAll());
       await _refreshShelfChapterMeta();
-      _bookshelfChangePort.notifyChanged();
+      _bookshelfChangePort.notifyChanged(_books);
       notifyListeners();
     }
     return (success: success, fail: fail);
@@ -788,7 +808,7 @@ class BookProvider extends ChangeNotifier {
         notifyListeners();
         try {
           await _refreshBookTocOnShelf(book, source);
-          _books = await _repository.getAll();
+          _replaceBooks(await _repository.getAll());
           updated++;
         } catch (e, st) {
           failed++;
@@ -812,9 +832,9 @@ class BookProvider extends ChangeNotifier {
     );
     await Future.wait(workers);
     _shelfUpdateQueued = 0;
-    _books = await _repository.getAll();
+    _replaceBooks(await _repository.getAll());
     await _refreshShelfChapterMeta();
-    _bookshelfChangePort.notifyChanged();
+    _bookshelfChangePort.notifyChanged(_books);
     notifyListeners();
     return ShelfTocUpdateResult(
       requested: requestedBooks.length,
@@ -834,16 +854,20 @@ class BookProvider extends ChangeNotifier {
   }
 
   Future<void> _refreshShelfChapterMetaInBackground() async {
+    final mutationVersion = _booksMutationVersion;
     try {
       await _refreshShelfChapterMeta();
     } catch (error, stackTrace) {
       debugPrint('书架章节元数据后台加载失败: $error\n$stackTrace');
     } finally {
+      if (mutationVersion != _booksMutationVersion) {
+        _bookshelfChangePort.notifyChanged(_books);
+      }
       notifyListeners();
     }
   }
 
-  Future<void> _refreshShelfChapterMetaFor(String bookId) async {
+  Future<bool> _refreshShelfChapterMetaFor(String bookId) async {
     Book? book;
     for (final b in _books) {
       if (b.id == bookId) {
@@ -853,7 +877,7 @@ class BookProvider extends ChangeNotifier {
     }
     if (book == null) {
       _shelfChapterMeta.remove(bookId);
-      return;
+      return false;
     }
     final shelfBook = book;
     final result = await _bookshelfChapterMetaController.refresh(
@@ -873,8 +897,12 @@ class BookProvider extends ChangeNotifier {
     );
     if (result.updatedBook != null) {
       final i = _books.indexWhere((b) => b.id == bookId);
-      if (i >= 0) _books[i] = result.updatedBook!;
+      if (i >= 0) {
+        _replaceBookAt(i, result.updatedBook!);
+        return true;
+      }
     }
+    return false;
   }
 
   bool _hasUnreadChapters(Book book) {
@@ -1007,8 +1035,8 @@ class BookProvider extends ChangeNotifier {
 
     if (shelf != null) {
       await _repository.insert(updated);
-      _books = await _repository.getAll();
-      _bookshelfChangePort.notifyChanged();
+      _replaceBooks(await _repository.getAll());
+      _bookshelfChangePort.notifyChanged(_books);
     }
     if (_currentChapters.isNotEmpty &&
         _currentChapters.first.bookId == updated.id) {
@@ -1154,9 +1182,9 @@ class BookProvider extends ChangeNotifier {
   /// 添加书籍到书架
   Future<void> addBook(Book book) async {
     await _bookshelfBookLifecycleController.addBook(book);
-    _books = await _repository.getAll();
+    _replaceBooks(await _repository.getAll());
     await _refreshShelfChapterMetaFor(book.id);
-    _bookshelfChangePort.notifyChanged();
+    _bookshelfChangePort.notifyChanged(_books);
     notifyListeners();
   }
 
@@ -1164,8 +1192,8 @@ class BookProvider extends ChangeNotifier {
   Future<void> removeBook(String bookId) async {
     await _bookshelfBookLifecycleController.removeBook(bookId);
     _shelfChapterMeta.remove(bookId);
-    _books = await _repository.getAll();
-    _bookshelfChangePort.notifyChanged();
+    _replaceBooks(await _repository.getAll());
+    _bookshelfChangePort.notifyChanged(_books);
     notifyListeners();
   }
 
@@ -1175,15 +1203,17 @@ class BookProvider extends ChangeNotifier {
       await _bookshelfBookLifecycleController.removeBook(id);
       _shelfChapterMeta.remove(id);
     }
-    _books = await _repository.getAll();
-    _bookshelfChangePort.notifyChanged();
+    _replaceBooks(await _repository.getAll());
+    _bookshelfChangePort.notifyChanged(_books);
     notifyListeners();
   }
 
   /// 批量更新分组
   Future<void> updateBooksGroup(Iterable<String> bookIds, String group) async {
-    _books = await _bookshelfGroupController.updateBooksGroup(bookIds, group);
-    _bookshelfChangePort.notifyChanged();
+    _replaceBooks(
+      await _bookshelfGroupController.updateBooksGroup(bookIds, group),
+    );
+    _bookshelfChangePort.notifyChanged(_books);
     notifyListeners();
   }
 
@@ -1203,9 +1233,9 @@ class BookProvider extends ChangeNotifier {
       durChapterIndex: durChapterIndex,
       existingBook: findBookById(bookId),
     );
-    _books = await _repository.getAll();
+    _replaceBooks(await _repository.getAll());
     await _refreshShelfChapterMetaFor(bookId);
-    _bookshelfChangePort.notifyChanged();
+    _bookshelfChangePort.notifyChanged(_books);
     notifyListeners();
   }
 
@@ -1234,16 +1264,18 @@ class BookProvider extends ChangeNotifier {
 
   /// 更新书籍分组
   Future<void> updateBookGroup(String bookId, String group) async {
-    _books = await _bookshelfGroupController.updateBookGroup(bookId, group);
-    _bookshelfChangePort.notifyChanged();
+    _replaceBooks(
+      await _bookshelfGroupController.updateBookGroup(bookId, group),
+    );
+    _bookshelfChangePort.notifyChanged(_books);
     notifyListeners();
   }
 
   /// 更新读完/N刷轮次（upsert 整书字段）
   Future<void> updateReadIteration(Book book, int readIteration) async {
     await _bookRecordController.updateReadIteration(book, readIteration);
-    _books = await _repository.getAll();
-    _bookshelfChangePort.notifyChanged();
+    _replaceBooks(await _repository.getAll());
+    _bookshelfChangePort.notifyChanged(_books);
     notifyListeners();
   }
 
@@ -1271,8 +1303,8 @@ class BookProvider extends ChangeNotifier {
       startChapter: startChapter,
       dailyChapters: dailyChapters,
     );
-    _books = await _repository.getAll();
-    _bookshelfChangePort.notifyChanged();
+    _replaceBooks(await _repository.getAll());
+    _bookshelfChangePort.notifyChanged(_books);
     notifyListeners();
     return findBookById(book.id) ?? next;
   }
@@ -1548,7 +1580,7 @@ class BookProvider extends ChangeNotifier {
             final next = shelfBook.copyWith(totalChapterNum: merged.length);
             await _repository.insert(next);
             final i = _books.indexWhere((b) => b.id == book.id);
-            if (i >= 0) _books[i] = next;
+            if (i >= 0) _replaceBookAt(i, next);
           }
           final saved = await _repository.getChapters(book.id);
           if (saved.isNotEmpty) {
@@ -1560,6 +1592,7 @@ class BookProvider extends ChangeNotifier {
               startIndex: migrated.progress.chapterIndex,
             );
             await _refreshShelfChapterMetaFor(book.id);
+            _bookshelfChangePort.notifyChanged(_books);
             notifyListeners();
           }
         } catch (e, st) {

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -68,21 +66,30 @@ final bookshelfNotifierProvider =
 class BookshelfNotifier extends Notifier<BookshelfState> {
   var _requestId = 0;
   late BookshelfController _controller;
+  late BookshelfChangePort _changePort;
 
   @override
   BookshelfState build() {
     _controller = ref.watch(bookshelfControllerProvider);
-    final changes = ref.watch(bookshelfChangePortProvider).changes;
-    final subscription = changes.listen((_) {
-      unawaited(refresh());
+    _changePort = ref.watch(bookshelfChangePortProvider);
+    final subscription = _changePort.changes.listen((change) {
+      _publishSnapshot(change.books);
     });
     ref.onDispose(subscription.cancel);
-    return BookshelfState.initial();
+    final latest = _changePort.latest;
+    return latest == null
+        ? BookshelfState.initial()
+        : BookshelfState.success(latest.books);
   }
 
   Future<void> load() => _fetch(refreshing: false);
 
   Future<void> refresh() => _fetch(refreshing: true);
+
+  void _publishSnapshot(List<Book> books) {
+    _requestId++;
+    state = BookshelfState.success(books);
+  }
 
   Future<void> _fetch({required bool refreshing}) async {
     final requestId = ++_requestId;
