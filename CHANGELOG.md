@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/Phase 4/R6 书架读取职责继续收口：`BookProvider.loadBooks` 通过可选注入的 `BookshelfController` 读取书架，生产默认使用同一 `BookRepository` 的 `RepositoryBookshelfPort`，测试可注入隔离 controller；保留 loading、error、notify、维护开关及全部写入职责，旧调用方无需改动。新增读取委托与错误文本回归，定向 `2/2`，Flutter 全量 `1145` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未迁移书架页面、Reader、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁。
 - 架构/Phase 4/R6 书架读取 application 边界：新增 `BookshelfPort`、`BookshelfController` 及 `RepositoryBookshelfPort`/`CoreApiBookshelfPort`，`BookshelfNotifier` 委托 controller 读取并保留 requestId、刷新旧列表、异常堆栈和不可变列表语义；生产组合根绑定同一 `BookRepository`，CoreApi 仅作为迁移/隔离测试 fallback。新增 controller 委托与异常传播回归，定向 `21/21`，Flutter 全量 `1143` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未迁移书架页面、BookProvider 其他职责、Reader、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁。
 - Flutter 3.44 兼容性收口：选择分组弹窗为 `CheckboxListTile` 增加透明 `Material`，排序列表切换到 `onReorderItem` 并移除旧回调重复索引修正；不改变布局、点击、分组或排序语义。相关定向 `10/10` 通过。
 - 架构/Phase 4/R6 书架章节元数据 application 边界：新增 `BookshelfChapterMetaController`，统一章节数量与当前章节标题索引计算及最小字段 upsert；`BookProvider` 继续负责元数据缓存、书籍列表、后台异常隔离和通知。空章节仍清除公开缓存且不写入 `0`，标题不匹配仍回退持久化 `durChapterIndex`；写入前重新取当前书籍快照，防止启动维护覆盖并发更新的进度、页内 UTF-16 位置和正文相关字段。定向 `29/29`，Flutter 全量 `1137` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未修改 `legado-main/`、Rust、目录刷新、正文、分页、章节身份、第 3 条断行规则、R1-12 和暂停平台门禁。

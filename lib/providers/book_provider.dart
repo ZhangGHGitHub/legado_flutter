@@ -9,6 +9,7 @@ import '../application/book/book_provider_source_port.dart';
 import '../application/book/book_record_controller.dart';
 import '../application/book/book_progress_controller.dart';
 import '../application/bookshelf/bookshelf_book_group_controller.dart';
+import '../application/bookshelf/bookshelf_controller.dart';
 import '../application/bookshelf/bookshelf_chapter_meta_controller.dart';
 import '../application/bookshelf/bookshelf_book_lifecycle_controller.dart';
 import '../domain/repositories/book_repository.dart';
@@ -50,6 +51,7 @@ class BookProvider extends ChangeNotifier {
     BookshelfBookGroupController? bookshelfGroupController,
     BookshelfChapterMetaController? bookshelfChapterMetaController,
     BookshelfBookLifecycleController? bookshelfBookLifecycleController,
+    BookshelfController? bookshelfController,
     required ChapterContentCachePort contentCache,
   }) : _repository = repository,
        _sourceService = sourceService,
@@ -71,7 +73,10 @@ class BookProvider extends ChangeNotifier {
            BookshelfBookLifecycleController(
              repository: repository,
              contentCache: contentCache,
-           ) {
+           ),
+       _bookshelfController =
+           bookshelfController ??
+           BookshelfController(RepositoryBookshelfPort(repository)) {
     ReadBook.instance.configure(
       sourceService: _sourceService,
       repository: _repository,
@@ -88,6 +93,7 @@ class BookProvider extends ChangeNotifier {
   final BookshelfBookGroupController _bookshelfGroupController;
   final BookshelfChapterMetaController _bookshelfChapterMetaController;
   final BookshelfBookLifecycleController _bookshelfBookLifecycleController;
+  final BookshelfController _bookshelfController;
 
   List<Book> _books = [];
   List<Chapter> _currentChapters = [];
@@ -250,7 +256,7 @@ class BookProvider extends ChangeNotifier {
     _loadError = null;
     notifyListeners();
     try {
-      _books = await _repository.getAll();
+      _books = await _bookshelfController.loadBookshelf();
       if (runMaintenance) {
         // 缓存清理和章节元数据只影响维护状态，不能阻塞书架首帧。
         unawaited(runStartupMaintenance());
