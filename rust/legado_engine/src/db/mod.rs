@@ -571,6 +571,20 @@ impl EngineDb {
         Ok(())
     }
 
+    pub fn update_book_details(
+        &self,
+        book_id: &str,
+        name: &str,
+        author: &str,
+        description: &str,
+    ) -> Result<(), DbError> {
+        self.conn.execute(
+            "UPDATE books SET name=?1, author=?2, description=?3 WHERE id=?4",
+            params![name, author, description, book_id],
+        )?;
+        Ok(())
+    }
+
     pub fn update_book_group(&self, book_id: &str, group: &str) -> Result<(), DbError> {
         self.conn.execute(
             "UPDATE books SET bookGroup=?1 WHERE id=?2",
@@ -1911,6 +1925,15 @@ pub fn db_update_book_cover(book_id: String, cover_url: String) -> Result<(), St
     with_db(|db| db.update_book_cover(&book_id, &cover_url))
 }
 
+pub fn db_update_book_details(
+    book_id: String,
+    name: String,
+    author: String,
+    description: String,
+) -> Result<(), String> {
+    with_db(|db| db.update_book_details(&book_id, &name, &author, &description))
+}
+
 pub fn db_update_book_group(book_id: String, group: String) -> Result<(), String> {
     with_db(|db| db.update_book_group(&book_id, &group))
 }
@@ -2970,6 +2993,48 @@ mod tests {
         assert_eq!(book["simReadDailyChapters"], 6);
         assert_eq!(book["readConfig"], json!({"reverseToc":true,"pageAnim":3}));
         assert_eq!(book["updatedAt"], "2026-08-02 12:34:56");
+    }
+
+    #[test]
+    fn update_book_details_only_changes_basic_information() {
+        let db = EngineDb::open_in_memory().unwrap();
+        db.insert_book_json(
+            r#"{
+                "id":"details-book", "name":"旧书名", "author":"旧作者",
+                "description":"旧简介", "coverUrl":"https://example.test/cover.jpg",
+                "progress":0.625, "durChapterIndex":17, "currentPageIndex":321,
+                "readConfig":{"reverseToc":true,"pageAnim":3},
+                "sourceUrl":"https://example.test/book",
+                "bookSourceUrl":"https://example.test/source"
+            }"#,
+        )
+        .unwrap();
+
+        db.update_book_details("details-book", "新书名", "新作者", "新简介")
+            .unwrap();
+
+        let book: Value = serde_json::from_str(&db.get_books_json().unwrap()[0]).unwrap();
+        assert_eq!(book["name"], "新书名");
+        assert_eq!(book["author"], "新作者");
+        assert_eq!(book["description"], "新简介");
+        assert_eq!(book["coverUrl"], "https://example.test/cover.jpg");
+        assert_eq!(book["progress"], 0.625);
+        assert_eq!(book["durChapterIndex"], 17);
+        assert_eq!(book["currentPageIndex"], 321);
+        assert_eq!(book["readConfig"], json!({"reverseToc":true,"pageAnim":3}));
+        assert_eq!(book["sourceUrl"], "https://example.test/book");
+        assert_eq!(book["bookSourceUrl"], "https://example.test/source");
+    }
+
+    #[test]
+    fn update_book_details_matches_update_cover_for_missing_id() {
+        let db = EngineDb::open_in_memory().unwrap();
+
+        assert!(db.update_book_cover("missing-book", "new-cover").is_ok());
+        assert!(db
+            .update_book_details("missing-book", "新书名", "新作者", "新简介")
+            .is_ok());
+        assert!(db.get_books_json().unwrap().is_empty());
     }
 
     #[test]

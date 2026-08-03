@@ -73,6 +73,21 @@ pub fn db_update_book_cover(book_id: String, cover_url: String) -> Result<(), Ap
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn db_update_book_details(
+    book_id: String,
+    name: String,
+    author: String,
+    description: String,
+) -> Result<(), AppError> {
+    map_database_error(db::db_update_book_details(
+        book_id,
+        name,
+        author,
+        description,
+    ))
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn db_update_book_group(book_id: String, group: String) -> Result<(), AppError> {
     map_database_error(db::db_update_book_group(book_id, group))
 }
