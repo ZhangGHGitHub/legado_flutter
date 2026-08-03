@@ -6,6 +6,7 @@ import '../application/book/batch_book_progress_sync_port.dart';
 import '../application/book/chapter_progress_migrator.dart';
 import '../application/book/local_book_import_port.dart';
 import '../application/book/book_provider_source_port.dart';
+import '../application/book/book_record_controller.dart';
 import '../application/bookshelf/bookshelf_book_group_controller.dart';
 import '../application/bookshelf/bookshelf_book_lifecycle_controller.dart';
 import '../domain/repositories/book_repository.dart';
@@ -42,6 +43,7 @@ class BookProvider extends ChangeNotifier {
     required BookRepository repository,
     required BookProviderSourcePort sourceService,
     LocalBookImportPort? localBookPort,
+    BookRecordController? bookRecordController,
     BookshelfBookGroupController? bookshelfGroupController,
     BookshelfBookLifecycleController? bookshelfBookLifecycleController,
     required ChapterContentCachePort contentCache,
@@ -49,6 +51,8 @@ class BookProvider extends ChangeNotifier {
        _sourceService = sourceService,
        _localBookPort = localBookPort ?? const UnavailableLocalBookImportPort(),
        _contentCache = contentCache,
+       _bookRecordController =
+           bookRecordController ?? BookRecordController(repository: repository),
        _bookshelfGroupController =
            bookshelfGroupController ??
            BookshelfBookGroupController(repository: repository),
@@ -69,6 +73,7 @@ class BookProvider extends ChangeNotifier {
   final BookProviderSourcePort _sourceService;
   final ChapterContentCachePort _contentCache;
   final LocalBookImportPort _localBookPort;
+  final BookRecordController _bookRecordController;
   final BookshelfBookGroupController _bookshelfGroupController;
   final BookshelfBookLifecycleController _bookshelfBookLifecycleController;
 
@@ -1220,8 +1225,7 @@ class BookProvider extends ChangeNotifier {
 
   /// 更新读完/N刷轮次（upsert 整书字段）
   Future<void> updateReadIteration(Book book, int readIteration) async {
-    final next = book.copyWith(readIteration: readIteration);
-    await _repository.insert(next);
+    await _bookRecordController.updateReadIteration(book, readIteration);
     _books = await _repository.getAll();
     notifyListeners();
   }
@@ -1243,13 +1247,13 @@ class BookProvider extends ChangeNotifier {
     required int dailyChapters,
   }) async {
     final base = findBookById(book.id) ?? book;
-    final next = base.copyWith(
-      simReadEnabled: enabled,
-      simReadStartDate: startDate,
-      simReadStartChapter: startChapter < 0 ? 0 : startChapter,
-      simReadDailyChapters: dailyChapters < 1 ? 3 : dailyChapters.clamp(1, 999),
+    final next = await _bookRecordController.updateSimulatedReading(
+      base,
+      enabled: enabled,
+      startDate: startDate,
+      startChapter: startChapter,
+      dailyChapters: dailyChapters,
     );
-    await _repository.insert(next);
     _books = await _repository.getAll();
     notifyListeners();
     return findBookById(book.id) ?? next;
