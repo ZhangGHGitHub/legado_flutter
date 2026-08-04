@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/reader/manga_chapter_content_port.dart';
+import 'package:legado_flutter/application/reader/manga_progress_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/features/reader/manga_reader_page.dart';
@@ -28,6 +29,17 @@ void main() {
 
     expect(page.contentPort, same(contentPort));
   });
+
+  test('test hosts can explicitly inject the manga progress port', () {
+    const progressPort = _FakeMangaProgressPort();
+    final page = MangaReaderPage(
+      book: const Book(id: 'book-1', name: '测试漫画'),
+      chapters: const [],
+      progressPort: progressPort,
+    );
+
+    expect(page.progressPort, same(progressPort));
+  });
 }
 
 final class _FakeMangaChapterContentPort implements MangaChapterContentPort {
@@ -38,4 +50,17 @@ final class _FakeMangaChapterContentPort implements MangaChapterContentPort {
     required Book book,
     required Chapter chapter,
   }) async => '';
+}
+
+final class _FakeMangaProgressPort implements MangaProgressPort {
+  const _FakeMangaProgressPort();
+
+  @override
+  Future<void> updateProgress(
+    String bookId,
+    double progress,
+    String? chapter, {
+    int pageIndex = 0,
+    int? durChapterIndex,
+  }) async {}
 }

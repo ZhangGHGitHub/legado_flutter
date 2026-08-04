@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../application/reader/manga_chapter_content_port.dart';
 import '../../application/reader/manga_prefs_port.dart';
+import '../../application/reader/manga_progress_port.dart';
 import '../../application/reader/reader_chapter_content_port.dart';
 import '../../help/manga_image_extractor.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -28,6 +29,7 @@ class MangaReaderPage extends StatefulWidget {
   final String? initialContent;
   final MangaChapterContentPort? contentPort;
   final MangaPrefsPort? prefs;
+  final MangaProgressPort? progressPort;
 
   const MangaReaderPage({
     super.key,
@@ -37,6 +39,7 @@ class MangaReaderPage extends StatefulWidget {
     this.initialContent,
     this.contentPort,
     this.prefs,
+    this.progressPort,
   });
 
   static Future<void> open(
@@ -47,6 +50,7 @@ class MangaReaderPage extends StatefulWidget {
     String? initialContent,
     MangaChapterContentPort? contentPort,
     MangaPrefsPort? prefs,
+    MangaProgressPort? progressPort,
   }) {
     return Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -57,6 +61,7 @@ class MangaReaderPage extends StatefulWidget {
           initialContent: initialContent,
           contentPort: contentPort,
           prefs: prefs,
+          progressPort: progressPort,
         ),
       ),
     );
@@ -70,6 +75,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     with SingleTickerProviderStateMixin {
   late final MangaPrefsPort _prefs;
   late final MangaChapterContentPort _contentPort;
+  late final MangaProgressPort? _progressPort;
   late int _chapterIndex;
   List<String> _imageUrls = const [];
   Map<String, String> _imageHeaders = const {};
@@ -93,6 +99,9 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     super.initState();
     _prefs = widget.prefs ?? context.read<MangaPrefsPort>();
     _contentPort = _resolveContentPort();
+    _progressPort =
+        widget.progressPort ??
+        Provider.of<MangaProgressPort?>(context, listen: false);
     _chapterIndex = widget.initialChapterIndex.clamp(
       0,
       math.max(0, widget.chapters.length - 1),
@@ -259,7 +268,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     if (ch == null) return;
     final total = math.max(1, widget.chapters.length);
     final progress = ((_chapterIndex + 1) / total).clamp(0.0, 1.0);
-    await context.read<BookProvider>().updateProgress(
+    await _progressPort?.updateProgress(
       widget.book.id,
       progress,
       ch.title,

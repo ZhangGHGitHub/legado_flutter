@@ -82,6 +82,7 @@ import '../application/reader/reader_font_port.dart';
 import '../application/reader/book_reader_prefs_port.dart';
 import '../application/reader/tts_port.dart';
 import '../application/reader/manga_prefs_port.dart';
+import '../application/reader/manga_progress_port.dart';
 import '../application/real_core_api.dart';
 import '../application/replace/replace_preset_port.dart';
 import '../application/qr/qr_code_port.dart';
@@ -249,6 +250,7 @@ import '../infrastructure/reader/reader_font_port_adapter.dart';
 import '../infrastructure/reader/book_reader_prefs_port_adapter.dart';
 import '../infrastructure/reader/tts_port_adapter.dart';
 import '../infrastructure/reader/manga_prefs_port_adapter.dart';
+import '../infrastructure/reader/manga_progress_port_adapter.dart';
 import '../infrastructure/reader/reader_image_cache_port_adapter.dart';
 import '../infrastructure/replace/replace_preset_port_adapter.dart';
 import '../infrastructure/sources/source_debug_formatter_adapter.dart';
@@ -711,6 +713,11 @@ abstract final class AppCompositionRoot {
                   bookId: book.id,
                 );
               },
+            ),
+          ),
+          Provider<MangaProgressPort>.value(
+            value: MangaProgressPortAdapter(
+              updateProgress: bootstrap.bookProvider.updateProgress,
             ),
           ),
           Provider<ReadStyleZipPort>.value(
