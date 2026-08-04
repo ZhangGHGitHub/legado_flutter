@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
+import 'package:legado_flutter/application/bookshelf/bookshelf_membership_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../application/book/book_source_result_mapper.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../domain/ports/book_source_explore_port.dart';
-import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../widgets/book_list_tile.dart';
 import '../../widgets/empty_state.dart';
@@ -15,17 +15,19 @@ import '../book/book_info_page.dart';
 
 /// 发现分类书籍列表 — 对齐 book/explore
 ///
-/// 已在书架的书从「可加入」结果中过滤掉；[BookProvider] 变化时即时刷新。
+/// 已在书架的书从「可加入」结果中过滤掉；书架端口变化时即时刷新。
 class ExploreListPage extends StatelessWidget {
   final BookSource source;
   final String exploreUrl;
   final String title;
+  final BookshelfMembershipPort? membershipPort;
 
   const ExploreListPage({
     super.key,
     required this.source,
     required this.exploreUrl,
     required this.title,
+    this.membershipPort,
   });
 
   @override
@@ -39,6 +41,7 @@ class ExploreListPage extends StatelessWidget {
         source: source,
         exploreUrl: exploreUrl,
         title: title,
+        membershipPort: membershipPort,
       ),
     );
   }
@@ -49,11 +52,13 @@ class _ExploreListPageBody extends riverpod.ConsumerStatefulWidget {
     required this.source,
     required this.exploreUrl,
     required this.title,
+    this.membershipPort,
   });
 
   final BookSource source;
   final String exploreUrl;
   final String title;
+  final BookshelfMembershipPort? membershipPort;
 
   @override
   riverpod.ConsumerState<_ExploreListPageBody> createState() =>
@@ -63,6 +68,7 @@ class _ExploreListPageBody extends riverpod.ConsumerStatefulWidget {
 class _ExploreListPageState
     extends riverpod.ConsumerState<_ExploreListPageBody> {
   late final BookSourceExplorePort _explorePort;
+  late final BookshelfMembershipPort _membershipPort;
   List<Book> _books = [];
   bool _loading = true;
   String? _error;
@@ -72,6 +78,10 @@ class _ExploreListPageState
   void initState() {
     super.initState();
     _explorePort = context.read<BookSourceExplorePort>();
+    _membershipPort =
+        widget.membershipPort ??
+        Provider.of<BookshelfMembershipPort?>(context, listen: false) ??
+        const EmptyBookshelfMembershipPort();
     _load();
   }
 
@@ -172,9 +182,10 @@ class _ExploreListPageState
                 ],
               ),
             )
-          : Consumer<BookProvider>(
-              builder: (context, bookProvider, _) {
-                final visible = _notInShelf(bookProvider.books);
+          : ListenableBuilder(
+              listenable: _membershipPort,
+              builder: (context, _) {
+                final visible = _notInShelf(_membershipPort.books);
                 if (visible.isEmpty) {
                   return RefreshIndicator(
                     onRefresh: () => _load(refresh: true),

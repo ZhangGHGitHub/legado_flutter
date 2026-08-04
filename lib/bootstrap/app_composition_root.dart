@@ -29,6 +29,7 @@ import '../application/bookshelf/bookshelf_display_port.dart';
 import '../application/bookshelf/bookshelf_display_state_port.dart';
 import '../application/bookshelf/bookshelf_list_port.dart';
 import '../application/bookshelf/bookshelf_local_book_port.dart';
+import '../application/bookshelf/bookshelf_membership_port.dart';
 import '../application/bookshelf/bookshelf_url_import_port.dart';
 import '../application/bookshelf/bookshelf_toc_refresh_port.dart';
 import '../application/mine/my_page_port.dart';
@@ -155,6 +156,7 @@ import '../infrastructure/bookshelf/bookshelf_display_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_display_state_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_list_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_local_book_port_adapter.dart';
+import '../infrastructure/bookshelf/bookshelf_membership_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_url_import_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_toc_refresh_port_adapter.dart';
 import '../infrastructure/bookshelf/remote_archive_import_port_adapter.dart';
@@ -520,6 +522,12 @@ abstract final class AppCompositionRoot {
           Provider<BookshelfLocalBookPort>.value(
             value: BookshelfLocalBookPortAdapter(
               () => bootstrap.bookProvider.importLocalBook(),
+            ),
+          ),
+          ListenableProvider<BookshelfMembershipPort>.value(
+            value: BookshelfMembershipPortAdapter(
+              listenable: bootstrap.bookProvider,
+              books: () => bootstrap.bookProvider.books,
             ),
           ),
           Provider<BookshelfUrlImportPort>.value(
