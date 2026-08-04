@@ -3665,3 +3665,13 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：漫画目录适配器和页面端口定向 `5/5`；Flutter 串行全量 `1241` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
 
 边界结论：本批完成漫画换源目录一个读取调用点收口，不宣称漫画页其他 Provider/SourceProvider 职责迁移完成或 R6 退出。
+
+## 195. 2026-08-05：R6 缓存下载与阅读器书源展示端口边界
+
+- `CacheBookDownloadPort` 提供不可变目录快照、下载状态、章节下载和取消命令；缓存页通过端口渲染进度和执行命令，生产组合根委托既有 `BookProvider`，缺少端口的独立宿主才保留旧回调 fallback。
+- `ReaderSourcePresentationPort` 保留书源名优先、`bookSourceUrl` 再 `sourceUrl` 的 host 回退、空值和不可解析 URL 原样展示；`MangaSourcePresentationPort` 保留旧菜单的未匹配“书源”回退。两个适配器均复用 `SourceProvider.findSourceForBook`，未产生第二份书源事实源。
+- 本批不改变 `legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：缓存下载、漫画与普通阅读器书源展示联合定向 `21/21`；Flutter 串行全量 `1254` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
+
+边界结论：本批完成三个独立调用面的 application 端口收口，不宣称 CacheBookPage、ReaderPage、MangaReaderPage 的其他 Provider/SourceProvider 职责迁移完成或 R6 退出。

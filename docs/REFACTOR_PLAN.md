@@ -20,6 +20,8 @@
 
 > **R1-12 当前权威状态（2026-08-03）：** 上述产品边界已完成：六张核心表导入后可直接使用，`readRecord` 与非核心 Room 表无损 archive-only 保存，JSON 备份、事务回滚和幂等导入通过。真实非空副本 `.tmp/r1-device-room/original_legado.db` 已确认 Room v99、identity hash 与原版基线一致，包含 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`；`emulator-5556` all-phase smoke 已通过 `1/1`。仍不宣称 `readRecord` 统计语义或非核心表 Rust v17 业务化完成。
 
+2026-08-05 Phase 4/R6 缓存下载与阅读器书源展示边界：`CacheBookDownloadPort` 将缓存页目录加载、章节下载、取消和进度状态收口到 application 层，生产组合根继续委托 `BookProvider`；`ReaderSourcePresentationPort` 与 `MangaSourcePresentationPort` 将两个阅读器的书源展示收口到 `SourceProvider` 回调适配器。普通阅读器保留书源名优先、`bookSourceUrl/sourceUrl` host 回退、空值和不可解析 URL 原样展示；漫画保留未匹配时“书源”回退。合并定向 `21/21`；Flutter 全量 `1254` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁，R6 尚未退出。
+
 2026-08-05 Phase 4/R6 漫画换源目录读取边界：新增 `MangaChapterListPort` 及不可变快照适配器，漫画阅读页换源后的目录读取通过 application 端口完成；组合根继续复用 `BookProvider.currentChapters`，保留空目录提示、当前索引裁剪、换源后替换导航和原异常语义。定向 `5/5`；Flutter 全量 `1241` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁，R6 尚未退出。
 
 2026-08-04 Phase 4/R6 书签页阅读跳转边界：新增 `BookmarkReaderPort` 及 Provider 回调适配器，书签页的按 ID 找书、当前目录、目录加载和本地目录回退均通过端口；书签加载复用 `BookshelfMembershipPort` 快照，移除页面对 `BookProvider` 的直接依赖。保留书架缺书提示、目录加载失败回退、章节索引/标题定位、UTF-16 章内位置和 Reader 跳转参数。全量 Flutter `1227` 通过、`3` 项既有条件跳过；类型注解修正后书签定向 `4/4`、`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。正文、目录、分页、章节身份、R1-12 和暂停平台门禁未改变，R6 尚未退出。
