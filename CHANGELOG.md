@@ -4,8 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
-- 架构/Phase 4/R6 书架整理读取边界：新增同步 `BookshelfArrangeSnapshotPort`，整理页的初始化、分组过滤、排序和“导出全部书源”统一读取完整书架快照，不再直接读取 `BookProvider.books`；生产组合根通过兼容适配器接入现有 Provider 快照，独立测试宿主保留空快照和显式注入能力。新增不可变快照/动态快照回归，受影响定向 `19/19`；Flutter 全量 `1221` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。未改变分组过滤、排序隔离、导出完整书架、删除/分组命令、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。
-
+- 架构/Phase 4/R6 书架菜单导出读取边界：`BookshelfMenuActions._exportList` 改用共享 `BookshelfArrangeSnapshotPort` 获取完整书架，保留空书架提示、JSON 导出端口、日志和成功/失败提示语义。新增导出行为回归；受影响定向 `23/23`，Flutter 全量 `1222` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。未改变添加网址、书单导入、书架写入、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。
 - 架构/Phase 4/R6 书架整理读取边界：新增同步 `BookshelfArrangeSnapshotPort`，整理页的初始化、分组过滤、排序和“导出全部书源”统一读取完整书架快照，不再直接读取 `BookProvider.books`；生产组合根通过兼容适配器接入现有 Provider 快照，独立测试宿主保留空快照和显式注入能力。新增不可变快照/动态快照回归，受影响定向 `19/19`；Flutter 全量 `1221` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。未改变分组过滤、排序隔离、导出完整书架、删除/分组命令、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。
 - 架构/Phase 4/R6 书架整理删除命令边界：新增独立 `BookshelfArrangeDeleteCommandPort` 及 Provider 回调适配器，整理页单本和批量删除不再直接读取 `BookProvider`。端口保持 `Future<void>`，成功后页面继续按原局部/筛选列表移除、清理对应选择并保存剩余顺序；取消或命令失败不改页面、不写排序。底层仍由 Provider/lifecycle controller 按输入顺序执行每本仓储删除与章节缓存清理，批量全部成功后只刷新、发布总线和通知一次；仓储、缓存或最终刷新中途失败时保留已完成副作用、停止后续且不伪造成功状态。受影响定向 `35/35`、Flutter 全量 `1220` 通过（`3` 项既有条件跳过），analyze、架构边界、Dart 格式和 diff 门禁通过。其他页面删除入口未迁移，R6 尚未退出。
 - 架构/Phase 4/R6 书架整理“移除分组”命令边界：`BookshelfArrangeGroupCommandPort` 新增条件式 `clearBooksGroup`，页面不再直接循环调用 Provider；适配器保持输入顺序，并在每个 ID 前读取最新书架快照，非空条件精确匹配、空选择通配清空、不存在 ID 静默跳过。命中项仍逐本委托 `BookProvider.updateBookGroup`，因此每本成功分别刷新、递增 mutation version、发布 `BookshelfChangeBus` 并通知；中途失败保留前项副作用、停止后续并原样传播异常，不宣称原子批量操作。受影响定向 `37/37`、Flutter 全量 `1205` 通过（`3` 项既有条件跳过），analyze、架构边界、Dart 格式和 diff 门禁通过。删除命令仍保留兼容入口，R6 尚未退出。

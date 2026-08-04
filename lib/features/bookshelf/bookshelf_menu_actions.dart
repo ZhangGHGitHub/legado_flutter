@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/bookshelf/bookshelf_arrange_snapshot_port.dart';
 import '../../application/bookshelf/bookshelf_list_port.dart';
 import '../../application/diagnostics/app_log_port.dart';
-import '../../providers/book_provider.dart';
 import 'add_book_url_dialog.dart';
 import 'app_log_dialog.dart';
 import 'bookshelf_overflow_menu.dart';
@@ -39,7 +39,8 @@ abstract final class BookshelfMenuActions {
 
   static Future<void> _exportList(BuildContext context) async {
     final appLog = context.read<AppLogPort>();
-    final books = context.read<BookProvider>().books;
+    final books =
+        context.read<BookshelfArrangeSnapshotPort?>()?.books ?? const [];
     final listPort = context.read<BookshelfListPort>();
     if (books.isEmpty) {
       ScaffoldMessenger.of(

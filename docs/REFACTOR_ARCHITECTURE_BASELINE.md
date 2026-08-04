@@ -3535,3 +3535,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：快照适配器与整理页联合定向 `19/19`；Flutter 全量 `1221` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。
 
 边界结论：本批完成 `BookshelfArrangePage` 的三处只读 Provider 依赖收口，不宣称 `BookProvider` 写入/目录职责迁移完成或 R6 退出。
+
+## 182. 2026-08-04：R6 书架菜单导出快照边界
+
+- `BookshelfMenuActions._exportList` 复用 `BookshelfArrangeSnapshotPort` 读取完整书架，不再直接依赖 `BookProvider`；`BookshelfListPort`、AppLog 和空书架/成功/失败提示行为保持不变。
+- 本批只收口导出入口的只读依赖，不迁移添加网址、书单导入、书架写入或 RemoteBook 生命周期，不改变 `legado-main/`、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：菜单导出及书架读取联合定向 `23/23`；Flutter 全量 `1222` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。
+
+边界结论：本批完成一个书架只读导出调用点的 Provider 依赖收口，不宣称 `BookProvider` 写入职责迁移或 R6 退出。
