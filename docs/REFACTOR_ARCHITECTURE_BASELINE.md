@@ -3581,3 +3581,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：书单入库定向 `2/2`；Flutter 全量 `1222` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。
 
 边界结论：本批完成书单解析后入库的单一 application 写入入口，不宣称 `BookProvider` 其他书架职责迁移完成或 R6 退出。
+
+## 186. 2026-08-04：R6 发现页书架成员读取边界
+
+- 新增只读可监听 `BookshelfMembershipPort` 和 `BookshelfMembershipPortAdapter`；`ExploreListPage` 的书架成员过滤通过端口快照执行，并用 `ListenableBuilder` 响应书架变化，不再直接依赖 `BookProvider`。
+- 生产组合根以 `ListenableProvider` 适配现有 `BookProvider` 的 `Listenable` 和 `books` 快照；适配器返回不可变列表，未引入第二份书架事实源。书源探索、名称/来源 URL 匹配、空态和刷新行为保持不变。
+
+验证结果：发现页与成员端口定向 `2/2`；Flutter 全量 `1224` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。
+
+边界结论：本批完成发现页书架只读成员依赖收口，不宣称 `BookProvider` 写入/目录职责迁移完成或 R6 退出；不改变 `legado-main/`、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。

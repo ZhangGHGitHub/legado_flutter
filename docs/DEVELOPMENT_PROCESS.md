@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-04
 
+2026-08-04 Phase 4/R6 发现页书架成员读取边界追溯：先通过发现页与成员端口定向 `2/2`，再执行 Flutter 串行全量 `1224`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、本批文件格式和 `git diff --check`，全部通过。新增 `BookshelfMembershipPort`、Provider 兼容适配器和组合根 `ListenableProvider` 接线；`ExploreListPage` 不再直接依赖 `BookProvider`，保留书架过滤和变化刷新语义。代码提交 `f4ee370`，只提交本批 application/infrastructure、组合根、页面和测试，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
+
 2026-08-04 Phase 4/R6 “我的”页缓存入口边界追溯：先通过我的页/缓存定向 `3/3`，再执行 Flutter 串行全量 `1223`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、本批文件格式和 `git diff --check`，全部通过。只提交本批页面和四份追溯文档，排除 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
 
 2026-08-04 Phase 4/R6 书架展示状态边界追溯：先固定 Style1/Style2 的加载、重试、单本目录更新动画回归，再新增可监听 `BookshelfDisplayStatePort`、Provider 适配器和组合根 `ListenableProvider` 接线。定向 `14/14` 后执行 Flutter 串行全量 `1223`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、本批文件格式和 `git diff --check`，全部通过。只提交本批 application/infrastructure、组合根、页面、测试和四份追溯文档，排除 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
