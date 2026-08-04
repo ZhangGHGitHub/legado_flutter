@@ -10,6 +10,7 @@ import '../../application/bookshelf/bookshelf_arrange_delete_command_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_group_command_port.dart';
 import '../../application/bookshelf/bookshelf_display_port.dart';
 import '../../application/bookshelf/bookshelf_local_book_port.dart';
+import '../../application/bookshelf/bookshelf_toc_refresh_port.dart';
 import '../../application/bookshelf/bookshelf_notifier.dart';
 import '../../application/preferences/bookshelf_display_prefs_port.dart';
 import '../../application/source_management/source_notifier.dart';
@@ -38,6 +39,7 @@ class BookshelfStyle1Page extends StatefulWidget {
     this.displayPort,
     this.groupStorePort,
     this.localBookPort,
+    this.tocRefreshPort,
   });
 
   final ScrollController? scrollController;
@@ -46,6 +48,7 @@ class BookshelfStyle1Page extends StatefulWidget {
   final BookshelfDisplayPort? displayPort;
   final BookGroupStorePort? groupStorePort;
   final BookshelfLocalBookPort? localBookPort;
+  final BookshelfTocRefreshPort? tocRefreshPort;
 
   @override
   State<BookshelfStyle1Page> createState() => _BookshelfStyle1PageState();
@@ -61,6 +64,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
   late final BookshelfDisplayPort _displayPort;
   late final BookGroupStorePort _groupStorePort;
   late final BookshelfLocalBookPort _localBookPort;
+  late final BookshelfTocRefreshPort _tocRefreshPort;
 
   @override
   void initState() {
@@ -73,6 +77,10 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
         widget.groupStorePort ?? context.read<BookGroupStorePort>();
     _localBookPort =
         widget.localBookPort ?? context.read<BookshelfLocalBookPort>();
+    _tocRefreshPort =
+        widget.tocRefreshPort ??
+        Provider.of<BookshelfTocRefreshPort?>(context, listen: false) ??
+        const EmptyBookshelfTocRefreshPort();
     _loadPreferences();
   }
 
@@ -164,7 +172,6 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
   }
 
   void _updateToc(List<Book> bookshelfBooks, SourceNotifier sourceNotifier) {
-    final provider = context.read<BookProvider>();
     final books = _processBooks(bookshelfBooks);
     if (books.isEmpty) {
       ScaffoldMessenger.of(
@@ -172,19 +179,18 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
       ).showSnackBar(const SnackBar(content: Text('没有可更新的书籍')));
       return;
     }
-    unawaited(_runTocUpdate(provider, books, sourceNotifier.findSourceForBook));
+    unawaited(_runTocUpdate(books, sourceNotifier.findSourceForBook));
   }
 
   Future<void> _runTocUpdate(
-    BookProvider provider,
     List<Book> books,
     BookSource? Function(Book book) resolveSource,
   ) async {
-    if (provider.isShelfUpdateRunning) return;
+    if (_tocRefreshPort.isRunning) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('正在更新目录…')));
-    final result = await provider.refreshShelfToc(
+    final result = await _tocRefreshPort.refresh(
       books,
       resolveSource: resolveSource,
       onlyUpdateRead: widget.config.onlyUpdateRead,
@@ -342,9 +348,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     return LegadoRefreshIndicator(
       enabled: books.isNotEmpty,
       onRefreshTriggered: () {
-        unawaited(
-          _runTocUpdate(provider, books, sourceNotifier.findSourceForBook),
-        );
+        unawaited(_runTocUpdate(books, sourceNotifier.findSourceForBook));
       },
       child: ScrollConfiguration(
         behavior: LegadoScrollBehavior(

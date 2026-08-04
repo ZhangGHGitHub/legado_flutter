@@ -9,6 +9,7 @@ import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_group_com
 import 'package:legado_flutter/application/bookshelf/bookshelf_notifier.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_display_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_local_book_port.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_toc_refresh_port.dart';
 import 'package:legado_flutter/application/preferences/bookshelf_display_prefs_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/book_group.dart';
@@ -20,6 +21,7 @@ import 'package:legado_flutter/features/bookshelf/bookshelf_style1_page.dart';
 import 'package:legado_flutter/features/bookshelf/bookshelf_style2_page.dart';
 import 'package:legado_flutter/infrastructure/bookshelf/bookshelf_arrange_delete_command_port_adapter.dart';
 import 'package:legado_flutter/infrastructure/bookshelf/bookshelf_arrange_group_command_port_adapter.dart';
+import 'package:legado_flutter/infrastructure/bookshelf/bookshelf_toc_refresh_port_adapter.dart';
 import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
@@ -307,6 +309,12 @@ Widget _host({
             value: BookshelfArrangeDeleteCommandPortAdapter(
               removeBook: bookProvider.removeBook,
               removeBooks: bookProvider.removeBooks,
+            ),
+          ),
+          Provider<BookshelfTocRefreshPort>.value(
+            value: BookshelfTocRefreshPortAdapter(
+              refresh: bookProvider.refreshShelfToc,
+              isRunning: () => bookProvider.isShelfUpdateRunning,
             ),
           ),
           Provider<BookshelfArrangeGroupCommandPort>.value(

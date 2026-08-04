@@ -438,6 +438,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 - 2026-07-27 R6 UI 对照扩展：完成原版/重构版“我的”页面同设备截图，确认结构基本一致但主题、图标、文本空格和设置项集合存在差异，已分类记录，未标记 UI 1:1 通过。
 - 2026-07-27 R6 UI 对照扩展：完成原版/重构版书源管理首屏截图；重构版首次帮助弹窗已单独记录，当前因书源数量、主题和工具栏/列表细节不同，未标记最终通过。
 
+2026-08-04 Phase 4/R6 书架目录刷新边界：新增 `BookshelfTocRefreshPort`、`ShelfTocUpdateResult` 和 `BookshelfTocRefreshPortAdapter`；Style1/Style2 只通过 application 端口发起目录刷新并读取运行状态，生产组合根继续复用 `BookProvider.refreshShelfToc`，因此并发去重、源解析、`onlyUpdateRead`、统计和异常语义保持不变。未注册端口的独立宿主使用明确空实现，生产路径不降级。定向 `14/14`；Flutter 全量 `1222` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
+
 ## 一、项目现状总览
 
 说明：本节及后续“已完成清单/仍需开发”内容保留为现状盘点和功能库存，不再作为执行顺序。实际重构顺序只以本文件第 0 节 R0-R6 为准；新增功能必须先确认不阻塞当前重构阶段。

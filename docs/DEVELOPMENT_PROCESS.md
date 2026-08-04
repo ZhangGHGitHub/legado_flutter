@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-04
 
+2026-08-04 Phase 4/R6 书架目录刷新边界追溯：先通过 Style1/Style2 目录刷新定向 `14/14`，再执行 Flutter 串行全量 `1222`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、本批文件格式和 `git diff --check`，全部通过。owner 将刷新结果和运行状态收口到 `BookshelfTocRefreshPort`，组合根用 Provider 兼容适配器接线；空实现仅服务未完整组装的独立宿主。验证固定原有并发去重、源解析、`onlyUpdateRead`、统计和异常语义未变；只提交本批端口、适配器、页面、测试和四份追溯文档，排除 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
+
 2026-08-04 Phase 4/R6 书架整理读取边界追溯：本批先完成整理页三处 `BookProvider.books` 读取的影响分析，再新增同步 `BookshelfArrangeSnapshotPort` 和不可变快照适配器；生产组合根复用 Provider 最新完整快照，测试宿主显式注入快照，未改变初始空态、分组过滤、排序顺序、完整书架书源导出或命令失败语义。联合定向 `19/19` 通过后才执行 Flutter 全量 `1221`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check`，全部通过。只提交本批端口、适配器、测试和四份追溯文档，排除 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
 2026-08-04 Phase 4/R6 书架菜单导出读取边界追溯：在整理页快照端口通过后，将 `BookshelfMenuActions._exportList` 的完整书架读取改接同一 application 端口；补充导出端口调用回归，固定空书架、成功、失败和日志提示路径未被改变。定向联合 `23/23` 通过后执行 Flutter 全量 `1222`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check`，全部通过。只提交菜单动作、测试和四份追溯文档，排除 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
 2026-08-04 Phase 4/R6 Style1/Style2 单本命令边界追溯：在分组/删除端口与整理页命令通过后，将 Style1 行内分组及 Style1/Style2 单本删除接入同一 application 端口；测试宿主使用现有 Provider 适配器，验证原确认、取消和移除结果，不触碰目录刷新/缓存职责。定向 `15/15` 通过后执行 Flutter 全量 `1222`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check`，全部通过。只提交本批样式页、测试和追溯文档，排除 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。

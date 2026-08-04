@@ -14,6 +14,7 @@ import '../application/bookshelf/bookshelf_change_port.dart';
 import '../application/bookshelf/bookshelf_controller.dart';
 import '../application/bookshelf/bookshelf_chapter_meta_controller.dart';
 import '../application/bookshelf/bookshelf_book_lifecycle_controller.dart';
+import '../application/bookshelf/bookshelf_toc_refresh_port.dart';
 import '../domain/repositories/book_repository.dart';
 import '../domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -22,25 +23,6 @@ import 'package:legado_flutter/domain/book/chapter.dart';
 import '../help/shelf_unread.dart';
 import '../model/read_book.dart';
 import '../utils/site_busy_guard.dart';
-
-/// 书架批量更新目录的结果，供 UI 展示完整的成功/失败/跳过统计。
-class ShelfTocUpdateResult {
-  const ShelfTocUpdateResult({
-    required this.requested,
-    required this.eligible,
-    required this.updated,
-    required this.failed,
-    required this.skipped,
-    this.failures = const <String, String>{},
-  });
-
-  final int requested;
-  final int eligible;
-  final int updated;
-  final int failed;
-  final int skipped;
-  final Map<String, String> failures;
-}
 
 /// 书籍管理 Provider — 书架、阅读、章节、下载缓存
 class BookProvider extends ChangeNotifier {

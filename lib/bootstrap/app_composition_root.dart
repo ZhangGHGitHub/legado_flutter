@@ -29,6 +29,7 @@ import '../application/bookshelf/bookshelf_display_port.dart';
 import '../application/bookshelf/bookshelf_list_port.dart';
 import '../application/bookshelf/bookshelf_local_book_port.dart';
 import '../application/bookshelf/bookshelf_url_import_port.dart';
+import '../application/bookshelf/bookshelf_toc_refresh_port.dart';
 import '../application/mine/my_page_port.dart';
 import '../application/mine/webdav_config_dialog_port.dart';
 import '../application/main/main_shell_startup_port.dart';
@@ -151,6 +152,7 @@ import '../infrastructure/bookshelf/bookshelf_display_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_list_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_local_book_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_url_import_port_adapter.dart';
+import '../infrastructure/bookshelf/bookshelf_toc_refresh_port_adapter.dart';
 import '../infrastructure/bookshelf/remote_archive_import_port_adapter.dart';
 import '../infrastructure/bookshelf/remote_book_sort_port_adapter.dart';
 import '../infrastructure/bookshelf/shared_preferences_webdav_prefs_port_adapter.dart';
@@ -684,6 +686,12 @@ abstract final class AppCompositionRoot {
           Provider<BookshelfArrangeSnapshotPort>.value(
             value: BookshelfArrangeSnapshotPortAdapter(
               () => bootstrap.bookProvider.books,
+            ),
+          ),
+          Provider<BookshelfTocRefreshPort>.value(
+            value: BookshelfTocRefreshPortAdapter(
+              refresh: bootstrap.bookProvider.refreshShelfToc,
+              isRunning: () => bootstrap.bookProvider.isShelfUpdateRunning,
             ),
           ),
           Provider<BookGroupStorePort>.value(
