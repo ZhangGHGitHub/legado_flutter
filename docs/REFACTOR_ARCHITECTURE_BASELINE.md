@@ -3656,3 +3656,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：漫画进度适配器和页面端口定向 `7/7`；Flutter 串行全量 `1239` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。
 
 边界结论：本批完成漫画页一个进度写入调用点收口，不宣称漫画页其他 Provider/SourceProvider 职责迁移完成或 R6 退出。
+
+## 194. 2026-08-05：R6 漫画换源目录读取端口边界
+
+- 新增 `MangaChapterListPort` 和 `MangaChapterListPortAdapter`；漫画阅读页 `_openChangeSource` 通过 application 端口获取换源后的当前目录，不再直接依赖 `BookProvider.currentChapters`。组合根复用同一 Provider 快照并返回不可变列表，保留空目录提示、索引裁剪、换源后替换导航和原页面时序。
+- 本批仅迁移换源后的目录读取职责，不改变 `legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：漫画目录适配器和页面端口定向 `5/5`；Flutter 串行全量 `1241` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
+
+边界结论：本批完成漫画换源目录一个读取调用点收口，不宣称漫画页其他 Provider/SourceProvider 职责迁移完成或 R6 退出。

@@ -6,7 +6,7 @@
 > **重构来源与基线：** [Jingshiro/legado](https://github.com/Jingshiro/legado)；UI 1:1 对齐和行为兼容是重构验收子目标，不是独立产品定位。
 > **本地原版基线：** 根目录 `legado-main/` 是只读的原版行为、数据结构、UI 和错误语义核对目录，不是本项目的主源码目录，也不参与 Flutter/Rust 构建。
 > 目标平台：Android / iOS / Windows / macOS / Linux / Web (WASM)  
-> 最后更新：2026-08-04
+> 最后更新：2026-08-05
 > 引擎版本：**v0.5.6** | Rust DB Schema：**v17** | 原版 Room：**v99** | FRB：**2.11.1**
 >
 > 当前暂停项（2026-07-26）：Web 平台/WASM/PWA 构建、Web 平台适配和相关验收；TTS 真实 Android 引擎验收。除这两类门禁外，Android/Windows 重构继续按固定顺序推进。
@@ -19,6 +19,8 @@
 > **R1-12 产品决策（2026-08-02）：** 旧版 Legado 数据必须能够导入，已完成业务映射的数据导入后立即可用；`readRecord` 和非核心 Room 表暂不业务化，但必须无损 archive-only 保存，不得因未映射而拒绝旧数据导入或丢弃原始行。导入前备份沿用原版 JSON 逻辑备份，不新增文件级 SQLite 备份要求。
 
 > **R1-12 当前权威状态（2026-08-03）：** 上述产品边界已完成：六张核心表导入后可直接使用，`readRecord` 与非核心 Room 表无损 archive-only 保存，JSON 备份、事务回滚和幂等导入通过。真实非空副本 `.tmp/r1-device-room/original_legado.db` 已确认 Room v99、identity hash 与原版基线一致，包含 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`；`emulator-5556` all-phase smoke 已通过 `1/1`。仍不宣称 `readRecord` 统计语义或非核心表 Rust v17 业务化完成。
+
+2026-08-05 Phase 4/R6 漫画换源目录读取边界：新增 `MangaChapterListPort` 及不可变快照适配器，漫画阅读页换源后的目录读取通过 application 端口完成；组合根继续复用 `BookProvider.currentChapters`，保留空目录提示、当前索引裁剪、换源后替换导航和原异常语义。定向 `5/5`；Flutter 全量 `1241` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁，R6 尚未退出。
 
 2026-08-04 Phase 4/R6 书签页阅读跳转边界：新增 `BookmarkReaderPort` 及 Provider 回调适配器，书签页的按 ID 找书、当前目录、目录加载和本地目录回退均通过端口；书签加载复用 `BookshelfMembershipPort` 快照，移除页面对 `BookProvider` 的直接依赖。保留书架缺书提示、目录加载失败回退、章节索引/标题定位、UTF-16 章内位置和 Reader 跳转参数。全量 Flutter `1227` 通过、`3` 项既有条件跳过；类型注解修正后书签定向 `4/4`、`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。正文、目录、分页、章节身份、R1-12 和暂停平台门禁未改变，R6 尚未退出。
 

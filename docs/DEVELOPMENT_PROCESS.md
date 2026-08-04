@@ -1,7 +1,9 @@
 # Legado Flutter — Jingshiro/legado Rust + Flutter 重构开发流程
 
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
-> 最后更新：2026-08-04
+> 最后更新：2026-08-05
+
+2026-08-05 Phase 4/R6 漫画换源目录读取边界追溯：本批只收口漫画页 `_openChangeSource` 的当前目录读取，新增 `MangaChapterListPort` 和不可变快照适配器，生产组合根继续复用 `BookProvider.currentChapters`。定向 `5/5`、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过后，执行 Flutter 串行全量 `1241`（`3` 项既有条件跳过）并通过。代码提交 `5ceb4dc`，只提交本批代码和测试，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
 
 2026-08-05 Phase 4/R6 漫画阅读进度写入边界追溯：本批只收口漫画页 `_persistProgress` 的 Provider 写入，新增 `MangaProgressPort` 和回调适配器，保留 `pageIndex`、`durChapterIndex`、章节标题和进度比例。定向 `7/7`、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过后，执行 Flutter 串行全量 `1239`（`3` 项既有条件跳过）并通过。代码提交 `aaf40d1`，只提交本批代码和测试，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
 
