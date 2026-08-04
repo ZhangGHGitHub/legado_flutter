@@ -3553,3 +3553,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：Style1/Style2 相关定向 `15/15`；Flutter 全量 `1222` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。
 
 边界结论：本批只完成两种书架样式的单本分组/删除命令接入，不宣称 `BookProvider` 目录、缓存或状态职责迁移完成，也不宣称 R6 退出。
+
+## 184. 2026-08-04：R6 添加网址入库端口边界
+
+- 新增 `BookshelfUrlImportPort` 及 infrastructure 适配器，`AddBookUrlDialog` 通过端口调用 URL 入库，不再直接依赖 `BookProvider`；生产组合根复用现有 `addBooksByUrls` 实现。
+- 书源来源仍由共享 `SourceController` 提供，逐 URL 进度、成功/失败计数、日志和错误提示保持不变；本批不迁移书单导入、目录刷新、缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：添加网址定向 `2/2`；Flutter 全量 `1222` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。
+
+边界结论：本批完成 URL 入库页面的单一 application 写入入口，不宣称书单导入或 `BookProvider` 其他书架职责迁移完成，也不宣称 R6 退出。

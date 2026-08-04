@@ -2,17 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
+import '../../application/bookshelf/bookshelf_url_import_port.dart';
 import '../../application/diagnostics/app_log_port.dart';
 import '../../application/platform/clipboard_port.dart';
 import '../../application/source_management/source_notifier.dart';
-import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 
 /// 添加书籍网址 — 对齐 Jingshiro「添加网址」：多行 URL → 匹配书源 → **直接加入书架**。
 class AddBookUrlDialog extends StatelessWidget {
-  const AddBookUrlDialog({super.key, this.clipboard});
+  const AddBookUrlDialog({super.key, this.clipboard, this.urlImportPort});
 
   final ClipboardPort? clipboard;
+  final BookshelfUrlImportPort? urlImportPort;
 
   static Future<void> show(BuildContext context) {
     return showDialog<void>(
@@ -28,15 +29,19 @@ class AddBookUrlDialog extends StatelessWidget {
       overrides: [
         sourceControllerProvider.overrideWithValue(sourceProvider.controller),
       ],
-      child: _AddBookUrlDialogBody(clipboard: clipboard),
+      child: _AddBookUrlDialogBody(
+        clipboard: clipboard,
+        urlImportPort: urlImportPort,
+      ),
     );
   }
 }
 
 class _AddBookUrlDialogBody extends riverpod.ConsumerStatefulWidget {
-  const _AddBookUrlDialogBody({this.clipboard});
+  const _AddBookUrlDialogBody({this.clipboard, this.urlImportPort});
 
   final ClipboardPort? clipboard;
+  final BookshelfUrlImportPort? urlImportPort;
 
   @override
   riverpod.ConsumerState<_AddBookUrlDialogBody> createState() =>
@@ -80,8 +85,9 @@ class _AddBookUrlDialogState
 
     try {
       final sources = ref.read(sourceNotifierProvider).sources;
-      final books = context.read<BookProvider>();
-      final result = await books.addBooksByUrls(
+      final urlImport =
+          widget.urlImportPort ?? context.read<BookshelfUrlImportPort>();
+      final result = await urlImport.addBooksByUrls(
         text,
         sources: sources,
         onProgress: (i, total, url) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/book/book_provider_source_port.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_url_import_port.dart';
 import 'package:legado_flutter/application/diagnostics/app_log_port.dart';
 import 'package:legado_flutter/application/platform/clipboard_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -12,6 +13,7 @@ import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/features/bookshelf/add_book_url_dialog.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
+import 'package:legado_flutter/infrastructure/bookshelf/bookshelf_url_import_port_adapter.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/source_management/source_controller_test.dart'
@@ -104,6 +106,10 @@ Widget _withProviders({
       ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
       if (bookProvider != null)
         ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+      if (bookProvider != null)
+        Provider<BookshelfUrlImportPort>.value(
+          value: BookshelfUrlImportPortAdapter(bookProvider.addBooksByUrls),
+        ),
       Provider<AppLogPort>.value(value: const _FakeAppLog()),
     ],
     child: child,

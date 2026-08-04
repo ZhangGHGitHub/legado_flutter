@@ -27,6 +27,7 @@ import '../application/bookshelf/bookshelf_config_dialog_port.dart';
 import '../application/bookshelf/bookshelf_display_port.dart';
 import '../application/bookshelf/bookshelf_list_port.dart';
 import '../application/bookshelf/bookshelf_local_book_port.dart';
+import '../application/bookshelf/bookshelf_url_import_port.dart';
 import '../application/mine/my_page_port.dart';
 import '../application/mine/webdav_config_dialog_port.dart';
 import '../application/main/main_shell_startup_port.dart';
@@ -147,6 +148,7 @@ import '../infrastructure/bookshelf/bookshelf_config_dialog_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_display_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_list_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_local_book_port_adapter.dart';
+import '../infrastructure/bookshelf/bookshelf_url_import_port_adapter.dart';
 import '../infrastructure/bookshelf/remote_archive_import_port_adapter.dart';
 import '../infrastructure/bookshelf/remote_book_sort_port_adapter.dart';
 import '../infrastructure/bookshelf/shared_preferences_webdav_prefs_port_adapter.dart';
@@ -509,6 +511,11 @@ abstract final class AppCompositionRoot {
           Provider<BookshelfLocalBookPort>.value(
             value: BookshelfLocalBookPortAdapter(
               () => bootstrap.bookProvider.importLocalBook(),
+            ),
+          ),
+          Provider<BookshelfUrlImportPort>.value(
+            value: BookshelfUrlImportPortAdapter(
+              bootstrap.bookProvider.addBooksByUrls,
             ),
           ),
           Provider<AppDiagnosticsMonitor>.value(value: diagnosticsMonitor),
