@@ -8,9 +8,9 @@ import '../../domain/crash/crash_report.dart';
 import '../../application/main/main_shell_startup_port.dart';
 import '../../application/main/privacy_consent_port.dart';
 import '../../application/startup/startup_task_runner.dart';
+import '../../application/bookshelf/bookshelf_display_state_port.dart';
 import '../../config/app_config.dart';
 import '../../domain/source_subscription/rule_sub.dart';
-import '../../providers/book_provider.dart';
 import '../../theme/legado_chrome.dart';
 import '../../widgets/legado_bottom_nav.dart';
 import '../bookshelf/bookshelf_page.dart';
@@ -29,11 +29,13 @@ class MainShell extends StatefulWidget {
     this.pendingCrashReport,
     this.onCrashReportPresented,
     this.startupPort,
+    this.displayStatePort,
   });
 
   final CrashReport? pendingCrashReport;
   final Future<void> Function()? onCrashReportPresented;
   final MainShellStartupPort? startupPort;
+  final BookshelfDisplayStatePort? displayStatePort;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -43,6 +45,7 @@ class _MainShellState extends State<MainShell> {
   /// 固定槽位索引（与 IndexedStack 子项一致）
   int _pageIndex = 0;
   bool _initialized = false;
+  late final BookshelfDisplayStatePort _displayStatePort;
   int _lastBookshelfTapMs = 0;
   int _lastExploreTapMs = 0;
   DateTime? _lastBackPress;
@@ -61,6 +64,10 @@ class _MainShellState extends State<MainShell> {
     super.initState();
     _startupPort = widget.startupPort ?? context.read<MainShellStartupPort>();
     _privacyPort = context.read<PrivacyConsentPort>();
+    _displayStatePort =
+        widget.displayStatePort ??
+        Provider.of<BookshelfDisplayStatePort?>(context, listen: false) ??
+        const EmptyBookshelfDisplayStatePort();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initProviders());
   }
 
@@ -300,8 +307,9 @@ class _MainShellState extends State<MainShell> {
     return ListenableBuilder(
       listenable: AppConfig.instance,
       builder: (context, _) {
-        return Consumer<BookProvider>(
-          builder: (context, bookProvider, _) {
+        return ListenableBuilder(
+          listenable: _displayStatePort,
+          builder: (context, _) {
             final slots = _visiblePageSlots(AppConfig.instance);
             var pageIndex = _pageIndex;
             if (!slots.contains(pageIndex)) {
@@ -318,7 +326,7 @@ class _MainShellState extends State<MainShell> {
                 .indexOf(pageIndex)
                 .clamp(0, slots.length - 1);
             final shelfBadge = (_bookshelfLayout?.showWaitUpCount ?? false)
-                ? bookProvider.shelfUpdateActiveCount
+                ? _displayStatePort.shelfUpdateActiveCount
                 : 0;
 
             return PopScope(

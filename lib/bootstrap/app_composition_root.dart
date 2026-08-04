@@ -595,6 +595,8 @@ abstract final class AppCompositionRoot {
               isLoading: () => bootstrap.bookProvider.isLoading,
               isBookUpdating: bootstrap.bookProvider.isBookShelfUpdating,
               reload: bootstrap.bookProvider.loadBooks,
+              shelfUpdateActiveCount: () =>
+                  bootstrap.bookProvider.shelfUpdateActiveCount,
             ),
           ),
           Provider<BookshelfListPort>.value(

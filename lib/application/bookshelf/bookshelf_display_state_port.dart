@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 abstract interface class BookshelfDisplayStatePort extends Listenable {
   bool get isLoading;
 
+  int get shelfUpdateActiveCount;
+
   bool isBookUpdating(String bookId);
 
   Future<void> reload();
@@ -16,6 +18,9 @@ final class EmptyBookshelfDisplayStatePort
 
   @override
   bool get isLoading => false;
+
+  @override
+  int get shelfUpdateActiveCount => 0;
 
   @override
   bool isBookUpdating(String bookId) => false;

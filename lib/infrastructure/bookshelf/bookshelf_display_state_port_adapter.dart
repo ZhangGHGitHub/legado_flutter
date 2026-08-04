@@ -10,21 +10,27 @@ final class BookshelfDisplayStatePortAdapter
     required bool Function() isLoading,
     required bool Function(String bookId) isBookUpdating,
     required Future<void> Function() reload,
+    int Function()? shelfUpdateActiveCount,
   }) : _listenable = listenable,
        _isLoading = isLoading,
        _isBookUpdating = isBookUpdating,
-       _reload = reload;
+       _reload = reload,
+       _shelfUpdateActiveCount = shelfUpdateActiveCount;
 
   final Listenable _listenable;
   final bool Function() _isLoading;
   final bool Function(String bookId) _isBookUpdating;
   final Future<void> Function() _reload;
+  final int Function()? _shelfUpdateActiveCount;
 
   @override
   bool get isLoading => _isLoading();
 
   @override
   bool isBookUpdating(String bookId) => _isBookUpdating(bookId);
+
+  @override
+  int get shelfUpdateActiveCount => _shelfUpdateActiveCount?.call() ?? 0;
 
   @override
   Future<void> reload() => _reload();
