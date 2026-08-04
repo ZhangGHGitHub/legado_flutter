@@ -21,6 +21,7 @@ import '../../application/reader/reader_content_refetch_port.dart';
 import '../../application/reader/reader_bookmark_readiness_port.dart';
 import '../../application/reader/reader_progress_sync_port.dart';
 import '../../application/reader/reader_image_cache_port.dart';
+import '../../application/reader/reader_image_headers_port.dart';
 import '../../application/reader/book_reader_prefs_port.dart';
 import '../../application/reader/reader_chapter_content_port.dart';
 import '../../application/reader/reading_session_tracker.dart';
@@ -88,6 +89,9 @@ class ReaderPage extends StatefulWidget {
   /// 正文读取端口；未注入时从组合根读取。
   final ReaderChapterContentPort? contentPort;
 
+  /// 图片请求头端口；未注入时从组合根读取。
+  final ReaderImageHeadersPort? imageHeadersPort;
+
   const ReaderPage({
     super.key,
     required this.book,
@@ -98,6 +102,7 @@ class ReaderPage extends StatefulWidget {
     this.prefs,
     this.configPrefs,
     this.contentPort,
+    this.imageHeadersPort,
   });
 
   @override
@@ -127,6 +132,7 @@ class _ReaderPageState extends State<ReaderPage> {
   late final ReaderBookmarkReadinessPort _bookmarkReadinessPort;
   late final ReaderProgressSyncPort _progressSyncPort;
   late final ReaderChapterContentPort _contentPort;
+  late final ReaderImageHeadersPort _imageHeadersPort;
   late final BookReaderPrefsPort _bookReaderPrefs;
   late final ReadBookConfigPrefsPort _configPrefs;
   final _readingSession = ReadingSessionTracker();
@@ -228,6 +234,8 @@ class _ReaderPageState extends State<ReaderPage> {
     _progressSyncPort = context.read<ReaderProgressSyncPort>();
     _contentPort =
         widget.contentPort ?? context.read<ReaderChapterContentPort>();
+    _imageHeadersPort =
+        widget.imageHeadersPort ?? context.read<ReaderImageHeadersPort>();
     _bookReaderPrefs = widget.prefs ?? context.read<BookReaderPrefsPort>();
     _configPrefs =
         widget.configPrefs ?? context.read<ReadBookConfigPrefsPort>();
@@ -287,8 +295,7 @@ class _ReaderPageState extends State<ReaderPage> {
         .toSet();
     if (sources.isEmpty) return;
 
-    final sourceProvider = context.read<SourceProvider>();
-    final headers = await sourceProvider.imageHeadersForBook(widget.book);
+    final headers = await _imageHeadersPort.imageHeadersForBook(widget.book);
     if (!mounted ||
         requestGeneration != _imageSizeRequestGeneration ||
         contentGeneration != _contentRequestGeneration) {

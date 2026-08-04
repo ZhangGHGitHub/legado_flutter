@@ -43,6 +43,7 @@ import '../application/bookshelf/remote_archive_import_port.dart';
 import '../application/bookshelf/remote_book_import_port.dart';
 import '../application/bookshelf/remote_book_sort_port.dart';
 import '../application/cache/book_cache_export_port.dart';
+import '../application/cache/cache_book_shelf_port.dart';
 import '../application/core_api_provider.dart';
 import '../application/crash/crash_log_service.dart';
 import '../application/diagnostics/app_diagnostics_monitor.dart';
@@ -71,6 +72,7 @@ import '../application/reader/reader_session_prefs_port.dart';
 import '../application/reader/reader_selection_port.dart';
 import '../application/reader/reader_content_refetch_port.dart';
 import '../application/reader/reader_chapter_content_port.dart';
+import '../application/reader/reader_image_headers_port.dart';
 import '../application/reader/manga_chapter_content_port.dart';
 import '../application/reader/reader_bookmark_readiness_port.dart';
 import '../application/reader/reader_progress_sync_port.dart';
@@ -172,6 +174,7 @@ import '../infrastructure/bookshelf/remote_book_import_port_adapter.dart';
 import '../infrastructure/bookshelf/remote_book_sort_port_adapter.dart';
 import '../infrastructure/bookshelf/shared_preferences_webdav_prefs_port_adapter.dart';
 import '../infrastructure/cache/book_cache_export_port_adapter.dart';
+import '../infrastructure/cache/cache_book_shelf_port_adapter.dart';
 import '../infrastructure/content/frb_content_processing_port.dart';
 import '../infrastructure/database/frb_backup_port.dart';
 import '../infrastructure/database/frb_database_status_port.dart';
@@ -237,6 +240,7 @@ import '../infrastructure/reader/reader_session_prefs_port_adapter.dart';
 import '../infrastructure/reader/reader_selection_port_adapter.dart';
 import '../infrastructure/reader/reader_content_refetch_port_adapter.dart';
 import '../infrastructure/reader/reader_chapter_content_port_adapter.dart';
+import '../infrastructure/reader/reader_image_headers_port_adapter.dart';
 import '../infrastructure/reader/manga_chapter_content_port_adapter.dart';
 import '../infrastructure/reader/reader_bookmark_readiness_port_adapter.dart';
 import '../infrastructure/reader/reader_progress_sync_port_adapter.dart';
@@ -667,6 +671,13 @@ abstract final class AppCompositionRoot {
           Provider<BookCacheExportPort>.value(
             value: BookCacheExportPortAdapter(contentCache),
           ),
+          Provider<CacheBookShelfPort>.value(
+            value: CacheBookShelfPortAdapter(
+              books: () => bootstrap.bookProvider.books,
+              getChapterCount: bootstrap.bookProvider.getChapterCount,
+              getLocalChapters: bootstrap.bookProvider.getLocalChapters,
+            ),
+          ),
           Provider<ChapterContentCachePort>.value(value: contentCache),
           Provider<ReaderChapterContentPort>(
             create: (context) => ReaderChapterContentPortAdapter(
@@ -923,6 +934,13 @@ abstract final class AppCompositionRoot {
               sourceGroupPort: context.read<SourceGroupCatalogPort>(),
               validationStorePort: context.read<SourceValidationStorePort>(),
               builtInSourcesLoader: BookSourceService.loadBuiltInSources,
+            ),
+          ),
+          Provider<ReaderImageHeadersPort>(
+            create: (context) => ReaderImageHeadersPortAdapter(
+              imageHeadersForBook: context
+                  .read<SourceProvider>()
+                  .imageHeadersForBook,
             ),
           ),
           Provider<ReaderContentRefetchPort>(

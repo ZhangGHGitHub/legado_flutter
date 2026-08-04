@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/source_management/source_notifier.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_membership_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/domain/ports/book_source_book_info_port.dart';
@@ -56,6 +57,9 @@ void main() {
         providers: [
           ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
           ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+          ListenableProvider<BookshelfMembershipPort>.value(
+            value: _TestBookshelfMembershipPort(bookProvider),
+          ),
           Provider<BookSourceSearchPort>.value(value: const _EmptySearchPort()),
         ],
         child: riverpod.ProviderScope(
@@ -205,6 +209,9 @@ _pumpEditPage(WidgetTester tester, {required bool inShelf}) async {
       providers: [
         ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
         ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+        ListenableProvider<BookshelfMembershipPort>.value(
+          value: _TestBookshelfMembershipPort(bookProvider),
+        ),
         Provider<BookSourceSearchPort>.value(value: const _EmptySearchPort()),
       ],
       child: riverpod.ProviderScope(
@@ -260,6 +267,9 @@ _pumpCoverPage(
       providers: [
         ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
         ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+        ListenableProvider<BookshelfMembershipPort>.value(
+          value: _TestBookshelfMembershipPort(bookProvider),
+        ),
         Provider<BookSourceSearchPort>.value(value: const _CoverSearchPort()),
       ],
       child: riverpod.ProviderScope(
@@ -404,6 +414,16 @@ final class _MemoryBookRepository implements BookRepository {
 
   @override
   Future<void> clearChapterContent(Chapter chapter) async {}
+}
+
+final class _TestBookshelfMembershipPort extends ChangeNotifier
+    implements BookshelfMembershipPort {
+  _TestBookshelfMembershipPort(this._provider);
+
+  final BookProvider _provider;
+
+  @override
+  List<Book> get books => _provider.books;
 }
 
 final class _NoopChapterCache implements ChapterContentCachePort {

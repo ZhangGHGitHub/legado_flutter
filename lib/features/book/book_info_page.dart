@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:legado_flutter/application/book/book_info_chapter_port.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_membership_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
@@ -33,12 +34,14 @@ class BookInfoPage extends StatelessWidget {
   final Book book;
   final bool openReaderImmediately;
   final BookInfoChapterPort? chapterPort;
+  final BookshelfMembershipPort? membershipPort;
 
   const BookInfoPage({
     super.key,
     required this.book,
     this.openReaderImmediately = false,
     this.chapterPort,
+    this.membershipPort,
   });
 
   @override
@@ -47,6 +50,7 @@ class BookInfoPage extends StatelessWidget {
       book: book,
       openReaderImmediately: openReaderImmediately,
       chapterPort: chapterPort,
+      membershipPort: membershipPort,
     );
   }
 }
@@ -55,11 +59,13 @@ class _BookInfoPageBody extends riverpod.ConsumerStatefulWidget {
   final Book book;
   final bool openReaderImmediately;
   final BookInfoChapterPort? chapterPort;
+  final BookshelfMembershipPort? membershipPort;
 
   const _BookInfoPageBody({
     required this.book,
     required this.openReaderImmediately,
     this.chapterPort,
+    this.membershipPort,
   });
 
   @override
@@ -75,12 +81,17 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   Timer? _snackBarHideTimer;
   bool _autoStartScheduled = false;
   late final BookInfoChapterPort _chapterPort;
+  late final BookshelfMembershipPort _membershipPort;
 
   @override
   void initState() {
     super.initState();
     _book = widget.book;
     final provider = context.read<BookProvider>();
+    _membershipPort =
+        widget.membershipPort ??
+        Provider.of<BookshelfMembershipPort?>(context, listen: false) ??
+        const EmptyBookshelfMembershipPort();
     _chapterPort =
         widget.chapterPort ??
         Provider.of<BookInfoChapterPort?>(context, listen: false) ??
@@ -99,11 +110,29 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   BookSource? _sourceForBook(Book book) =>
       _sourceNotifier.findSourceForBook(book);
 
+  /// 保留旧版书架匹配优先级，仅把只读成员查询移到应用端口。
+  Book? _findShelfBook(Book book) {
+    for (final shelfBook in _membershipPort.books) {
+      if (book.sourceUrl.isNotEmpty &&
+          shelfBook.sourceUrl.isNotEmpty &&
+          shelfBook.sourceUrl == book.sourceUrl) {
+        return shelfBook;
+      }
+    }
+    for (final shelfBook in _membershipPort.books) {
+      if (shelfBook.name == book.name &&
+          (book.author.isEmpty || shelfBook.author == book.author)) {
+        return shelfBook;
+      }
+    }
+    return null;
+  }
+
   Future<void> _initPage() async {
     final bookProvider = context.read<BookProvider>();
     _coverUrl = _book.coverUrl;
 
-    final shelf = bookProvider.findShelfBook(_book);
+    final shelf = _findShelfBook(_book);
     if (shelf != null) {
       _book = shelf;
       _isInShelf = true;
@@ -237,7 +266,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
 
   Future<void> _addToShelf() async {
     final provider = context.read<BookProvider>();
-    final existing = provider.findShelfBook(_book);
+    final existing = _findShelfBook(_book);
     if (existing != null) {
       if (mounted) {
         setState(() {
@@ -360,7 +389,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
         _coverUrl = result.coverUrl.isNotEmpty ? result.coverUrl : _coverUrl;
         _errorMessage = null;
       });
-      final shelf = context.read<BookProvider>().findShelfBook(result);
+      final shelf = _findShelfBook(result);
       if (shelf != null) {
         setState(() {
           _book = shelf;
@@ -372,7 +401,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
       }
       return;
     }
-    final shelf = context.read<BookProvider>().findShelfBook(_book);
+    final shelf = _findShelfBook(_book);
     if (shelf != null) {
       setState(() {
         _book = shelf;
@@ -390,7 +419,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
       MaterialPageRoute(builder: (_) => ChangeCoverPage(book: _book)),
     );
     if (!mounted) return;
-    final shelf = context.read<BookProvider>().findShelfBook(_book);
+    final shelf = _findShelfBook(_book);
     if (shelf != null) {
       setState(() {
         _book = shelf;

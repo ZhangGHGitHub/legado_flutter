@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../application/cache/book_cache_export_port.dart';
+import '../../application/cache/cache_book_shelf_port.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -18,26 +19,42 @@ import 'download_helpers.dart';
 
 /// 离线缓存管理 — 对齐 Jingshiro `CacheActivity` + `item_download`
 class CacheBookPage extends StatelessWidget {
-  const CacheBookPage({super.key, required this.contentCache});
+  const CacheBookPage({super.key, required this.contentCache, this.shelfPort});
 
   final ChapterContentCachePort contentCache;
+  final CacheBookShelfPort? shelfPort;
 
   @override
   Widget build(BuildContext context) {
+    final bookProvider = context.read<BookProvider>();
+    final resolvedShelfPort =
+        shelfPort ??
+        CacheBookShelfPortCallbacks(
+          books: () => bookProvider.books,
+          getChapterCount: bookProvider.getChapterCount,
+          getLocalChapters: bookProvider.getLocalChapters,
+        );
     final sourceProvider = context.read<SourceProvider>();
     return riverpod.ProviderScope(
       overrides: [
         sourceControllerProvider.overrideWithValue(sourceProvider.controller),
       ],
-      child: _CacheBookPageBody(contentCache: contentCache),
+      child: _CacheBookPageBody(
+        contentCache: contentCache,
+        shelfPort: resolvedShelfPort,
+      ),
     );
   }
 }
 
 class _CacheBookPageBody extends riverpod.ConsumerStatefulWidget {
-  const _CacheBookPageBody({required this.contentCache});
+  const _CacheBookPageBody({
+    required this.contentCache,
+    required this.shelfPort,
+  });
 
   final ChapterContentCachePort contentCache;
+  final CacheBookShelfPort shelfPort;
 
   @override
   riverpod.ConsumerState<_CacheBookPageBody> createState() =>
@@ -82,13 +99,12 @@ class _CacheBookPageState extends riverpod.ConsumerState<_CacheBookPageBody> {
   }
 
   Future<void> _reload() async {
-    final provider = context.read<BookProvider>();
-    final books = provider.books;
+    final books = widget.shelfPort.books;
     setState(() => _loading = true);
     final map = <String, _CacheBookRow>{};
     for (final book in books) {
       final stats = await widget.contentCache.stats(book.id);
-      final dbChapters = await provider.getChapterCount(book.id);
+      final dbChapters = await widget.shelfPort.getChapterCount(book.id);
       map[book.id] = _CacheBookRow(
         book: book,
         cachedChapters: stats.chapterFiles,
@@ -264,7 +280,7 @@ class _CacheBookPageState extends riverpod.ConsumerState<_CacheBookPageBody> {
     }
     final text = await exporter.buildBooksText(
       books: books,
-      loadChapters: context.read<BookProvider>().getLocalChapters,
+      loadChapters: widget.shelfPort.getLocalChapters,
     );
     if (text.isEmpty || !mounted) {
       if (mounted) {
