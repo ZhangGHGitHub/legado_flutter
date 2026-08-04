@@ -3525,3 +3525,13 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：书架同步相关七个测试文件定向 `25/25`，命令为 `flutter test --no-pub --enable-experiment=dot-shorthands test/application/bookshelf/bookshelf_change_port_test.dart test/application/bookshelf_notifier_test.dart test/providers/book_provider_bookshelf_change_test.dart test/providers/book_provider_load_request_test.dart test/providers/book_provider_bookshelf_controller_test.dart test/providers/book_provider_group_update_test.dart test/providers/book_provider_chapter_meta_controller_test.dart`；Flutter 全量 `flutter test --no-pub --enable-experiment=dot-shorthands` 为 `1153` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过，仅保留既有 Windows LF/CRLF 提示。
 
 边界结论：本批只完成书架快照同步前置契约和并发保护，不宣称 BookshelfStyle1/Style2 UI 只读状态迁移完成，不改变 `legado-main/`、Reader、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12、Web/WASM/PWA、真实 Android TTS 或其他暂停门禁。
+
+## 181. 2026-08-04：R6 书架整理页快照读取边界
+
+- 新增 `BookshelfArrangeSnapshotPort` 与 infrastructure 适配器，`BookshelfArrangePage` 的初始化、分组过滤、排序和“导出全部书源”只依赖 application 同步快照端口；不再直接读取 `BookProvider.books`。
+- 生产组合根以 `BookshelfArrangeSnapshotPortAdapter` 复用现有 Provider 最新完整快照；空测试宿主保留空实现，需验证页面数据的宿主显式注入快照，避免引入第二份书架事实源或新的异步时序。
+- 本批不迁移整理页写入命令，不改变分组/删除的局部列表与排序持久化语义、完整书架导出、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12、`legado-main/` 或暂停平台门禁。
+
+验证结果：快照适配器与整理页联合定向 `19/19`；Flutter 全量 `1221` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。
+
+边界结论：本批完成 `BookshelfArrangePage` 的三处只读 Provider 依赖收口，不宣称 `BookProvider` 写入/目录职责迁移完成或 R6 退出。

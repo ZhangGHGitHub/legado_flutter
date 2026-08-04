@@ -11,6 +11,7 @@ import 'package:legado_flutter/application/bookshelf/book_group_store_port.dart'
 import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_delete_command_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_group_command_port.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_snapshot_port.dart';
 import 'package:legado_flutter/application/book/book_group_policy.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -127,6 +128,14 @@ class _FakeDeleteCommands implements BookshelfArrangeDeleteCommandPort {
   }
 }
 
+class _FakeBookshelfArrangeSnapshotPort
+    implements BookshelfArrangeSnapshotPort {
+  _FakeBookshelfArrangeSnapshotPort(this.books);
+
+  @override
+  List<Book> books;
+}
+
 class _FakeBookGroupManagementPort implements BookGroupManagementPort {
   List<BookGroup> selectGroups = const [];
 
@@ -192,6 +201,7 @@ void main() {
             groupStore: groupStore,
             groupCommands: _FakeGroupCommands(),
             deleteCommands: _FakeDeleteCommands(),
+            snapshot: _FakeBookshelfArrangeSnapshotPort(const []),
           ),
         ),
       ),
@@ -263,6 +273,7 @@ void main() {
             groupStore: _FakeBookGroupStore(),
             groupCommands: _FakeGroupCommands(),
             deleteCommands: _FakeDeleteCommands(),
+            snapshot: _FakeBookshelfArrangeSnapshotPort(bookProvider.books),
           ),
         ),
       ),
@@ -736,6 +747,7 @@ void main() {
             groupStore: _FakeBookGroupStore(),
             groupCommands: _FakeGroupCommands(),
             deleteCommands: _FakeDeleteCommands(),
+            snapshot: _FakeBookshelfArrangeSnapshotPort(bookProvider.books),
           ),
         ),
       ),
@@ -799,6 +811,7 @@ Future<void> _pumpArrangePage(
           groupStore: _FakeBookGroupStore(),
           groupCommands: commands,
           deleteCommands: deleteCommands ?? _FakeDeleteCommands(),
+          snapshot: _FakeBookshelfArrangeSnapshotPort(bookProvider.books),
         ),
       ),
     ),

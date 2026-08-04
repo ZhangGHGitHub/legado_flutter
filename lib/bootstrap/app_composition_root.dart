@@ -20,6 +20,7 @@ import '../application/bookshelf/book_group_store_port.dart';
 import '../application/bookshelf/bookshelf_arrange_delete_command_port.dart';
 import '../application/bookshelf/bookshelf_arrange_group_command_port.dart';
 import '../application/bookshelf/bookshelf_arrange_port.dart';
+import '../application/bookshelf/bookshelf_arrange_snapshot_port.dart';
 import '../application/bookshelf/bookshelf_change_port.dart';
 import '../application/bookshelf/bookshelf_controller.dart';
 import '../application/bookshelf/bookshelf_config_dialog_port.dart';
@@ -141,6 +142,7 @@ import '../infrastructure/bookshelf/book_group_store_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_arrange_delete_command_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_arrange_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_arrange_group_command_port_adapter.dart';
+import '../infrastructure/bookshelf/bookshelf_arrange_snapshot_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_config_dialog_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_display_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_list_port_adapter.dart';
@@ -663,6 +665,11 @@ abstract final class AppCompositionRoot {
               updateBookGroup: bootstrap.bookProvider.updateBookGroup,
               updateBooksGroup: bootstrap.bookProvider.updateBooksGroup,
               books: () => bootstrap.bookProvider.books,
+            ),
+          ),
+          Provider<BookshelfArrangeSnapshotPort>.value(
+            value: BookshelfArrangeSnapshotPortAdapter(
+              () => bootstrap.bookProvider.books,
             ),
           ),
           Provider<BookGroupStorePort>.value(

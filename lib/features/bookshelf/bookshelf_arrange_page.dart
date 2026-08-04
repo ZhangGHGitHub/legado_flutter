@@ -9,10 +9,10 @@ import '../../application/bookshelf/book_group_store_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_delete_command_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_group_command_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_port.dart';
+import '../../application/bookshelf/bookshelf_arrange_snapshot_port.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../domain/book/book_group.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../widgets/book_group_manage_dialog.dart';
 import '../../widgets/book_group_select_dialog.dart';
@@ -30,6 +30,7 @@ class BookshelfArrangePage extends StatelessWidget {
     this.groupStore,
     this.groupCommands,
     this.deleteCommands,
+    this.snapshot,
   });
 
   /// `null` = 全部；`''` = 未分组；其它 = 分组名
@@ -51,6 +52,9 @@ class BookshelfArrangePage extends StatelessWidget {
   /// 删除命令边界；生产由组合根注入 Provider 回调适配器。
   final BookshelfArrangeDeleteCommandPort? deleteCommands;
 
+  /// 当前完整书架快照边界；生产由组合根注入，测试宿主可显式提供。
+  final BookshelfArrangeSnapshotPort? snapshot;
+
   @override
   Widget build(BuildContext context) {
     final sourceProvider = context.read<SourceProvider>();
@@ -66,6 +70,7 @@ class BookshelfArrangePage extends StatelessWidget {
         groupStore: groupStore,
         groupCommands: groupCommands,
         deleteCommands: deleteCommands,
+        snapshot: snapshot,
       ),
     );
   }
@@ -80,6 +85,7 @@ class _BookshelfArrangePageBody extends riverpod.ConsumerStatefulWidget {
     this.groupStore,
     this.groupCommands,
     this.deleteCommands,
+    this.snapshot,
   });
 
   final String? groupFilter;
@@ -89,6 +95,7 @@ class _BookshelfArrangePageBody extends riverpod.ConsumerStatefulWidget {
   final BookGroupStorePort? groupStore;
   final BookshelfArrangeGroupCommandPort? groupCommands;
   final BookshelfArrangeDeleteCommandPort? deleteCommands;
+  final BookshelfArrangeSnapshotPort? snapshot;
 
   @override
   riverpod.ConsumerState<_BookshelfArrangePageBody> createState() =>
@@ -113,6 +120,7 @@ class _BookshelfArrangePageState
   late final BookGroupStorePort _groupStore;
   late final BookshelfArrangeGroupCommandPort _groupCommands;
   late final BookshelfArrangeDeleteCommandPort _deleteCommands;
+  late final BookshelfArrangeSnapshotPort _snapshot;
 
   /// 当前筛选：全部 / 本地 / 未分组 / 自定义分组名
   late String _filterKey;
@@ -129,6 +137,10 @@ class _BookshelfArrangePageState
     _deleteCommands =
         widget.deleteCommands ??
         context.read<BookshelfArrangeDeleteCommandPort>();
+    _snapshot =
+        widget.snapshot ??
+        context.read<BookshelfArrangeSnapshotPort?>() ??
+        const EmptyBookshelfArrangeSnapshotPort();
     _filterKey = _filterKeyFromWidget(widget.groupFilter);
     _groupLabel = widget.groupLabel;
     _loadSortMode();
@@ -168,7 +180,7 @@ class _BookshelfArrangePageState
   }
 
   void _reloadBooks([List<Book>? snapshot]) {
-    var all = snapshot ?? context.read<BookProvider>().books;
+    var all = snapshot ?? _snapshot.books;
     all = _applyGroupFilter(all);
     _books = BookshelfArrangeOrderPolicy.apply(all, _cachedOrder, (b) => b.id);
     _selected.removeWhere((id) => !_books.any((b) => b.id == id));
@@ -201,7 +213,7 @@ class _BookshelfArrangePageState
   Future<void> _loadOrderAndBooks() async {
     _cachedOrder = await _preferences.loadBookOrder();
     if (!mounted) return;
-    final books = context.read<BookProvider>().books;
+    final books = _snapshot.books;
     await _groupStore.syncNamesFromBooks(
       books.map((b) => b.group).where((g) => g.isNotEmpty),
     );
@@ -441,7 +453,7 @@ class _BookshelfArrangePageState
   Future<void> _exportAllUseBookSource() async {
     final sources = ref.read(sourceNotifierProvider.notifier);
     final used = <String, dynamic>{};
-    for (final book in context.read<BookProvider>().books) {
+    for (final book in _snapshot.books) {
       final src = sources.findSourceForBook(book);
       if (src == null) continue;
       used[src.bookSourceUrl] = src.toJson();
