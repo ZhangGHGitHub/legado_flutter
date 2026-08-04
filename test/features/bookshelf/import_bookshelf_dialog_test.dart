@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/application/book/book_provider_source_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_list_port.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_booklist_import_port.dart';
 import 'package:legado_flutter/application/diagnostics/app_log_port.dart';
 import 'package:legado_flutter/application/platform/clipboard_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -16,6 +17,7 @@ import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/features/bookshelf/import_bookshelf_dialog.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
+import 'package:legado_flutter/infrastructure/bookshelf/bookshelf_booklist_import_port_adapter.dart';
 
 import '../../application/source_management/source_controller_test.dart'
     as source_fixtures;
@@ -325,6 +327,12 @@ Widget _withProviders({
       ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
       if (bookProvider != null)
         ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+      if (bookProvider != null)
+        Provider<BookshelfBooklistImportPort>.value(
+          value: BookshelfBooklistImportPortAdapter(
+            bookProvider.importBookshelfEntries,
+          ),
+        ),
       Provider<ClipboardPort>.value(
         value: clipboard ?? _FakeClipboardPort(null),
       ),

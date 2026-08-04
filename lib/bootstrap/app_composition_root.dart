@@ -21,6 +21,7 @@ import '../application/bookshelf/bookshelf_arrange_delete_command_port.dart';
 import '../application/bookshelf/bookshelf_arrange_group_command_port.dart';
 import '../application/bookshelf/bookshelf_arrange_port.dart';
 import '../application/bookshelf/bookshelf_arrange_snapshot_port.dart';
+import '../application/bookshelf/bookshelf_booklist_import_port.dart';
 import '../application/bookshelf/bookshelf_change_port.dart';
 import '../application/bookshelf/bookshelf_controller.dart';
 import '../application/bookshelf/bookshelf_config_dialog_port.dart';
@@ -144,6 +145,7 @@ import '../infrastructure/bookshelf/bookshelf_arrange_delete_command_port_adapte
 import '../infrastructure/bookshelf/bookshelf_arrange_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_arrange_group_command_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_arrange_snapshot_port_adapter.dart';
+import '../infrastructure/bookshelf/bookshelf_booklist_import_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_config_dialog_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_display_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_list_port_adapter.dart';
@@ -516,6 +518,11 @@ abstract final class AppCompositionRoot {
           Provider<BookshelfUrlImportPort>.value(
             value: BookshelfUrlImportPortAdapter(
               bootstrap.bookProvider.addBooksByUrls,
+            ),
+          ),
+          Provider<BookshelfBooklistImportPort>.value(
+            value: BookshelfBooklistImportPortAdapter(
+              bootstrap.bookProvider.importBookshelfEntries,
             ),
           ),
           Provider<AppDiagnosticsMonitor>.value(value: diagnosticsMonitor),

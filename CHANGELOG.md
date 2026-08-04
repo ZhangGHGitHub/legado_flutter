@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/Phase 4/R6 书单条目入库边界：新增 `BookshelfBooklistImportPort` 及兼容适配器，`ImportBookshelfDialog` 通过 application 端口执行解析后的书单入库；保留 JSON/URL 解析、共享书源列表、进度、added/skipped/failed 计数、日志和错误提示。定向 `2/2`，Flutter 全量 `1222` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。添加网址、目录刷新、缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁未改变；R6 尚未退出。
 - 架构/Phase 4/R6 添加网址入库边界：新增 `BookshelfUrlImportPort` 及兼容适配器，`AddBookUrlDialog` 不再直接读取 `BookProvider`；保留共享书源列表、逐 URL 进度、成功/失败计数、日志和异常提示。定向 `2/2`，Flutter 全量 `1222` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。书单导入、目录刷新、缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁未改变；R6 尚未退出。
 - 架构/Phase 4/R6 Style1/Style2 单本命令边界：书架样式页的行内分组与移除操作改用已验证的 `BookshelfArrangeGroupCommandPort`/`BookshelfArrangeDeleteCommandPort`，保留目录刷新、缓存访问和展示状态由 `BookProvider` 承担；组合根和测试宿主注入现有 Provider 适配器。Style 定向 `15/15`，Flutter 全量 `1222` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。未改变确认/取消、通知、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。
 - 架构/Phase 4/R6 书架菜单导出读取边界：`BookshelfMenuActions._exportList` 改用共享 `BookshelfArrangeSnapshotPort` 获取完整书架，保留空书架提示、JSON 导出端口、日志和成功/失败提示语义。新增导出行为回归；受影响定向 `23/23`，Flutter 全量 `1222` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。未改变添加网址、书单导入、书架写入、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。

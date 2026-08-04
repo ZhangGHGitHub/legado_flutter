@@ -2,19 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
+import '../../application/bookshelf/bookshelf_booklist_import_port.dart';
 import '../../application/bookshelf/bookshelf_list_port.dart';
 import '../../application/diagnostics/app_log_port.dart';
 import '../../application/platform/clipboard_port.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../domain/ports/public_text_fetch_port.dart';
-import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 
 /// 导入书单 — 对齐 Jingshiro：粘贴 url/json +「选文件」，按 name/author 精准搜索入库。
 class ImportBookshelfDialog extends StatelessWidget {
-  const ImportBookshelfDialog({super.key, this.listPort});
+  const ImportBookshelfDialog({super.key, this.listPort, this.importPort});
 
   final BookshelfListPort? listPort;
+  final BookshelfBooklistImportPort? importPort;
 
   static Future<void> show(BuildContext context) {
     return showDialog<void>(
@@ -30,15 +31,19 @@ class ImportBookshelfDialog extends StatelessWidget {
       overrides: [
         sourceControllerProvider.overrideWithValue(sourceProvider.controller),
       ],
-      child: _ImportBookshelfDialogBody(listPort: listPort),
+      child: _ImportBookshelfDialogBody(
+        listPort: listPort,
+        importPort: importPort,
+      ),
     );
   }
 }
 
 class _ImportBookshelfDialogBody extends riverpod.ConsumerStatefulWidget {
-  const _ImportBookshelfDialogBody({this.listPort});
+  const _ImportBookshelfDialogBody({this.listPort, this.importPort});
 
   final BookshelfListPort? listPort;
+  final BookshelfBooklistImportPort? importPort;
 
   @override
   riverpod.ConsumerState<_ImportBookshelfDialogBody> createState() =>
@@ -84,7 +89,8 @@ class _ImportBookshelfDialogState
 
   Future<void> _submit() async {
     final appLog = context.read<AppLogPort>();
-    final books = context.read<BookProvider>();
+    final importPort =
+        widget.importPort ?? context.read<BookshelfBooklistImportPort>();
     final sources = ref.read(sourceNotifierProvider).sources;
     setState(() {
       _busy = true;
@@ -107,7 +113,7 @@ class _ImportBookshelfDialogState
         return;
       }
 
-      final result = await books.importBookshelfEntries(
+      final result = await importPort.importBookshelfEntries(
         entries,
         sources: sources,
         onProgress: (i, total, status) {

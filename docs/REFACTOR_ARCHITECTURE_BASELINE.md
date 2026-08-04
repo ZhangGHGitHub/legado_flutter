@@ -3562,3 +3562,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：添加网址定向 `2/2`；Flutter 全量 `1222` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。
 
 边界结论：本批完成 URL 入库页面的单一 application 写入入口，不宣称书单导入或 `BookProvider` 其他书架职责迁移完成，也不宣称 R6 退出。
+
+## 185. 2026-08-04：R6 书单条目入库端口边界
+
+- 新增 `BookshelfBooklistImportPort` 及 infrastructure 适配器，`ImportBookshelfDialog` 将解析后的 `BookshelfListEntry` 交给 application 端口；生产组合根复用现有 `importBookshelfEntries` 实现。
+- JSON/URL 解析继续由 `BookshelfListPort` 承担，书源仍来自共享 `SourceController`，进度、added/skipped/failed 结果、日志和错误提示保持不变；本批不迁移添加网址、目录刷新、缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：书单入库定向 `2/2`；Flutter 全量 `1222` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。
+
+边界结论：本批完成书单解析后入库的单一 application 写入入口，不宣称 `BookProvider` 其他书架职责迁移完成或 R6 退出。
