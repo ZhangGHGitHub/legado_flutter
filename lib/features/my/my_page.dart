@@ -6,12 +6,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/lifecycle/app_lifecycle_coordinator.dart';
 import '../../application/mine/my_page_notifier.dart';
+import '../../domain/ports/chapter_content_cache_port.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/legado_list_tile.dart';
 import '../../widgets/quick_action_button.dart';
 import '../ai/ai_config_dialog.dart';
 import '../../features/book/bookmark_page.dart';
-import '../../providers/book_provider.dart';
 import '../cache/cache_book_page.dart';
 import '../../features/settings/config_page.dart';
 import '../obsidian/obsidian_export_dialog.dart';
@@ -360,11 +360,19 @@ class _MyPageBodyState extends riverpod.ConsumerState<_MyPageBody> {
                   icon: Icons.download_for_offline_outlined,
                   title: '离线缓存',
                   subtitle: '按书管理缓存并下载章节',
-                  onTap: () => _openPage(
-                    CacheBookPage(
-                      contentCache: context.read<BookProvider>().contentCache,
-                    ),
-                  ),
+                  onTap: () {
+                    final contentCache = Provider.of<ChapterContentCachePort?>(
+                      context,
+                      listen: false,
+                    );
+                    if (contentCache == null) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(const SnackBar(content: Text('缓存引擎不可用')));
+                      return;
+                    }
+                    _openPage(CacheBookPage(contentCache: contentCache));
+                  },
                 ),
                 LegadoListTile(
                   icon: Icons.cleaning_services_outlined,

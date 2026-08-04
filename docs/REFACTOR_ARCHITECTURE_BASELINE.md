@@ -1,5 +1,7 @@
 # Legado Flutter 架构重构基线
 
+> 2026-08-04 Phase 4/R6 “我的”页缓存入口边界：`MyPage` 打开离线缓存时只读取组合根提供的 `ChapterContentCachePort`，不再依赖 `BookProvider.contentCache`；生产绑定与书架/启动阶段复用同一缓存实例，缺少端口的独立宿主仅显示不可用提示。定向 `3/3`、Flutter 全量 `1223`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过；R6 尚未退出。
+
 > 2026-08-04 Phase 4/R6 书架展示状态边界：Style1/Style2 的 loading、重试和单本目录更新展示依赖可监听 application `BookshelfDisplayStatePort`，不再直接消费 `BookProvider`；infrastructure 适配器转发现有 Provider 的 `Listenable`、`isLoading`、`isBookShelfUpdating` 和 `loadBooks`，生产组合根使用 `ListenableProvider` 注册。书架业务状态仍由 `BookshelfNotifier` 快照提供，Provider 继续是过渡事实源。定向 `14/14`、Flutter 全量 `1223`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过；R6 尚未退出。
 
 > 2026-08-04 Phase 4/R6 远程书籍书架导入边界：`RemoteBookPage` 不再直接依赖 `BookProvider`；`RemoteBookImportPort` 提供不可变本地书架快照和按路径导入回调，infrastructure 适配器复用现有 Provider 的 `books` 与 `importLocalBookFromPath`。WebDAV 列目录、筛选、选择、排序和请求失效仍由 `RemoteBookController` 负责；生产组合根接入真实适配器，独立宿主使用空实现。适配器/页面定向 `4/4`、Flutter 全量 `1223`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过；R6 尚未退出。
