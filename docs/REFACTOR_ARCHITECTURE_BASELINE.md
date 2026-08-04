@@ -3647,3 +3647,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：阅读器图片请求头、书籍详情、缓存页及适配器联合定向 `13/13`；Flutter 串行全量 `1236` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
 
 边界结论：本批完成三个页面只读调用点收口，不宣称 Reader/BookProvider/SourceProvider 其他职责迁移完成或 R6 退出。
+
+## 193. 2026-08-05：R6 漫画阅读进度写入端口边界
+
+- 新增 `MangaProgressPort` 和 `MangaProgressPortAdapter`；漫画阅读页 `_persistProgress` 通过端口写入书籍进度，不再直接依赖 `BookProvider.updateProgress`。组合根复用同一 Provider 回调，保留进度比例、章节标题、`pageIndex`、`durChapterIndex`、异常传播和原页面时序。
+- 本批仅迁移进度写入职责，不改变 `legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：漫画进度适配器和页面端口定向 `7/7`；Flutter 串行全量 `1239` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。
+
+边界结论：本批完成漫画页一个进度写入调用点收口，不宣称漫画页其他 Provider/SourceProvider 职责迁移完成或 R6 退出。

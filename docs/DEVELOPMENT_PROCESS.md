@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-04
 
+2026-08-05 Phase 4/R6 漫画阅读进度写入边界追溯：本批只收口漫画页 `_persistProgress` 的 Provider 写入，新增 `MangaProgressPort` 和回调适配器，保留 `pageIndex`、`durChapterIndex`、章节标题和进度比例。定向 `7/7`、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过后，执行 Flutter 串行全量 `1239`（`3` 项既有条件跳过）并通过。代码提交 `aaf40d1`，只提交本批代码和测试，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
+
 2026-08-04 Phase 4/R6 阅读器、书籍详情和缓存页只读边界追溯：三条不重叠写集分别实现图片请求头端口、书架成员查询端口和缓存页书架/本地目录端口；主线统一补齐组合根注册并修正图片端口的延迟依赖构造。定向联合 `13/13` 后执行 Flutter 串行全量 `1236`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check`，全部通过。代码提交 `5e9cc80`，只提交本批代码和测试，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
 
 2026-08-04 Phase 4/R6 阅读器与书籍目录读取边界追溯：按三个不重叠写集并行实现漫画正文、阅读器正文搜索和书籍详情目录端口；主线复核后补齐组合根接线，并修正 Feature 对 infrastructure 适配器的直接导入。定向联合 `14/14`，再执行 Flutter 串行全量 `1232`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check`，全部通过。漫画组合根继续调用原 `loadChapterContent`，阅读器搜索复用 `ReaderChapterContentPort`/`ChapterContentCachePort`，详情页目录复用 `BookInfoChapterPort`；代码提交 `96f241a`，只提交本批代码和测试，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。

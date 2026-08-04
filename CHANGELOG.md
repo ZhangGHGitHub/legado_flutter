@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/Phase 4/R6 漫画阅读进度写入边界：新增 `MangaProgressPort` 及 Provider 回调适配器，漫画页章节进度保存不再直接调用 `BookProvider.updateProgress`；保留进度比例、章节标题、页内位置、章节索引、异常传播和原 UI 行为。定向 `7/7`，Flutter 全量 `1239` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。
 - 架构/Phase 4/R6 阅读器、书籍详情和缓存页只读边界：`ReaderPage` 图片请求头改用 `ReaderImageHeadersPort`；`BookInfoPage` 的书架成员只读查询复用 `BookshelfMembershipPort`；`CacheBookPage` 的书架快照、本地章节数和缓存导出章节读取改用 `CacheBookShelfPort`。组合根注入现有 Provider/SourceController 适配器，保留请求代数、书架匹配、缓存统计、下载/取消、导出和 UI 行为。定向联合 `13/13`，Flutter 全量 `1236` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。
 - 架构/Phase 4/R6 阅读器与书籍目录读取边界：漫画页新增 `MangaChapterContentPort`，继续复用原 `loadChapterContent` 非缓存正文语义；普通阅读页的正文搜索改用 `ReaderChapterContentPort` 与 `ChapterContentCachePort`；书籍详情页的目录读取、加载、强制刷新、目录打开和阅读定位改用 `BookInfoChapterPort`。组合根分别注入 Provider 回调适配器，保留书源匹配、缓存优先、失败文案、正文图片提取、TTS/章节导航和目录行为。定向联合 `14/14`，Flutter 全量 `1232` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。
 - 架构/Phase 4/R6 有声页正文读取边界：新增 `ReaderChapterContentPort` 及 Provider 回调适配器，`AudioPlayPage` 不再直接依赖 `BookProvider`/`SourceProvider`，组合根继续复用缓存正文读取、书源匹配和原有“未找到匹配的书源”文案。保留缓存、正文处理、TTS、章节切换和失败语义；适配器定向 `1/1`，Flutter 全量 `1228` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。

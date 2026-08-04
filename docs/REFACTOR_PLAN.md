@@ -448,6 +448,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 2026-08-04 Phase 4/R6 书架目录刷新边界：新增 `BookshelfTocRefreshPort`、`ShelfTocUpdateResult` 和 `BookshelfTocRefreshPortAdapter`；Style1/Style2 只通过 application 端口发起目录刷新并读取运行状态，生产组合根继续复用 `BookProvider.refreshShelfToc`，因此并发去重、源解析、`onlyUpdateRead`、统计和异常语义保持不变。未注册端口的独立宿主使用明确空实现，生产路径不降级。定向 `14/14`；Flutter 全量 `1222` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
 
+2026-08-05 Phase 4/R6 漫画阅读进度写入边界：新增 `MangaProgressPort` 及 Provider 回调适配器，漫画页的章节进度写入通过 application 端口完成；组合根继续复用 `BookProvider.updateProgress`，保留进度比例、章节标题、页内位置、章节索引和异常语义。定向 `7/7`；Flutter 全量 `1239` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁，R6 尚未退出。
+
 2026-08-04 Phase 4/R6 阅读器、书籍详情和缓存页只读边界：`ReaderPage` 图片请求头改用 `ReaderImageHeadersPort`，`BookInfoPage` 书架成员只读查询复用 `BookshelfMembershipPort`，`CacheBookPage` 书架快照、本地章节数和缓存导出章节读取改用 `CacheBookShelfPort`；组合根适配现有 Provider/SourceController，保留请求代数、书架匹配、缓存统计、下载/取消、导出和 UI 行为。定向联合 `13/13`；Flutter 全量 `1236` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁，R6 尚未退出。
 
 2026-08-04 Phase 4/R6 阅读器与书籍目录读取边界：三个不重叠写集分别收口漫画页原始正文、阅读器正文搜索在线加载和书籍详情目录读取/加载/强制刷新/阅读定位。漫画页新增 `MangaChapterContentPort` 并由组合根复用原 `loadChapterContent` 非缓存语义；ReaderPage 搜索改用 `ReaderChapterContentPort` 与 `ChapterContentCachePort`；BookInfoPage 改用 `BookInfoChapterPort`。修正 Feature 对 infrastructure 适配器的直接导入后，定向联合 `14/14`；Flutter 全量 `1232` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁，R6 尚未退出。
