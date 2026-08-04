@@ -9,6 +9,7 @@ import '../../application/reader/manga_chapter_content_port.dart';
 import '../../application/reader/manga_chapter_list_port.dart';
 import '../../application/reader/manga_prefs_port.dart';
 import '../../application/reader/manga_progress_port.dart';
+import '../../application/reader/manga_source_presentation_port.dart';
 import '../../application/reader/reader_chapter_content_port.dart';
 import '../../help/manga_image_extractor.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -31,6 +32,7 @@ class MangaReaderPage extends StatefulWidget {
   final MangaChapterListPort? chapterListPort;
   final MangaPrefsPort? prefs;
   final MangaProgressPort? progressPort;
+  final MangaSourcePresentationPort? sourcePresentationPort;
 
   const MangaReaderPage({
     super.key,
@@ -42,6 +44,7 @@ class MangaReaderPage extends StatefulWidget {
     this.chapterListPort,
     this.prefs,
     this.progressPort,
+    this.sourcePresentationPort,
   });
 
   static Future<void> open(
@@ -54,6 +57,7 @@ class MangaReaderPage extends StatefulWidget {
     MangaChapterListPort? chapterListPort,
     MangaPrefsPort? prefs,
     MangaProgressPort? progressPort,
+    MangaSourcePresentationPort? sourcePresentationPort,
   }) {
     return Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -66,6 +70,7 @@ class MangaReaderPage extends StatefulWidget {
           chapterListPort: chapterListPort,
           prefs: prefs,
           progressPort: progressPort,
+          sourcePresentationPort: sourcePresentationPort,
         ),
       ),
     );
@@ -81,6 +86,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
   late final MangaChapterContentPort _contentPort;
   late final MangaChapterListPort _chapterListPort;
   late final MangaProgressPort? _progressPort;
+  late final MangaSourcePresentationPort _sourcePresentationPort;
   late int _chapterIndex;
   List<String> _imageUrls = const [];
   Map<String, String> _imageHeaders = const {};
@@ -111,6 +117,10 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     _progressPort =
         widget.progressPort ??
         Provider.of<MangaProgressPort?>(context, listen: false);
+    _sourcePresentationPort =
+        widget.sourcePresentationPort ??
+        Provider.of<MangaSourcePresentationPort?>(context, listen: false) ??
+        const EmptyMangaSourcePresentationPort();
     _chapterIndex = widget.initialChapterIndex.clamp(
       0,
       math.max(0, widget.chapters.length - 1),
@@ -1166,9 +1176,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
 
   /// MangaMenu TitleBar — 对齐 `view_manga_menu.xml` + `menu/book_manga.xml`
   Widget _mangaMenuTop(ThemeData theme) {
-    final source = context.read<SourceProvider>().findSourceForBook(
-      widget.book,
-    );
+    final sourceName = _sourcePresentationPort.sourceNameForBook(widget.book);
     final onSurface = theme.colorScheme.onSurface;
     final menuBg = theme.colorScheme.surfaceContainerHigh;
 
@@ -1337,7 +1345,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
                     ),
                     alignment: Alignment.center,
                     child: Text(
-                      source?.bookSourceName ?? '书源',
+                      sourceName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

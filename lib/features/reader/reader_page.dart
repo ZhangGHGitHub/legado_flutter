@@ -22,6 +22,7 @@ import '../../application/reader/reader_bookmark_readiness_port.dart';
 import '../../application/reader/reader_progress_sync_port.dart';
 import '../../application/reader/reader_image_cache_port.dart';
 import '../../application/reader/reader_image_headers_port.dart';
+import '../../application/reader/reader_source_presentation_port.dart';
 import '../../application/reader/book_reader_prefs_port.dart';
 import '../../application/reader/reader_chapter_content_port.dart';
 import '../../application/reader/reading_session_tracker.dart';
@@ -92,6 +93,9 @@ class ReaderPage extends StatefulWidget {
   /// 图片请求头端口；未注入时从组合根读取。
   final ReaderImageHeadersPort? imageHeadersPort;
 
+  /// 顶栏书源展示端口；未注入时从组合根读取。
+  final ReaderSourcePresentationPort? sourcePresentationPort;
+
   const ReaderPage({
     super.key,
     required this.book,
@@ -103,6 +107,7 @@ class ReaderPage extends StatefulWidget {
     this.configPrefs,
     this.contentPort,
     this.imageHeadersPort,
+    this.sourcePresentationPort,
   });
 
   @override
@@ -133,6 +138,7 @@ class _ReaderPageState extends State<ReaderPage> {
   late final ReaderProgressSyncPort _progressSyncPort;
   late final ReaderChapterContentPort _contentPort;
   late final ReaderImageHeadersPort _imageHeadersPort;
+  late final ReaderSourcePresentationPort _sourcePresentationPort;
   late final BookReaderPrefsPort _bookReaderPrefs;
   late final ReadBookConfigPrefsPort _configPrefs;
   final _readingSession = ReadingSessionTracker();
@@ -236,6 +242,10 @@ class _ReaderPageState extends State<ReaderPage> {
         widget.contentPort ?? context.read<ReaderChapterContentPort>();
     _imageHeadersPort =
         widget.imageHeadersPort ?? context.read<ReaderImageHeadersPort>();
+    _sourcePresentationPort =
+        widget.sourcePresentationPort ??
+        Provider.of<ReaderSourcePresentationPort?>(context, listen: false) ??
+        const EmptyReaderSourcePresentationPort();
     _bookReaderPrefs = widget.prefs ?? context.read<BookReaderPrefsPort>();
     _configPrefs =
         widget.configPrefs ?? context.read<ReadBookConfigPrefsPort>();
@@ -1389,20 +1399,8 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   /// 顶栏书源芯片文案（书源名；无名称时用 host）
-  String get _sourceDisplayName {
-    final source = context.read<SourceProvider>().findSourceForBook(
-      widget.book,
-    );
-    if (source != null && source.bookSourceName.isNotEmpty) {
-      return source.bookSourceName;
-    }
-    final url = widget.book.bookSourceUrl.isNotEmpty
-        ? widget.book.bookSourceUrl
-        : widget.book.sourceUrl;
-    if (url.isEmpty) return '';
-    final host = Uri.tryParse(url)?.host;
-    return (host != null && host.isNotEmpty) ? host : url;
-  }
+  String get _sourceDisplayName =>
+      _sourcePresentationPort.sourceNameForBook(widget.book);
 
   /// 顶栏第三行：当前章源地址
   String get _chapterUrlLabel {

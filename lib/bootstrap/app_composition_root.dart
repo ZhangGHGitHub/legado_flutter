@@ -43,6 +43,7 @@ import '../application/bookshelf/remote_archive_import_port.dart';
 import '../application/bookshelf/remote_book_import_port.dart';
 import '../application/bookshelf/remote_book_sort_port.dart';
 import '../application/cache/book_cache_export_port.dart';
+import '../application/cache/cache_book_download_port.dart';
 import '../application/cache/cache_book_shelf_port.dart';
 import '../application/core_api_provider.dart';
 import '../application/crash/crash_log_service.dart';
@@ -75,7 +76,9 @@ import '../application/reader/reader_chapter_content_port.dart';
 import '../application/reader/reader_image_headers_port.dart';
 import '../application/reader/manga_chapter_content_port.dart';
 import '../application/reader/manga_chapter_list_port.dart';
+import '../application/reader/manga_source_presentation_port.dart';
 import '../application/reader/reader_bookmark_readiness_port.dart';
+import '../application/reader/reader_source_presentation_port.dart';
 import '../application/reader/reader_progress_sync_port.dart';
 import '../application/reader/read_style_zip_port.dart';
 import '../application/reader/reader_image_cache_port.dart';
@@ -176,6 +179,7 @@ import '../infrastructure/bookshelf/remote_book_import_port_adapter.dart';
 import '../infrastructure/bookshelf/remote_book_sort_port_adapter.dart';
 import '../infrastructure/bookshelf/shared_preferences_webdav_prefs_port_adapter.dart';
 import '../infrastructure/cache/book_cache_export_port_adapter.dart';
+import '../infrastructure/cache/cache_book_download_port_adapter.dart';
 import '../infrastructure/cache/cache_book_shelf_port_adapter.dart';
 import '../infrastructure/content/frb_content_processing_port.dart';
 import '../infrastructure/database/frb_backup_port.dart';
@@ -245,7 +249,9 @@ import '../infrastructure/reader/reader_chapter_content_port_adapter.dart';
 import '../infrastructure/reader/reader_image_headers_port_adapter.dart';
 import '../infrastructure/reader/manga_chapter_content_port_adapter.dart';
 import '../infrastructure/reader/manga_chapter_list_port_adapter.dart';
+import '../infrastructure/reader/manga_source_presentation_port_adapter.dart';
 import '../infrastructure/reader/reader_bookmark_readiness_port_adapter.dart';
+import '../infrastructure/reader/reader_source_presentation_port_adapter.dart';
 import '../infrastructure/reader/reader_progress_sync_port_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_web_api_prefs_adapter.dart';
 import '../infrastructure/reader/reader_font_port_adapter.dart';
@@ -682,6 +688,23 @@ abstract final class AppCompositionRoot {
               getLocalChapters: bootstrap.bookProvider.getLocalChapters,
             ),
           ),
+          Provider<CacheBookDownloadPort>.value(
+            value: CacheBookDownloadPortAdapter(
+              changes: bootstrap.bookProvider,
+              state: () => CacheBookDownloadState(
+                isDownloading: bootstrap.bookProvider.isDownloading,
+                downloadBookId: bootstrap.bookProvider.downloadBookId,
+                completed: bootstrap.bookProvider.downloadCompleted,
+                total: bootstrap.bookProvider.downloadTotal,
+              ),
+              loadChapters: (book, {required source}) async {
+                await bootstrap.bookProvider.loadChapters(book, source: source);
+                return bootstrap.bookProvider.currentChapters;
+              },
+              downloadAllChapters: bootstrap.bookProvider.downloadAllChapters,
+              cancelDownload: bootstrap.bookProvider.cancelDownload,
+            ),
+          ),
           Provider<ChapterContentCachePort>.value(value: contentCache),
           Provider<ReaderChapterContentPort>(
             create: (context) => ReaderChapterContentPortAdapter(
@@ -955,6 +978,20 @@ abstract final class AppCompositionRoot {
               imageHeadersForBook: context
                   .read<SourceProvider>()
                   .imageHeadersForBook,
+            ),
+          ),
+          Provider<ReaderSourcePresentationPort>(
+            create: (context) => ReaderSourcePresentationPortAdapter(
+              findSourceForBook: context
+                  .read<SourceProvider>()
+                  .findSourceForBook,
+            ),
+          ),
+          Provider<MangaSourcePresentationPort>(
+            create: (context) => MangaSourcePresentationPortAdapter(
+              findSourceForBook: context
+                  .read<SourceProvider>()
+                  .findSourceForBook,
             ),
           ),
           Provider<ReaderContentRefetchPort>(

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../application/cache/book_cache_export_port.dart';
+import '../../application/cache/cache_book_download_port.dart';
 import '../../application/cache/cache_book_shelf_port.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../domain/ports/chapter_content_cache_port.dart';
@@ -19,21 +20,24 @@ import 'download_helpers.dart';
 
 /// 离线缓存管理 — 对齐 Jingshiro `CacheActivity` + `item_download`
 class CacheBookPage extends StatelessWidget {
-  const CacheBookPage({super.key, required this.contentCache, this.shelfPort});
+  const CacheBookPage({
+    super.key,
+    required this.contentCache,
+    this.shelfPort,
+    this.downloadPort,
+  });
 
   final ChapterContentCachePort contentCache;
   final CacheBookShelfPort? shelfPort;
+  final CacheBookDownloadPort? downloadPort;
 
   @override
   Widget build(BuildContext context) {
-    final bookProvider = context.read<BookProvider>();
-    final resolvedShelfPort =
-        shelfPort ??
-        CacheBookShelfPortCallbacks(
-          books: () => bookProvider.books,
-          getChapterCount: bookProvider.getChapterCount,
-          getLocalChapters: bookProvider.getLocalChapters,
-        );
+    final resolvedShelfPort = shelfPort ?? _fallbackShelfPort(context);
+    final resolvedDownloadPort =
+        downloadPort ??
+        Provider.of<CacheBookDownloadPort?>(context, listen: false) ??
+        _fallbackDownloadPort(context);
     final sourceProvider = context.read<SourceProvider>();
     return riverpod.ProviderScope(
       overrides: [
@@ -42,19 +46,50 @@ class CacheBookPage extends StatelessWidget {
       child: _CacheBookPageBody(
         contentCache: contentCache,
         shelfPort: resolvedShelfPort,
+        downloadPort: resolvedDownloadPort,
       ),
     );
   }
+}
+
+CacheBookShelfPort _fallbackShelfPort(BuildContext context) {
+  final bookProvider = context.read<BookProvider>();
+  return CacheBookShelfPortCallbacks(
+    books: () => bookProvider.books,
+    getChapterCount: bookProvider.getChapterCount,
+    getLocalChapters: bookProvider.getLocalChapters,
+  );
+}
+
+CacheBookDownloadPort _fallbackDownloadPort(BuildContext context) {
+  final bookProvider = context.read<BookProvider>();
+  return CacheBookDownloadPortCallbacks(
+    changes: bookProvider,
+    state: () => CacheBookDownloadState(
+      isDownloading: bookProvider.isDownloading,
+      downloadBookId: bookProvider.downloadBookId,
+      completed: bookProvider.downloadCompleted,
+      total: bookProvider.downloadTotal,
+    ),
+    loadChapters: (book, {required source}) async {
+      await bookProvider.loadChapters(book, source: source);
+      return List.unmodifiable(bookProvider.currentChapters);
+    },
+    downloadAllChapters: bookProvider.downloadAllChapters,
+    cancelDownload: bookProvider.cancelDownload,
+  );
 }
 
 class _CacheBookPageBody extends riverpod.ConsumerStatefulWidget {
   const _CacheBookPageBody({
     required this.contentCache,
     required this.shelfPort,
+    required this.downloadPort,
   });
 
   final ChapterContentCachePort contentCache;
   final CacheBookShelfPort shelfPort;
+  final CacheBookDownloadPort downloadPort;
 
   @override
   riverpod.ConsumerState<_CacheBookPageBody> createState() =>
@@ -132,12 +167,13 @@ class _CacheBookPageState extends riverpod.ConsumerState<_CacheBookPageBody> {
   }
 
   Future<void> _toggleDownload(Book book) async {
-    final provider = context.read<BookProvider>();
-    if (provider.isDownloading && provider.downloadBookId == book.id) {
-      provider.cancelDownload();
+    final downloadState = widget.downloadPort.state;
+    if (downloadState.isDownloading &&
+        downloadState.downloadBookId == book.id) {
+      widget.downloadPort.cancelDownload();
       return;
     }
-    if (provider.isDownloading) {
+    if (downloadState.isDownloading) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('正在缓存其他书籍，请稍候')));
@@ -154,9 +190,11 @@ class _CacheBookPageState extends riverpod.ConsumerState<_CacheBookPageBody> {
       return;
     }
 
-    await provider.loadChapters(book, source: source);
+    final chapters = await widget.downloadPort.loadChapters(
+      book,
+      source: source,
+    );
     if (!mounted) return;
-    final chapters = provider.currentChapters;
     if (chapters.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -204,7 +242,7 @@ class _CacheBookPageState extends riverpod.ConsumerState<_CacheBookPageBody> {
       return;
     }
 
-    await provider.downloadAllChapters(
+    await widget.downloadPort.downloadAllChapters(
       book.id,
       toDownload,
       source,
@@ -314,212 +352,221 @@ class _CacheBookPageState extends riverpod.ConsumerState<_CacheBookPageBody> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final provider = context.watch<BookProvider>();
     final rows = _visible;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: _selectMode
-            ? Text('已选 ${_selected.length}')
-            : const Text('离线缓存'),
-        actions: [
-          if (!_selectMode)
-            IconButton(
-              tooltip: '搜索',
-              icon: const Icon(Icons.search),
-              onPressed: () async {
-                final ctrl = TextEditingController(text: _search ?? '');
-                final v = await showDialog<String>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('搜索'),
-                    content: TextField(
-                      controller: ctrl,
-                      autofocus: true,
-                      decoration: const InputDecoration(hintText: '书名 / 作者'),
-                      onSubmitted: (s) => Navigator.pop(ctx, s),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, ''),
-                        child: const Text('清空'),
+    return AnimatedBuilder(
+      animation: widget.downloadPort,
+      builder: (context, child) {
+        final downloadState = widget.downloadPort.state;
+        return Scaffold(
+          appBar: AppBar(
+            title: _selectMode
+                ? Text('已选 ${_selected.length}')
+                : const Text('离线缓存'),
+            actions: [
+              if (!_selectMode)
+                IconButton(
+                  tooltip: '搜索',
+                  icon: const Icon(Icons.search),
+                  onPressed: () async {
+                    final ctrl = TextEditingController(text: _search ?? '');
+                    final v = await showDialog<String>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('搜索'),
+                        content: TextField(
+                          controller: ctrl,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                            hintText: '书名 / 作者',
+                          ),
+                          onSubmitted: (s) => Navigator.pop(ctx, s),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, ''),
+                            child: const Text('清空'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(ctx, ctrl.text),
+                            child: const Text('确定'),
+                          ),
+                        ],
                       ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(ctx, ctrl.text),
-                        child: const Text('确定'),
-                      ),
-                    ],
-                  ),
-                );
-                if (v != null && mounted) {
-                  setState(() => _search = v.trim().isEmpty ? null : v.trim());
-                }
-              },
-            ),
-          IconButton(
-            tooltip: _selectMode ? '取消选择' : '多选',
-            icon: Icon(_selectMode ? Icons.close : Icons.checklist),
-            onPressed: () => setState(() {
-              _selectMode = !_selectMode;
-              if (!_selectMode) _selected.clear();
-            }),
-          ),
-          if (_selectMode) ...[
-            IconButton(
-              tooltip: '导出所选',
-              icon: const Icon(Icons.ios_share_outlined),
-              onPressed: _selected.isEmpty
-                  ? null
-                  : () => _exportBooks(
-                      _rows.values
-                          .where((row) => _selected.contains(row.book.id))
-                          .map((row) => row.book)
-                          .toList(),
-                    ),
-            ),
-            IconButton(
-              tooltip: '清除所选',
-              icon: const Icon(Icons.delete_outline),
-              onPressed: _selected.isEmpty ? null : _clearSelected,
-            ),
-          ] else
-            PopupMenuButton<String>(
-              offset: legadoAppBarPopupOffset(context),
-              onSelected: (v) {
-                if (v == 'clear_all') _clearAll();
-                if (v == 'reload') _reload();
-                if (v == 'export_all') {
-                  _exportBooks(_rows.values.map((r) => r.book).toList());
-                }
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'reload', child: Text('刷新')),
-                PopupMenuItem(value: 'export_all', child: Text('导出全部缓存')),
-                PopupMenuItem(value: 'clear_all', child: Text('清除全部缓存')),
-              ],
-            ),
-        ],
-        bottom: provider.isDownloading
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(4),
-                child: LinearProgressIndicator(
-                  value: provider.downloadProgress > 0
-                      ? provider.downloadProgress
-                      : null,
+                    );
+                    if (v != null && mounted) {
+                      setState(
+                        () => _search = v.trim().isEmpty ? null : v.trim(),
+                      );
+                    }
+                  },
                 ),
-              )
-            : null,
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : rows.isEmpty
-          ? Center(
-              child: Text(
-                '书架暂无书籍',
-                style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+              IconButton(
+                tooltip: _selectMode ? '取消选择' : '多选',
+                icon: Icon(_selectMode ? Icons.close : Icons.checklist),
+                onPressed: () => setState(() {
+                  _selectMode = !_selectMode;
+                  if (!_selectMode) _selected.clear();
+                }),
               ),
-            )
-          : RefreshIndicator(
-              onRefresh: _reload,
-              child: ListView.separated(
-                itemCount: rows.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (ctx, i) {
-                  final row = rows[i];
-                  final book = row.book;
-                  final downloading =
-                      provider.isDownloading &&
-                      provider.downloadBookId == book.id;
-                  final isLocal = book.type == 'local';
+              if (_selectMode) ...[
+                IconButton(
+                  tooltip: '导出所选',
+                  icon: const Icon(Icons.ios_share_outlined),
+                  onPressed: _selected.isEmpty
+                      ? null
+                      : () => _exportBooks(
+                          _rows.values
+                              .where((row) => _selected.contains(row.book.id))
+                              .map((row) => row.book)
+                              .toList(),
+                        ),
+                ),
+                IconButton(
+                  tooltip: '清除所选',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: _selected.isEmpty ? null : _clearSelected,
+                ),
+              ] else
+                PopupMenuButton<String>(
+                  offset: legadoAppBarPopupOffset(context),
+                  onSelected: (v) {
+                    if (v == 'clear_all') _clearAll();
+                    if (v == 'reload') _reload();
+                    if (v == 'export_all') {
+                      _exportBooks(_rows.values.map((r) => r.book).toList());
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'reload', child: Text('刷新')),
+                    PopupMenuItem(value: 'export_all', child: Text('导出全部缓存')),
+                    PopupMenuItem(value: 'clear_all', child: Text('清除全部缓存')),
+                  ],
+                ),
+            ],
+            bottom: downloadState.isDownloading
+                ? PreferredSize(
+                    preferredSize: const Size.fromHeight(4),
+                    child: LinearProgressIndicator(
+                      value: downloadState.progress > 0
+                          ? downloadState.progress
+                          : null,
+                    ),
+                  )
+                : null,
+          ),
+          body: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : rows.isEmpty
+              ? Center(
+                  child: Text(
+                    '书架暂无书籍',
+                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _reload,
+                  child: ListView.separated(
+                    itemCount: rows.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (ctx, i) {
+                      final row = rows[i];
+                      final book = row.book;
+                      final downloading =
+                          downloadState.isDownloading &&
+                          downloadState.downloadBookId == book.id;
+                      final isLocal = book.type == 'local';
 
-                  return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    leading: _selectMode
-                        ? Checkbox(
-                            value: _selected.contains(book.id),
-                            onChanged: (v) {
-                              setState(() {
-                                if (v == true) {
-                                  _selected.add(book.id);
-                                } else {
-                                  _selected.remove(book.id);
-                                }
-                              });
-                            },
-                          )
-                        : null,
-                    title: Text(
-                      book.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 4),
-                        Text(
-                          '作者：${book.author}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: theme.colorScheme.onSurfaceVariant,
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        leading: _selectMode
+                            ? Checkbox(
+                                value: _selected.contains(book.id),
+                                onChanged: (v) {
+                                  setState(() {
+                                    if (v == true) {
+                                      _selected.add(book.id);
+                                    } else {
+                                      _selected.remove(book.id);
+                                    }
+                                  });
+                                },
+                              )
+                            : null,
+                        title: Text(
+                          book.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          isLocal
-                              ? '本地书籍'
-                              : downloading
-                              ? '缓存中 ${provider.downloadCompleted}/${provider.downloadTotal}'
-                              : '已缓存 ${row.cachedChapters}/${row.totalChapters} · ${row.sizeLabel}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    isThreeLine: true,
-                    trailing: isLocal || _selectMode
-                        ? null
-                        : IconButton(
-                            tooltip: downloading ? '停止' : '下载',
-                            icon: Icon(
-                              downloading
-                                  ? Icons.stop_circle_outlined
-                                  : Icons.play_circle_outline,
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 4),
+                            Text(
+                              '作者：${book.author}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
                             ),
-                            onPressed: () => _toggleDownload(book),
-                          ),
-                    onTap: _selectMode
-                        ? () {
-                            setState(() {
-                              if (_selected.contains(book.id)) {
-                                _selected.remove(book.id);
-                              } else {
-                                _selected.add(book.id);
+                            const SizedBox(height: 2),
+                            Text(
+                              isLocal
+                                  ? '本地书籍'
+                                  : downloading
+                                  ? '缓存中 ${downloadState.completed}/${downloadState.total}'
+                                  : '已缓存 ${row.cachedChapters}/${row.totalChapters} · ${row.sizeLabel}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        isThreeLine: true,
+                        trailing: isLocal || _selectMode
+                            ? null
+                            : IconButton(
+                                tooltip: downloading ? '停止' : '下载',
+                                icon: Icon(
+                                  downloading
+                                      ? Icons.stop_circle_outlined
+                                      : Icons.play_circle_outline,
+                                ),
+                                onPressed: () => _toggleDownload(book),
+                              ),
+                        onTap: _selectMode
+                            ? () {
+                                setState(() {
+                                  if (_selected.contains(book.id)) {
+                                    _selected.remove(book.id);
+                                  } else {
+                                    _selected.add(book.id);
+                                  }
+                                });
                               }
-                            });
-                          }
-                        : isLocal
-                        ? null
-                        : () => _toggleDownload(book),
-                    onLongPress: () {
-                      setState(() {
-                        _selectMode = true;
-                        _selected.add(book.id);
-                      });
+                            : isLocal
+                            ? null
+                            : () => _toggleDownload(book),
+                        onLongPress: () {
+                          setState(() {
+                            _selectMode = true;
+                            _selected.add(book.id);
+                          });
+                        },
+                      );
                     },
-                  );
-                },
-              ),
-            ),
+                  ),
+                ),
+        );
+      },
     );
   }
 }

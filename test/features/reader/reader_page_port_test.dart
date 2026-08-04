@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/reader/book_reader_prefs_port.dart';
 import 'package:legado_flutter/application/reader/read_book_config_prefs_port.dart';
 import 'package:legado_flutter/application/reader/reader_image_headers_port.dart';
+import 'package:legado_flutter/application/reader/reader_source_presentation_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/features/reader/reader_page.dart';
@@ -22,6 +23,12 @@ final class _FakeReadBookConfigPrefsPort implements ReadBookConfigPrefsPort {
 final class _FakeReaderImageHeadersPort implements ReaderImageHeadersPort {
   @override
   Future<Map<String, String>> imageHeadersForBook(Book book) async => const {};
+}
+
+final class _FakeReaderSourcePresentationPort
+    implements ReaderSourcePresentationPort {
+  @override
+  String sourceNameForBook(Book book) => '测试书源';
 }
 
 void main() {
@@ -83,4 +90,26 @@ void main() {
 
     expect(page.imageHeadersPort, same(imageHeadersPort));
   });
+
+  test(
+    'test hosts can explicitly inject the reader source presentation port',
+    () {
+      final sourcePresentationPort = _FakeReaderSourcePresentationPort();
+      final chapter = Chapter(
+        id: 'chapter-1',
+        bookId: 'book-1',
+        title: '第一章',
+        index: 0,
+        url: '',
+      );
+      final page = ReaderPage(
+        book: Book(id: 'book-1', name: '测试书'),
+        chapter: chapter,
+        allChapters: [chapter],
+        sourcePresentationPort: sourcePresentationPort,
+      );
+
+      expect(page.sourcePresentationPort, same(sourcePresentationPort));
+    },
+  );
 }

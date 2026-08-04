@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/book/book_provider_source_port.dart';
+import 'package:legado_flutter/application/cache/cache_book_download_port.dart';
+import 'package:legado_flutter/application/cache/cache_book_shelf_port.dart';
 import 'package:legado_flutter/application/preferences/download_choice_prefs_port.dart';
 import 'package:legado_flutter/application/source_management/source_management_book_source_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -16,6 +18,131 @@ import 'package:legado_flutter/providers/source_provider.dart';
 import 'package:provider/provider.dart';
 
 void main() {
+  testWidgets('缓存下载通过端口加载目录并下载章节', (tester) async {
+    final source = const BookSource(
+      bookSourceUrl: 'https://source.example',
+      bookSourceName: '测试书源',
+    );
+    final book = Book(
+      id: 'book-1',
+      name: '测试书',
+      author: '测试作者',
+      sourceUrl: 'https://source.example/book/1',
+      bookSourceUrl: source.bookSourceUrl,
+    );
+    final chapters = [
+      Chapter(
+        id: 'chapter-1',
+        bookId: book.id,
+        title: '第一章',
+        index: 0,
+        url: 'https://source.example/book/1/1',
+      ),
+    ];
+    final cache = _FakeChapterContentCache();
+    final downloadPort = _RecordingCacheBookDownloadPort(chapters: chapters);
+    final sourceProvider = _LegacyLookupGuardSourceProvider(
+      repository: _FakeBookSourceRepository([source]),
+      validationPort: _FakeValidationPort(),
+      sourceService: _FakeSourceManagementBookSourcePort(),
+    );
+    addTearDown(sourceProvider.dispose);
+    await sourceProvider.loadSources();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
+          Provider<DownloadChoicePrefsPort>.value(
+            value: const _FakeDownloadChoicePrefsPort(),
+          ),
+        ],
+        child: MaterialApp(
+          home: CacheBookPage(
+            contentCache: cache,
+            shelfPort: _FakeCacheBookShelfPort(
+              books: [book],
+              chapters: chapters,
+            ),
+            downloadPort: downloadPort,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('下载'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '下载'));
+    await tester.pumpAndSettle();
+
+    expect(downloadPort.loadedSource, same(source));
+    expect(downloadPort.downloadedSource, same(source));
+    expect(downloadPort.downloadedBookId, book.id);
+    expect(downloadPort.downloadedChapters, chapters);
+    expect(downloadPort.downloadConcurrency, 1);
+  });
+
+  testWidgets('缓存下载进度和取消通过端口状态更新', (tester) async {
+    final book = const Book(id: 'book-1', name: '测试书', author: '测试作者');
+    final chapters = const [
+      Chapter(
+        id: 'chapter-1',
+        bookId: 'book-1',
+        title: '第一章',
+        index: 0,
+        url: 'https://source.example/book/1/1',
+      ),
+    ];
+    final cache = _FakeChapterContentCache();
+    final downloadPort = _RecordingCacheBookDownloadPort(
+      chapters: chapters,
+      initialState: const CacheBookDownloadState(
+        isDownloading: true,
+        downloadBookId: 'book-1',
+        completed: 1,
+        total: 4,
+      ),
+    );
+    final sourceProvider = _LegacyLookupGuardSourceProvider(
+      repository: _FakeBookSourceRepository([]),
+      validationPort: _FakeValidationPort(),
+      sourceService: _FakeSourceManagementBookSourcePort(),
+    );
+    addTearDown(sourceProvider.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
+          Provider<DownloadChoicePrefsPort>.value(
+            value: const _FakeDownloadChoicePrefsPort(),
+          ),
+        ],
+        child: MaterialApp(
+          home: CacheBookPage(
+            contentCache: cache,
+            shelfPort: _FakeCacheBookShelfPort(
+              books: [book],
+              chapters: chapters,
+            ),
+            downloadPort: downloadPort,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('缓存中 1/4'), findsOneWidget);
+    final progress = tester.widget<LinearProgressIndicator>(
+      find.byType(LinearProgressIndicator),
+    );
+    expect(progress.value, 0.25);
+
+    await tester.tap(find.byTooltip('停止'));
+    expect(downloadPort.cancelCalls, 1);
+  });
+
   testWidgets('缓存下载通过共享 SourceController 查找书源', (tester) async {
     final source = const BookSource(
       bookSourceUrl: 'https://source.example',
@@ -76,6 +203,67 @@ void main() {
     expect(bookProvider.loadedSource, same(source));
     expect(bookProvider.downloadedSource, same(source));
   });
+}
+
+final class _FakeCacheBookShelfPort implements CacheBookShelfPort {
+  const _FakeCacheBookShelfPort({required this.books, required this.chapters});
+
+  @override
+  final List<Book> books;
+  final List<Chapter> chapters;
+
+  @override
+  Future<int> getChapterCount(String bookId) async => chapters.length;
+
+  @override
+  Future<List<Chapter>> getLocalChapters(String bookId) async => chapters;
+}
+
+final class _RecordingCacheBookDownloadPort extends ChangeNotifier
+    implements CacheBookDownloadPort {
+  _RecordingCacheBookDownloadPort({
+    required this.chapters,
+    CacheBookDownloadState initialState = const CacheBookDownloadState(),
+  }) : _state = initialState;
+
+  final List<Chapter> chapters;
+  final CacheBookDownloadState _state;
+  BookSource? loadedSource;
+  BookSource? downloadedSource;
+  String? downloadedBookId;
+  List<Chapter>? downloadedChapters;
+  int? downloadConcurrency;
+  int cancelCalls = 0;
+
+  @override
+  CacheBookDownloadState get state => _state;
+
+  @override
+  void cancelDownload() {
+    cancelCalls++;
+  }
+
+  @override
+  Future<List<Chapter>> loadChapters(
+    Book book, {
+    required BookSource source,
+  }) async {
+    loadedSource = source;
+    return List<Chapter>.unmodifiable(chapters);
+  }
+
+  @override
+  Future<void> downloadAllChapters(
+    String bookId,
+    List<Chapter> chapters,
+    BookSource source, {
+    int concurrency = 1,
+  }) async {
+    downloadedBookId = bookId;
+    downloadedChapters = chapters;
+    downloadedSource = source;
+    downloadConcurrency = concurrency;
+  }
 }
 
 final class _RecordingBookProvider extends BookProvider {
