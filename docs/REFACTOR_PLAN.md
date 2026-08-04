@@ -20,6 +20,8 @@
 
 > **R1-12 当前权威状态（2026-08-03）：** 上述产品边界已完成：六张核心表导入后可直接使用，`readRecord` 与非核心 Room 表无损 archive-only 保存，JSON 备份、事务回滚和幂等导入通过。真实非空副本 `.tmp/r1-device-room/original_legado.db` 已确认 Room v99、identity hash 与原版基线一致，包含 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`；`emulator-5556` all-phase smoke 已通过 `1/1`。仍不宣称 `readRecord` 统计语义或非核心表 Rust v17 业务化完成。
 
+2026-08-04 Phase 4/R6 主框架书架更新角标边界：`MainShell` 的书架待更新角标改从可监听 `BookshelfDisplayStatePort` 读取，扩展端口转发 `shelfUpdateActiveCount`，生产组合根继续适配现有 `BookProvider`；缺少端口的独立宿主回退为 0。角标显示条件、更新通知和书架写入/目录职责保持不变。定向 `18/18`；Flutter 全量 `1226` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
+
 2026-08-04 Phase 4/R6 换源页写入端口边界：新增 `BookSourceChangePort` 及 Provider 回调适配器，`ChangeSourcePage` 不再直接调用 `BookProvider.changeSource/loadChapters`；保留“先换源、再强制刷新目录、成功返回、失败提示”的顺序和异常语义，生产组合根接入现有 Provider 实现。定向 `2/2`；Flutter 全量 `1225` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。未改变书源搜索、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁，R6 尚未退出。
 
 2026-08-04 Phase 4/R6 发现页书架成员读取边界：新增只读可监听 `BookshelfMembershipPort` 及 Provider 兼容适配器，`ExploreListPage` 的书架过滤改用端口快照并通过 `ListenableBuilder` 监听变化；生产组合根以 `ListenableProvider` 接入现有 `BookProvider`，保留书架事实源和过滤匹配语义。定向 `2/2`；Flutter 全量 `1224` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。未改变书源探索、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁，R6 尚未退出。

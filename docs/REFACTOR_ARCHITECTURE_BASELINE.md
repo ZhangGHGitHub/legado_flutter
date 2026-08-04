@@ -3599,3 +3599,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：换源页与适配器定向 `2/2`；Flutter 全量 `1225` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。
 
 边界结论：本批完成换源页写入调用点收口，不宣称 `BookProvider` 其他书籍/目录职责迁移完成或 R6 退出；不改变 `legado-main/`、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+## 188. 2026-08-04：R6 主框架书架更新角标边界
+
+- `MainShell` 不再直接消费 `BookProvider.shelfUpdateActiveCount`；`BookshelfDisplayStatePort` 增加 `shelfUpdateActiveCount` 只读状态，主框架用 `ListenableBuilder` 监听端口，生产组合根由 `BookshelfDisplayStatePortAdapter` 转发现有 Provider 数值和通知。
+- 角标仍只在 `BookshelfLayout.showWaitUpCount` 开启时显示，端口缺失时使用空实现并回退 0；书架列表、写入、目录刷新和其他页面职责未迁移或改变。
+
+验证结果：主框架/书架样式/展示状态适配器定向 `18/18`；Flutter 全量 `1226` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。
+
+边界结论：本批完成主框架一个书架只读角标调用点收口，不宣称 `BookProvider` 其他职责迁移完成或 R6 退出；不改变 `legado-main/`、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
