@@ -3608,3 +3608,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：主框架/书架样式/展示状态适配器定向 `18/18`；Flutter 全量 `1226` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。
 
 边界结论：本批完成主框架一个书架只读角标调用点收口，不宣称 `BookProvider` 其他职责迁移完成或 R6 退出；不改变 `legado-main/`、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+## 189. 2026-08-04：R6 书签页阅读跳转边界
+
+- 新增 `BookmarkReaderPort` 和 `BookmarkReaderPortAdapter`；`BookmarkPage` 通过端口查找书籍、读取当前目录、加载书源目录和回退读取本地目录，不再直接依赖 `BookProvider`。书签数据加载改用既有 `BookshelfMembershipPort` 的不可变书架快照。
+- 书源匹配仍由共享 `SourceController` 完成；书架缺书提示、目录加载异常后的本地回退、章节索引/标题回退、`chapterPos`/`pageIndex` 传递和 Reader 导航保持不变。缺少端口的独立宿主使用明确空实现。
+
+验证结果：书签页与适配器全量 Flutter `1227` 通过、`3` 项既有条件跳过；测试类型注解修正后书签定向 `4/4`、`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。
+
+边界结论：本批完成书签页书架/目录只读与加载调用点收口，不宣称 Reader 其他页面或 `BookProvider` 其他职责迁移完成或 R6 退出；不改变 `legado-main/`、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
