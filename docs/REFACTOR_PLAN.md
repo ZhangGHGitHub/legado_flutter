@@ -448,6 +448,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 2026-08-04 Phase 4/R6 书架目录刷新边界：新增 `BookshelfTocRefreshPort`、`ShelfTocUpdateResult` 和 `BookshelfTocRefreshPortAdapter`；Style1/Style2 只通过 application 端口发起目录刷新并读取运行状态，生产组合根继续复用 `BookProvider.refreshShelfToc`，因此并发去重、源解析、`onlyUpdateRead`、统计和异常语义保持不变。未注册端口的独立宿主使用明确空实现，生产路径不降级。定向 `14/14`；Flutter 全量 `1222` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
 
+2026-08-04 Phase 4/R6 有声页正文读取边界：新增 `ReaderChapterContentPort` 及 Provider 回调适配器，`AudioPlayPage` 通过 application 端口读取缓存正文，组合根复用现有书源匹配和 `loadChapterContentCached` 行为；保留正文处理、TTS、章节切换、失败文案和 UTF-16 位置语义。适配器定向 `1/1`；Flutter 全量 `1228` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、R1-12 或暂停平台门禁，R6 尚未退出。
+
 2026-08-04 Phase 4/R6 书架缓存入口边界：Style1/Style2 打开缓存管理页时从组合根提供的 `ChapterContentCachePort` 获取缓存对象，不再直接读取 `BookProvider.contentCache`；生产继续注入同一 `FileChapterContentCache` 实例，保持缓存管理、下载、清理和导出行为。未完整组装的独立宿主缺少端口时仅提示缓存引擎不可用。定向 `19/19`；Flutter 全量 `1222` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。目录刷新、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
 
 2026-08-04 Phase 4/R6 远程书籍书架导入边界：新增 `RemoteBookImportPort` 和 Provider 兼容适配器，RemoteBook 页面通过端口读取不可变本地书架快照并按路径导入本地文件；WebDAV 目录状态继续由 `RemoteBookController` 负责。保留已在书架匹配、TXT/EPUB/ZIP 解包、导入计数、日志、错误提示和导航行为。定向 `4/4`；Flutter 全量 `1223` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。目录刷新、缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
