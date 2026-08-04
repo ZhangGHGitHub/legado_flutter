@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../../application/bookshelf/remote_archive_import_port.dart';
 import '../../application/bookshelf/remote_book_controller.dart';
+import '../../application/bookshelf/remote_book_import_port.dart';
 import '../../application/bookshelf/remote_book_notifier.dart';
 import '../../application/bookshelf/remote_book_sort_port.dart';
 import '../../application/bookshelf/remote_book_state.dart';
@@ -16,7 +17,6 @@ import '../../application/diagnostics/app_log_port.dart';
 import '../../domain/ports/webdav_repository.dart';
 import '../../domain/remote/webdav_entry.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import '../../providers/book_provider.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../../features/book/book_info_page.dart';
 import '../../features/my/webdav_config_dialog.dart';
@@ -33,6 +33,7 @@ class RemoteBookPage extends StatefulWidget {
     this.archiveImporter,
     this.bookSorter,
     this.webdavPrefs,
+    this.bookImportPort,
   });
 
   @visibleForTesting
@@ -47,6 +48,9 @@ class RemoteBookPage extends StatefulWidget {
   @visibleForTesting
   final WebDavPrefsPort? webdavPrefs;
 
+  @visibleForTesting
+  final RemoteBookImportPort? bookImportPort;
+
   @override
   State<RemoteBookPage> createState() => _RemoteBookPageState();
 }
@@ -54,6 +58,7 @@ class RemoteBookPage extends StatefulWidget {
 class _RemoteBookPageState extends State<RemoteBookPage> {
   late final WebDavRepository _webdav;
   late final RemoteBookController _remoteBookController;
+  late final RemoteBookImportPort _bookImportPort;
   final _searchCtl = TextEditingController();
   RemoteArchiveImportPort get _archiveImporter =>
       widget.archiveImporter ?? context.read<RemoteArchiveImportPort>();
@@ -68,6 +73,10 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
   void initState() {
     super.initState();
     _webdav = widget.webdavRepository ?? context.read<WebDavRepository>();
+    _bookImportPort =
+        widget.bookImportPort ??
+        Provider.of<RemoteBookImportPort?>(context, listen: false) ??
+        const EmptyRemoteBookImportPort();
     _remoteBookController = RemoteBookController(
       webdavRepository: _webdav,
       archiveImporter: _archiveImporter,
@@ -103,9 +112,9 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
   bool _isSelectableImport(String name) =>
       RemoteBookController.isSelectableImport(name);
 
-  Book? _shelfBookFor(WebDavEntry e, BookProvider books) {
+  Book? _shelfBookFor(WebDavEntry e, List<Book> books) {
     final base = p.basenameWithoutExtension(e.name);
-    for (final b in books.books) {
+    for (final b in books) {
       if (b.type == 'local' &&
           (b.name == base || b.sourceUrl.endsWith(e.name))) {
         return b;
@@ -165,7 +174,6 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
     var ok = 0;
     var fail = 0;
     try {
-      final books = context.read<BookProvider>();
       // 对齐 Jingshiro LocalBook.saveBookFile：落到持久目录，勿只用系统临时目录。
       final docs = await getApplicationDocumentsDirectory();
       final saveDir = Directory(p.join(docs.path, 'webdav_books'));
@@ -193,7 +201,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
               archiveName: e.name,
             );
             for (final path in extracted) {
-              final book = await books.importLocalBookFromPath(
+              final book = await _bookImportPort.importLocalBookFromPath(
                 path,
                 displayName: p.basename(path),
               );
@@ -202,7 +210,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
           } else {
             final localPath = p.join(saveDir.path, e.name);
             await File(localPath).writeAsBytes(bytes, flush: true);
-            final book = await books.importLocalBookFromPath(
+            final book = await _bookImportPort.importLocalBookFromPath(
               localPath,
               displayName: e.name,
             );
@@ -271,6 +279,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
 
   Widget _buildWithState(BuildContext context, RemoteBookState state) {
     final visible = _remoteBookController.visibleEntries;
+    final shelfBooks = _bookImportPort.books;
     final checkable = visible
         .where((e) => !e.isDir && _isSelectableImport(e.name))
         .length;
@@ -379,7 +388,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
                 ),
               ),
             ),
-            Expanded(child: _buildBody(visible, scheme, state)),
+            Expanded(child: _buildBody(visible, scheme, state, shelfBooks)),
             if (checkable > 0)
               SafeArea(
                 child: Material(
@@ -449,6 +458,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
     List<WebDavEntry> visible,
     ColorScheme scheme,
     RemoteBookState state,
+    List<Book> shelfBooks,
   ) {
     if (state.isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -494,74 +504,65 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
         ),
       );
     }
-    return Consumer<BookProvider>(
-      builder: (ctx, books, _) {
-        return ListView.separated(
-          itemCount: visible.length,
-          separatorBuilder: (_, _) => const Divider(height: 1),
-          itemBuilder: (ctx, i) {
-            final e = visible[i];
-            final shelfBook = e.isDir ? null : _shelfBookFor(e, books);
-            final onShelf = shelfBook != null;
-            final selectable = !e.isDir && _isSelectableImport(e.name);
-            final selected = state.selected.contains(e.path);
-            return ListTile(
-              leading: e.isDir
-                  ? Icon(Icons.folder_outlined, color: scheme.primary)
-                  : selectable
-                  ? Checkbox(
-                      value: selected,
-                      onChanged: (_) => _toggleSelect(e),
-                    )
-                  : Icon(
-                      _isArchive(e.name)
-                          ? Icons.folder_zip_outlined
-                          : Icons.insert_drive_file_outlined,
-                      color: scheme.onSurfaceVariant,
-                    ),
-              title: Text(e.name),
-              subtitle: Text(_subtitleFor(e, onShelf)),
-              trailing: e.isDir
-                  ? const Icon(Icons.chevron_right)
-                  : onShelf
-                  ? IconButton(
-                      tooltip: '重新加入书架',
-                      icon: Icon(
-                        Icons.check_circle,
-                        color: scheme.primary,
-                        size: 22,
-                      ),
-                      onPressed: state.isImporting
-                          ? null
-                          : () => _confirmReAdd(e),
-                    )
-                  : null,
-              onTap: () {
-                if (e.isDir) {
-                  _remoteBookController.enterDirectory(e);
-                } else if (shelfBook != null) {
-                  // 对齐 RemoteBookActivity.startRead：已在书架则打开
-                  _openShelfBook(shelfBook);
-                } else if (selectable) {
-                  _toggleSelect(e);
-                } else if (_isArchive(e.name)) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('此压缩格式暂不支持导入')));
-                } else {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('暂不支持导入: ${e.name}')));
-                }
-              },
-              onLongPress: () {
-                if (onShelf) {
-                  _confirmReAdd(e);
-                } else if (selectable) {
-                  _toggleSelect(e);
-                }
-              },
-            );
+    return ListView.separated(
+      itemCount: visible.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (ctx, i) {
+        final e = visible[i];
+        final shelfBook = e.isDir ? null : _shelfBookFor(e, shelfBooks);
+        final onShelf = shelfBook != null;
+        final selectable = !e.isDir && _isSelectableImport(e.name);
+        final selected = state.selected.contains(e.path);
+        return ListTile(
+          leading: e.isDir
+              ? Icon(Icons.folder_outlined, color: scheme.primary)
+              : selectable
+              ? Checkbox(value: selected, onChanged: (_) => _toggleSelect(e))
+              : Icon(
+                  _isArchive(e.name)
+                      ? Icons.folder_zip_outlined
+                      : Icons.insert_drive_file_outlined,
+                  color: scheme.onSurfaceVariant,
+                ),
+          title: Text(e.name),
+          subtitle: Text(_subtitleFor(e, onShelf)),
+          trailing: e.isDir
+              ? const Icon(Icons.chevron_right)
+              : onShelf
+              ? IconButton(
+                  tooltip: '重新加入书架',
+                  icon: Icon(
+                    Icons.check_circle,
+                    color: scheme.primary,
+                    size: 22,
+                  ),
+                  onPressed: state.isImporting ? null : () => _confirmReAdd(e),
+                )
+              : null,
+          onTap: () {
+            if (e.isDir) {
+              _remoteBookController.enterDirectory(e);
+            } else if (shelfBook != null) {
+              // 对齐 RemoteBookActivity.startRead：已在书架则打开
+              _openShelfBook(shelfBook);
+            } else if (selectable) {
+              _toggleSelect(e);
+            } else if (_isArchive(e.name)) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('此压缩格式暂不支持导入')));
+            } else {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('暂不支持导入: ${e.name}')));
+            }
+          },
+          onLongPress: () {
+            if (onShelf) {
+              _confirmReAdd(e);
+            } else if (selectable) {
+              _toggleSelect(e);
+            }
           },
         );
       },

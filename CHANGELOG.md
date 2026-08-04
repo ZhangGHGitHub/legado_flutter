@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/Phase 4/R6 远程书籍书架导入边界：新增 `RemoteBookImportPort` 及 Provider 兼容适配器，`RemoteBookPage` 通过端口读取本地书架快照、判断已在书架状态并按路径导入 TXT/EPUB/ZIP 解包文件；WebDAV 目录状态仍由 `RemoteBookController` 管理，原导入计数、日志、错误和导航语义保持不变。适配器与远程页面定向 `4/4`，Flutter 全量 `1223` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过；目录刷新、缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
 - 架构/Phase 4/R6 书架缓存入口边界：Style1/Style2 打开缓存管理页时改从组合根提供的 `ChapterContentCachePort` 获取缓存对象，不再直接读取 `BookProvider.contentCache`；生产仍注入同一 `FileChapterContentCache` 实例，缓存管理、下载、清理和导出行为不变。未完整组装的独立宿主缺少端口时提示缓存引擎不可用。定向 `19/19`，Flutter 全量 `1222` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过；目录刷新、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
 - 架构/Phase 4/R6 书架目录刷新边界：新增 `BookshelfTocRefreshPort`、结果模型和 Provider 兼容适配器，Style1/Style2 的目录刷新命令与运行中状态改由 application 端口承载；组合根继续委托现有 `BookProvider.refreshShelfToc`，保留并发去重、源解析、`onlyUpdateRead`、成功/失败/跳过统计和异常语义。独立宿主未注册端口时使用明确空实现，不影响生产组合。目录刷新定向 `14/14`，Flutter 全量 `1222` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过；缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
 - 架构/Phase 4/R6 书单条目入库边界：新增 `BookshelfBooklistImportPort` 及兼容适配器，`ImportBookshelfDialog` 通过 application 端口执行解析后的书单入库；保留 JSON/URL 解析、共享书源列表、进度、added/skipped/failed 计数、日志和错误提示。定向 `2/2`，Flutter 全量 `1222` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。添加网址、目录刷新、缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁未改变；R6 尚未退出。
