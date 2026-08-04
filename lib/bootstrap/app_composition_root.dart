@@ -16,6 +16,7 @@ import '../application/annotation/bookmark_editor_port.dart';
 import '../application/annotation/bookplate_overlay_port.dart';
 import '../application/annotation/note_editor_port.dart';
 import '../application/bookmark/bookmark_page_port.dart';
+import '../application/bookmark/bookmark_reader_port.dart';
 import '../application/bookshelf/book_group_management_port.dart';
 import '../application/bookshelf/book_group_store_port.dart';
 import '../application/bookshelf/bookshelf_arrange_delete_command_port.dart';
@@ -142,6 +143,7 @@ import '../infrastructure/annotation/bookmark_editor_port_adapter.dart';
 import '../infrastructure/annotation/bookplate_overlay_port_adapter.dart';
 import '../infrastructure/annotation/note_editor_port_adapter.dart';
 import '../infrastructure/bookmark/bookmark_page_port_adapter.dart';
+import '../infrastructure/bookmark/bookmark_reader_port_adapter.dart';
 import '../infrastructure/book/batch_book_progress_sync_port_adapter.dart';
 import '../infrastructure/book/book_provider_source_port_adapter.dart';
 import '../infrastructure/book/book_source_change_port_adapter.dart';
@@ -712,6 +714,15 @@ abstract final class AppCompositionRoot {
           Provider<NoteEditorPort>.value(value: const NoteEditorPortAdapter()),
           Provider<BookmarkPagePort>.value(
             value: BookmarkPagePortAdapter(syncService: bookmarkSyncService),
+          ),
+          Provider<BookmarkReaderPort>.value(
+            value: BookmarkReaderPortAdapter(
+              findBookById: bootstrap.bookProvider.findBookById,
+              currentChapters: () => bootstrap.bookProvider.currentChapters,
+              loadChapters: (book, {required source}) =>
+                  bootstrap.bookProvider.loadChapters(book, source: source),
+              getLocalChapters: bootstrap.bookProvider.getLocalChapters,
+            ),
           ),
           Provider<BookshelfArrangePort>.value(
             value: const SharedPreferencesBookshelfArrangePortAdapter(),

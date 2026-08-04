@@ -7,11 +7,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
 import '../../application/bookmark/bookmark_page_port.dart';
+import '../../application/bookmark/bookmark_reader_port.dart';
+import '../../application/bookshelf/bookshelf_membership_port.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../help/bookmark_hint.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
-import '../../providers/book_provider.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/bookmark_editor_sheet.dart';
 import '../../widgets/note_editor_sheet.dart';
@@ -21,20 +22,33 @@ import '../../features/reader/reader_page.dart';
 
 /// 书签与想法 — 对齐 AllBookmarkActivity：书签 / 想法分 Tab
 class BookmarkPage extends StatelessWidget {
-  const BookmarkPage({super.key, this.port});
+  const BookmarkPage({
+    super.key,
+    this.port,
+    this.membershipPort,
+    this.readerPort,
+  });
 
   final BookmarkPagePort? port;
+  final BookshelfMembershipPort? membershipPort;
+  final BookmarkReaderPort? readerPort;
 
   @override
   Widget build(BuildContext context) {
-    return _BookmarkPageBody(port: port);
+    return _BookmarkPageBody(
+      port: port,
+      membershipPort: membershipPort,
+      readerPort: readerPort,
+    );
   }
 }
 
 class _BookmarkPageBody extends riverpod.ConsumerStatefulWidget {
-  const _BookmarkPageBody({this.port});
+  const _BookmarkPageBody({this.port, this.membershipPort, this.readerPort});
 
   final BookmarkPagePort? port;
+  final BookshelfMembershipPort? membershipPort;
+  final BookmarkReaderPort? readerPort;
 
   @override
   riverpod.ConsumerState<_BookmarkPageBody> createState() =>
@@ -45,6 +59,8 @@ class _BookmarkPageState extends riverpod.ConsumerState<_BookmarkPageBody>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   late final BookmarkPagePort _port;
+  late final BookshelfMembershipPort _membershipPort;
+  late final BookmarkReaderPort _readerPort;
   List<BookmarkPageMark> _all = [];
   bool _loading = true;
   bool _syncing = false;
@@ -76,6 +92,14 @@ class _BookmarkPageState extends riverpod.ConsumerState<_BookmarkPageBody>
         widget.port ??
         Provider.of<BookmarkPagePort?>(context, listen: false) ??
         const UnavailableBookmarkPagePort();
+    _membershipPort =
+        widget.membershipPort ??
+        Provider.of<BookshelfMembershipPort?>(context, listen: false) ??
+        const EmptyBookshelfMembershipPort();
+    _readerPort =
+        widget.readerPort ??
+        Provider.of<BookmarkReaderPort?>(context, listen: false) ??
+        const EmptyBookmarkReaderPort();
     _tabs = TabController(length: 2, vsync: this);
     _load();
   }
@@ -88,8 +112,7 @@ class _BookmarkPageState extends riverpod.ConsumerState<_BookmarkPageBody>
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final provider = Provider.of<BookProvider?>(context, listen: false);
-    final marks = _port.load(books: provider?.books ?? const <Book>[]).marks;
+    final marks = _port.load(books: _membershipPort.books).marks;
     if (!mounted) return;
     setState(() {
       _all = marks;
@@ -207,8 +230,7 @@ class _BookmarkPageState extends riverpod.ConsumerState<_BookmarkPageBody>
 
   /// 点击书签/想法：书架有书则打开 ReaderPage 并尽量定位章节，否则 SnackBar
   Future<void> _openNoteInReader(BookmarkPageMark mark) async {
-    final provider = context.read<BookProvider>();
-    final book = provider.findBookById(mark.bookId);
+    final book = _readerPort.findBookById(mark.bookId);
     if (book == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -218,21 +240,21 @@ class _BookmarkPageState extends riverpod.ConsumerState<_BookmarkPageBody>
     }
 
     var chapters = <Chapter>[];
-    if (provider.currentChapters.isNotEmpty &&
-        provider.currentChapters.first.bookId == book.id) {
-      chapters = List<Chapter>.from(provider.currentChapters);
+    if (_readerPort.currentChapters.isNotEmpty &&
+        _readerPort.currentChapters.first.bookId == book.id) {
+      chapters = List<Chapter>.from(_readerPort.currentChapters);
     } else {
       final source = ref
           .read(sourceNotifierProvider.notifier)
           .findSourceForBook(book);
       if (source != null) {
         try {
-          await provider.loadChapters(book, source: source);
-          chapters = List<Chapter>.from(provider.currentChapters);
+          await _readerPort.loadChapters(book, source: source);
+          chapters = List<Chapter>.from(_readerPort.currentChapters);
         } catch (_) {}
       }
       if (chapters.isEmpty) {
-        chapters = await provider.getLocalChapters(book.id);
+        chapters = await _readerPort.getLocalChapters(book.id);
       }
     }
 
