@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
+import '../../domain/ports/chapter_content_cache_port.dart';
 import '../../application/bookshelf/book_group_store_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_delete_command_port.dart';
 import '../../application/bookshelf/bookshelf_display_port.dart';
@@ -198,12 +199,20 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
       case BookshelfOverflowMenu.arrange:
         _openArrange();
       case BookshelfOverflowMenu.cacheExport:
+        final contentCache = Provider.of<ChapterContentCachePort?>(
+          context,
+          listen: false,
+        );
+        if (contentCache == null) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('缓存引擎不可用')));
+          return;
+        }
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => CacheBookPage(
-              contentCache: context.read<BookProvider>().contentCache,
-            ),
+            builder: (_) => CacheBookPage(contentCache: contentCache),
           ),
         );
       case BookshelfOverflowMenu.groupMgmt:

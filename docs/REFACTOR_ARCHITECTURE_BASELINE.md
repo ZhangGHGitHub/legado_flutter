@@ -1,5 +1,7 @@
 # Legado Flutter 架构重构基线
 
+> 2026-08-04 Phase 4/R6 书架缓存入口边界：书架样式页打开缓存管理页时只读取组合根提供的 `ChapterContentCachePort`，不再从 `BookProvider` 取 `contentCache`；生产绑定与 Provider/启动阶段使用同一 `FileChapterContentCache` 实例，因此缓存统计、下载、清理和导出链路不变。未注册端口的独立宿主显示不可用提示，不创建第二份缓存事实源。定向 `19/19`、Flutter 全量 `1222`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过；R6 尚未退出。
+
 > 2026-08-04 Phase 4/R6 书架目录刷新边界：Style1/Style2 的目录刷新命令与运行状态依赖 application `BookshelfTocRefreshPort`，结果模型 `ShelfTocUpdateResult` 不再归属于 Provider 文件；infrastructure 适配器将端口接入现有 `BookProvider.refreshShelfToc`，保留其并发去重、源解析、`onlyUpdateRead`、逐本更新、章节元数据刷新和异常统计。未注册端口的独立宿主使用空实现，生产组合根始终注册真实适配器。定向 `14/14`、Flutter 全量 `1222`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过；缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
 
 > **当前权威状态（2026-08-03）：** R1-12 已按 archive-only 产品边界完成：六张核心表映射后可直接使用，23 张 Room 实体表无损归档，JSON 备份、事务回滚和幂等导入通过；`.tmp/r1-device-room/original_legado.db` 已确认 Room v99、identity hash 与原版基线一致，非空行数为 `books=1`、`book_sources=1`、`chapters=876`、`readRecord=1`、`detailedReadRecord=2`，既有 `emulator-5556` all-phase smoke `1/1` 通过。不宣称 `readRecord` 统计语义或非核心表 Rust v17 业务化完成。历史段落中的“R1 重新打开/部分完成”保留为当时证据链，不覆盖本条当前判定。

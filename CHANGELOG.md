@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/Phase 4/R6 书架缓存入口边界：Style1/Style2 打开缓存管理页时改从组合根提供的 `ChapterContentCachePort` 获取缓存对象，不再直接读取 `BookProvider.contentCache`；生产仍注入同一 `FileChapterContentCache` 实例，缓存管理、下载、清理和导出行为不变。未完整组装的独立宿主缺少端口时提示缓存引擎不可用。定向 `19/19`，Flutter 全量 `1222` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过；目录刷新、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
 - 架构/Phase 4/R6 书架目录刷新边界：新增 `BookshelfTocRefreshPort`、结果模型和 Provider 兼容适配器，Style1/Style2 的目录刷新命令与运行中状态改由 application 端口承载；组合根继续委托现有 `BookProvider.refreshShelfToc`，保留并发去重、源解析、`onlyUpdateRead`、成功/失败/跳过统计和异常语义。独立宿主未注册端口时使用明确空实现，不影响生产组合。目录刷新定向 `14/14`，Flutter 全量 `1222` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过；缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
 - 架构/Phase 4/R6 书单条目入库边界：新增 `BookshelfBooklistImportPort` 及兼容适配器，`ImportBookshelfDialog` 通过 application 端口执行解析后的书单入库；保留 JSON/URL 解析、共享书源列表、进度、added/skipped/failed 计数、日志和错误提示。定向 `2/2`，Flutter 全量 `1222` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。添加网址、目录刷新、缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁未改变；R6 尚未退出。
 - 架构/Phase 4/R6 添加网址入库边界：新增 `BookshelfUrlImportPort` 及兼容适配器，`AddBookUrlDialog` 不再直接读取 `BookProvider`；保留共享书源列表、逐 URL 进度、成功/失败计数、日志和异常提示。定向 `2/2`，Flutter 全量 `1222` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。书单导入、目录刷新、缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁未改变；R6 尚未退出。

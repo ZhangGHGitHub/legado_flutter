@@ -120,6 +120,7 @@ import '../domain/ports/book_source_debug_port.dart';
 import '../domain/ports/book_source_explore_port.dart';
 import '../domain/ports/book_source_search_port.dart';
 import '../domain/ports/book_source_validation_port.dart';
+import '../domain/ports/chapter_content_cache_port.dart';
 import '../domain/ports/dict_rule_query_port.dart';
 import '../domain/ports/legacy_room_import_use_case.dart';
 import '../domain/ports/public_text_fetch_port.dart';
@@ -606,6 +607,7 @@ abstract final class AppCompositionRoot {
           Provider<BookCacheExportPort>.value(
             value: BookCacheExportPortAdapter(contentCache),
           ),
+          Provider<ChapterContentCachePort>.value(value: contentCache),
           Provider<ReadStyleZipPort>.value(
             value: ReadStyleZipPortAdapter(binaryHttpPort),
           ),
