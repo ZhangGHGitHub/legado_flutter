@@ -74,6 +74,7 @@ import '../application/reader/reader_content_refetch_port.dart';
 import '../application/reader/reader_chapter_content_port.dart';
 import '../application/reader/reader_image_headers_port.dart';
 import '../application/reader/manga_chapter_content_port.dart';
+import '../application/reader/manga_chapter_list_port.dart';
 import '../application/reader/reader_bookmark_readiness_port.dart';
 import '../application/reader/reader_progress_sync_port.dart';
 import '../application/reader/read_style_zip_port.dart';
@@ -243,6 +244,7 @@ import '../infrastructure/reader/reader_content_refetch_port_adapter.dart';
 import '../infrastructure/reader/reader_chapter_content_port_adapter.dart';
 import '../infrastructure/reader/reader_image_headers_port_adapter.dart';
 import '../infrastructure/reader/manga_chapter_content_port_adapter.dart';
+import '../infrastructure/reader/manga_chapter_list_port_adapter.dart';
 import '../infrastructure/reader/reader_bookmark_readiness_port_adapter.dart';
 import '../infrastructure/reader/reader_progress_sync_port_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_web_api_prefs_adapter.dart';
@@ -713,6 +715,11 @@ abstract final class AppCompositionRoot {
                   bookId: book.id,
                 );
               },
+            ),
+          ),
+          Provider<MangaChapterListPort>.value(
+            value: MangaChapterListPortAdapter(
+              chapters: () => bootstrap.bookProvider.currentChapters,
             ),
           ),
           Provider<MangaProgressPort>.value(

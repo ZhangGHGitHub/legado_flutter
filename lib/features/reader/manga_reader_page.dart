@@ -6,13 +6,13 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/reader/manga_chapter_content_port.dart';
+import '../../application/reader/manga_chapter_list_port.dart';
 import '../../application/reader/manga_prefs_port.dart';
 import '../../application/reader/manga_progress_port.dart';
 import '../../application/reader/reader_chapter_content_port.dart';
 import '../../help/manga_image_extractor.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
-import '../../providers/book_provider.dart';
 import '../../providers/source_provider.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_popup_menu.dart';
@@ -28,6 +28,7 @@ class MangaReaderPage extends StatefulWidget {
   final int initialChapterIndex;
   final String? initialContent;
   final MangaChapterContentPort? contentPort;
+  final MangaChapterListPort? chapterListPort;
   final MangaPrefsPort? prefs;
   final MangaProgressPort? progressPort;
 
@@ -38,6 +39,7 @@ class MangaReaderPage extends StatefulWidget {
     this.initialChapterIndex = 0,
     this.initialContent,
     this.contentPort,
+    this.chapterListPort,
     this.prefs,
     this.progressPort,
   });
@@ -49,6 +51,7 @@ class MangaReaderPage extends StatefulWidget {
     int initialChapterIndex = 0,
     String? initialContent,
     MangaChapterContentPort? contentPort,
+    MangaChapterListPort? chapterListPort,
     MangaPrefsPort? prefs,
     MangaProgressPort? progressPort,
   }) {
@@ -60,6 +63,7 @@ class MangaReaderPage extends StatefulWidget {
           initialChapterIndex: initialChapterIndex,
           initialContent: initialContent,
           contentPort: contentPort,
+          chapterListPort: chapterListPort,
           prefs: prefs,
           progressPort: progressPort,
         ),
@@ -75,6 +79,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     with SingleTickerProviderStateMixin {
   late final MangaPrefsPort _prefs;
   late final MangaChapterContentPort _contentPort;
+  late final MangaChapterListPort _chapterListPort;
   late final MangaProgressPort? _progressPort;
   late int _chapterIndex;
   List<String> _imageUrls = const [];
@@ -99,6 +104,10 @@ class _MangaReaderPageState extends State<MangaReaderPage>
     super.initState();
     _prefs = widget.prefs ?? context.read<MangaPrefsPort>();
     _contentPort = _resolveContentPort();
+    _chapterListPort =
+        widget.chapterListPort ??
+        Provider.of<MangaChapterListPort?>(context, listen: false) ??
+        const EmptyMangaChapterListPort();
     _progressPort =
         widget.progressPort ??
         Provider.of<MangaProgressPort?>(context, listen: false);
@@ -1004,8 +1013,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       MaterialPageRoute(builder: (_) => ChangeSourcePage(book: widget.book)),
     );
     if (result == null || !mounted) return;
-    final provider = context.read<BookProvider>();
-    final chapters = provider.currentChapters;
+    final chapters = _chapterListPort.currentChapters;
     if (chapters.isEmpty) {
       ScaffoldMessenger.of(
         context,
