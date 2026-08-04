@@ -6,9 +6,8 @@ import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
+import '../../application/reader/reader_chapter_content_port.dart';
 import '../../application/reader/tts_port.dart';
-import '../../providers/book_provider.dart';
-import '../../providers/source_provider.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../../widgets/remote_binary_image.dart';
@@ -19,6 +18,7 @@ class AudioPlayPage extends StatefulWidget {
   final List<Chapter> chapters;
   final int initialChapterIndex;
   final String? initialContent;
+  final ReaderChapterContentPort? contentPort;
 
   /// 章节切换时回调（同步阅读器进度）
   final ValueChanged<int>? onChapterChanged;
@@ -29,6 +29,7 @@ class AudioPlayPage extends StatefulWidget {
     required this.chapters,
     this.initialChapterIndex = 0,
     this.initialContent,
+    this.contentPort,
     this.onChapterChanged,
   });
 
@@ -38,6 +39,7 @@ class AudioPlayPage extends StatefulWidget {
     required List<Chapter> chapters,
     int initialChapterIndex = 0,
     String? initialContent,
+    ReaderChapterContentPort? contentPort,
     ValueChanged<int>? onChapterChanged,
   }) {
     return Navigator.of(context).push<void>(
@@ -47,6 +49,7 @@ class AudioPlayPage extends StatefulWidget {
           chapters: chapters,
           initialChapterIndex: initialChapterIndex,
           initialContent: initialContent,
+          contentPort: contentPort,
           onChapterChanged: onChapterChanged,
         ),
       ),
@@ -63,6 +66,7 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
   static const _accentBorder = Color(0xFFFF6D00);
 
   late final TtsPort _tts;
+  late final ReaderChapterContentPort _contentPort;
   late int _chapterIndex;
   String _content = '';
   bool _loading = false;
@@ -74,6 +78,10 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
   void initState() {
     super.initState();
     _tts = context.read<TtsPort>();
+    _contentPort =
+        widget.contentPort ??
+        Provider.of<ReaderChapterContentPort?>(context, listen: false) ??
+        const EmptyReaderChapterContentPort();
     _chapterIndex = widget.initialChapterIndex.clamp(
       0,
       max(0, widget.chapters.length - 1),
@@ -127,19 +135,10 @@ class _AudioPlayPageState extends State<AudioPlayPage> {
           _content.isEmpty) {
         content = widget.initialContent!;
       } else {
-        final source = context.read<SourceProvider>().findSourceForBook(
-          widget.book,
+        content = await _contentPort.loadChapterContent(
+          book: widget.book,
+          chapter: chapter,
         );
-        if (source == null) {
-          content = '未找到匹配的书源';
-        } else {
-          content = await context.read<BookProvider>().loadChapterContentCached(
-            chapter.url,
-            source: source,
-            chapterId: chapter.id,
-            bookId: widget.book.id,
-          );
-        }
       }
       if (!mounted) return;
       setState(() {

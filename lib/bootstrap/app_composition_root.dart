@@ -69,6 +69,7 @@ import '../application/reader/read_book_config_prefs_port.dart';
 import '../application/reader/reader_session_prefs_port.dart';
 import '../application/reader/reader_selection_port.dart';
 import '../application/reader/reader_content_refetch_port.dart';
+import '../application/reader/reader_chapter_content_port.dart';
 import '../application/reader/reader_bookmark_readiness_port.dart';
 import '../application/reader/reader_progress_sync_port.dart';
 import '../application/reader/read_style_zip_port.dart';
@@ -232,6 +233,7 @@ import '../infrastructure/reader/read_book_config_prefs_port_adapter.dart';
 import '../infrastructure/reader/reader_session_prefs_port_adapter.dart';
 import '../infrastructure/reader/reader_selection_port_adapter.dart';
 import '../infrastructure/reader/reader_content_refetch_port_adapter.dart';
+import '../infrastructure/reader/reader_chapter_content_port_adapter.dart';
 import '../infrastructure/reader/reader_bookmark_readiness_port_adapter.dart';
 import '../infrastructure/reader/reader_progress_sync_port_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_web_api_prefs_adapter.dart';
@@ -654,6 +656,22 @@ abstract final class AppCompositionRoot {
             value: BookCacheExportPortAdapter(contentCache),
           ),
           Provider<ChapterContentCachePort>.value(value: contentCache),
+          Provider<ReaderChapterContentPort>(
+            create: (context) => ReaderChapterContentPortAdapter(
+              loadChapterContent: ({required book, required chapter}) async {
+                final source = context.read<SourceProvider>().findSourceForBook(
+                  book,
+                );
+                if (source == null) return '未找到匹配的书源';
+                return bootstrap.bookProvider.loadChapterContentCached(
+                  chapter.url,
+                  source: source,
+                  chapterId: chapter.id,
+                  bookId: book.id,
+                );
+              },
+            ),
+          ),
           Provider<ReadStyleZipPort>.value(
             value: ReadStyleZipPortAdapter(binaryHttpPort),
           ),
