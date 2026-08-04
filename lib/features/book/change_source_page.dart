@@ -2,29 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
+import 'package:legado_flutter/application/book/book_source_change_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../application/source_management/source_notifier.dart';
-import '../../providers/book_provider.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/empty_state.dart';
 
 /// 换源页 — 按书名在启用书源中搜索，选中后更新来源并刷新目录
 class ChangeSourcePage extends StatelessWidget {
   final Book book;
+  final BookSourceChangePort? port;
 
-  const ChangeSourcePage({super.key, required this.book});
+  const ChangeSourcePage({super.key, required this.book, this.port});
 
   @override
   Widget build(BuildContext context) {
-    return _ChangeSourcePageBody(book: book);
+    return _ChangeSourcePageBody(book: book, port: port);
   }
 }
 
 class _ChangeSourcePageBody extends riverpod.ConsumerStatefulWidget {
   final Book book;
+  final BookSourceChangePort? port;
 
-  const _ChangeSourcePageBody({required this.book});
+  const _ChangeSourcePageBody({required this.book, this.port});
 
   @override
   riverpod.ConsumerState<_ChangeSourcePageBody> createState() =>
@@ -33,12 +35,17 @@ class _ChangeSourcePageBody extends riverpod.ConsumerStatefulWidget {
 
 class _ChangeSourcePageState
     extends riverpod.ConsumerState<_ChangeSourcePageBody> {
+  late final BookSourceChangePort _port;
   bool _applying = false;
   String? _applyError;
 
   @override
   void initState() {
     super.initState();
+    _port =
+        widget.port ??
+        Provider.of<BookSourceChangePort?>(context, listen: false) ??
+        const EmptyBookSourceChangePort();
     WidgetsBinding.instance.addPostFrameCallback((_) => _startSearch());
   }
 
@@ -90,23 +97,18 @@ class _ChangeSourcePageState
       _applyError = null;
     });
     try {
-      final bookProvider = context.read<BookProvider>();
       final source = ref
           .read(sourceNotifierProvider.notifier)
           .findSourceForBook(selected);
       if (source == null) {
         throw StateError('找不到对应书源，请确认书源已启用');
       }
-      final updated = await bookProvider.changeSource(
+      final updated = await _port.changeSource(
         widget.book,
         selected,
         source: source,
       );
-      await bookProvider.loadChapters(
-        updated,
-        source: source,
-        forceRefresh: true,
-      );
+      await _port.loadChapters(updated, source: source, forceRefresh: true);
       if (!mounted) return;
       Navigator.pop(context, updated);
     } catch (e) {

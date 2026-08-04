@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/book/book_source_change_port.dart';
 import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
@@ -15,6 +16,7 @@ import 'package:legado_flutter/domain/repositories/book_repository.dart';
 import 'package:legado_flutter/domain/repositories/book_source_repository.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/features/book/change_source_page.dart';
+import 'package:legado_flutter/infrastructure/book/book_source_change_port_adapter.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
 import 'package:legado_flutter/services/book_source_service.dart';
@@ -53,6 +55,18 @@ void main() {
         providers: [
           ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
           ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+          Provider<BookSourceChangePort>.value(
+            value: BookSourceChangePortAdapter(
+              changeSource: (current, selected, {source}) =>
+                  bookProvider.changeSource(current, selected, source: source),
+              loadChapters: (book, {required source, forceRefresh = false}) =>
+                  bookProvider.loadChapters(
+                    book,
+                    source: source,
+                    forceRefresh: forceRefresh,
+                  ),
+            ),
+          ),
         ],
         child: riverpod.ProviderScope(
           overrides: [

@@ -10,6 +10,7 @@ import '../application/ai/ai_config_http_port.dart';
 import '../application/ai/ai_config_prefs_port.dart';
 import '../application/book/batch_book_progress_sync_port.dart';
 import '../application/book/book_provider_source_port.dart';
+import '../application/book/book_source_change_port.dart';
 import '../application/book/local_book_import_port.dart';
 import '../application/annotation/bookmark_editor_port.dart';
 import '../application/annotation/bookplate_overlay_port.dart';
@@ -143,6 +144,7 @@ import '../infrastructure/annotation/note_editor_port_adapter.dart';
 import '../infrastructure/bookmark/bookmark_page_port_adapter.dart';
 import '../infrastructure/book/batch_book_progress_sync_port_adapter.dart';
 import '../infrastructure/book/book_provider_source_port_adapter.dart';
+import '../infrastructure/book/book_source_change_port_adapter.dart';
 import '../infrastructure/book/local_book_import_port_adapter.dart';
 import '../infrastructure/bookshelf/book_group_management_port_adapter.dart';
 import '../infrastructure/bookshelf/book_group_store_port_adapter.dart';
@@ -538,6 +540,19 @@ abstract final class AppCompositionRoot {
           Provider<BookshelfBooklistImportPort>.value(
             value: BookshelfBooklistImportPortAdapter(
               bootstrap.bookProvider.importBookshelfEntries,
+            ),
+          ),
+          Provider<BookSourceChangePort>.value(
+            value: BookSourceChangePortAdapter(
+              changeSource: (current, selected, {source}) => bootstrap
+                  .bookProvider
+                  .changeSource(current, selected, source: source),
+              loadChapters: (book, {required source, forceRefresh = false}) =>
+                  bootstrap.bookProvider.loadChapters(
+                    book,
+                    source: source,
+                    forceRefresh: forceRefresh,
+                  ),
             ),
           ),
           Provider<AppDiagnosticsMonitor>.value(value: diagnosticsMonitor),
