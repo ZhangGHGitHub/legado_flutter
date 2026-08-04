@@ -10,12 +10,12 @@ import '../../application/bookshelf/book_group_store_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_delete_command_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_group_command_port.dart';
 import '../../application/bookshelf/bookshelf_display_port.dart';
+import '../../application/bookshelf/bookshelf_display_state_port.dart';
 import '../../application/bookshelf/bookshelf_local_book_port.dart';
 import '../../application/bookshelf/bookshelf_toc_refresh_port.dart';
 import '../../application/bookshelf/bookshelf_notifier.dart';
 import '../../application/preferences/bookshelf_display_prefs_port.dart';
 import '../../application/source_management/source_notifier.dart';
-import '../../providers/book_provider.dart';
 import '../../theme/legado_chrome.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_group_manage_dialog.dart';
@@ -38,6 +38,7 @@ class BookshelfStyle1Page extends StatefulWidget {
     required this.config,
     this.onConfigChanged,
     this.displayPort,
+    this.displayStatePort,
     this.groupStorePort,
     this.localBookPort,
     this.tocRefreshPort,
@@ -47,6 +48,7 @@ class BookshelfStyle1Page extends StatefulWidget {
   final BookshelfConfig config;
   final ValueChanged<BookshelfConfig>? onConfigChanged;
   final BookshelfDisplayPort? displayPort;
+  final BookshelfDisplayStatePort? displayStatePort;
   final BookGroupStorePort? groupStorePort;
   final BookshelfLocalBookPort? localBookPort;
   final BookshelfTocRefreshPort? tocRefreshPort;
@@ -63,6 +65,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
   Set<String> _pinnedIds = {};
   List<String> _shelfOrder = [];
   late final BookshelfDisplayPort _displayPort;
+  late final BookshelfDisplayStatePort _displayStatePort;
   late final BookGroupStorePort _groupStorePort;
   late final BookshelfLocalBookPort _localBookPort;
   late final BookshelfTocRefreshPort _tocRefreshPort;
@@ -74,6 +77,10 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
         widget.displayPort ??
         Provider.of<BookshelfDisplayPort?>(context, listen: false) ??
         const InMemoryBookshelfDisplayPort();
+    _displayStatePort =
+        widget.displayStatePort ??
+        Provider.of<BookshelfDisplayStatePort?>(context, listen: false) ??
+        const EmptyBookshelfDisplayStatePort();
     _groupStorePort =
         widget.groupStorePort ?? context.read<BookGroupStorePort>();
     _localBookPort =
@@ -273,8 +280,9 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
       builder: (context, ref, _) {
         final sourceNotifier = ref.read(sourceNotifierProvider.notifier);
         final bookshelfState = ref.watch(bookshelfNotifierProvider);
-        return Consumer<BookProvider>(
-          builder: (context, provider, _) {
+        return ListenableBuilder(
+          listenable: _displayStatePort,
+          builder: (context, _) {
             return Scaffold(
               appBar: AppBar(
                 titleSpacing: LegadoChrome.appBarTitleStartPaddingOf(context),
@@ -315,9 +323,8 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
               ),
               body: _buildBody(
                 bookshelfState,
-                provider,
                 sourceNotifier,
-                onRetry: () => provider.loadBooks(),
+                onRetry: _displayStatePort.reload,
               ),
             );
           },
@@ -328,11 +335,10 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
 
   Widget _buildBody(
     BookshelfState bookshelfState,
-    BookProvider provider,
     SourceNotifier sourceNotifier, {
     required VoidCallback onRetry,
   }) {
-    if ((bookshelfState.isLoading || provider.isLoading) &&
+    if ((bookshelfState.isLoading || _displayStatePort.isLoading) &&
         bookshelfState.books.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -364,13 +370,13 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
           overscrollColor: Theme.of(context).colorScheme.primary,
         ).copyWith(scrollbars: false),
         child: _showGrouped && _selectedGroup == '__all__'
-            ? _buildGrouped(books, provider, bookshelfState.books)
+            ? _buildGrouped(books, bookshelfState.books)
             : BookshelfBooksView(
                 config: widget.config,
                 books: books,
                 pinnedIds: _pinnedIds,
                 scrollController: widget.scrollController,
-                isUpdating: provider.isBookShelfUpdating,
+                isUpdating: _displayStatePort.isBookUpdating,
                 onTap: _openBook,
                 onLongPress: (book) =>
                     _showBookActions(book, bookshelfState.books),
@@ -462,11 +468,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
     );
   }
 
-  Widget _buildGrouped(
-    List<Book> books,
-    BookProvider provider,
-    List<Book> bookshelfBooks,
-  ) {
+  Widget _buildGrouped(List<Book> books, List<Book> bookshelfBooks) {
     final groups = <String, List<Book>>{};
     for (final b in books) {
       groups.putIfAbsent(b.group.isNotEmpty ? b.group : '未分组', () => []).add(b);
@@ -520,7 +522,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                 return BookshelfGridTile(
                   book: b,
                   config: cfg,
-                  isUpdating: provider.isBookShelfUpdating(b.id),
+                  isUpdating: _displayStatePort.isBookUpdating(b.id),
                   onTap: () => _openBook(b),
                   onLongPress: () => _showBookActions(b, bookshelfBooks),
                 );
@@ -539,7 +541,7 @@ class _BookshelfStyle1PageState extends State<BookshelfStyle1Page> {
                   book: b,
                   config: cfg,
                   isPinned: _pinnedIds.contains(b.id),
-                  isUpdating: provider.isBookShelfUpdating(b.id),
+                  isUpdating: _displayStatePort.isBookUpdating(b.id),
                   compact: cfg.isCompactList,
                   onTap: () => _openBook(b),
                   onLongPress: () => _showBookActions(b, bookshelfBooks),

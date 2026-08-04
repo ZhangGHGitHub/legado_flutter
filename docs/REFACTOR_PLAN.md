@@ -444,6 +444,8 @@ P1-4 当前证据：只读对照原版 `App.kt`、`AppFreezeMonitor`、`Dispatch
 
 2026-08-04 Phase 4/R6 远程书籍书架导入边界：新增 `RemoteBookImportPort` 和 Provider 兼容适配器，RemoteBook 页面通过端口读取不可变本地书架快照并按路径导入本地文件；WebDAV 目录状态继续由 `RemoteBookController` 负责。保留已在书架匹配、TXT/EPUB/ZIP 解包、导入计数、日志、错误提示和导航行为。定向 `4/4`；Flutter 全量 `1223` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。目录刷新、缓存、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
 
+2026-08-04 Phase 4/R6 书架展示状态边界：新增可监听 `BookshelfDisplayStatePort` 和 Provider 适配器；Style1/Style2 只通过端口读取加载、重试和单本目录更新状态，生产组合根使用 `ListenableProvider` 适配现有 ChangeNotifier，保持重试 loading、更新中动画和书架事实源语义。定向 `14/14`；Flutter 全量 `1223` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。远程导入、缓存、目录刷新、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
+
 ## 一、项目现状总览
 
 说明：本节及后续“已完成清单/仍需开发”内容保留为现状盘点和功能库存，不再作为执行顺序。实际重构顺序只以本文件第 0 节 R0-R6 为准；新增功能必须先确认不阻塞当前重构阶段。

@@ -10,11 +10,11 @@ import '../../domain/ports/chapter_content_cache_port.dart';
 import '../../application/bookshelf/book_group_store_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_delete_command_port.dart';
 import '../../application/bookshelf/bookshelf_display_port.dart';
+import '../../application/bookshelf/bookshelf_display_state_port.dart';
 import '../../application/bookshelf/bookshelf_local_book_port.dart';
 import '../../application/bookshelf/bookshelf_toc_refresh_port.dart';
 import '../../application/bookshelf/bookshelf_notifier.dart';
 import '../../application/source_management/source_notifier.dart';
-import '../../providers/book_provider.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_group_manage_dialog.dart';
 import '../../widgets/error_view.dart';
@@ -37,6 +37,7 @@ class BookshelfStyle2Page extends StatefulWidget {
     required this.config,
     this.onConfigChanged,
     this.displayPort,
+    this.displayStatePort,
     this.groupStorePort,
     this.localBookPort,
     this.tocRefreshPort,
@@ -46,6 +47,7 @@ class BookshelfStyle2Page extends StatefulWidget {
   final BookshelfConfig config;
   final ValueChanged<BookshelfConfig>? onConfigChanged;
   final BookshelfDisplayPort? displayPort;
+  final BookshelfDisplayStatePort? displayStatePort;
   final BookGroupStorePort? groupStorePort;
   final BookshelfLocalBookPort? localBookPort;
   final BookshelfTocRefreshPort? tocRefreshPort;
@@ -59,6 +61,7 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   List<String> _shelfOrder = [];
   late final BookshelfDisplayPort _displayPort;
+  late final BookshelfDisplayStatePort _displayStatePort;
   late final BookGroupStorePort _groupStorePort;
   late final BookshelfLocalBookPort _localBookPort;
   late final BookshelfTocRefreshPort _tocRefreshPort;
@@ -70,6 +73,10 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
         widget.displayPort ??
         Provider.of<BookshelfDisplayPort?>(context, listen: false) ??
         const InMemoryBookshelfDisplayPort();
+    _displayStatePort =
+        widget.displayStatePort ??
+        Provider.of<BookshelfDisplayStatePort?>(context, listen: false) ??
+        const EmptyBookshelfDisplayStatePort();
     _groupStorePort =
         widget.groupStorePort ?? context.read<BookGroupStorePort>();
     _localBookPort =
@@ -352,16 +359,18 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
               ),
             ],
           ),
-          body: Consumer<BookProvider>(
-            builder: (context, provider, _) {
-              if ((bookshelfState.isInitialLoading || provider.isLoading) &&
+          body: ListenableBuilder(
+            listenable: _displayStatePort,
+            builder: (context, _) {
+              if ((bookshelfState.isInitialLoading ||
+                      _displayStatePort.isLoading) &&
                   bookshelfBooks.isEmpty) {
                 return const Center(child: CircularProgressIndicator());
               }
               if (bookshelfState.hasError && bookshelfBooks.isEmpty) {
                 return ErrorView(
                   message: bookshelfState.error?.toString() ?? '加载书架失败',
-                  onRetry: () => provider.loadBooks(),
+                  onRetry: _displayStatePort.reload,
                 );
               }
               if (bookshelfBooks.isEmpty) {
@@ -407,7 +416,7 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
                     books: books,
                     pinnedIds: const {},
                     scrollController: widget.scrollController,
-                    isUpdating: provider.isBookShelfUpdating,
+                    isUpdating: _displayStatePort.isBookUpdating,
                     onTap: _openBook,
                     onLongPress: _confirmRemove,
                   ),

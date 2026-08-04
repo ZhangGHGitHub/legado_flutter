@@ -26,6 +26,7 @@ import '../application/bookshelf/bookshelf_change_port.dart';
 import '../application/bookshelf/bookshelf_controller.dart';
 import '../application/bookshelf/bookshelf_config_dialog_port.dart';
 import '../application/bookshelf/bookshelf_display_port.dart';
+import '../application/bookshelf/bookshelf_display_state_port.dart';
 import '../application/bookshelf/bookshelf_list_port.dart';
 import '../application/bookshelf/bookshelf_local_book_port.dart';
 import '../application/bookshelf/bookshelf_url_import_port.dart';
@@ -151,6 +152,7 @@ import '../infrastructure/bookshelf/bookshelf_arrange_snapshot_port_adapter.dart
 import '../infrastructure/bookshelf/bookshelf_booklist_import_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_config_dialog_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_display_port_adapter.dart';
+import '../infrastructure/bookshelf/bookshelf_display_state_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_list_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_local_book_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_url_import_port_adapter.dart';
@@ -563,6 +565,14 @@ abstract final class AppCompositionRoot {
           ),
           Provider<BookshelfDisplayPort>.value(
             value: const SharedPreferencesBookshelfDisplayPortAdapter(),
+          ),
+          ListenableProvider<BookshelfDisplayStatePort>.value(
+            value: BookshelfDisplayStatePortAdapter(
+              listenable: bootstrap.bookProvider,
+              isLoading: () => bootstrap.bookProvider.isLoading,
+              isBookUpdating: bootstrap.bookProvider.isBookShelfUpdating,
+              reload: bootstrap.bookProvider.loadBooks,
+            ),
           ),
           Provider<BookshelfListPort>.value(
             value: const BookshelfListPortAdapter(),
