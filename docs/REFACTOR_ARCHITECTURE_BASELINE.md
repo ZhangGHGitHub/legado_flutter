@@ -3544,3 +3544,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：菜单导出及书架读取联合定向 `23/23`；Flutter 全量 `1222` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。
 
 边界结论：本批完成一个书架只读导出调用点的 Provider 依赖收口，不宣称 `BookProvider` 写入职责迁移或 R6 退出。
+
+## 183. 2026-08-04：R6 Style1/Style2 单本书架命令边界
+
+- `BookshelfStyle1Page` 的行内分组改用 `BookshelfArrangeGroupCommandPort`；Style1/Style2 的单本移除改用 `BookshelfArrangeDeleteCommandPort`，组合根复用现有 Provider 回调适配器。
+- 目录刷新、缓存读取、书架列表展示、重试和状态兼容仍由现有职责承载；本批不迁移批量命令、URL/书单/远程入库，不改变 `legado-main/`、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：Style1/Style2 相关定向 `15/15`；Flutter 全量 `1222` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。
+
+边界结论：本批只完成两种书架样式的单本分组/删除命令接入，不宣称 `BookProvider` 目录、缓存或状态职责迁移完成，也不宣称 R6 退出。

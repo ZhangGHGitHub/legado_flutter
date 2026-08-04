@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../application/bookshelf/book_group_store_port.dart';
+import '../../application/bookshelf/bookshelf_arrange_delete_command_port.dart';
 import '../../application/bookshelf/bookshelf_display_port.dart';
 import '../../application/bookshelf/bookshelf_local_book_port.dart';
 import '../../application/bookshelf/bookshelf_notifier.dart';
@@ -247,7 +248,11 @@ class _BookshelfStyle2PageState extends State<BookshelfStyle2Page> {
           FilledButton(
             onPressed: () {
               Navigator.pop(ctx);
-              context.read<BookProvider>().removeBook(book.id);
+              unawaited(
+                context.read<BookshelfArrangeDeleteCommandPort>().removeBook(
+                  book.id,
+                ),
+              );
             },
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('移除'),

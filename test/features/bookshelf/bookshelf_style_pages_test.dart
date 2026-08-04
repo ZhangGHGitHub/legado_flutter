@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/bookshelf/book_group_store_port.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_delete_command_port.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_group_command_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_notifier.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_display_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_local_book_port.dart';
@@ -16,6 +18,8 @@ import 'package:legado_flutter/domain/repositories/book_repository.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/features/bookshelf/bookshelf_style1_page.dart';
 import 'package:legado_flutter/features/bookshelf/bookshelf_style2_page.dart';
+import 'package:legado_flutter/infrastructure/bookshelf/bookshelf_arrange_delete_command_port_adapter.dart';
+import 'package:legado_flutter/infrastructure/bookshelf/bookshelf_arrange_group_command_port_adapter.dart';
 import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
@@ -299,6 +303,19 @@ Widget _host({
         providers: [
           ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
           ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+          Provider<BookshelfArrangeDeleteCommandPort>.value(
+            value: BookshelfArrangeDeleteCommandPortAdapter(
+              removeBook: bookProvider.removeBook,
+              removeBooks: bookProvider.removeBooks,
+            ),
+          ),
+          Provider<BookshelfArrangeGroupCommandPort>.value(
+            value: BookshelfArrangeGroupCommandPortAdapter(
+              updateBookGroup: bookProvider.updateBookGroup,
+              updateBooksGroup: bookProvider.updateBooksGroup,
+              books: () => bookProvider.books,
+            ),
+          ),
           Provider<BookshelfDisplayPrefsPort>.value(
             value: const _FakeBookshelfDisplayPrefsPort(),
           ),
