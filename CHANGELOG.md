@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/Phase 4/R6 换源页写入端口边界：新增 `BookSourceChangePort` 及 Provider 回调适配器，`ChangeSourcePage` 不再直接调用 `BookProvider.changeSource/loadChapters`；保留先换源、强制刷新目录、成功返回和失败提示语义。定向 `2/2`，Flutter 全量 `1225` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。未改变书源搜索、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。
 - 架构/Phase 4/R6 发现页书架成员读取边界：新增只读可监听 `BookshelfMembershipPort` 及 Provider 兼容适配器，`ExploreListPage` 不再直接读取 `BookProvider`，通过不可变书架快照过滤已在书架书籍并响应书架变化；生产组合根以 `ListenableProvider` 接入现有事实源。定向 `2/2`，Flutter 全量 `1224` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。未改变书源探索、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。
 - 架构/Phase 4/R6 “我的”页缓存入口边界：离线缓存入口改从组合根提供的 `ChapterContentCachePort` 获取缓存对象，不再直接读取 `BookProvider.contentCache`；生产继续使用同一缓存实例，缓存管理、下载、清理和导出行为不变，未完整组装宿主缺少端口时提示不可用。定向 `3/3`，Flutter 全量 `1223` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过；书架、远程导入、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。
 - 架构/Phase 4/R6 书架展示状态边界：新增可监听 `BookshelfDisplayStatePort` 及 Provider 适配器，Style1/Style2 的加载、重试、单本目录更新动画不再直接读取 `BookProvider`；组合根使用 `ListenableProvider` 接入现有 ChangeNotifier，保留重试 loading、更新中状态和原书架事实源。定向 `14/14`，Flutter 全量 `1223` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过；远程导入、缓存、目录刷新、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 和暂停平台门禁不变，R6 尚未退出。

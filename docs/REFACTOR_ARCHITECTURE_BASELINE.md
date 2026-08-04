@@ -3590,3 +3590,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：发现页与成员端口定向 `2/2`；Flutter 全量 `1224` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。
 
 边界结论：本批完成发现页书架只读成员依赖收口，不宣称 `BookProvider` 写入/目录职责迁移完成或 R6 退出；不改变 `legado-main/`、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+## 187. 2026-08-04：R6 换源页写入端口边界
+
+- 新增 `BookSourceChangePort` 和 `BookSourceChangePortAdapter`；`ChangeSourcePage` 通过端口完成换源及目录刷新，不再直接依赖 `BookProvider`。组合根将现有 Provider 的 `changeSource` 与 `loadChapters` 回调接入端口，独立宿主缺失能力时使用明确空实现。
+- 页面仍先解析目标书源，再执行换源，随后以 `forceRefresh: true` 强制刷新目录；成功返回更新书籍，异常保持原错误状态和 SnackBar 提示。本批未合并自动换源或其他 Reader/目录调用点。
+
+验证结果：换源页与适配器定向 `2/2`；Flutter 全量 `1225` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过。
+
+边界结论：本批完成换源页写入调用点收口，不宣称 `BookProvider` 其他书籍/目录职责迁移完成或 R6 退出；不改变 `legado-main/`、正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
