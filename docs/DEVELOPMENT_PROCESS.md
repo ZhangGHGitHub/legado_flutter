@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-04
 
+2026-08-04 Phase 4/R6 阅读器与书籍目录读取边界追溯：按三个不重叠写集并行实现漫画正文、阅读器正文搜索和书籍详情目录端口；主线复核后补齐组合根接线，并修正 Feature 对 infrastructure 适配器的直接导入。定向联合 `14/14`，再执行 Flutter 串行全量 `1232`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check`，全部通过。漫画组合根继续调用原 `loadChapterContent`，阅读器搜索复用 `ReaderChapterContentPort`/`ChapterContentCachePort`，详情页目录复用 `BookInfoChapterPort`；代码提交 `96f241a`，只提交本批代码和测试，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
+
 2026-08-04 Phase 4/R6 有声页正文读取边界追溯：先通过有声页正文读取端口适配器定向 `1/1`，再执行 Flutter 串行全量 `1228`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check`，全部通过。新增 `ReaderChapterContentPort`，`AudioPlayPage` 通过端口读取缓存正文，组合根复用现有 Provider 的书源匹配、缓存读取和原有失败文案；保留正文处理、TTS、章节切换和正文位置语义。代码提交 `6f5c406`，只提交本批 application/infrastructure、组合根、页面和测试，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
 
 2026-08-04 Phase 4/R6 书签页阅读跳转边界追溯：先通过书签页与两个端口适配器定向 `4/4`，再执行 Flutter 串行全量 `1227`（`3` 项既有条件跳过）；全量通过后修正适配器测试的显式 `Book?` 类型注解，再复跑书签定向 `4/4`、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、本批文件格式和 `git diff --check`，全部通过。新增 `BookmarkReaderPort`、Provider 回调适配器，书签页复用 `BookshelfMembershipPort`，保留目录回退和 Reader 定位语义。代码提交 `b4580b7`，只提交本批 application/infrastructure、组合根、页面和测试，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。

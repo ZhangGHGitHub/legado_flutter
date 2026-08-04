@@ -3626,3 +3626,13 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：适配器定向 `1/1`；Flutter 全量 `1228` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。
 
 边界结论：本批完成有声页一个正文读取调用点收口，不宣称 Reader 其他页面、`BookProvider` 其他职责迁移完成或 R6 退出。
+
+## 191. 2026-08-04：R6 阅读器与书籍目录读取端口边界
+
+- 漫画阅读页新增 `MangaChapterContentPort`；组合根适配器继续调用原 `BookProvider.loadChapterContent`，保留非缓存正文读取、书源缺失异常、正文图片提取和图片请求头行为。普通 `ReaderPage` 的正文搜索改用已注册的 `ReaderChapterContentPort` 与 `ChapterContentCachePort`，保留书源缺失转 `null`、搜索缓存和导航参数。
+- `BookInfoPage` 新增 `BookInfoChapterPort`，目录缓存读取、目录加载、强制刷新、目录打开、摘要和阅读定位统一通过端口；组合根复用 Provider 的当前目录、加载状态和刷新状态。移除 Feature 对 infrastructure 适配器的直接导入，未改变书源匹配、失败提示、封面/进度/写入等未迁移职责。
+- 本批不改变 `legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：漫画、阅读器、书籍详情和三个适配器联合定向 `14/14`；Flutter 串行全量 `1232` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
+
+边界结论：本批完成三个页面调用点的 application 端口收口，不宣称 Reader/BookProvider 其他职责迁移完成或 R6 退出。
