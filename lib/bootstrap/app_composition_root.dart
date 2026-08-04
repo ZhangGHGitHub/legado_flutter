@@ -9,6 +9,7 @@ import '../application/app_bootstrap.dart';
 import '../application/ai/ai_config_http_port.dart';
 import '../application/ai/ai_config_prefs_port.dart';
 import '../application/book/batch_book_progress_sync_port.dart';
+import '../application/book/book_info_chapter_port.dart';
 import '../application/book/book_provider_source_port.dart';
 import '../application/book/book_source_change_port.dart';
 import '../application/book/local_book_import_port.dart';
@@ -70,6 +71,7 @@ import '../application/reader/reader_session_prefs_port.dart';
 import '../application/reader/reader_selection_port.dart';
 import '../application/reader/reader_content_refetch_port.dart';
 import '../application/reader/reader_chapter_content_port.dart';
+import '../application/reader/manga_chapter_content_port.dart';
 import '../application/reader/reader_bookmark_readiness_port.dart';
 import '../application/reader/reader_progress_sync_port.dart';
 import '../application/reader/read_style_zip_port.dart';
@@ -146,6 +148,7 @@ import '../infrastructure/annotation/note_editor_port_adapter.dart';
 import '../infrastructure/bookmark/bookmark_page_port_adapter.dart';
 import '../infrastructure/bookmark/bookmark_reader_port_adapter.dart';
 import '../infrastructure/book/batch_book_progress_sync_port_adapter.dart';
+import '../infrastructure/book/book_info_chapter_port_adapter.dart';
 import '../infrastructure/book/book_provider_source_port_adapter.dart';
 import '../infrastructure/book/book_source_change_port_adapter.dart';
 import '../infrastructure/book/local_book_import_port_adapter.dart';
@@ -234,6 +237,7 @@ import '../infrastructure/reader/reader_session_prefs_port_adapter.dart';
 import '../infrastructure/reader/reader_selection_port_adapter.dart';
 import '../infrastructure/reader/reader_content_refetch_port_adapter.dart';
 import '../infrastructure/reader/reader_chapter_content_port_adapter.dart';
+import '../infrastructure/reader/manga_chapter_content_port_adapter.dart';
 import '../infrastructure/reader/reader_bookmark_readiness_port_adapter.dart';
 import '../infrastructure/reader/reader_progress_sync_port_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_web_api_prefs_adapter.dart';
@@ -559,6 +563,14 @@ abstract final class AppCompositionRoot {
                   ),
             ),
           ),
+          Provider<BookInfoChapterPort>.value(
+            value: BookInfoChapterPortAdapter(
+              currentChapters: () => bootstrap.bookProvider.currentChapters,
+              isLoading: () => bootstrap.bookProvider.isLoading,
+              isRefreshingToc: () => bootstrap.bookProvider.isRefreshingToc,
+              loadChapters: bootstrap.bookProvider.loadChapters,
+            ),
+          ),
           Provider<AppDiagnosticsMonitor>.value(value: diagnosticsMonitor),
           Provider<AppLogPort>(create: (_) => const AppLogPortAdapter()),
           Provider<AiConfigPrefsPort>.value(
@@ -664,6 +676,24 @@ abstract final class AppCompositionRoot {
                 );
                 if (source == null) return '未找到匹配的书源';
                 return bootstrap.bookProvider.loadChapterContentCached(
+                  chapter.url,
+                  source: source,
+                  chapterId: chapter.id,
+                  bookId: book.id,
+                );
+              },
+            ),
+          ),
+          Provider<MangaChapterContentPort>(
+            create: (context) => MangaChapterContentPortAdapter(
+              loadChapterContent: ({required book, required chapter}) async {
+                final source = context.read<SourceProvider>().findSourceForBook(
+                  book,
+                );
+                if (source == null) {
+                  throw StateError('未找到书源，无法加载漫画页');
+                }
+                return bootstrap.bookProvider.loadChapterContent(
                   chapter.url,
                   source: source,
                   chapterId: chapter.id,

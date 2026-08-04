@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'package:legado_flutter/application/book/book_info_chapter_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
@@ -31,11 +32,13 @@ const Color _kAccentRed = LegadoTokens.sourceDotRed;
 class BookInfoPage extends StatelessWidget {
   final Book book;
   final bool openReaderImmediately;
+  final BookInfoChapterPort? chapterPort;
 
   const BookInfoPage({
     super.key,
     required this.book,
     this.openReaderImmediately = false,
+    this.chapterPort,
   });
 
   @override
@@ -43,6 +46,7 @@ class BookInfoPage extends StatelessWidget {
     return _BookInfoPageBody(
       book: book,
       openReaderImmediately: openReaderImmediately,
+      chapterPort: chapterPort,
     );
   }
 }
@@ -50,10 +54,12 @@ class BookInfoPage extends StatelessWidget {
 class _BookInfoPageBody extends riverpod.ConsumerStatefulWidget {
   final Book book;
   final bool openReaderImmediately;
+  final BookInfoChapterPort? chapterPort;
 
   const _BookInfoPageBody({
     required this.book,
     required this.openReaderImmediately,
+    this.chapterPort,
   });
 
   @override
@@ -68,11 +74,22 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   String _coverUrl = '';
   Timer? _snackBarHideTimer;
   bool _autoStartScheduled = false;
+  late final BookInfoChapterPort _chapterPort;
 
   @override
   void initState() {
     super.initState();
     _book = widget.book;
+    final provider = context.read<BookProvider>();
+    _chapterPort =
+        widget.chapterPort ??
+        Provider.of<BookInfoChapterPort?>(context, listen: false) ??
+        BookInfoChapterPortCallbacks(
+          currentChapters: () => provider.currentChapters,
+          isLoading: () => provider.isLoading,
+          isRefreshingToc: () => provider.isRefreshingToc,
+          loadChapters: provider.loadChapters,
+        );
     WidgetsBinding.instance.addPostFrameCallback((_) => _initPage());
   }
 
@@ -99,11 +116,11 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     setState(() => _errorMessage = null);
     final source = _sourceForBook(_book);
     if (source != null) {
-      final cached = bookProvider.currentChapters;
+      final cached = _chapterPort.currentChapters;
       final sameBook = cached.isNotEmpty && cached.first.bookId == _book.id;
       if (!sameBook) {
         try {
-          await bookProvider.loadChapters(_book, source: source);
+          await _chapterPort.loadChapters(_book, source: source);
         } catch (e) {
           if (mounted) {
             setState(() => _errorMessage = SiteBusyGuard.friendlyMessage(e));
@@ -114,13 +131,13 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
         await _fetchCoverFromSource(source);
       }
     }
-    if (mounted && bookProvider.currentChapters.isEmpty) {
+    if (mounted && _chapterPort.currentChapters.isEmpty) {
       setState(() => _errorMessage ??= '未获取到章节列表\n请检查书源是否可用');
     }
     if (mounted &&
         widget.openReaderImmediately &&
         !_autoStartScheduled &&
-        bookProvider.currentChapters.isNotEmpty) {
+        _chapterPort.currentChapters.isNotEmpty) {
       _autoStartScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _startReading(bookProvider);
@@ -162,7 +179,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     final source = _sourceForBook(_book);
     if (source == null || !mounted) return;
     try {
-      await context.read<BookProvider>().loadChapters(
+      await _chapterPort.loadChapters(
         _book,
         source: source,
         forceRefresh: force,
@@ -202,18 +219,18 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     return '网络';
   }
 
-  String _latestChapterLabel(BookProvider provider) {
+  String _latestChapterLabel() {
     final last = _book.lastChapter;
     if (last != null && last.isNotEmpty) return last;
-    if (provider.currentChapters.isNotEmpty) {
-      return provider.currentChapters.last.title;
+    if (_chapterPort.currentChapters.isNotEmpty) {
+      return _chapterPort.currentChapters.last.title;
     }
     return '暂无';
   }
 
-  String _tocPreviewLabel(BookProvider provider) {
-    if (provider.currentChapters.isNotEmpty) {
-      return provider.currentChapters.first.title;
+  String _tocPreviewLabel() {
+    if (_chapterPort.currentChapters.isNotEmpty) {
+      return _chapterPort.currentChapters.first.title;
     }
     return _book.currentChapter ?? '暂无';
   }
@@ -317,7 +334,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
       }
       return;
     }
-    final chapters = provider.currentChapters;
+    final chapters = _chapterPort.currentChapters;
     if (chapters.isEmpty) return;
     final toDownload = chapters.where((c) => !c.isDownloaded).toList();
     if (toDownload.isEmpty) {
@@ -478,15 +495,14 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   }
 
   Future<void> _openToc() async {
-    final provider = context.read<BookProvider>();
     // 详情页已在拉目录时复用同一 Future，勿再起并行刷新
-    if (provider.currentChapters.isEmpty) {
-      if (provider.isLoading || provider.isRefreshingToc) {
+    if (_chapterPort.currentChapters.isEmpty) {
+      if (_chapterPort.isLoading || _chapterPort.isRefreshingToc) {
         // 等待进行中的合并请求结束
         final source = _sourceForBook(_book);
         if (source != null) {
           try {
-            await provider.loadChapters(_book, source: source);
+            await _chapterPort.loadChapters(_book, source: source);
           } catch (e) {
             if (mounted) {
               setState(() => _errorMessage = SiteBusyGuard.friendlyMessage(e));
@@ -498,7 +514,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
       }
     }
     if (!mounted) return;
-    final chapters = provider.currentChapters;
+    final chapters = _chapterPort.currentChapters;
     if (chapters.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -682,7 +698,8 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   }
 
   void _startReading(BookProvider provider) {
-    if (provider.currentChapters.isEmpty) {
+    final chapters = _chapterPort.currentChapters;
+    if (chapters.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(_errorMessage ?? '暂无章节，无法阅读')));
@@ -695,18 +712,16 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     Chapter startChapter;
     if (latestBook.currentChapter != null &&
         latestBook.currentChapter!.isNotEmpty) {
-      final idx = provider.currentChapters.indexWhere(
+      final idx = chapters.indexWhere(
         (c) => c.title == latestBook.currentChapter,
       );
-      startChapter = idx >= 0
-          ? provider.currentChapters[idx]
-          : provider.currentChapters.first;
+      startChapter = idx >= 0 ? chapters[idx] : chapters.first;
     } else {
-      startChapter = provider.currentChapters.first;
+      startChapter = chapters.first;
     }
-    final chapterIndex = provider.currentChapters
+    final chapterIndex = chapters
         .indexWhere((c) => c.id == startChapter.id)
-        .clamp(0, provider.currentChapters.length - 1);
+        .clamp(0, chapters.length - 1);
     final source = _sourceForBook(latestBook);
     final useManga = source?.isImageSource ?? false;
     Navigator.push(
@@ -715,13 +730,13 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
         builder: (_) => useManga
             ? MangaReaderPage(
                 book: latestBook,
-                chapters: provider.currentChapters,
+                chapters: chapters,
                 initialChapterIndex: chapterIndex,
               )
             : ReaderPage(
                 book: latestBook,
                 chapter: startChapter,
-                allChapters: provider.currentChapters,
+                allChapters: chapters,
               ),
       ),
     );
@@ -919,7 +934,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
           ),
           _MetaRow(
             icon: Icons.explore_outlined,
-            text: '最新：${_latestChapterLabel(provider)}',
+            text: '最新：${_latestChapterLabel()}',
           ),
           _MetaRow(
             icon: Icons.campaign_outlined,
@@ -929,7 +944,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
           ),
           _MetaRow(
             icon: Icons.folder_outlined,
-            text: '目录：${_tocPreviewLabel(provider)}',
+            text: '目录：${_tocPreviewLabel()}',
             actionLabel: '查看目录',
             onAction: _openToc,
           ),

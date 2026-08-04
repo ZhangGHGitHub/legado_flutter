@@ -22,8 +22,10 @@ import '../../application/reader/reader_bookmark_readiness_port.dart';
 import '../../application/reader/reader_progress_sync_port.dart';
 import '../../application/reader/reader_image_cache_port.dart';
 import '../../application/reader/book_reader_prefs_port.dart';
+import '../../application/reader/reader_chapter_content_port.dart';
 import '../../application/reader/reading_session_tracker.dart';
 import '../../application/reader/tts_port.dart';
+import '../../domain/ports/chapter_content_cache_port.dart';
 import '../../domain/ports/reading_record_port.dart';
 import '../../application/reader/reading_position_mapper.dart';
 import '../../application/reader/book_progress_factory.dart';
@@ -83,6 +85,9 @@ class ReaderPage extends StatefulWidget {
   /// 全局阅读配置端口；未注入时从组合根读取。
   final ReadBookConfigPrefsPort? configPrefs;
 
+  /// 正文读取端口；未注入时从组合根读取。
+  final ReaderChapterContentPort? contentPort;
+
   const ReaderPage({
     super.key,
     required this.book,
@@ -92,6 +97,7 @@ class ReaderPage extends StatefulWidget {
     this.initialChapterPos,
     this.prefs,
     this.configPrefs,
+    this.contentPort,
   });
 
   @override
@@ -120,6 +126,7 @@ class _ReaderPageState extends State<ReaderPage> {
   late final ReaderContentRefetchPort _contentRefetchPort;
   late final ReaderBookmarkReadinessPort _bookmarkReadinessPort;
   late final ReaderProgressSyncPort _progressSyncPort;
+  late final ReaderChapterContentPort _contentPort;
   late final BookReaderPrefsPort _bookReaderPrefs;
   late final ReadBookConfigPrefsPort _configPrefs;
   final _readingSession = ReadingSessionTracker();
@@ -219,6 +226,8 @@ class _ReaderPageState extends State<ReaderPage> {
     _contentRefetchPort = context.read<ReaderContentRefetchPort>();
     _bookmarkReadinessPort = context.read<ReaderBookmarkReadinessPort>();
     _progressSyncPort = context.read<ReaderProgressSyncPort>();
+    _contentPort =
+        widget.contentPort ?? context.read<ReaderChapterContentPort>();
     _bookReaderPrefs = widget.prefs ?? context.read<BookReaderPrefsPort>();
     _configPrefs =
         widget.configPrefs ?? context.read<ReadBookConfigPrefsPort>();
@@ -1543,18 +1552,13 @@ class _ReaderPageState extends State<ReaderPage> {
           : widget.allChapters,
       durChapterIndex: _currentIndex,
       currentChapterContent: _content,
-      contentCache: context.read<BookProvider>().contentCache,
+      contentCache: context.read<ChapterContentCachePort>(),
       onlineContentLoader: (chapter) async {
-        final source = context.read<SourceProvider>().findSourceForBook(
-          widget.book,
+        final content = await _contentPort.loadChapterContent(
+          book: widget.book,
+          chapter: chapter,
         );
-        if (source == null) return null;
-        return context.read<BookProvider>().loadChapterContentCached(
-          chapter.url,
-          source: source,
-          chapterId: chapter.id,
-          bookId: widget.book.id,
-        );
+        return content == '未找到匹配的书源' ? null : content;
       },
       initialQuery:
           initialQuery ??

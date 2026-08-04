@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/reader/manga_chapter_content_port.dart';
 import '../../application/reader/manga_prefs_port.dart';
+import '../../application/reader/reader_chapter_content_port.dart';
 import '../../help/manga_image_extractor.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
@@ -24,6 +26,7 @@ class MangaReaderPage extends StatefulWidget {
   final List<Chapter> chapters;
   final int initialChapterIndex;
   final String? initialContent;
+  final MangaChapterContentPort? contentPort;
   final MangaPrefsPort? prefs;
 
   const MangaReaderPage({
@@ -32,6 +35,7 @@ class MangaReaderPage extends StatefulWidget {
     required this.chapters,
     this.initialChapterIndex = 0,
     this.initialContent,
+    this.contentPort,
     this.prefs,
   });
 
@@ -41,6 +45,7 @@ class MangaReaderPage extends StatefulWidget {
     required List<Chapter> chapters,
     int initialChapterIndex = 0,
     String? initialContent,
+    MangaChapterContentPort? contentPort,
     MangaPrefsPort? prefs,
   }) {
     return Navigator.of(context).push<void>(
@@ -50,6 +55,7 @@ class MangaReaderPage extends StatefulWidget {
           chapters: chapters,
           initialChapterIndex: initialChapterIndex,
           initialContent: initialContent,
+          contentPort: contentPort,
           prefs: prefs,
         ),
       ),
@@ -63,6 +69,7 @@ class MangaReaderPage extends StatefulWidget {
 class _MangaReaderPageState extends State<MangaReaderPage>
     with SingleTickerProviderStateMixin {
   late final MangaPrefsPort _prefs;
+  late final MangaChapterContentPort _contentPort;
   late int _chapterIndex;
   List<String> _imageUrls = const [];
   Map<String, String> _imageHeaders = const {};
@@ -85,6 +92,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
   void initState() {
     super.initState();
     _prefs = widget.prefs ?? context.read<MangaPrefsPort>();
+    _contentPort = _resolveContentPort();
     _chapterIndex = widget.initialChapterIndex.clamp(
       0,
       math.max(0, widget.chapters.length - 1),
@@ -105,6 +113,25 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       setState(() {});
       await _loadChapter(seed: widget.initialContent);
     });
+  }
+
+  MangaChapterContentPort _resolveContentPort() {
+    final explicitPort = widget.contentPort;
+    if (explicitPort != null) return explicitPort;
+
+    final mangaPort = Provider.of<MangaChapterContentPort?>(
+      context,
+      listen: false,
+    );
+    if (mangaPort != null) return mangaPort;
+
+    final readerPort = Provider.of<ReaderChapterContentPort?>(
+      context,
+      listen: false,
+    );
+    if (readerPort == null) return const EmptyMangaChapterContentPort();
+
+    return ReaderBackedMangaChapterContentPort(readerPort);
   }
 
   @override
@@ -158,16 +185,9 @@ class _MangaReaderPageState extends State<MangaReaderPage>
         content = seed;
       } else {
         final chapter = widget.chapters[_chapterIndex];
-        final bookProvider = context.read<BookProvider>();
-        final source = sourceProvider.findSourceForBook(widget.book);
-        if (source == null) {
-          throw StateError('未找到书源，无法加载漫画页');
-        }
-        content = await bookProvider.loadChapterContent(
-          chapter.url,
-          source: source,
-          chapterId: chapter.id,
-          bookId: widget.book.id,
+        content = await _contentPort.loadChapterContent(
+          book: widget.book,
+          chapter: chapter,
         );
       }
       final base = _chapter?.url;
