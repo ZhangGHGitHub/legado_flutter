@@ -4,6 +4,7 @@ All notable changes to this project are recorded in this file.
 
 ## [Unreleased]
 
+- 架构/Phase 4/R6 普通阅读器模拟追读边界：新增 `ReaderSimulatedReadingPort` 及 Provider 回调适配器，模拟追读的书籍查询和字段写入改经 application 端口；保留 SharedPreferences 配置存储、旧书字段迁移、日期/章节/每日章节参数和阅读限制语义。定向 `6/6`，Flutter 全量 `1271` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；R6 尚未退出。
 - 架构/Phase 4/R6 缓存下载与阅读器书源展示边界：`CacheBookPage` 新增 `CacheBookDownloadPort`，目录加载、下载、取消和进度改经可监听端口，组合根继续复用 `BookProvider` 下载事实源；普通阅读器和漫画菜单分别新增书源展示端口，保留书源名称、URL host、空值和“书源”回退语义。定向 `21/21`，Flutter 全量 `1254` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。
 - 架构/Phase 4/R6 漫画换源目录读取边界：新增 `MangaChapterListPort` 及不可变快照适配器，漫画阅读页换源后的目录读取不再直接依赖 `BookProvider.currentChapters`；组合根继续复用同一 Provider 快照，保留空目录提示、索引裁剪和换源导航语义。定向 `5/5`，Flutter 全量 `1241` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。
 - 架构/Phase 4/R6 漫画阅读进度写入边界：新增 `MangaProgressPort` 及 Provider 回调适配器，漫画页章节进度保存不再直接调用 `BookProvider.updateProgress`；保留进度比例、章节标题、页内位置、章节索引、异常传播和原 UI 行为。定向 `7/7`，Flutter 全量 `1239` 通过（`3` 项既有条件跳过），`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未改变正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；R6 尚未退出。

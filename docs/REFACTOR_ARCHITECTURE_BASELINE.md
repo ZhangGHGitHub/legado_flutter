@@ -3738,3 +3738,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：目录刷新适配器和 Reader 端口宿主定向 `5/5`；Flutter 全量 `1269` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
 
 边界结论：本批完成普通阅读器一个目录刷新调用点的 application 端口收口，不宣称 ReaderPage 其他 Provider 职责迁移完成或 R6 退出。
+
+## 203. 2026-08-05：R6 普通阅读器模拟追读边界
+
+- 新增 `ReaderSimulatedReadingPort` 和 `ReaderSimulatedReadingPortAdapter`；`ReaderPage` 的模拟追读书籍查询、旧书字段迁移写入和对话框保存写入均通过 application 端口完成，生产组合根继续复用 `BookProvider.findBookById/updateSimulatedReading`。
+- 保留 `SimulatedReadingPrefsPort` 配置存储、旧书字段迁移顺序、日期/章节/每日章节参数裁剪、可读章节限制和原有 UI 行为；本批不改变 `legado-main`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：模拟追读适配器与 Reader 端口宿主定向 `6/6`；Flutter 全量 `1271` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。
+
+边界结论：本批完成普通阅读器模拟追读一个读写调用面的 application 端口收口，不宣称 ReaderPage 其他 Provider 职责迁移完成或 R6 退出。

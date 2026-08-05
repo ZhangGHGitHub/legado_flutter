@@ -3,6 +3,7 @@ import 'package:legado_flutter/application/reader/book_reader_prefs_port.dart';
 import 'package:legado_flutter/application/reader/read_book_config_prefs_port.dart';
 import 'package:legado_flutter/application/reader/reader_image_headers_port.dart';
 import 'package:legado_flutter/application/reader/reader_source_presentation_port.dart';
+import 'package:legado_flutter/application/reader/reader_simulated_reading_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/features/reader/reader_page.dart';
@@ -112,4 +113,33 @@ void main() {
       expect(page.sourcePresentationPort, same(sourcePresentationPort));
     },
   );
+
+  test('test hosts can explicitly inject the simulated reading port', () {
+    final simulatedReadingPort = ReaderSimulatedReadingPortCallbacks(
+      findBookById: (_) => null,
+      updateSimulatedReading:
+          (
+            Book book, {
+            required bool enabled,
+            required String startDate,
+            required int startChapter,
+            required int dailyChapters,
+          }) async => book,
+    );
+    final chapter = Chapter(
+      id: 'chapter-1',
+      bookId: 'book-1',
+      title: '第一章',
+      index: 0,
+      url: '',
+    );
+    final page = ReaderPage(
+      book: Book(id: 'book-1', name: '测试书'),
+      chapter: chapter,
+      allChapters: [chapter],
+      simulatedReadingPort: simulatedReadingPort,
+    );
+
+    expect(page.simulatedReadingPort, same(simulatedReadingPort));
+  });
 }

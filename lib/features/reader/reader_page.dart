@@ -22,6 +22,7 @@ import '../../application/reader/reader_bookmark_readiness_port.dart';
 import '../../application/reader/reader_progress_sync_port.dart';
 import '../../application/reader/reader_progress_port.dart';
 import '../../application/reader/reader_chapter_refresh_port.dart';
+import '../../application/reader/reader_simulated_reading_port.dart';
 import '../../application/reader/reader_image_cache_port.dart';
 import '../../application/reader/reader_image_headers_port.dart';
 import '../../application/reader/reader_source_presentation_port.dart';
@@ -104,6 +105,9 @@ class ReaderPage extends StatefulWidget {
   /// 目录强制刷新端口；未注入时从组合根读取。
   final ReaderChapterRefreshPort? chapterRefreshPort;
 
+  /// 模拟追读书籍读写端口；未注入时从组合根读取。
+  final ReaderSimulatedReadingPort? simulatedReadingPort;
+
   const ReaderPage({
     super.key,
     required this.book,
@@ -118,6 +122,7 @@ class ReaderPage extends StatefulWidget {
     this.sourcePresentationPort,
     this.progressPort,
     this.chapterRefreshPort,
+    this.simulatedReadingPort,
   });
 
   @override
@@ -148,6 +153,7 @@ class _ReaderPageState extends State<ReaderPage> {
   late final ReaderProgressSyncPort _progressSyncPort;
   late final ReaderProgressPort _progressPort;
   late final ReaderChapterRefreshPort _chapterRefreshPort;
+  late final ReaderSimulatedReadingPort _simulatedReadingPort;
   late final ReaderChapterContentPort _contentPort;
   late final ReaderImageHeadersPort _imageHeadersPort;
   late final ReaderSourcePresentationPort _sourcePresentationPort;
@@ -260,6 +266,15 @@ class _ReaderPageState extends State<ReaderPage> {
         widget.chapterRefreshPort ??
         Provider.of<ReaderChapterRefreshPort?>(context, listen: false) ??
         const EmptyReaderChapterRefreshPort();
+    _simulatedReadingPort =
+        widget.simulatedReadingPort ??
+        Provider.of<ReaderSimulatedReadingPort?>(context, listen: false) ??
+        ReaderSimulatedReadingPortCallbacks(
+          findBookById: context.read<BookProvider>().findBookById,
+          updateSimulatedReading: context
+              .read<BookProvider>()
+              .updateSimulatedReading,
+        );
     _contentPort =
         widget.contentPort ?? context.read<ReaderChapterContentPort>();
     _imageHeadersPort =
@@ -523,13 +538,13 @@ class _ReaderPageState extends State<ReaderPage> {
   );
 
   Future<void> _loadSimulatedReading() async {
-    final provider = context.read<BookProvider>();
     final prefs = context.read<SimulatedReadingPrefsPort>();
-    final book = provider.findBookById(widget.book.id) ?? widget.book;
+    final book =
+        _simulatedReadingPort.findBookById(widget.book.id) ?? widget.book;
     final loaded = await prefs.loadForBook(book);
     var cfg = loaded.config;
     if (loaded.needsBookMigrate) {
-      final persisted = await provider.updateSimulatedReading(
+      final persisted = await _simulatedReadingPort.updateSimulatedReading(
         book,
         enabled: cfg.enabled,
         startDate: SimulatedReadingConfig.formatDate(cfg.startDate),
@@ -1675,10 +1690,10 @@ class _ReaderPageState extends State<ReaderPage> {
     );
     if (!mounted) return;
     if (next != null) {
-      final provider = context.read<BookProvider>();
       final prefs = context.read<SimulatedReadingPrefsPort>();
-      final book = provider.findBookById(widget.book.id) ?? widget.book;
-      await provider.updateSimulatedReading(
+      final book =
+          _simulatedReadingPort.findBookById(widget.book.id) ?? widget.book;
+      await _simulatedReadingPort.updateSimulatedReading(
         book,
         enabled: next.enabled,
         startDate: SimulatedReadingConfig.formatDate(next.startDate),

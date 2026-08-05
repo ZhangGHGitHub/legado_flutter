@@ -472,7 +472,8 @@ Day 2  PR/Issue 模板
 
 2026-08-03 当前 R6 追溯记录：完成 `BookshelfStyle1Page`、`BookshelfStyle2Page` 的 `BookshelfState` 只读消费迁移，并扩展 `BookshelfChangeBus` 失败快照，使生产启动书架读取失败进入 `BookshelfNotifier.failure`；目录刷新、更新中状态、缓存、删除和分组写入继续由 `BookProvider` 兼容边界承载。书架相关定向 `39/39`；Flutter 全量 `1165` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过。未修改 Rust、`legado-main/`、Reader、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；不宣称 BookProvider 全量迁移或 R6 退出。
 
-2026-08-03 当前 R6 追溯记录：Style1/Style2 错误态重试统一调用 `BookProvider.loadBooks()`，共享变更总线负责最终快照同步，页面同时观察 Provider loading 状态；新增延迟重试 loading 回归，书架相关定向 `41/41`，Flutter 全量 `1167` 通过、`3` 项既有条件跳过。未修改 Rust、`legado-main/`、目录刷新、缓存、删除、分组写入、Reader、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；不宣称 R6 全量退出。
+ 2026-08-03 当前 R6 追溯记录：Style1/Style2 错误态重试统一调用 `BookProvider.loadBooks()`，共享变更总线负责最终快照同步，页面同时观察 Provider loading 状态；新增延迟重试 loading 回归，书架相关定向 `41/41`，Flutter 全量 `1167` 通过、`3` 项既有条件跳过。未修改 Rust、`legado-main/`、目录刷新、缓存、删除、分组写入、Reader、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；不宣称 R6 全量退出。
+ 2026-08-05 当前 R6 追溯记录：普通阅读器模拟追读书籍查询和字段写入收口到 `ReaderSimulatedReadingPort`；组合根以 `BookProvider` 回调适配器接入，页面保留 SharedPreferences 配置、旧书字段迁移、参数裁剪、阅读限制和原 UI 时序。先执行模拟追读适配器与 Reader 宿主定向 `6/6`，再执行 `flutter analyze --no-pub`、架构边界、Flutter 全量 `1271`（`3` 项既有条件跳过）和 `git diff --check`，全部通过。未修改 Rust、`legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；R6 尚未退出。
 
 ---
 
