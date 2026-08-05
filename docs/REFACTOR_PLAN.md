@@ -1,5 +1,7 @@
 # Legado Flutter — 项目重构主计划
 
+2026-08-05 Phase 4/R6 全文搜索与 RSS 源编辑/管理页 controller scope 收口：`SearchContentPage`、`RssSourceEditPage`、`RssSourceManagePage` 移除页面内旧 Provider 读取和嵌套 Riverpod scope，生产入口复用父级共享 controller，独立宿主保留显式注入；补齐既有缓存端口测试宿主的 ReplaceController 注入。保留全文搜索净化、RSS 编辑校验保存、源管理和导入行为。受影响定向 `9/9`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1284`（`3` 项既有条件跳过）和 `git diff --check` 通过；R6 尚未退出。
+
 2026-08-05 Phase 4/R6 替换页、规则订阅与缓存页 controller scope 收口：`ReplacePage`、`RuleSubPage`、`CacheBookPage` 移除页面内旧 Provider 读取和嵌套 Riverpod scope，生产入口复用父级共享 controller，独立宿主保留显式注入；保留规则增删改/预览、订阅导入和缓存下载/书源查找行为。受影响定向 `15/15`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1282`（`3` 项既有条件跳过）和 `git diff --check` 通过；R6 尚未退出。
 
 2026-08-05 Phase 4/R6 RSS 收藏页 SourceController 边界：`RssFavoritesPage` 新增可选 `RssSourceController` 显式注入；生产入口优先读取父级 Riverpod 共享 controller，独立宿主缺少 `ProviderScope` 时使用空 controller，移除页面对旧 `RssProvider` 的直接依赖。保留收藏加载、取消收藏、源匹配、图片请求策略和阅读跳转行为。定向 RSS 收藏/图片测试 `4/4`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1280`（`3` 项既有条件跳过）和 `git diff --check` 通过；R6 尚未退出。

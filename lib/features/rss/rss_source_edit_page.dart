@@ -2,16 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
+import '../../application/rss/rss_controller.dart';
 import '../../application/rss/rss_login_port.dart';
 import '../../application/rss/rss_notifier.dart';
 import '../../application/rss/rss_source_edit_port.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../features/sources/source_login_page.dart';
-import '../../providers/rss_provider.dart';
 
 /// 订阅源编辑 — 对齐 Jingshiro RssSourceEditActivity 核心字段。
 class RssSourceEditPage extends StatelessWidget {
-  const RssSourceEditPage({super.key, this.source, this.editor});
+  const RssSourceEditPage({
+    super.key,
+    this.source,
+    this.editor,
+    this.controller,
+  });
 
   /// `null` 表示新建
   final RssSource? source;
@@ -19,28 +24,42 @@ class RssSourceEditPage extends StatelessWidget {
   /// Optional persistence boundary for tests and alternate application shells.
   final RssSourceEditPort? editor;
 
+  /// Optional RSS controller for standalone hosts and tests.
+  final RssSourceController? controller;
+
   @override
   Widget build(BuildContext context) {
-    final controller = context.read<RssProvider>().controller;
-    return riverpod.ProviderScope(
-      overrides: [rssSourceControllerProvider.overrideWithValue(controller)],
-      child: _RssSourceEditBody(source: source, editor: editor),
+    return _RssSourceEditBody(
+      source: source,
+      editor: editor,
+      controller: controller ?? _parentController(context),
     );
+  }
+
+  RssSourceController? _parentController(BuildContext context) {
+    try {
+      return riverpod.ProviderScope.containerOf(
+        context,
+        listen: false,
+      ).read(rssSourceControllerProvider);
+    } catch (_) {
+      return null;
+    }
   }
 }
 
-class _RssSourceEditBody extends riverpod.ConsumerStatefulWidget {
-  const _RssSourceEditBody({this.source, this.editor});
+class _RssSourceEditBody extends StatefulWidget {
+  const _RssSourceEditBody({this.source, this.editor, this.controller});
 
   final RssSource? source;
   final RssSourceEditPort? editor;
+  final RssSourceController? controller;
 
   @override
-  riverpod.ConsumerState<_RssSourceEditBody> createState() =>
-      _RssSourceEditBodyState();
+  State<_RssSourceEditBody> createState() => _RssSourceEditBodyState();
 }
 
-class _RssSourceEditBodyState extends riverpod.ConsumerState<_RssSourceEditBody>
+class _RssSourceEditBodyState extends State<_RssSourceEditBody>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   late final TextEditingController _url;
@@ -182,7 +201,11 @@ class _RssSourceEditBodyState extends riverpod.ConsumerState<_RssSourceEditBody>
       if (editor != null) {
         await editor.save(source);
       } else {
-        await ref.read(rssNotifierProvider.notifier).upsertSource(source);
+        final controller = widget.controller;
+        if (controller == null) {
+          throw StateError('未提供 RSS 源控制器');
+        }
+        await controller.upsertSource(source);
       }
       if (!mounted) return;
       ScaffoldMessenger.of(

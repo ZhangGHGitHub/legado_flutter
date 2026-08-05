@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/application/rss/rss_controller.dart';
+import 'package:legado_flutter/application/rss/rss_notifier.dart';
 import 'package:legado_flutter/application/rss/rss_source_store_port.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import 'package:legado_flutter/features/rss/rss_source_edit_page.dart';
 import 'package:legado_flutter/application/rss/rss_source_edit_port.dart';
-import 'package:legado_flutter/providers/rss_provider.dart';
 
 class _FakeRssSourceEditPort implements RssSourceEditPort {
   RssSource? saved;
@@ -24,9 +24,11 @@ void main() {
   testWidgets('editor saves through the injected boundary', (tester) async {
     final editor = _FakeRssSourceEditPort();
     await tester.pumpWidget(
-      ChangeNotifierProvider(
-        create: (_) => RssProvider(),
-        child: MaterialApp(home: RssSourceEditPage(editor: editor)),
+      MaterialApp(
+        home: RssSourceEditPage(
+          editor: editor,
+          controller: RssSourceController(sourceStore: _FakeRssSourceStore()),
+        ),
       ),
     );
 
@@ -56,11 +58,9 @@ void main() {
       raw: {'legacyOption': 'preserve'},
     );
     final controller = RssSourceController(sourceStore: _FakeRssSourceStore());
-    final provider = RssProvider(controller: controller);
-
     await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: provider,
+      riverpod.ProviderScope(
+        overrides: [rssSourceControllerProvider.overrideWithValue(controller)],
         child: MaterialApp(home: RssSourceEditPage(source: source)),
       ),
     );

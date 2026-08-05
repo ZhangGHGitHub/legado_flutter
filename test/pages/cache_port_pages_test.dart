@@ -70,14 +70,15 @@ void main() {
         _chapter(id: 'chapter-1', title: '当前章', index: 0),
         _chapter(id: 'chapter-2', title: '缓存章', index: 1),
       ];
+      final replaceProvider = ReplaceProvider(
+        repository: _EmptyRuleRepository(),
+        contentProcessor: ContentProcessorAdapter(),
+      );
 
       await tester.pumpWidget(
         MaterialApp(
           home: ChangeNotifierProvider(
-            create: (_) => ReplaceProvider(
-              repository: _EmptyRuleRepository(),
-              contentProcessor: ContentProcessorAdapter(),
-            ),
+            create: (_) => replaceProvider,
             child: Provider<SearchContentPrefsPort>.value(
               value: _FakeSearchContentPrefsPort(),
               child: SearchContentPage(
@@ -88,6 +89,7 @@ void main() {
                 currentChapterContent: '当前正文没有命中',
                 initialQuery: '目标词',
                 contentCache: cache,
+                controller: replaceProvider.controller,
               ),
             ),
           ),
@@ -112,14 +114,15 @@ void main() {
       _chapter(id: 'chapter-1', title: '当前章', index: 0),
       _chapter(id: 'chapter-2', title: '远程章', index: 1),
     ];
+    final replaceProvider = ReplaceProvider(
+      repository: _EmptyRuleRepository(),
+      contentProcessor: ContentProcessorAdapter(),
+    );
 
     await tester.pumpWidget(
       MaterialApp(
         home: ChangeNotifierProvider(
-          create: (_) => ReplaceProvider(
-            repository: _EmptyRuleRepository(),
-            contentProcessor: ContentProcessorAdapter(),
-          ),
+          create: (_) => replaceProvider,
           child: Provider<SearchContentPrefsPort>.value(
             value: _FakeSearchContentPrefsPort(
               loaded: SearchContentPrefs(
@@ -135,6 +138,7 @@ void main() {
               initialQuery: '迟到词',
               onlineContentLoader: (_) => lateContent.future,
               contentCache: _FakeChapterContentCache(),
+              controller: replaceProvider.controller,
             ),
           ),
         ),

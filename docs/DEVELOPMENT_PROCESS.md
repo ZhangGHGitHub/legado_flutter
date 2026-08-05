@@ -1,5 +1,7 @@
 # Legado Flutter — Jingshiro/legado Rust + Flutter 重构开发流程
 
+2026-08-05 Phase 4/R6 全文搜索与 RSS 源编辑/管理页 controller scope 边界追溯：三个不重叠写集分别移除 `SearchContentPage`、`RssSourceEditPage`、`RssSourceManagePage` 的旧 Provider 读取和嵌套 Riverpod scope，生产入口复用父级 controller，测试宿主显式覆盖或注入 controller；同时补齐 `cache_port_pages_test.dart` 两个全文搜索宿主的显式 ReplaceController 注入。先执行受影响定向 `9/9`；首次全量发现两项旧宿主缺少注入，修复后重跑 `flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Flutter 串行全量 `1284`（`3` 项既有条件跳过）和 `git diff --check`，全部通过。仅提交本批页面、测试和四份追溯文档，不提交用户本地文件，不自动 push。
+
 2026-08-05 Phase 4/R6 替换页、规则订阅与缓存页 controller scope 边界追溯：三个不重叠写集分别移除 `ReplacePage`、`RuleSubPage`、`CacheBookPage` 的旧 Provider 读取和嵌套 Riverpod scope，生产入口复用父级 controller，测试宿主显式覆盖或注入 controller。先执行受影响定向 `15/15`，再执行 `flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Flutter 串行全量 `1282`（`3` 项既有条件跳过）和 `git diff --check`，全部通过。仅提交本批页面、测试和四份追溯文档，不提交用户本地文件，不自动 push。
 
 2026-08-05 Phase 4/R6 RSS 收藏页 SourceController 边界追溯：本批将 `RssFavoritesPage` 的源状态读取改为可选 `RssSourceController` 注入，生产入口优先复用父级 Riverpod scope；为保持图片组件独立宿主兼容性，补充无 `ProviderScope` 时的空 controller 回退，未恢复页面对旧 `RssProvider` 的直接依赖。先执行 RSS 收藏/图片定向 `4/4`；首次全量发现独立 RSS 图片宿主缺少 `ProviderScope`，修复后重跑 Flutter 串行全量 `1280`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check`，全部通过。仅提交本批页面、测试和四份追溯文档，不提交用户本地文件，不自动 push。

@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
 import '../../application/preferences/search_content_prefs_port.dart';
+import '../../application/replace/replace_controller.dart';
 import '../../application/replace/replace_notifier.dart';
 import '../../domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
-import '../../providers/replace_provider.dart';
 import '../../widgets/legado_popup_menu.dart';
 import 'search_content_result.dart';
 
@@ -24,6 +24,7 @@ class SearchContentPage extends StatelessWidget {
   final int initialResultIndex;
   final Future<String?> Function(Chapter chapter)? onlineContentLoader;
   final ChapterContentCachePort contentCache;
+  final ReplaceRulesController? controller;
 
   const SearchContentPage({
     super.key,
@@ -33,6 +34,7 @@ class SearchContentPage extends StatelessWidget {
     required this.durChapterIndex,
     required this.currentChapterContent,
     required this.contentCache,
+    this.controller,
     this.initialQuery,
     this.initialResults,
     this.initialResultIndex = 0,
@@ -51,6 +53,7 @@ class SearchContentPage extends StatelessWidget {
     List<SearchContentResult>? initialResults,
     int initialResultIndex = 0,
     Future<String?> Function(Chapter chapter)? onlineContentLoader,
+    ReplaceRulesController? controller,
   }) {
     return Navigator.push<SearchContentNavigate>(
       context,
@@ -62,6 +65,7 @@ class SearchContentPage extends StatelessWidget {
           durChapterIndex: durChapterIndex,
           currentChapterContent: currentChapterContent,
           contentCache: contentCache,
+          controller: controller,
           initialQuery: initialQuery,
           initialResults: initialResults,
           initialResultIndex: initialResultIndex,
@@ -73,21 +77,18 @@ class SearchContentPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = context.read<ReplaceProvider>().controller;
-    return riverpod.ProviderScope(
-      overrides: [replaceRulesControllerProvider.overrideWithValue(controller)],
-      child: _SearchContentPageBody(
-        bookId: bookId,
-        bookName: bookName,
-        chapters: chapters,
-        durChapterIndex: durChapterIndex,
-        currentChapterContent: currentChapterContent,
-        contentCache: contentCache,
-        initialQuery: initialQuery,
-        initialResults: initialResults,
-        initialResultIndex: initialResultIndex,
-        onlineContentLoader: onlineContentLoader,
-      ),
+    return _SearchContentPageBody(
+      bookId: bookId,
+      bookName: bookName,
+      chapters: chapters,
+      durChapterIndex: durChapterIndex,
+      currentChapterContent: currentChapterContent,
+      contentCache: contentCache,
+      controller: controller,
+      initialQuery: initialQuery,
+      initialResults: initialResults,
+      initialResultIndex: initialResultIndex,
+      onlineContentLoader: onlineContentLoader,
     );
   }
 }
@@ -103,6 +104,7 @@ class _SearchContentPageBody extends riverpod.ConsumerStatefulWidget {
   final int initialResultIndex;
   final Future<String?> Function(Chapter chapter)? onlineContentLoader;
   final ChapterContentCachePort contentCache;
+  final ReplaceRulesController? controller;
 
   const _SearchContentPageBody({
     required this.bookId,
@@ -111,6 +113,7 @@ class _SearchContentPageBody extends riverpod.ConsumerStatefulWidget {
     required this.durChapterIndex,
     required this.currentChapterContent,
     required this.contentCache,
+    this.controller,
     this.initialQuery,
     this.initialResults,
     this.initialResultIndex = 0,
@@ -162,7 +165,12 @@ class _SearchContentPageBodyState
     _prefs = await context.read<SearchContentPrefsPort>().load();
     if (mounted) setState(() {});
     if (!mounted) return;
-    await ref.read(replaceNotifierProvider.notifier).loadRules();
+    final controller = widget.controller;
+    if (controller != null) {
+      await controller.loadRules();
+    } else {
+      await ref.read(replaceNotifierProvider.notifier).loadRules();
+    }
   }
 
   Future<void> _toggleReplace(bool value) async {
@@ -194,7 +202,10 @@ class _SearchContentPageBodyState
 
   String _prepareContent(String raw) {
     if (!_prefs.enableReplace) return raw;
-    return ref.read(replaceNotifierProvider.notifier).processContent(raw);
+    final controller = widget.controller;
+    return controller != null
+        ? controller.processContent(raw)
+        : ref.read(replaceNotifierProvider.notifier).processContent(raw);
   }
 
   @override

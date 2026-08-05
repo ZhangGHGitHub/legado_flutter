@@ -4,9 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
+import 'package:legado_flutter/application/rss/rss_controller.dart';
 import 'package:legado_flutter/application/rss/rss_notifier.dart';
+import 'package:legado_flutter/application/rss/rss_state.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
-import '../../providers/rss_provider.dart';
 import 'package:legado_flutter/application/rss/rss_source_transfer_port.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/empty_state.dart';
@@ -17,65 +18,112 @@ import 'rss_source_edit_page.dart';
 /// 订阅源管理 — 对齐 Jingshiro [RssSourceActivity] /
 /// `activity_rss_source.xml` + `item_rss_source.xml` + `menu/rss_source.xml`
 class RssSourceManagePage extends StatelessWidget {
-  const RssSourceManagePage({super.key, this.transfer});
+  const RssSourceManagePage({super.key, this.controller, this.transfer});
 
+  /// 独立宿主可直接注入 controller；生产入口由父级 Riverpod scope 提供。
+  final RssSourceController? controller;
   final RssSourceTransferPort? transfer;
 
   @override
   Widget build(BuildContext context) {
-    final controller = context.read<RssProvider>().controller;
-    return riverpod.ProviderScope(
-      overrides: [rssSourceControllerProvider.overrideWithValue(controller)],
-      child: _RssSourceManagePageBody(transfer: transfer),
-    );
+    return _RssSourceManagePageBody(controller: controller, transfer: transfer);
   }
 }
 
-class _RssSourceManagePageBody extends StatefulWidget {
-  const _RssSourceManagePageBody({this.transfer});
+class _RssSourceManagePageBody extends riverpod.ConsumerStatefulWidget {
+  const _RssSourceManagePageBody({this.controller, this.transfer});
 
+  final RssSourceController? controller;
   final RssSourceTransferPort? transfer;
 
   @override
-  State<_RssSourceManagePageBody> createState() =>
+  riverpod.ConsumerState<_RssSourceManagePageBody> createState() =>
       _RssSourceManagePageBodyState();
 }
 
-class _RssSourceManagePageBodyState extends State<_RssSourceManagePageBody> {
+class _RssSourceManagePageBodyState
+    extends riverpod.ConsumerState<_RssSourceManagePageBody> {
   final _searchController = TextEditingController();
   final _selected = <String>{};
   final _selectBarKey = GlobalKey();
   late final RssSourceTransferPort _transfer;
-  late RssNotifier _notifier;
-  var _notifierReady = false;
 
   /// all | enabled | disabled | login | null_group | group:xxx
   String _filter = 'all';
+
+  RssSourceController? get _injectedController => widget.controller;
+
+  RssNotifier get _notifier => ref.read(rssNotifierProvider.notifier);
+
+  RssState get _state =>
+      _injectedController?.state ?? ref.read(rssNotifierProvider);
 
   @override
   void initState() {
     super.initState();
     _transfer = widget.transfer ?? context.read<RssSourceTransferPort>();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_notifierReady) return;
-    _notifier = riverpod.ProviderScope.containerOf(
-      context,
-    ).read(rssNotifierProvider.notifier);
-    _notifierReady = true;
+    _injectedController?.addListener(_onInjectedControllerChanged);
   }
 
   @override
   void dispose() {
+    _injectedController?.removeListener(_onInjectedControllerChanged);
     _searchController.dispose();
     super.dispose();
   }
 
-  List<RssSource> _visible(RssNotifier p) =>
-      p.managedSources(searchKey: _searchController.text, filter: _filter);
+  void _onInjectedControllerChanged(RssState _) {
+    if (mounted) setState(() {});
+  }
+
+  List<RssSource> _visible() => _injectedController == null
+      ? _notifier.managedSources(
+          searchKey: _searchController.text,
+          filter: _filter,
+        )
+      : _injectedController!.managedSources(
+          searchKey: _searchController.text,
+          filter: _filter,
+        );
+
+  List<String> _allGroups() => _injectedController == null
+      ? _notifier.allGroups()
+      : _injectedController!.allGroups();
+
+  Future<void> _setEnabled(RssSource source, bool enabled) =>
+      _injectedController == null
+      ? _notifier.setEnabled(source, enabled)
+      : _injectedController!.setEnabled(source, enabled);
+
+  Future<void> _setEnabledMany(Iterable<String> urls, bool enabled) =>
+      _injectedController == null
+      ? _notifier.setEnabledMany(urls, enabled)
+      : _injectedController!.setEnabledMany(urls, enabled);
+
+  Future<void> _deleteSources(Iterable<String> urls) =>
+      _injectedController == null
+      ? _notifier.deleteSources(urls)
+      : _injectedController!.deleteSources(urls);
+
+  Future<void> _topSources(Iterable<String> urls) => _injectedController == null
+      ? _notifier.topSources(urls)
+      : _injectedController!.topSources(urls);
+
+  Future<bool> _importSources(String jsonText) => _injectedController == null
+      ? _notifier.importSources(jsonText)
+      : _injectedController!.importSources(jsonText);
+
+  Future<bool> _importSourcesFromUrl(String url) => _injectedController == null
+      ? _notifier.importSourcesFromUrl(url)
+      : _injectedController!.importSourcesFromUrl(url);
+
+  Future<void> _topSource(RssSource source) => _injectedController == null
+      ? _notifier.topSource(source)
+      : _injectedController!.topSource(source);
+
+  Future<void> _deleteSource(RssSource source) => _injectedController == null
+      ? _notifier.deleteSource(source)
+      : _injectedController!.deleteSource(source);
 
   TextStyle _uiText({
     required Color color,
@@ -216,7 +264,7 @@ class _RssSourceManagePageBodyState extends State<_RssSourceManagePageBody> {
       final jsonText = await _transfer.pickImportText();
       if (jsonText == null) return;
       if (!mounted) return;
-      final ok = await _notifier.importSources(jsonText);
+      final ok = await _importSources(jsonText);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -257,7 +305,7 @@ class _RssSourceManagePageBodyState extends State<_RssSourceManagePageBody> {
     if (ok != true || !mounted) return;
     final url = controller.text.trim();
     if (url.isEmpty) return;
-    final success = await _notifier.importSourcesFromUrl(url);
+    final success = await _importSourcesFromUrl(url);
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -270,7 +318,7 @@ class _RssSourceManagePageBodyState extends State<_RssSourceManagePageBody> {
       MaterialPageRoute(builder: (_) => const QrCodeCapturePage()),
     );
     if (result == null || result.isEmpty || !mounted) return;
-    final success = await _notifier.importSources(result);
+    final success = await _importSources(result);
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -304,7 +352,7 @@ class _RssSourceManagePageBodyState extends State<_RssSourceManagePageBody> {
       ),
     );
     if (ok != true || !mounted) return;
-    final success = await _notifier.importSources(controller.text);
+    final success = await _importSources(controller.text);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(success ? '导入成功' : '导入失败，请检查 JSON 格式')),
@@ -331,12 +379,11 @@ class _RssSourceManagePageBodyState extends State<_RssSourceManagePageBody> {
       ),
     );
     if (yes != true || !mounted) return;
-    await _notifier.deleteSources(_selected);
+    await _deleteSources(_selected);
     setState(() => _selected.clear());
   }
 
   Future<void> _onBottomMore(String value) async {
-    final provider = _notifier;
     if (_selected.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -345,13 +392,13 @@ class _RssSourceManagePageBodyState extends State<_RssSourceManagePageBody> {
     }
     switch (value) {
       case 'enable':
-        await provider.setEnabledMany(_selected, true);
+        await _setEnabledMany(_selected, true);
       case 'disable':
-        await provider.setEnabledMany(_selected, false);
+        await _setEnabledMany(_selected, false);
       case 'top':
-        await provider.topSources(_selected);
+        await _topSources(_selected);
       case 'export':
-        final list = provider.sources
+        final list = _state.sources
             .where((s) => _selected.contains(s.sourceUrl))
             .map((s) => s.toJson())
             .toList();
@@ -370,7 +417,6 @@ class _RssSourceManagePageBodyState extends State<_RssSourceManagePageBody> {
   }
 
   void _showItemMenu(RssSource source, Offset anchor) {
-    final provider = _notifier;
     showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -392,7 +438,7 @@ class _RssSourceManagePageBodyState extends State<_RssSourceManagePageBody> {
       if (action == null || !mounted) return;
       switch (action) {
         case 'top':
-          await provider.topSource(source);
+          await _topSource(source);
         case 'edit':
           await Navigator.push(
             context,
@@ -401,7 +447,7 @@ class _RssSourceManagePageBodyState extends State<_RssSourceManagePageBody> {
             ),
           );
         case 'toggle':
-          await provider.setEnabled(source, !source.enabled);
+          await _setEnabled(source, !source.enabled);
         case 'del':
           final yes = await showDialog<bool>(
             context: context,
@@ -421,7 +467,7 @@ class _RssSourceManagePageBodyState extends State<_RssSourceManagePageBody> {
             ),
           );
           if (yes == true) {
-            await provider.deleteSource(source);
+            await _deleteSource(source);
             _selected.remove(source.sourceUrl);
             if (mounted) setState(() {});
           }
@@ -462,8 +508,7 @@ class _RssSourceManagePageBodyState extends State<_RssSourceManagePageBody> {
         actions: [
           riverpod.Consumer(
             builder: (context, ref, _) {
-              final provider = ref.read(rssNotifierProvider.notifier);
-              final groups = provider.allGroups();
+              final groups = _allGroups();
               return PopupMenuButton<String>(
                 offset: legadoAppBarPopupOffset(context),
                 tooltip: '分组',
@@ -534,11 +579,11 @@ class _RssSourceManagePageBodyState extends State<_RssSourceManagePageBody> {
           ),
         ],
       ),
-      body: riverpod.Consumer(
-        builder: (context, ref, _) {
-          final state = ref.watch(rssNotifierProvider);
-          final provider = ref.read(rssNotifierProvider.notifier);
-          final visible = _visible(provider);
+      body: Builder(
+        builder: (context) {
+          if (_injectedController == null) ref.watch(rssNotifierProvider);
+          final state = _state;
+          final visible = _visible();
           if (state.sources.isEmpty) {
             return EmptyState(
               icon: Icons.subscriptions_outlined,
@@ -610,7 +655,7 @@ class _RssSourceManagePageBodyState extends State<_RssSourceManagePageBody> {
                               value: s.enabled,
                               activeThumbColor: Colors.white,
                               activeTrackColor: accent,
-                              onChanged: (v) => provider.setEnabled(s, v),
+                              onChanged: (v) => _setEnabled(s, v),
                             ),
                             IconButton(
                               tooltip: '编辑',

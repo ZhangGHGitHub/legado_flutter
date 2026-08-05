@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/preferences/search_content_prefs_port.dart';
+import 'package:legado_flutter/application/replace/replace_controller.dart';
+import 'package:legado_flutter/application/replace/replace_notifier.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/domain/content/replace_rule.dart';
 import 'package:legado_flutter/domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/domain/ports/content_processing_port.dart';
 import 'package:legado_flutter/domain/repositories/replace_rule_repository.dart';
 import 'package:legado_flutter/features/reader/search_content_page.dart';
-import 'package:legado_flutter/providers/replace_provider.dart';
 import 'package:provider/provider.dart';
 
 void main() {
@@ -21,11 +23,10 @@ void main() {
     );
     final repository = _FakeReplaceRuleRepository([rule]);
     final processor = _FakeContentProcessingPort();
-    final controller = ReplaceProvider(
+    final controller = ReplaceRulesController(
       repository: repository,
       contentProcessor: processor,
     );
-    addTearDown(controller.dispose);
 
     final chapter = Chapter(
       id: 'chapter-1',
@@ -37,20 +38,24 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
-          ChangeNotifierProvider<ReplaceProvider>.value(value: controller),
           Provider<SearchContentPrefsPort>.value(
             value: const _FakeSearchContentPrefsPort(),
           ),
         ],
-        child: MaterialApp(
-          home: SearchContentPage(
-            bookId: 'book-1',
-            bookName: '测试书',
-            chapters: [chapter],
-            durChapterIndex: 0,
-            currentChapterContent: '原始正文这是一段足够长的正文内容，用于搜索测试',
-            contentCache: _FakeChapterContentCache(),
-            initialQuery: '净化',
+        child: riverpod.ProviderScope(
+          overrides: [
+            replaceRulesControllerProvider.overrideWithValue(controller),
+          ],
+          child: MaterialApp(
+            home: SearchContentPage(
+              bookId: 'book-1',
+              bookName: '测试书',
+              chapters: [chapter],
+              durChapterIndex: 0,
+              currentChapterContent: '原始正文这是一段足够长的正文内容，用于搜索测试',
+              contentCache: _FakeChapterContentCache(),
+              initialQuery: '净化',
+            ),
           ),
         ),
       ),
@@ -61,6 +66,51 @@ void main() {
     expect(processor.processedContents, ['原始正文这是一段足够长的正文内容，用于搜索测试']);
     expect(find.text('搜索结果: 1'), findsOneWidget);
     expect(find.byType(ListTile), findsOneWidget);
+  });
+
+  testWidgets('全文搜索独立宿主支持显式注入 ReplaceController', (tester) async {
+    final rule = const ReplaceRule(
+      id: 'injected-rule',
+      name: '注入净化',
+      pattern: '原始',
+      replacement: '净化',
+      isRegex: false,
+    );
+    final processor = _FakeContentProcessingPort();
+    final controller = ReplaceRulesController(
+      repository: _FakeReplaceRuleRepository([rule]),
+      contentProcessor: processor,
+    );
+    final chapter = Chapter(
+      id: 'chapter-2',
+      bookId: 'book-2',
+      title: '第二章',
+      index: 0,
+      url: '',
+    );
+
+    await tester.pumpWidget(
+      Provider<SearchContentPrefsPort>.value(
+        value: const _FakeSearchContentPrefsPort(),
+        child: MaterialApp(
+          home: SearchContentPage(
+            bookId: 'book-2',
+            bookName: '注入测试书',
+            chapters: [chapter],
+            durChapterIndex: 0,
+            currentChapterContent: '原始正文这是一段足够长的正文内容，用于搜索测试',
+            contentCache: _FakeChapterContentCache(),
+            controller: controller,
+            initialQuery: '净化',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(processor.loadedRules, [rule]);
+    expect(processor.processedContents, ['原始正文这是一段足够长的正文内容，用于搜索测试']);
+    expect(find.text('搜索结果: 1'), findsOneWidget);
   });
 }
 

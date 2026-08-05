@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
+import 'package:legado_flutter/application/rss/rss_controller.dart';
+import 'package:legado_flutter/application/rss/rss_notifier.dart';
 import 'package:legado_flutter/application/rss/rss_source_transfer_port.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../helpers/fake_reader_font_port.dart';
 import 'package:legado_flutter/features/rss/rss_source_manage_page.dart';
-import 'package:legado_flutter/providers/rss_provider.dart';
 
 class _FakeRssSourceTransfer implements RssSourceTransferPort {
   int pickCount = 0;
@@ -36,12 +39,12 @@ void main() {
     tester,
   ) async {
     final transfer = _FakeRssSourceTransfer();
+    final controller = RssSourceController();
     await tester.pumpWidget(
-      ChangeNotifierProvider(
-        create: (_) => RssProvider(),
-        child: Provider<ReaderFontPort>.value(
-          value: _FakeReaderFontPort(),
-          child: MaterialApp(home: RssSourceManagePage(transfer: transfer)),
+      Provider<ReaderFontPort>.value(
+        value: _FakeReaderFontPort(),
+        child: MaterialApp(
+          home: RssSourceManagePage(controller: controller, transfer: transfer),
         ),
       ),
     );
@@ -57,5 +60,31 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(transfer.pickCount, 1);
+  });
+
+  testWidgets('RssSourceManagePage reuses the parent RSS controller', (
+    tester,
+  ) async {
+    final controller = RssSourceController();
+    final transfer = _FakeRssSourceTransfer();
+    await controller.upsertSource(
+      const RssSource(sourceUrl: 'https://example.com/rss', sourceName: '示例订阅'),
+    );
+
+    await tester.pumpWidget(
+      Provider<ReaderFontPort>.value(
+        value: _FakeReaderFontPort(),
+        child: riverpod.ProviderScope(
+          overrides: [
+            rssSourceControllerProvider.overrideWithValue(controller),
+          ],
+          child: MaterialApp(home: RssSourceManagePage(transfer: transfer)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('示例订阅'), findsOneWidget);
+    expect(find.byType(Switch), findsOneWidget);
   });
 }
