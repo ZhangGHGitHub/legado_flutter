@@ -3693,3 +3693,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：元数据端口与书籍详情定向 9/9；Flutter 全量 1264 通过、3 项既有条件跳过；flutter analyze --no-pub、scripts/check_architecture_boundaries.ps1 和 git diff --check 通过；R6 尚未退出。
 
 边界结论：本批完成书籍详情两个基础元数据写入调用面的 application 端口收口，不宣称 BookInfoPage 其他 Provider 职责迁移完成或 R6 退出。
+
+## 198. 2026-08-05：R6 书籍详情阅读状态写入边界
+
+- 新增 `BookReadStatusPort` 和 `BookReadStatusPortAdapter`；`BookInfoPage._setReadIteration` 通过 application 端口写入读完/N 刷轮次，生产组合根继续复用 `BookProvider.updateReadIteration`，独立宿主可显式注入端口或使用回调实现。
+- 保留阅读状态选项、书架内落库条件、Provider 异常传播和原有 UI 行为；本批不迁移书架增删、分组、阅读启动、目录或进度职责，不改变 `legado-main`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：端口转发和书籍详情交互定向 `9/9`；Flutter 全量 `1266` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
+
+边界结论：本批完成书籍详情一个阅读状态写入调用点的 application 端口收口，不宣称 BookInfoPage 其他 Provider 职责迁移完成或 R6 退出。

@@ -1,5 +1,7 @@
 # Legado Flutter — 项目重构主计划
 
+2026-08-05 Phase 4/R6 书籍详情阅读状态写入边界：新增 BookReadStatusPort 及 BookReadStatusPortAdapter，BookInfoPage 的读完/N 刷轮次写入改通过 application 端口；生产组合根继续复用 BookProvider.updateReadIteration，独立宿主保留显式回调能力。保留阅读状态选项、书架内落库条件、异常传播和现有 UI 行为。定向 9/9；Flutter 全量 1266 通过、3 项既有条件跳过；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。
+
 2026-08-05 Phase 4/R6 书架未读角标元数据边界：新增可监听只读 ShelfUnreadMetaPort 及 ShelfUnreadMetaPortAdapter，ShelfUnreadBadge 不再直接依赖 BookProvider，改通过 application 端口读取章节数量和当前阅读索引；生产组合根继续复用同一 Provider 事实源。未读公式、更新文案、999+ 截断、主题色、显示条件和元数据变化通知保持不变。定向 5/5；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。
 
 2026-08-05 Phase 4/R6 书籍详情元数据写入边界：新增 BookMetadataPort 及 BookMetadataPortAdapter，BookInfoPage 的封面自动补全和书名/作者/简介字段写入改通过 application 端口；生产组合根继续复用 BookProvider 的最新书架快照、通知和异常语义。保留字段裁剪、非书架不落库、封面静默降级和已有 UI 行为。定向 9/9；Flutter 全量 1264 通过、3 项既有条件跳过；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。

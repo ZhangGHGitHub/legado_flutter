@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/source_management/source_notifier.dart';
+import 'package:legado_flutter/application/book/book_read_status_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_membership_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
@@ -25,6 +26,29 @@ import '../../application/source_management/source_controller_test.dart'
     as source_fixtures;
 
 void main() {
+  testWidgets('详情页阅读状态通过应用端口写入', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1000));
+    final readStatusPort = _RecordingBookReadStatusPort();
+    try {
+      await _pumpEditPage(
+        tester,
+        inShelf: true,
+        readStatusPort: readStatusPort,
+      );
+
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('阅读状态'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('2刷完'));
+      await tester.pumpAndSettle();
+
+      expect(readStatusPort.calls, [('book-1', 3)]);
+    } finally {
+      await tester.binding.setSurfaceSize(null);
+    }
+  });
+
   testWidgets('详情页设置分组从书架成员端口读取分组列表', (tester) async {
     final source = BookSource(
       bookSourceUrl: 'https://source.example',
@@ -226,7 +250,11 @@ Future<void> _editBookInfo(
 }
 
 Future<({BookProvider provider, _MemoryBookRepository repository})>
-_pumpEditPage(WidgetTester tester, {required bool inShelf}) async {
+_pumpEditPage(
+  WidgetTester tester, {
+  required bool inShelf,
+  BookReadStatusPort? readStatusPort,
+}) async {
   final source = BookSource(
     bookSourceUrl: 'https://source.example',
     bookSourceName: '编辑书源',
@@ -273,7 +301,9 @@ _pumpEditPage(WidgetTester tester, {required bool inShelf}) async {
         overrides: [
           sourceControllerProvider.overrideWithValue(sourceProvider.controller),
         ],
-        child: MaterialApp(home: BookInfoPage(book: book)),
+        child: MaterialApp(
+          home: BookInfoPage(book: book, readStatusPort: readStatusPort),
+        ),
       ),
     ),
   );
@@ -479,6 +509,15 @@ final class _TestBookshelfMembershipPort extends ChangeNotifier
 
   @override
   List<Book> get books => _provider.books;
+}
+
+final class _RecordingBookReadStatusPort implements BookReadStatusPort {
+  final calls = <(String, int)>[];
+
+  @override
+  Future<void> updateReadIteration(Book book, int readIteration) async {
+    calls.add((book.id, readIteration));
+  }
 }
 
 final class _StaticBookshelfMembershipPort extends ChangeNotifier
