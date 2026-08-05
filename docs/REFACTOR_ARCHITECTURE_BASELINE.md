@@ -3729,3 +3729,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：阅读进度适配器和 Reader 端口宿主定向 `5/5`；Flutter 全量 `1268` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
 
 边界结论：本批完成普通阅读器一个进度写入调用点的 application 端口收口，不宣称 ReaderPage 其他 Provider 职责迁移完成或 R6 退出。
+
+## 202. 2026-08-05：R6 普通阅读器目录刷新边界
+
+- 新增 `ReaderChapterRefreshPort` 和 `ReaderChapterRefreshPortAdapter`；`ReaderPage._updateToc` 的强制目录刷新通过 application 端口获取不可变章节快照，生产组合根继续复用 `BookProvider.loadChapters`，未创建第二份目录事实源。
+- 保留当前章节 ID/标题定位、空目录提示、成功提示、异常文案和替换导航行为；本批不迁移普通目录读取、换源、正文、缓存或阅读进度职责，不改变 `legado-main`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：目录刷新适配器和 Reader 端口宿主定向 `5/5`；Flutter 全量 `1269` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
+
+边界结论：本批完成普通阅读器一个目录刷新调用点的 application 端口收口，不宣称 ReaderPage 其他 Provider 职责迁移完成或 R6 退出。

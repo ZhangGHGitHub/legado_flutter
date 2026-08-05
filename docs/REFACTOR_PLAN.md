@@ -1,5 +1,7 @@
 # Legado Flutter — 项目重构主计划
 
+2026-08-05 Phase 4/R6 普通阅读器目录刷新边界：新增 ReaderChapterRefreshPort 及 ReaderChapterRefreshPortAdapter，ReaderPage 的强制刷新目录改通过 application 端口获取不可变章节快照；生产组合根继续复用 BookProvider.loadChapters，保留当前章节 ID/标题定位、空目录提示、成功提示和异常文案。定向 5/5；Flutter 全量 1269 通过、3 项既有条件跳过；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。
+
 2026-08-05 Phase 4/R6 普通阅读器进度写入边界：新增 ReaderProgressPort 及 ReaderProgressPortAdapter，ReaderPage 的章节进度写入改通过 application 端口；生产组合根继续复用 BookProvider.updateProgress，保留进度比例、章节标题、pageIndex、durChapterIndex 和原异步时序。定向 5/5；Flutter 全量 1268 通过、3 项既有条件跳过；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。
 
 2026-08-05 Phase 4/R6 书籍详情书架生命周期边界：新增 BookshelfBookLifecyclePort 及适配器，BookInfoPage 的加入书架、当前目录保存和移除书架改通过 application 端口；生产组合根继续复用 BookProvider 的快照、章节元数据、变更总线和通知语义。保留加入顺序、移除行为、成功提示和阅读入口，不迁移阅读启动。定向 9/9；Flutter 全量 1267 通过、3 项既有条件跳过；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。

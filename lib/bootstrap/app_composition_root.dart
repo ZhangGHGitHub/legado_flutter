@@ -86,6 +86,7 @@ import '../application/reader/reader_bookmark_readiness_port.dart';
 import '../application/reader/reader_source_presentation_port.dart';
 import '../application/reader/reader_progress_sync_port.dart';
 import '../application/reader/reader_progress_port.dart';
+import '../application/reader/reader_chapter_refresh_port.dart';
 import '../application/reader/read_style_zip_port.dart';
 import '../application/reader/reader_image_cache_port.dart';
 import '../application/reader/reader_font_port.dart';
@@ -265,6 +266,7 @@ import '../infrastructure/reader/reader_bookmark_readiness_port_adapter.dart';
 import '../infrastructure/reader/reader_source_presentation_port_adapter.dart';
 import '../infrastructure/reader/reader_progress_sync_port_adapter.dart';
 import '../infrastructure/reader/reader_progress_port_adapter.dart';
+import '../infrastructure/reader/reader_chapter_refresh_port_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_web_api_prefs_adapter.dart';
 import '../infrastructure/reader/reader_font_port_adapter.dart';
 import '../infrastructure/reader/book_reader_prefs_port_adapter.dart';
@@ -993,6 +995,12 @@ abstract final class AppCompositionRoot {
           Provider<ReaderProgressPort>.value(
             value: ReaderProgressPortAdapter(
               update: bootstrap.bookProvider.updateProgress,
+            ),
+          ),
+          Provider<ReaderChapterRefreshPort>.value(
+            value: ReaderChapterRefreshPortAdapter(
+              loadChapters: bootstrap.bookProvider.loadChapters,
+              currentChapters: () => bootstrap.bookProvider.currentChapters,
             ),
           ),
           Provider<BookmarkSyncService>.value(value: bookmarkSyncService),

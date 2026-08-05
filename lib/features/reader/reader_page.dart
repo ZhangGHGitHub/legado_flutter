@@ -21,6 +21,7 @@ import '../../application/reader/reader_content_refetch_port.dart';
 import '../../application/reader/reader_bookmark_readiness_port.dart';
 import '../../application/reader/reader_progress_sync_port.dart';
 import '../../application/reader/reader_progress_port.dart';
+import '../../application/reader/reader_chapter_refresh_port.dart';
 import '../../application/reader/reader_image_cache_port.dart';
 import '../../application/reader/reader_image_headers_port.dart';
 import '../../application/reader/reader_source_presentation_port.dart';
@@ -100,6 +101,9 @@ class ReaderPage extends StatefulWidget {
   /// 阅读进度写入端口；未注入时从组合根读取。
   final ReaderProgressPort? progressPort;
 
+  /// 目录强制刷新端口；未注入时从组合根读取。
+  final ReaderChapterRefreshPort? chapterRefreshPort;
+
   const ReaderPage({
     super.key,
     required this.book,
@@ -113,6 +117,7 @@ class ReaderPage extends StatefulWidget {
     this.imageHeadersPort,
     this.sourcePresentationPort,
     this.progressPort,
+    this.chapterRefreshPort,
   });
 
   @override
@@ -142,6 +147,7 @@ class _ReaderPageState extends State<ReaderPage> {
   late final ReaderBookmarkReadinessPort _bookmarkReadinessPort;
   late final ReaderProgressSyncPort _progressSyncPort;
   late final ReaderProgressPort _progressPort;
+  late final ReaderChapterRefreshPort _chapterRefreshPort;
   late final ReaderChapterContentPort _contentPort;
   late final ReaderImageHeadersPort _imageHeadersPort;
   late final ReaderSourcePresentationPort _sourcePresentationPort;
@@ -250,6 +256,10 @@ class _ReaderPageState extends State<ReaderPage> {
         ReaderProgressPortCallbacks(
           update: context.read<BookProvider>().updateProgress,
         );
+    _chapterRefreshPort =
+        widget.chapterRefreshPort ??
+        Provider.of<ReaderChapterRefreshPort?>(context, listen: false) ??
+        const EmptyReaderChapterRefreshPort();
     _contentPort =
         widget.contentPort ?? context.read<ReaderChapterContentPort>();
     _imageHeadersPort =
@@ -2442,12 +2452,11 @@ class _ReaderPageState extends State<ReaderPage> {
       );
     }
 
-    final provider = context.read<BookProvider>();
+    List<Chapter> newChapters;
     try {
-      await provider.loadChapters(
+      newChapters = await _chapterRefreshPort.refreshChapters(
         widget.book,
         source: source,
-        forceRefresh: true,
       );
     } catch (e) {
       if (mounted) {
@@ -2459,7 +2468,6 @@ class _ReaderPageState extends State<ReaderPage> {
     }
 
     if (!mounted) return;
-    final newChapters = provider.currentChapters;
     if (newChapters.isEmpty) {
       ScaffoldMessenger.of(
         context,
