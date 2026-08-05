@@ -463,6 +463,8 @@ Each release entry must include the release date, the App version from `pubspec.
 the Rust engine version, the database schema version, user-visible changes,
 breaking or migration notes, and verification results. Keep unreleased work under
 `[Unreleased]` until it is committed and tagged.
+2026-08-05 Phase 4/R6 书架整理 SourceController 显式注入收口：`BookshelfArrangePage` 移除页面内旧 `SourceProvider` 依赖，生产组合根继续提供共享 scope，测试宿主显式注入 controller；保留源标签刷新、分组、删除、排序和选择状态。定向 `18/18`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1280`（`3` 项既有条件跳过）通过；待完成 `git diff --check` 后创建中文本地提交，不自动 push。
+
 2026-08-05 Phase 4/R6 书架整理 SourceController 边界：`BookshelfArrangePage` 移除页面内直接依赖旧 `SourceProvider`，增加可选 `SourceController` 显式注入；生产环境继续使用组合根共享 scope，测试宿主显式注入 controller。保留源标签刷新、分组、删除、排序和选择状态行为。定向 `18/18`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1280`（`3` 项既有条件跳过）通过；待完成 `git diff --check` 后创建中文本地提交，不自动 push。
 
 2026-08-05 Phase 4/R6 探索页 SourceController 边界：`ExploreListPage` 移除页面内直接依赖旧 `SourceProvider` 和嵌套 Riverpod scope，统一由生产组合根/测试宿主提供共享 `SourceController`；保留当前书源、探索请求、结果映射和书架过滤行为。定向 `1/1`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1280`（`3` 项既有条件跳过）通过；待完成 `git diff --check` 后创建中文本地提交，不自动 push。
