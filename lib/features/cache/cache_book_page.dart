@@ -10,10 +10,10 @@ import '../../application/cache/book_cache_export_port.dart';
 import '../../application/cache/cache_book_download_port.dart';
 import '../../application/cache/cache_book_shelf_port.dart';
 import '../../application/source_management/source_notifier.dart';
+import '../../application/source_management/source_controller.dart';
 import '../../domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import '../../providers/book_provider.dart';
-import '../../providers/source_provider.dart';
 import '../../widgets/legado_popup_menu.dart';
 import 'download_choice_dialog.dart';
 import 'download_helpers.dart';
@@ -25,11 +25,13 @@ class CacheBookPage extends StatelessWidget {
     required this.contentCache,
     this.shelfPort,
     this.downloadPort,
+    this.sourceController,
   });
 
   final ChapterContentCachePort contentCache;
   final CacheBookShelfPort? shelfPort;
   final CacheBookDownloadPort? downloadPort;
+  final SourceController? sourceController;
 
   @override
   Widget build(BuildContext context) {
@@ -38,16 +40,11 @@ class CacheBookPage extends StatelessWidget {
         downloadPort ??
         Provider.of<CacheBookDownloadPort?>(context, listen: false) ??
         _fallbackDownloadPort(context);
-    final sourceProvider = context.read<SourceProvider>();
-    return riverpod.ProviderScope(
-      overrides: [
-        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
-      ],
-      child: _CacheBookPageBody(
-        contentCache: contentCache,
-        shelfPort: resolvedShelfPort,
-        downloadPort: resolvedDownloadPort,
-      ),
+    return _CacheBookPageBody(
+      contentCache: contentCache,
+      shelfPort: resolvedShelfPort,
+      downloadPort: resolvedDownloadPort,
+      sourceController: sourceController,
     );
   }
 }
@@ -85,11 +82,13 @@ class _CacheBookPageBody extends riverpod.ConsumerStatefulWidget {
     required this.contentCache,
     required this.shelfPort,
     required this.downloadPort,
+    this.sourceController,
   });
 
   final ChapterContentCachePort contentCache;
   final CacheBookShelfPort shelfPort;
   final CacheBookDownloadPort downloadPort;
+  final SourceController? sourceController;
 
   @override
   riverpod.ConsumerState<_CacheBookPageBody> createState() =>
@@ -180,9 +179,9 @@ class _CacheBookPageState extends riverpod.ConsumerState<_CacheBookPageBody> {
       return;
     }
 
-    final source = ref
-        .read(sourceNotifierProvider.notifier)
-        .findSourceForBook(book);
+    final SourceController controller =
+        widget.sourceController ?? ref.read(sourceControllerProvider);
+    final source = controller.findSourceForBook(book);
     if (source == null) {
       ScaffoldMessenger.of(
         context,

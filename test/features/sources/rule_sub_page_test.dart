@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
@@ -8,6 +9,9 @@ import 'package:legado_flutter/domain/repositories/replace_rule_repository.dart'
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/source_subscription/rule_sub.dart';
+import 'package:legado_flutter/application/replace/replace_notifier.dart';
+import 'package:legado_flutter/application/rss/rss_notifier.dart';
+import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/application/source_subscription/rule_sub_import_port.dart';
 import 'package:legado_flutter/application/source_subscription/rule_sub_prefs_port.dart';
 import 'package:legado_flutter/features/sources/rule_sub_page.dart';
@@ -43,36 +47,41 @@ void main() {
           ChangeNotifierProvider<ReplaceProvider>.value(value: replaceProvider),
           Provider<RuleSubImportPort>.value(value: importPort),
         ],
-        child: MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => Column(
-                children: [
-                  FilledButton(
-                    key: const ValueKey('book-source'),
-                    onPressed: () => RuleSubPage.openImport(
-                      context,
-                      const RuleSub(id: 1, type: 0, url: 'book'),
+        child: _withSharedControllers(
+          sourceProvider: sourceProvider,
+          rssProvider: rssProvider,
+          replaceProvider: replaceProvider,
+          child: MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => Column(
+                  children: [
+                    FilledButton(
+                      key: const ValueKey('book-source'),
+                      onPressed: () => RuleSubPage.openImport(
+                        context,
+                        const RuleSub(id: 1, type: 0, url: 'book'),
+                      ),
+                      child: const Text('书源'),
                     ),
-                    child: const Text('书源'),
-                  ),
-                  FilledButton(
-                    key: const ValueKey('rss-source'),
-                    onPressed: () => RuleSubPage.openImport(
-                      context,
-                      const RuleSub(id: 2, type: 1, url: 'rss'),
+                    FilledButton(
+                      key: const ValueKey('rss-source'),
+                      onPressed: () => RuleSubPage.openImport(
+                        context,
+                        const RuleSub(id: 2, type: 1, url: 'rss'),
+                      ),
+                      child: const Text('订阅源'),
                     ),
-                    child: const Text('订阅源'),
-                  ),
-                  FilledButton(
-                    key: const ValueKey('replace-rule'),
-                    onPressed: () => RuleSubPage.openImport(
-                      context,
-                      const RuleSub(id: 3, type: 2, url: 'replace'),
+                    FilledButton(
+                      key: const ValueKey('replace-rule'),
+                      onPressed: () => RuleSubPage.openImport(
+                        context,
+                        const RuleSub(id: 3, type: 2, url: 'replace'),
+                      ),
+                      child: const Text('替换规则'),
                     ),
-                    child: const Text('替换规则'),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -104,22 +113,27 @@ void main() {
       validationPort: FrbBookSourceValidationPort(),
       sourceService: createTestBookSourceService(),
     );
+    final rssProvider = RssProvider();
+    final replaceProvider = ReplaceProvider(
+      repository: _FakeReplaceRuleRepository(),
+      contentProcessor: ContentProcessorAdapter(),
+    );
     final importPort = _FakeRuleSubImportPort();
     await tester.pumpWidget(
       MultiProvider(
         providers: [
           ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
-          ChangeNotifierProvider<RssProvider>.value(value: RssProvider()),
-          ChangeNotifierProvider<ReplaceProvider>.value(
-            value: ReplaceProvider(
-              repository: _FakeReplaceRuleRepository(),
-              contentProcessor: ContentProcessorAdapter(),
-            ),
-          ),
+          ChangeNotifierProvider<RssProvider>.value(value: rssProvider),
+          ChangeNotifierProvider<ReplaceProvider>.value(value: replaceProvider),
           Provider<RuleSubPrefsPort>.value(value: prefs),
           Provider<RuleSubImportPort>.value(value: importPort),
         ],
-        child: const MaterialApp(home: RuleSubPage()),
+        child: _withSharedControllers(
+          sourceProvider: sourceProvider,
+          rssProvider: rssProvider,
+          replaceProvider: replaceProvider,
+          child: const MaterialApp(home: RuleSubPage()),
+        ),
       ),
     );
 
@@ -129,6 +143,24 @@ void main() {
     expect(find.byTooltip('编辑'), findsOneWidget);
     expect(importPort.autoUpdateChecks, 1);
   });
+}
+
+Widget _withSharedControllers({
+  required SourceProvider sourceProvider,
+  required RssProvider rssProvider,
+  required ReplaceProvider replaceProvider,
+  required Widget child,
+}) {
+  return riverpod.ProviderScope(
+    overrides: [
+      sourceControllerProvider.overrideWithValue(sourceProvider.controller),
+      rssSourceControllerProvider.overrideWithValue(rssProvider.controller),
+      replaceRulesControllerProvider.overrideWithValue(
+        replaceProvider.controller,
+      ),
+    ],
+    child: child,
+  );
 }
 
 Future<void> _importFrom(WidgetTester tester, String key) async {

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/book/book_provider_source_port.dart';
 import 'package:legado_flutter/application/cache/cache_book_download_port.dart';
 import 'package:legado_flutter/application/cache/cache_book_shelf_port.dart';
 import 'package:legado_flutter/application/preferences/download_choice_prefs_port.dart';
+import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/application/source_management/source_management_book_source_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
@@ -50,21 +52,25 @@ void main() {
     await sourceProvider.loadSources();
 
     await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
-          Provider<DownloadChoicePrefsPort>.value(
-            value: const _FakeDownloadChoicePrefsPort(),
-          ),
+      riverpod.ProviderScope(
+        overrides: [
+          sourceControllerProvider.overrideWithValue(sourceProvider.controller),
         ],
-        child: MaterialApp(
-          home: CacheBookPage(
-            contentCache: cache,
-            shelfPort: _FakeCacheBookShelfPort(
-              books: [book],
-              chapters: chapters,
+        child: MultiProvider(
+          providers: [
+            Provider<DownloadChoicePrefsPort>.value(
+              value: const _FakeDownloadChoicePrefsPort(),
             ),
-            downloadPort: downloadPort,
+          ],
+          child: MaterialApp(
+            home: CacheBookPage(
+              contentCache: cache,
+              shelfPort: _FakeCacheBookShelfPort(
+                books: [book],
+                chapters: chapters,
+              ),
+              downloadPort: downloadPort,
+            ),
           ),
         ),
       ),
@@ -112,21 +118,25 @@ void main() {
     addTearDown(sourceProvider.dispose);
 
     await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
-          Provider<DownloadChoicePrefsPort>.value(
-            value: const _FakeDownloadChoicePrefsPort(),
-          ),
+      riverpod.ProviderScope(
+        overrides: [
+          sourceControllerProvider.overrideWithValue(sourceProvider.controller),
         ],
-        child: MaterialApp(
-          home: CacheBookPage(
-            contentCache: cache,
-            shelfPort: _FakeCacheBookShelfPort(
-              books: [book],
-              chapters: chapters,
+        child: MultiProvider(
+          providers: [
+            Provider<DownloadChoicePrefsPort>.value(
+              value: const _FakeDownloadChoicePrefsPort(),
             ),
-            downloadPort: downloadPort,
+          ],
+          child: MaterialApp(
+            home: CacheBookPage(
+              contentCache: cache,
+              shelfPort: _FakeCacheBookShelfPort(
+                books: [book],
+                chapters: chapters,
+              ),
+              downloadPort: downloadPort,
+            ),
           ),
         ),
       ),
@@ -143,7 +153,7 @@ void main() {
     expect(downloadPort.cancelCalls, 1);
   });
 
-  testWidgets('缓存下载通过共享 SourceController 查找书源', (tester) async {
+  testWidgets('独立宿主通过显式 SourceController 查找书源', (tester) async {
     final source = const BookSource(
       bookSourceUrl: 'https://source.example',
       bookSourceName: '测试书源',
@@ -179,15 +189,21 @@ void main() {
     await sourceProvider.loadSources();
 
     await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
-          ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
-          Provider<DownloadChoicePrefsPort>.value(
-            value: const _FakeDownloadChoicePrefsPort(),
+      riverpod.ProviderScope(
+        child: MultiProvider(
+          providers: [
+            ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+            Provider<DownloadChoicePrefsPort>.value(
+              value: const _FakeDownloadChoicePrefsPort(),
+            ),
+          ],
+          child: MaterialApp(
+            home: CacheBookPage(
+              contentCache: cache,
+              sourceController: sourceProvider.controller,
+            ),
           ),
-        ],
-        child: MaterialApp(home: CacheBookPage(contentCache: cache)),
+        ),
       ),
     );
     await tester.pumpAndSettle();

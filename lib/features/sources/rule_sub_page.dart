@@ -12,9 +12,6 @@ import '../../application/source_subscription/rule_sub_policy.dart';
 import '../../application/source_subscription/rule_sub_import_port.dart';
 import '../../application/source_subscription/rule_sub_prefs_port.dart';
 import '../../domain/source_subscription/rule_sub.dart';
-import '../../providers/replace_provider.dart';
-import '../../providers/rss_provider.dart';
-import '../../providers/source_provider.dart';
 
 /// 规则订阅 — 对齐 Jingshiro [RuleSubActivity] + `activity_rule_sub.xml`
 class RuleSubPage extends StatelessWidget {
@@ -25,27 +22,7 @@ class RuleSubPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _withControllerScope(
-      context,
-      _RuleSubPageBody(prefsPort: prefsPort),
-    );
-  }
-
-  static Widget _withControllerScope(BuildContext context, Widget child) {
-    return riverpod.ProviderScope(
-      overrides: [
-        sourceControllerProvider.overrideWithValue(
-          context.read<SourceProvider>().controller,
-        ),
-        rssSourceControllerProvider.overrideWithValue(
-          context.read<RssProvider>().controller,
-        ),
-        replaceRulesControllerProvider.overrideWithValue(
-          context.read<ReplaceProvider>().controller,
-        ),
-      ],
-      child: child,
-    );
+    return _RuleSubPageBody(prefsPort: prefsPort);
   }
 
   /// 供 MainShell / 自动更新打开导入 UI（对齐 openImportUi）
@@ -69,10 +46,7 @@ class RuleSubPage extends StatelessWidget {
       }
       await showDialog<void>(
         context: context,
-        builder: (_) => _withControllerScope(
-          context,
-          _RuleSubImportDialog(sub: sub, fetched: fetched),
-        ),
+        builder: (_) => _RuleSubImportDialog(sub: sub, fetched: fetched),
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -557,17 +531,19 @@ class _RuleSubEditDialogState extends State<_RuleSubEditDialog> {
 }
 
 /// 对齐 ImportBookSource / ImportRssSource / ImportReplaceRule 选择导入
-class _RuleSubImportDialog extends StatefulWidget {
+class _RuleSubImportDialog extends riverpod.ConsumerStatefulWidget {
   const _RuleSubImportDialog({required this.sub, required this.fetched});
 
   final RuleSub sub;
   final RuleSubImportResult fetched;
 
   @override
-  State<_RuleSubImportDialog> createState() => _RuleSubImportDialogState();
+  riverpod.ConsumerState<_RuleSubImportDialog> createState() =>
+      _RuleSubImportDialogState();
 }
 
-class _RuleSubImportDialogState extends State<_RuleSubImportDialog> {
+class _RuleSubImportDialogState
+    extends riverpod.ConsumerState<_RuleSubImportDialog> {
   late List<bool> _selected;
 
   @override
@@ -586,10 +562,9 @@ class _RuleSubImportDialogState extends State<_RuleSubImportDialog> {
       return;
     }
 
-    final container = riverpod.ProviderScope.containerOf(context);
-    final sourceNotifier = container.read(sourceNotifierProvider.notifier);
-    final rssNotifier = container.read(rssNotifierProvider.notifier);
-    final replaceNotifier = container.read(replaceNotifierProvider.notifier);
+    final sourceNotifier = ref.read(sourceNotifierProvider.notifier);
+    final rssNotifier = ref.read(rssNotifierProvider.notifier);
+    final replaceNotifier = ref.read(replaceNotifierProvider.notifier);
     var imported = 0;
 
     switch (widget.fetched.kind) {
@@ -608,7 +583,7 @@ class _RuleSubImportDialogState extends State<_RuleSubImportDialog> {
       case RuleSubImportKind.replaceRule:
         for (final i in indices) {
           final rule = widget.fetched.replaceRules[i];
-          final existing = container
+          final existing = ref
               .read(replaceNotifierProvider)
               .rules
               .where((r) => r.id == rule.id)

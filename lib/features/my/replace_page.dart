@@ -2,49 +2,97 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
+import '../../application/replace/replace_controller.dart';
 import '../../application/replace/replace_notifier.dart';
 import '../../application/replace/replace_preset_port.dart';
+import '../../application/replace/replace_state.dart';
 import '../../domain/content/replace_rule.dart';
-import '../../providers/replace_provider.dart';
 import '../../widgets/replace_preview_panel.dart';
 import '../../widgets/legado_popup_menu.dart';
 
 /// 替换净化页面 - 规则管理 + 实时预览 + 预设库
 class ReplacePage extends StatelessWidget {
-  const ReplacePage({super.key});
+  const ReplacePage({super.key, this.controller});
+
+  /// 独立宿主可直接注入 controller；生产入口由父级 Riverpod scope 提供。
+  final ReplaceRulesController? controller;
 
   @override
   Widget build(BuildContext context) {
-    final controller = context.read<ReplaceProvider>().controller;
-    return riverpod.ProviderScope(
-      overrides: [replaceRulesControllerProvider.overrideWithValue(controller)],
-      child: const _ReplacePageBody(),
-    );
+    return _ReplacePageBody(controller: controller);
   }
 }
 
-class _ReplacePageBody extends StatefulWidget {
-  const _ReplacePageBody();
+class _ReplacePageBody extends riverpod.ConsumerStatefulWidget {
+  const _ReplacePageBody({this.controller});
+
+  final ReplaceRulesController? controller;
 
   @override
-  State<_ReplacePageBody> createState() => _ReplacePageBodyState();
+  riverpod.ConsumerState<_ReplacePageBody> createState() =>
+      _ReplacePageBodyState();
 }
 
-class _ReplacePageBodyState extends State<_ReplacePageBody>
+class _ReplacePageBodyState extends riverpod.ConsumerState<_ReplacePageBody>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+
+  ReplaceRulesController? get _injectedController => widget.controller;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _injectedController?.addListener(_onInjectedControllerChanged);
   }
 
   @override
   void dispose() {
+    _injectedController?.removeListener(_onInjectedControllerChanged);
     _tabController.dispose();
     super.dispose();
   }
+
+  void _onInjectedControllerChanged(_) {
+    if (mounted) setState(() {});
+  }
+
+  ReplaceState get _state => _injectedController == null
+      ? ref.read(replaceNotifierProvider)
+      : _injectedController!.state;
+
+  ReplaceNotifier get _notifier => ref.read(replaceNotifierProvider.notifier);
+
+  Future<void> _resetRules() => _injectedController == null
+      ? _notifier.resetReplaceRules()
+      : _injectedController!.resetReplaceRules();
+
+  Future<void> _addRule(ReplaceRule rule) => _injectedController == null
+      ? _notifier.addRule(rule)
+      : _injectedController!.addRule(rule);
+
+  Future<void> _updateRule(ReplaceRule rule) => _injectedController == null
+      ? _notifier.updateRule(rule)
+      : _injectedController!.updateRule(rule);
+
+  Future<void> _deleteRule(String ruleId) => _injectedController == null
+      ? _notifier.deleteRule(ruleId)
+      : _injectedController!.deleteRule(ruleId);
+
+  Future<void> _toggleRule(String ruleId, bool enabled) =>
+      _injectedController == null
+      ? _notifier.toggleRule(ruleId, enabled)
+      : _injectedController!.toggleRule(ruleId, enabled);
+
+  Future<int> _importPresets(List<ReplaceRule> rules) =>
+      _injectedController == null
+      ? _notifier.importPresets(rules)
+      : _injectedController!.importPresets(rules);
+
+  String _previewContent(String raw, List<ReplaceRule> rules) =>
+      _injectedController == null
+      ? _notifier.previewContent(raw, rules)
+      : _injectedController!.previewContent(raw, rules);
 
   @override
   Widget build(BuildContext context) {
@@ -73,9 +121,7 @@ class _ReplacePageBodyState extends State<_ReplacePageBody>
             offset: legadoAppBarPopupOffset(context),
             onSelected: (v) {
               if (v == 'reset') {
-                riverpod.ProviderScope.containerOf(
-                  context,
-                ).read(replaceNotifierProvider.notifier).resetReplaceRules();
+                _resetRules();
               }
             },
             itemBuilder: (_) => [
@@ -86,23 +132,20 @@ class _ReplacePageBodyState extends State<_ReplacePageBody>
       ),
       body: riverpod.Consumer(
         builder: (context, ref, _) {
-          final state = ref.watch(replaceNotifierProvider);
-          final notifier = ref.read(replaceNotifierProvider.notifier);
-          final rules = state.rules;
+          final rules = _injectedController == null
+              ? ref.watch(replaceNotifierProvider).rules
+              : _state.rules;
           return TabBarView(
             controller: _tabController,
             children: [
               _RulesListTab(
                 rules: rules,
                 onEdit: (rule) => _showRuleEditor(context, rule),
-                onReset: notifier.resetReplaceRules,
-                onToggle: notifier.toggleRule,
-                onDelete: notifier.deleteRule,
+                onReset: _resetRules,
+                onToggle: _toggleRule,
+                onDelete: _deleteRule,
               ),
-              ReplacePreviewPanel(
-                rules: rules,
-                applyRules: notifier.previewContent,
-              ),
+              ReplacePreviewPanel(rules: rules, applyRules: _previewContent),
             ],
           );
         },
@@ -111,9 +154,6 @@ class _ReplacePageBodyState extends State<_ReplacePageBody>
   }
 
   void _showPresetPicker(BuildContext context) {
-    final notifier = riverpod.ProviderScope.containerOf(
-      context,
-    ).read(replaceNotifierProvider.notifier);
     final presetPort = context.read<ReplacePresetPort>();
     final allPresets = presetPort.all;
     final groups = presetPort.grouped();
@@ -218,7 +258,7 @@ class _ReplacePageBodyState extends State<_ReplacePageBody>
                               (p) => selected.contains(p.id),
                             );
                             final rules = presetPort.toRules(presets);
-                            final added = await notifier.importPresets(rules);
+                            final added = await _importPresets(rules);
                             if (ctx.mounted) Navigator.pop(ctx);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -238,9 +278,6 @@ class _ReplacePageBodyState extends State<_ReplacePageBody>
   }
 
   void _showRuleEditor(BuildContext context, ReplaceRule? rule) {
-    final notifier = riverpod.ProviderScope.containerOf(
-      context,
-    ).read(replaceNotifierProvider.notifier);
     final nameController = TextEditingController(text: rule?.name ?? '');
     final patternController = TextEditingController(text: rule?.pattern ?? '');
     final replacementController = TextEditingController(
@@ -313,9 +350,9 @@ class _ReplacePageBodyState extends State<_ReplacePageBody>
                   isEnabled: rule?.isEnabled ?? true,
                 );
                 if (rule == null) {
-                  notifier.addRule(newRule);
+                  _addRule(newRule);
                 } else {
-                  notifier.updateRule(newRule);
+                  _updateRule(newRule);
                 }
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(rule == null ? '规则已添加' : '规则已更新')),
