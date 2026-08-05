@@ -6,7 +6,6 @@ import '../../application/bookshelf/bookshelf_url_import_port.dart';
 import '../../application/diagnostics/app_log_port.dart';
 import '../../application/platform/clipboard_port.dart';
 import '../../application/source_management/source_notifier.dart';
-import '../../providers/source_provider.dart';
 
 /// 添加书籍网址 — 对齐 Jingshiro「添加网址」：多行 URL → 匹配书源 → **直接加入书架**。
 class AddBookUrlDialog extends StatelessWidget {
@@ -24,15 +23,9 @@ class AddBookUrlDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sourceProvider = context.read<SourceProvider>();
-    return riverpod.ProviderScope(
-      overrides: [
-        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
-      ],
-      child: _AddBookUrlDialogBody(
-        clipboard: clipboard,
-        urlImportPort: urlImportPort,
-      ),
+    return _AddBookUrlDialogBody(
+      clipboard: clipboard,
+      urlImportPort: urlImportPort,
     );
   }
 }

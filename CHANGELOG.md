@@ -463,6 +463,8 @@ Each release entry must include the release date, the App version from `pubspec.
 the Rust engine version, the database schema version, user-visible changes,
 breaking or migration notes, and verification results. Keep unreleased work under
 `[Unreleased]` until it is committed and tagged.
+2026-08-05 Phase 4/R6 书架导入对话框 SourceController 边界：`AddBookUrlDialog` 与 `ImportBookshelfDialog` 移除页面内直接依赖旧 `SourceProvider` 和嵌套 Riverpod scope，统一由生产组合根/测试宿主提供共享 `SourceController`；保留源列表读取、网址导入、书单解析、进度和错误提示。定向 `4/4`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1280`（`3` 项既有条件跳过）通过；待完成 `git diff --check` 后创建中文本地提交，不自动 push。
+
 2026-08-05 Phase 4/R6 目录持久化边界：新增 `TocPersistencePort`，`TocSheet` 的书籍状态读取、倒序目录章节保存和书籍状态保存改通过 application 端口；生产组合根继续复用同一 `BookRepository`，缓存元数据改从已注册 `ChapterContentCachePort` 读取，保留 `bookRepository` 显式兼容参数。目录定向 `15/15`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1280`（`3` 项既有条件跳过）通过；待完成 `git diff --check` 后创建中文本地提交，不自动 push。
 
 2026-08-05 Phase 4/R6 书籍详情阅读启动与书源访问边界：`BookInfoPage` 的书源匹配改用既有 `ReaderSourceAccessPort`，阅读入口从 `BookshelfMembershipPort` 读取最新书架书籍，移除对 `BookProvider.books` 的直接读取；移除未使用的 `Consumer<BookProvider>` 展示包装，保留书源状态刷新和所有阅读/换源行为。详情定向 `10/10`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1280`（`3` 项既有条件跳过）通过；待完成 `git diff --check` 后创建中文本地提交，不自动 push。

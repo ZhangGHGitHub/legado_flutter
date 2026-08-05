@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
@@ -7,6 +8,7 @@ import 'package:legado_flutter/application/bookshelf/bookshelf_list_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_booklist_import_port.dart';
 import 'package:legado_flutter/application/diagnostics/app_log_port.dart';
 import 'package:legado_flutter/application/platform/clipboard_port.dart';
+import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/domain/diagnostics/diagnostic_record.dart';
@@ -322,24 +324,32 @@ Widget _withProviders({
   BookshelfListPort? listPort,
   BookProvider? bookProvider,
 }) {
-  return MultiProvider(
-    providers: [
-      ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
-      if (bookProvider != null)
-        ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
-      if (bookProvider != null)
-        Provider<BookshelfBooklistImportPort>.value(
-          value: BookshelfBooklistImportPortAdapter(
-            bookProvider.importBookshelfEntries,
-          ),
-        ),
-      Provider<ClipboardPort>.value(
-        value: clipboard ?? _FakeClipboardPort(null),
-      ),
-      if (listPort != null) Provider<BookshelfListPort>.value(value: listPort),
-      Provider<PublicTextFetchPort>.value(value: const _FakePublicTextFetch()),
-      Provider<AppLogPort>.value(value: const _FakeAppLog()),
+  return riverpod.ProviderScope(
+    overrides: [
+      sourceControllerProvider.overrideWithValue(sourceProvider.controller),
     ],
-    child: child,
+    child: MultiProvider(
+      providers: [
+        ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
+        if (bookProvider != null)
+          ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+        if (bookProvider != null)
+          Provider<BookshelfBooklistImportPort>.value(
+            value: BookshelfBooklistImportPortAdapter(
+              bookProvider.importBookshelfEntries,
+            ),
+          ),
+        Provider<ClipboardPort>.value(
+          value: clipboard ?? _FakeClipboardPort(null),
+        ),
+        if (listPort != null)
+          Provider<BookshelfListPort>.value(value: listPort),
+        Provider<PublicTextFetchPort>.value(
+          value: const _FakePublicTextFetch(),
+        ),
+        Provider<AppLogPort>.value(value: const _FakeAppLog()),
+      ],
+      child: child,
+    ),
   );
 }

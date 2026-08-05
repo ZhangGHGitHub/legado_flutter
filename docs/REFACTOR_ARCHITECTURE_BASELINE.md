@@ -3801,3 +3801,9 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 目录缓存字数/缓存状态读取改从已注册的 `ChapterContentCachePort` 获取；保留 `bookRepository` 显式参数作为旧宿主兼容路径，以及目录顺序、倒序、0-based index 重写和异常降级行为。
 - 目录页与书籍详情定向 `15/15`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280`（`3` 项既有条件跳过）通过。
 - 本批未修改 Rust、`legado-main/`、正文、目录顺序语义、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；R6 尚未退出。
+## 211. 2026-08-05：R6 书架导入对话框 SourceController 边界
+
+- `AddBookUrlDialog` 与 `ImportBookshelfDialog` 移除页面内对旧 `SourceProvider` 的直接依赖和嵌套 Riverpod scope；生产组合根已经提供共享 `SourceController`，测试宿主显式设置同一 `sourceControllerProvider` override。
+- 保留源列表读取、网址导入、书单解析、进度更新、错误记录和原有 UI 行为；不改变书源顺序、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+- 对话框定向 `4/4`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280`（`3` 项既有条件跳过）通过。
+- 本批未修改 Rust、`legado-main/`、R1-12 或暂停平台门禁；R6 尚未退出。

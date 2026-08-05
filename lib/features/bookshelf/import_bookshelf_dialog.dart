@@ -8,7 +8,6 @@ import '../../application/diagnostics/app_log_port.dart';
 import '../../application/platform/clipboard_port.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../domain/ports/public_text_fetch_port.dart';
-import '../../providers/source_provider.dart';
 
 /// 导入书单 — 对齐 Jingshiro：粘贴 url/json +「选文件」，按 name/author 精准搜索入库。
 class ImportBookshelfDialog extends StatelessWidget {
@@ -26,15 +25,9 @@ class ImportBookshelfDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sourceProvider = context.read<SourceProvider>();
-    return riverpod.ProviderScope(
-      overrides: [
-        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
-      ],
-      child: _ImportBookshelfDialogBody(
-        listPort: listPort,
-        importPort: importPort,
-      ),
+    return _ImportBookshelfDialogBody(
+      listPort: listPort,
+      importPort: importPort,
     );
   }
 }
