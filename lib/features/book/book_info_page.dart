@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:legado_flutter/application/book/book_info_chapter_port.dart';
 import 'package:legado_flutter/application/book/book_metadata_port.dart';
 import 'package:legado_flutter/application/book/book_read_status_port.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_group_command_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_membership_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
@@ -39,6 +40,7 @@ class BookInfoPage extends StatelessWidget {
   final BookshelfMembershipPort? membershipPort;
   final BookMetadataPort? metadataPort;
   final BookReadStatusPort? readStatusPort;
+  final BookshelfArrangeGroupCommandPort? groupCommandPort;
 
   const BookInfoPage({
     super.key,
@@ -48,6 +50,7 @@ class BookInfoPage extends StatelessWidget {
     this.membershipPort,
     this.metadataPort,
     this.readStatusPort,
+    this.groupCommandPort,
   });
 
   @override
@@ -59,6 +62,7 @@ class BookInfoPage extends StatelessWidget {
       membershipPort: membershipPort,
       metadataPort: metadataPort,
       readStatusPort: readStatusPort,
+      groupCommandPort: groupCommandPort,
     );
   }
 }
@@ -70,6 +74,7 @@ class _BookInfoPageBody extends riverpod.ConsumerStatefulWidget {
   final BookshelfMembershipPort? membershipPort;
   final BookMetadataPort? metadataPort;
   final BookReadStatusPort? readStatusPort;
+  final BookshelfArrangeGroupCommandPort? groupCommandPort;
 
   const _BookInfoPageBody({
     required this.book,
@@ -78,6 +83,7 @@ class _BookInfoPageBody extends riverpod.ConsumerStatefulWidget {
     this.membershipPort,
     this.metadataPort,
     this.readStatusPort,
+    this.groupCommandPort,
   });
 
   @override
@@ -96,6 +102,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   late final BookshelfMembershipPort _membershipPort;
   late final BookMetadataPort _metadataPort;
   late final BookReadStatusPort _readStatusPort;
+  late final BookshelfArrangeGroupCommandPort _groupCommandPort;
 
   @override
   void initState() {
@@ -113,6 +120,13 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
         widget.readStatusPort ??
         Provider.of<BookReadStatusPort?>(context, listen: false) ??
         BookReadStatusPortCallbacks(update: provider.updateReadIteration);
+    _groupCommandPort =
+        widget.groupCommandPort ??
+        Provider.of<BookshelfArrangeGroupCommandPort?>(
+          context,
+          listen: false,
+        ) ??
+        const EmptyBookshelfArrangeGroupCommandPort();
     _membershipPort =
         widget.membershipPort ??
         Provider.of<BookshelfMembershipPort?>(context, listen: false) ??
@@ -538,7 +552,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     );
     controller.dispose();
     if (chosen == null || !mounted) return;
-    await context.read<BookProvider>().updateBookGroup(_book.id, chosen);
+    await _groupCommandPort.updateBookGroup(_book.id, chosen);
     if (mounted) {
       setState(() => _book = _book.copyWith(group: chosen));
     }

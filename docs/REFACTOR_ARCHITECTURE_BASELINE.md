@@ -3702,3 +3702,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：端口转发和书籍详情交互定向 `9/9`；Flutter 全量 `1266` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
 
 边界结论：本批完成书籍详情一个阅读状态写入调用点的 application 端口收口，不宣称 BookInfoPage 其他 Provider 职责迁移完成或 R6 退出。
+
+## 199. 2026-08-05：R6 书籍详情分组命令边界
+
+- `BookInfoPage` 的单本分组写入改用已存在的 `BookshelfArrangeGroupCommandPort`；生产组合根继续复用 `BookshelfArrangeGroupCommandPortAdapter` 与 `BookProvider`，独立宿主缺少能力时使用明确空实现。分组列表读取仍通过 `BookshelfMembershipPort`，未创建第二份书架事实源。
+- 保留加入书架前置、分组输入裁剪、取消、页面局部状态更新和原有 UI 行为；本批不迁移书架增删、阅读启动、目录、进度职责，不改变 `legado-main`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：分组适配器与书籍详情定向联合 `15/15`；Flutter 全量 `1266` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
+
+边界结论：本批完成书籍详情一个单本分组写入调用点的 application 端口收口，不宣称 BookInfoPage 其他 Provider 职责迁移完成或 R6 退出。

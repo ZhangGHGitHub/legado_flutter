@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-05
 
+2026-08-05 Phase 4/R6 书籍详情分组命令边界追溯：本批将 `BookInfoPage._setGroup` 的单本写入改接已存在的 `BookshelfArrangeGroupCommandPort`，组合根继续绑定 `BookProvider` 适配器，独立宿主缺少能力时使用 application 空实现；保留分组读取、加入书架前置、输入裁剪、取消和原 UI 行为。定向联合 `15/15`、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过后，执行 Flutter 全量 `1266`（`3` 项既有条件跳过）并通过。创建中文本地提交，只提交本批代码和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
+
 2026-08-05 Phase 4/R6 书籍详情阅读状态写入边界追溯：本批只收口 `BookInfoPage._setReadIteration` 的 Provider 写入，新增 `BookReadStatusPort` 和回调适配器，生产组合根继续委托 `BookProvider.updateReadIteration`；保留阅读状态选项、书架内落库条件、异常传播和原 UI 行为。定向 `9/9`、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过后，执行 Flutter 全量 `1266`（`3` 项既有条件跳过）并通过。已创建中文本地提交，只提交本批代码、测试和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
 
 2026-08-05 Phase 4/R6 缓存下载与阅读器书源展示边界追溯：三个不重叠写集分别收口缓存页下载状态/命令、漫画菜单书源名和普通阅读器顶栏书源名；主线在组合根复用既有 `BookProvider` 下载状态与 `SourceProvider.findSourceForBook`。缓存页仅在独立宿主未注入端口时保留回调 fallback，生产入口优先读取根端口。合并定向 `21/21`、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过后，执行 Flutter 串行全量 `1254`（`3` 项既有条件跳过）并通过。代码提交 `cb0e194`，只提交本批代码和测试，不提交 `reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
