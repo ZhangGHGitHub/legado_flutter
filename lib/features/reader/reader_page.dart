@@ -24,6 +24,7 @@ import '../../application/reader/reader_progress_port.dart';
 import '../../application/reader/reader_chapter_refresh_port.dart';
 import '../../application/reader/reader_chapter_list_port.dart';
 import '../../application/reader/reader_source_access_port.dart';
+import '../../application/reader/reader_chapter_cache_status_port.dart';
 import '../../application/reader/reader_simulated_reading_port.dart';
 import '../../application/reader/reader_image_cache_port.dart';
 import '../../application/reader/reader_image_headers_port.dart';
@@ -139,6 +140,9 @@ class ReaderPage extends StatefulWidget {
   /// 书源访问和自动换源端口；未注入时从组合根读取。
   final ReaderSourceAccessPort? sourceAccessPort;
 
+  /// 章节缓存状态端口；未注入时从组合根读取。
+  final ReaderChapterCacheStatusPort? chapterCacheStatusPort;
+
   const ReaderPage({
     super.key,
     required this.book,
@@ -157,6 +161,7 @@ class ReaderPage extends StatefulWidget {
     this.cacheDownloadPort,
     this.chapterListPort,
     this.sourceAccessPort,
+    this.chapterCacheStatusPort,
   });
 
   @override
@@ -192,6 +197,7 @@ class _ReaderPageState extends State<ReaderPage> {
   late final ReaderChapterListPort _chapterListPort;
   late final ReaderSourceAccessPort _sourceAccessPort;
   late final ChapterContentCachePort _contentCache;
+  late final ReaderChapterCacheStatusPort _chapterCacheStatusPort;
   late final ReaderChapterContentPort _contentPort;
   late final ReaderImageHeadersPort _imageHeadersPort;
   late final ReaderSourcePresentationPort _sourcePresentationPort;
@@ -332,6 +338,14 @@ class _ReaderPageState extends State<ReaderPage> {
           autoChangeSource: context.read<BookProvider>().autoChangeSource,
         );
     _contentCache = context.read<ChapterContentCachePort>();
+    _chapterCacheStatusPort =
+        widget.chapterCacheStatusPort ??
+        Provider.of<ReaderChapterCacheStatusPort?>(context, listen: false) ??
+        ReaderChapterCacheStatusPortCallbacks(
+          markChapterDownloaded: context
+              .read<BookProvider>()
+              .markChapterDownloaded,
+        );
     _contentPort =
         widget.contentPort ?? context.read<ReaderChapterContentPort>();
     _imageHeadersPort =
@@ -1511,7 +1525,6 @@ class _ReaderPageState extends State<ReaderPage> {
     setState(() => _isLoading = true);
     try {
       final chapter = widget.allChapters[_currentIndex];
-      final bookProvider = context.read<BookProvider>();
       final source = _sourceAccessPort.sourceForBook(widget.book);
       String content;
       if (source != null) {
@@ -1534,11 +1547,9 @@ class _ReaderPageState extends State<ReaderPage> {
             bookId: widget.book.id,
           );
         }
-        content = await bookProvider.loadChapterContentCached(
-          chapter.url,
-          source: source,
-          chapterId: chapter.id,
-          bookId: widget.book.id,
+        content = await _contentPort.loadChapterContent(
+          book: widget.book,
+          chapter: chapter,
         );
       } else {
         content = '⚠️ 未找到匹配的书源';
@@ -1563,7 +1574,7 @@ class _ReaderPageState extends State<ReaderPage> {
             !content.contains('（加载失败') &&
             !content.startsWith('⚠️');
         if (ok) {
-          bookProvider.markChapterDownloaded(chapter.id);
+          _chapterCacheStatusPort.markChapterDownloaded(chapter.id);
         }
         _countChapterChars(content);
         _syncPreload();

@@ -3774,3 +3774,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：Reader 源访问、目录校验、缓存端口与页面宿主定向 `10/10`；Flutter 全量 `1276` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。
 
 边界结论：本批完成普通阅读器书源/目录/缓存外部访问的 application 端口收口，不宣称 ReaderPage 自动换源内部算法或其他 Provider 职责迁移完成或 R6 退出。
+
+## 207. 2026-08-05：R6 普通阅读器正文读取边界
+
+- `ReaderPage._loadContent` 的缓存正文读取改用已注册的 `ReaderChapterContentPort`；新增 `ReaderChapterCacheStatusPort` 和适配器承载成功正文后的 `markChapterDownloaded`，组合根继续复用 `BookProvider.loadChapterContentCached/markChapterDownloaded`。
+- 保留书源缺失文案、`ReadBook` 章节缓存失效、正文处理、请求世代、分页、图片加载、章节身份和失败语义；本批不改变 `legado-main`、目录顺序、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：Reader 正文端口、缓存状态适配器与页面宿主定向 `11/11`；Flutter 全量 `1278` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。
+
+边界结论：本批完成普通阅读器正文读取和缓存状态更新两个外部调用面的 application 端口收口，不宣称 `ReadBook` 内存缓存/编辑职责或 ReaderPage 其他 Provider 职责迁移完成或 R6 退出。

@@ -89,6 +89,7 @@ import '../application/reader/reader_progress_port.dart';
 import '../application/reader/reader_chapter_refresh_port.dart';
 import '../application/reader/reader_chapter_list_port.dart';
 import '../application/reader/reader_source_access_port.dart';
+import '../application/reader/reader_chapter_cache_status_port.dart';
 import '../application/reader/reader_simulated_reading_port.dart';
 import '../application/reader/read_style_zip_port.dart';
 import '../application/reader/reader_image_cache_port.dart';
@@ -272,6 +273,7 @@ import '../infrastructure/reader/reader_progress_port_adapter.dart';
 import '../infrastructure/reader/reader_chapter_refresh_port_adapter.dart';
 import '../infrastructure/reader/reader_chapter_list_port_adapter.dart';
 import '../infrastructure/reader/reader_source_access_port_adapter.dart';
+import '../infrastructure/reader/reader_chapter_cache_status_port_adapter.dart';
 import '../infrastructure/reader/reader_simulated_reading_port_adapter.dart';
 import '../infrastructure/preferences/shared_preferences_web_api_prefs_adapter.dart';
 import '../infrastructure/reader/reader_font_port_adapter.dart';
@@ -1001,6 +1003,12 @@ abstract final class AppCompositionRoot {
           Provider<ReaderProgressPort>.value(
             value: ReaderProgressPortAdapter(
               update: bootstrap.bookProvider.updateProgress,
+            ),
+          ),
+          Provider<ReaderChapterCacheStatusPort>.value(
+            value: ReaderChapterCacheStatusPortAdapter(
+              markChapterDownloaded:
+                  bootstrap.bookProvider.markChapterDownloaded,
             ),
           ),
           Provider<ReaderChapterRefreshPort>.value(
