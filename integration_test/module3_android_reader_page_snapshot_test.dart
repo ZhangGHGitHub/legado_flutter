@@ -28,6 +28,8 @@ import 'package:legado_flutter/application/reader/reader_session_prefs_port.dart
 import 'package:legado_flutter/application/preferences/click_action_prefs_port.dart';
 import 'package:legado_flutter/application/reader/simulated_reading_prefs_port.dart';
 import 'package:legado_flutter/application/reader/reader_progress_sync_port.dart';
+import 'package:legado_flutter/application/reader/reader_progress_port.dart';
+import 'package:legado_flutter/application/reader/reader_chapter_cache_status_port.dart';
 import 'package:legado_flutter/features/reader/reader_page.dart';
 import 'package:legado_flutter/features/reader/reader_settings.dart';
 import 'package:legado_flutter/features/reader/turn/page_direction.dart';
@@ -220,6 +222,12 @@ void main() {
               book: book,
               chapter: chapter,
               allChapters: [chapter],
+              progressPort: ReaderProgressPortCallbacks(
+                update: bookProvider.updateProgress,
+              ),
+              chapterCacheStatusPort: ReaderChapterCacheStatusPortCallbacks(
+                markChapterDownloaded: bookProvider.markChapterDownloaded,
+              ),
             ),
           ),
         ),

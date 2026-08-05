@@ -191,12 +191,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     _chapterPort =
         widget.chapterPort ??
         Provider.of<BookInfoChapterPort?>(context, listen: false) ??
-        BookInfoChapterPortCallbacks(
-          currentChapters: () => provider.currentChapters,
-          isLoading: () => provider.isLoading,
-          isRefreshingToc: () => provider.isRefreshingToc,
-          loadChapters: provider.loadChapters,
-        );
+        const EmptyBookInfoChapterPort();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initPage());
   }
 

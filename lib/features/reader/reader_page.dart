@@ -300,12 +300,7 @@ class _ReaderPageState extends State<ReaderPage> {
     _contentRefetchPort = context.read<ReaderContentRefetchPort>();
     _bookmarkReadinessPort = context.read<ReaderBookmarkReadinessPort>();
     _progressSyncPort = context.read<ReaderProgressSyncPort>();
-    _progressPort =
-        widget.progressPort ??
-        Provider.of<ReaderProgressPort?>(context, listen: false) ??
-        ReaderProgressPortCallbacks(
-          update: context.read<BookProvider>().updateProgress,
-        );
+    _progressPort = widget.progressPort ?? context.read<ReaderProgressPort>();
     _chapterRefreshPort =
         widget.chapterRefreshPort ??
         Provider.of<ReaderChapterRefreshPort?>(context, listen: false) ??
@@ -340,12 +335,7 @@ class _ReaderPageState extends State<ReaderPage> {
     _contentCache = context.read<ChapterContentCachePort>();
     _chapterCacheStatusPort =
         widget.chapterCacheStatusPort ??
-        Provider.of<ReaderChapterCacheStatusPort?>(context, listen: false) ??
-        ReaderChapterCacheStatusPortCallbacks(
-          markChapterDownloaded: context
-              .read<BookProvider>()
-              .markChapterDownloaded,
-        );
+        context.read<ReaderChapterCacheStatusPort>();
     _contentPort =
         widget.contentPort ?? context.read<ReaderChapterContentPort>();
     _imageHeadersPort =

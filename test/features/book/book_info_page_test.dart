@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/application/book/book_info_chapter_port.dart';
 import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/application/book/book_read_status_port.dart';
 import 'package:legado_flutter/application/cache/cache_book_download_port.dart';
@@ -58,6 +59,61 @@ void main() {
     );
 
     expect(page.sourceAccessPort, same(sourcePort));
+  });
+
+  testWidgets('详情页显式章节端口优先并保留初次加载和强制刷新参数', (tester) async {
+    final chapterPort = _RecordingBookInfoChapterPort();
+    final providerPort = _RecordingBookInfoChapterPort();
+
+    await _pumpEditPage(
+      tester,
+      inShelf: false,
+      chapterPort: chapterPort,
+      providerChapterPort: providerPort,
+    );
+
+    expect(chapterPort.calls, [false]);
+    expect(providerPort.calls, isEmpty);
+    expect(chapterPort.currentChapters.single.title, '第一章');
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('刷新目录'));
+    await tester.pumpAndSettle();
+
+    expect(chapterPort.calls, [false, true]);
+    expect(providerPort.calls, isEmpty);
+  });
+
+  testWidgets('详情页未显式注入时复用共享章节端口', (tester) async {
+    final providerPort = _RecordingBookInfoChapterPort();
+
+    await _pumpEditPage(
+      tester,
+      inShelf: false,
+      providerChapterPort: providerPort,
+    );
+
+    expect(providerPort.calls, [false]);
+    expect(providerPort.currentChapters.single.title, '第一章');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('详情页章节端口异常仍被捕获且保留刷新调用', (tester) async {
+    final chapterPort = _RecordingBookInfoChapterPort(failure: '目录端口失败');
+
+    await _pumpEditPage(tester, inShelf: false, chapterPort: chapterPort);
+
+    expect(chapterPort.calls, [false]);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('刷新目录'));
+    await tester.pumpAndSettle();
+
+    expect(chapterPort.calls, [false, true]);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('详情页阅读状态通过应用端口写入', (tester) async {
@@ -288,6 +344,8 @@ _pumpEditPage(
   WidgetTester tester, {
   required bool inShelf,
   BookReadStatusPort? readStatusPort,
+  BookInfoChapterPort? chapterPort,
+  BookInfoChapterPort? providerChapterPort,
 }) async {
   final source = BookSource(
     bookSourceUrl: 'https://source.example',
@@ -330,13 +388,19 @@ _pumpEditPage(
           value: _TestBookshelfMembershipPort(bookProvider),
         ),
         Provider<BookSourceSearchPort>.value(value: const _EmptySearchPort()),
+        if (providerChapterPort != null)
+          Provider<BookInfoChapterPort>.value(value: providerChapterPort),
       ],
       child: riverpod.ProviderScope(
         overrides: [
           sourceControllerProvider.overrideWithValue(sourceProvider.controller),
         ],
         child: MaterialApp(
-          home: BookInfoPage(book: book, readStatusPort: readStatusPort),
+          home: BookInfoPage(
+            book: book,
+            readStatusPort: readStatusPort,
+            chapterPort: chapterPort,
+          ),
         ),
       ),
     ),
@@ -551,6 +615,44 @@ final class _RecordingBookReadStatusPort implements BookReadStatusPort {
   @override
   Future<void> updateReadIteration(Book book, int readIteration) async {
     calls.add((book.id, readIteration));
+  }
+}
+
+final class _RecordingBookInfoChapterPort implements BookInfoChapterPort {
+  _RecordingBookInfoChapterPort({this.failure});
+
+  final String? failure;
+  final calls = <bool>[];
+  final chapters = <Chapter>[];
+
+  @override
+  List<Chapter> get currentChapters => chapters;
+
+  @override
+  bool get isLoading => false;
+
+  @override
+  bool get isRefreshingToc => false;
+
+  @override
+  Future<void> loadChapters(
+    Book book, {
+    required BookSource source,
+    bool forceRefresh = false,
+  }) async {
+    calls.add(forceRefresh);
+    if (failure != null) throw StateError(failure!);
+    chapters
+      ..clear()
+      ..add(
+        const Chapter(
+          id: 'chapter-1',
+          bookId: 'book-1',
+          title: '第一章',
+          index: 0,
+          url: 'https://source.example/chapter-1',
+        ),
+      );
   }
 }
 
