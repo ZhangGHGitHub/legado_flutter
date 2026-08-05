@@ -36,6 +36,7 @@ import '../application/bookshelf/bookshelf_membership_port.dart';
 import '../application/bookshelf/bookshelf_url_import_port.dart';
 import '../application/bookshelf/bookshelf_toc_refresh_port.dart';
 import '../application/mine/my_page_port.dart';
+import '../application/mine/my_page_notifier.dart';
 import '../application/mine/webdav_config_dialog_port.dart';
 import '../application/main/main_shell_startup_port.dart';
 import '../application/obsidian/obsidian_export_port.dart';
@@ -97,6 +98,7 @@ import '../application/source_management/source_notifier.dart';
 import '../application/main/privacy_consent_port.dart';
 import '../application/sources/source_debug_formatter_port.dart';
 import '../application/rss/public_text_rss_source_import_port.dart';
+import '../application/rss/rss_notifier.dart';
 import '../application/rss/rss_read_state_port.dart';
 import '../application/rss/rss_sort_urls_port.dart';
 import '../application/rss/rss_login_port.dart';
@@ -340,9 +342,17 @@ abstract final class AppCompositionRoot {
     return Builder(
       builder: (context) {
         final sourceProvider = context.read<SourceProvider?>();
+        final myPagePort = context.read<MyPagePort?>();
+        final rssProvider = context.read<RssProvider?>();
         return riverpod.ProviderScope(
           overrides: [
             coreApiProvider.overrideWithValue(coreApi),
+            if (myPagePort != null)
+              myPagePortProvider.overrideWithValue(myPagePort),
+            if (rssProvider != null)
+              rssSourceControllerProvider.overrideWithValue(
+                rssProvider.controller,
+              ),
             bookshelfControllerProvider.overrideWithValue(
               BookshelfController(RepositoryBookshelfPort(bookRepository)),
             ),
