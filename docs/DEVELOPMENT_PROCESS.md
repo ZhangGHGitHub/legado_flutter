@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-05
 
+2026-08-05 Phase 4/R6 目录持久化边界追溯：本批新增 `TocPersistencePort`，`TocSheet` 的书籍状态读取、倒序目录章节保存和书籍状态保存改通过 application 端口；生产组合根继续委托同一 `BookRepository`，缓存元数据改从已注册 `ChapterContentCachePort` 读取，保留 `bookRepository` 显式兼容参数和目录既有行为。先执行目录/详情定向 `15/15`，再执行 `flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 Flutter 串行全量 `1280`（`3` 项既有条件跳过），全部通过；随后执行 `git diff --check` 并创建中文本地提交，只提交本批代码和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
+
 2026-08-05 Phase 4/R6 书籍详情阅读启动与书源访问边界追溯：本批将 `BookInfoPage` 的书源匹配改接既有 `ReaderSourceAccessPort`，阅读入口改从 `BookshelfMembershipPort` 读取最新书架书籍，移除对 `BookProvider.books` 的直接读取和未使用的 `Consumer<BookProvider>` 展示包装；保留书源状态刷新、阅读入口、换源行为和原有书籍匹配语义。先执行书籍详情定向 `10/10`，再执行 `flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 Flutter 串行全量 `1280`（`3` 项既有条件跳过），全部通过；随后执行 `git diff --check` 并创建中文本地提交，只提交本批代码、测试和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
 
 2026-08-05 Phase 4/R6 书籍详情缓存下载边界追溯：本批将 `BookInfoPage` 的“缓存全部”入口接入既有 `CacheBookDownloadPort`，生产组合根继续委托 `BookProvider` 的下载状态、目录加载、批量下载和取消；保留同书取消、书源缺失、空目录提示、缓存过滤、并发参数和完成计数语义。先执行书籍详情定向 `10/10`，再执行 `flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 Flutter 串行全量 `1279`（`3` 项既有条件跳过），全部通过；随后执行 `git diff --check` 并创建中文本地提交，只提交本批代码、测试和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。

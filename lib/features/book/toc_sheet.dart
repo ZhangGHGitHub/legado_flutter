@@ -7,10 +7,10 @@ import '../../domain/annotation/note_snapshot.dart';
 import '../../domain/ports/chapter_content_cache_port.dart';
 import '../../domain/ports/note_port.dart';
 import '../../domain/repositories/book_repository.dart';
+import '../../application/book/toc_persistence_port.dart';
 import '../../help/bookmark_hint.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
-import '../../providers/book_provider.dart';
 import '../../widgets/legado_popup_menu.dart';
 
 /// 选中章节；[pageIndex]/[chapterPos] 为书签回跳参数。
@@ -26,6 +26,7 @@ class TocSheet extends StatefulWidget {
   final String? bookId;
   final Book? book;
   final BookRepository? bookRepository;
+  final TocPersistencePort? persistencePort;
   final Future<void> Function(bool reverseToc)? onReverseTocChanged;
   final ChapterContentCachePort? contentCache;
   final TocChapterTap onChapterTap;
@@ -38,6 +39,7 @@ class TocSheet extends StatefulWidget {
     this.bookId,
     this.book,
     this.bookRepository,
+    this.persistencePort,
     this.onReverseTocChanged,
     this.contentCache,
     required this.onChapterTap,
@@ -51,11 +53,19 @@ class TocSheet extends StatefulWidget {
     String? bookId,
     Book? book,
     BookRepository? bookRepository,
+    TocPersistencePort? persistencePort,
     Future<void> Function(bool reverseToc)? onReverseTocChanged,
     ChapterContentCachePort? contentCache,
     required TocChapterTap onChapterTap,
   }) {
-    final bookProvider = Provider.of<BookProvider?>(context, listen: false);
+    final resolvedPersistencePort =
+        persistencePort ??
+        (bookRepository == null
+            ? Provider.of<TocPersistencePort?>(context, listen: false)
+            : TocPersistencePortCallbacks.fromRepository(bookRepository));
+    final resolvedContentCache =
+        contentCache ??
+        Provider.of<ChapterContentCachePort?>(context, listen: false);
     return Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => TocSheet(
@@ -64,9 +74,10 @@ class TocSheet extends StatefulWidget {
           currentChapterId: currentChapterId,
           bookId: bookId,
           book: book,
-          bookRepository: bookRepository ?? bookProvider?.repository,
+          bookRepository: bookRepository,
+          persistencePort: resolvedPersistencePort,
           onReverseTocChanged: onReverseTocChanged,
-          contentCache: contentCache ?? bookProvider?.contentCache,
+          contentCache: resolvedContentCache,
           onChapterTap: onChapterTap,
         ),
       ),
@@ -101,6 +112,12 @@ class _TocSheetState extends State<TocSheet>
   bool _wordCountLoadScheduled = false;
   bool _didScrollToCurrent = false;
 
+  TocPersistencePort? get _tocPersistence =>
+      widget.persistencePort ??
+      (widget.bookRepository == null
+          ? null
+          : TocPersistencePortCallbacks.fromRepository(widget.bookRepository!));
+
   @override
   void initState() {
     super.initState();
@@ -124,13 +141,9 @@ class _TocSheetState extends State<TocSheet>
     final bookId = widget.bookId;
     if (bookId == null || bookId.isEmpty) return;
     try {
-      final repository = widget.bookRepository;
-      if (repository == null) return;
-      final books = await repository.getAll();
-      final book = books.cast<Book?>().firstWhere(
-        (candidate) => candidate?.id == bookId,
-        orElse: () => null,
-      );
+      final persistence = _tocPersistence;
+      if (persistence == null) return;
+      final book = await persistence.findBookById(bookId);
       if (!mounted || book == null) return;
       _persistentBook = book;
       final pending = _pendingReverseToc;
@@ -161,18 +174,18 @@ class _TocSheetState extends State<TocSheet>
       _pendingReverseToc = null;
       await widget.onReverseTocChanged?.call(value);
       if (current == null) return;
-      final repository = widget.bookRepository;
-      if (repository == null) return;
-      final persisted = await repository.getChapters(current.id);
+      final persistence = _tocPersistence;
+      if (persistence == null) return;
+      final persisted = await persistence.getChapters(current.id);
       final source = persisted.isNotEmpty ? persisted : _displayChapters;
       final reversed = _reverseAndReindex(source);
-      await repository.insertChapters(reversed);
+      await persistence.saveChapters(reversed);
       if (!mounted) return;
       setState(() => _displayChapters = reversed);
       final updated = current.copyWith(
         readConfig: current.readConfig.copyWith(reverseToc: value),
       );
-      await repository.insert(updated);
+      await persistence.saveBook(updated);
       _persistentBook = updated;
     } catch (error) {
       debugPrint('保存目录顺序失败: $error');

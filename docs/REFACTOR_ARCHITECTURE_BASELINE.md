@@ -3795,3 +3795,9 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 阅读入口的最新书籍读取改用 `BookshelfMembershipPort`，移除页面对 `BookProvider.books` 的直接读取；移除未使用的 `Consumer<BookProvider>` 展示包装，书源状态仍通过共享 `SourceState` 驱动名称刷新。
 - 保留书架匹配优先级、章节定位、普通/漫画阅读分流、书源回退和原 UI 行为。新增书源端口显式注入回归，详情定向 `10/10`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280`（`3` 项既有条件跳过）通过。
 - 本批未修改 Rust、`legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；R6 尚未退出。
+## 210. 2026-08-05：R6 目录持久化边界
+
+- 新增 `TocPersistencePort`；`TocSheet` 的书籍状态读取、倒序目录章节保存和书籍状态保存通过 application 端口完成，生产组合根以 `TocPersistencePortCallbacks` 复用同一 `BookRepository`。
+- 目录缓存字数/缓存状态读取改从已注册的 `ChapterContentCachePort` 获取；保留 `bookRepository` 显式参数作为旧宿主兼容路径，以及目录顺序、倒序、0-based index 重写和异常降级行为。
+- 目录页与书籍详情定向 `15/15`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280`（`3` 项既有条件跳过）通过。
+- 本批未修改 Rust、`legado-main/`、正文、目录顺序语义、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；R6 尚未退出。

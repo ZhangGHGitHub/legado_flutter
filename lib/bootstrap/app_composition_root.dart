@@ -12,6 +12,7 @@ import '../application/book/batch_book_progress_sync_port.dart';
 import '../application/book/book_info_chapter_port.dart';
 import '../application/book/book_metadata_port.dart';
 import '../application/book/book_read_status_port.dart';
+import '../application/book/toc_persistence_port.dart';
 import '../application/book/book_provider_source_port.dart';
 import '../application/book/book_source_change_port.dart';
 import '../application/book/local_book_import_port.dart';
@@ -771,6 +772,9 @@ abstract final class AppCompositionRoot {
             ),
           ),
           Provider<ChapterContentCachePort>.value(value: contentCache),
+          Provider<TocPersistencePort>.value(
+            value: TocPersistencePortCallbacks.fromRepository(bookRepository),
+          ),
           Provider<ReaderChapterContentPort>(
             create: (context) => ReaderChapterContentPortAdapter(
               loadChapterContent: ({required book, required chapter}) async {
