@@ -1,5 +1,7 @@
 # Legado Flutter — 项目重构主计划
 
+2026-08-05 Phase 4/R6 RSS 收藏页 SourceController 边界：`RssFavoritesPage` 新增可选 `RssSourceController` 显式注入；生产入口优先读取父级 Riverpod 共享 controller，独立宿主缺少 `ProviderScope` 时使用空 controller，移除页面对旧 `RssProvider` 的直接依赖。保留收藏加载、取消收藏、源匹配、图片请求策略和阅读跳转行为。定向 RSS 收藏/图片测试 `4/4`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1280`（`3` 项既有条件跳过）和 `git diff --check` 通过；R6 尚未退出。
+
 2026-08-05 Phase 4/R6 书架整理 SourceController 显式注入收口：`BookshelfArrangePage` 移除页面内旧 `SourceProvider` 依赖，生产组合根继续提供共享 scope，测试宿主显式注入 controller；保留源标签刷新、分组、删除、排序和选择状态。定向 `18/18`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280` 通过（`3` 项既有条件跳过）；R6 尚未退出。
 
 2026-08-05 Phase 4/R6 书架整理 SourceController 边界：`BookshelfArrangePage` 移除页面内直接依赖旧 `SourceProvider`，增加可选 `SourceController` 显式注入；生产环境继续使用组合根共享 scope，测试宿主显式注入 controller。保留源标签刷新、分组、删除、排序和选择状态行为。定向 `18/18`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280` 通过（`3` 项既有条件跳过）；R6 尚未退出。

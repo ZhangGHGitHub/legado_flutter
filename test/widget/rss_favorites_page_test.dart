@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/application/rss/rss_star_prefs_port.dart';
+import 'package:legado_flutter/application/rss/rss_notifier.dart';
 import 'package:legado_flutter/domain/rss/rss_article.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import 'package:legado_flutter/features/rss/rss_favorites_page.dart';
@@ -49,7 +51,14 @@ void main() {
           ChangeNotifierProvider.value(value: provider),
           Provider<RssStarPrefsPort>.value(value: stars),
         ],
-        child: const MaterialApp(home: RssFavoritesPage()),
+        child: riverpod.ProviderScope(
+          overrides: [
+            rssSourceControllerProvider.overrideWithValue(provider.controller),
+          ],
+          child: MaterialApp(
+            home: RssFavoritesPage(controller: provider.controller),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();

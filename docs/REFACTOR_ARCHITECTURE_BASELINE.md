@@ -1,5 +1,7 @@
 # Legado Flutter 架构重构基线
 
+> 2026-08-05 Phase 4/R6 RSS 收藏页 SourceController 边界：`RssFavoritesPage` 通过可选 `RssSourceController` 接入共享 application 状态；生产导航优先读取父级 Riverpod scope，独立宿主没有 `ProviderScope` 时回退到空 controller，避免页面重新依赖旧 `RssProvider`。收藏读取、取消收藏、书源匹配、图片请求策略和阅读跳转语义保持不变。定向 RSS 收藏/图片测试 `4/4`，Flutter 全量 `1280`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过；R6 尚未退出。
+
 > 2026-08-04 Phase 4/R6 “我的”页缓存入口边界：`MyPage` 打开离线缓存时只读取组合根提供的 `ChapterContentCachePort`，不再依赖 `BookProvider.contentCache`；生产绑定与书架/启动阶段复用同一缓存实例，缺少端口的独立宿主仅显示不可用提示。定向 `3/3`、Flutter 全量 `1223`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过；R6 尚未退出。
 
 > 2026-08-04 Phase 4/R6 书架展示状态边界：Style1/Style2 的 loading、重试和单本目录更新展示依赖可监听 application `BookshelfDisplayStatePort`，不再直接消费 `BookProvider`；infrastructure 适配器转发现有 Provider 的 `Listenable`、`isLoading`、`isBookShelfUpdating` 和 `loadBooks`，生产组合根使用 `ListenableProvider` 注册。书架业务状态仍由 `BookshelfNotifier` 快照提供，Provider 继续是过渡事实源。定向 `14/14`、Flutter 全量 `1223`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、本批文件格式和 `git diff --check` 通过；R6 尚未退出。

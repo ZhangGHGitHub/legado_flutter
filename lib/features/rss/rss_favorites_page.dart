@@ -8,23 +8,38 @@ import '../../domain/ports/application_http_request_port.dart';
 import '../../domain/rss/rss_article.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import '../../application/rss/rss_star_prefs_port.dart';
-import '../../providers/rss_provider.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/remote_binary_image.dart';
 import 'rss_read_page.dart';
 
 /// RSS 收藏列表 — 对齐 Jingshiro RssFavorites / RssStar
 class RssFavoritesPage extends StatelessWidget {
-  const RssFavoritesPage({super.key});
+  const RssFavoritesPage({super.key, this.controller});
+
+  final RssSourceController? controller;
 
   @override
   Widget build(BuildContext context) {
-    final controller =
-        context.read<RssProvider?>()?.controller ?? RssSourceController();
+    final body = const _RssFavoritesPageBody();
+    final sourceController =
+        controller ?? _parentController(context) ?? RssSourceController();
     return riverpod.ProviderScope(
-      overrides: [rssSourceControllerProvider.overrideWithValue(controller)],
-      child: const _RssFavoritesPageBody(),
+      overrides: [
+        rssSourceControllerProvider.overrideWithValue(sourceController),
+      ],
+      child: body,
     );
+  }
+
+  RssSourceController? _parentController(BuildContext context) {
+    try {
+      return riverpod.ProviderScope.containerOf(
+        context,
+        listen: false,
+      ).read(rssSourceControllerProvider);
+    } catch (_) {
+      return null;
+    }
   }
 }
 
