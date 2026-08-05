@@ -463,3 +463,4 @@ Each release entry must include the release date, the App version from `pubspec.
 the Rust engine version, the database schema version, user-visible changes,
 breaking or migration notes, and verification results. Keep unreleased work under
 `[Unreleased]` until it is committed and tagged.
+2026-08-05 Phase 4/R6 书籍详情缓存下载边界：`BookInfoPage` 的“缓存全部”入口改用既有 `CacheBookDownloadPort`，生产组合根继续复用 `BookProvider` 的下载状态、目录加载、批量下载和取消事实源；保留同书取消、书源缺失、空目录提示、缓存过滤、并发参数和完成计数语义。书籍详情定向 `10/10`，`flutter analyze --no-pub`、架构边界、Flutter 全量 `1279`（`3` 项既有条件跳过）通过；待完成 `git diff --check` 后创建中文本地提交，不自动 push。

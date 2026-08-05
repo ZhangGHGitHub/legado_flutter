@@ -12,6 +12,7 @@ import 'package:legado_flutter/application/book/book_read_status_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_group_command_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_book_lifecycle_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_membership_port.dart';
+import 'package:legado_flutter/application/cache/cache_book_download_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
@@ -30,6 +31,25 @@ import 'change_source_page.dart';
 import 'toc_sheet.dart';
 import '../../utils/site_busy_guard.dart';
 
+CacheBookDownloadPort _fallbackBookInfoCacheDownloadPort(BuildContext context) {
+  final provider = context.read<BookProvider>();
+  return CacheBookDownloadPortCallbacks(
+    changes: provider,
+    state: () => CacheBookDownloadState(
+      isDownloading: provider.isDownloading,
+      downloadBookId: provider.downloadBookId,
+      completed: provider.downloadCompleted,
+      total: provider.downloadTotal,
+    ),
+    loadChapters: (book, {required source}) async {
+      await provider.loadChapters(book, source: source);
+      return List<Chapter>.unmodifiable(provider.currentChapters);
+    },
+    downloadAllChapters: provider.downloadAllChapters,
+    cancelDownload: provider.cancelDownload,
+  );
+}
+
 /// Legado 主色红（换源芯片 / 阅读按钮），对齐 Jingshiro BookInfo
 const Color _kAccentRed = LegadoTokens.sourceDotRed;
 
@@ -43,6 +63,7 @@ class BookInfoPage extends StatelessWidget {
   final BookReadStatusPort? readStatusPort;
   final BookshelfArrangeGroupCommandPort? groupCommandPort;
   final BookshelfBookLifecyclePort? lifecyclePort;
+  final CacheBookDownloadPort? cacheDownloadPort;
 
   const BookInfoPage({
     super.key,
@@ -54,6 +75,7 @@ class BookInfoPage extends StatelessWidget {
     this.readStatusPort,
     this.groupCommandPort,
     this.lifecyclePort,
+    this.cacheDownloadPort,
   });
 
   @override
@@ -67,6 +89,7 @@ class BookInfoPage extends StatelessWidget {
       readStatusPort: readStatusPort,
       groupCommandPort: groupCommandPort,
       lifecyclePort: lifecyclePort,
+      cacheDownloadPort: cacheDownloadPort,
     );
   }
 }
@@ -80,6 +103,7 @@ class _BookInfoPageBody extends riverpod.ConsumerStatefulWidget {
   final BookReadStatusPort? readStatusPort;
   final BookshelfArrangeGroupCommandPort? groupCommandPort;
   final BookshelfBookLifecyclePort? lifecyclePort;
+  final CacheBookDownloadPort? cacheDownloadPort;
 
   const _BookInfoPageBody({
     required this.book,
@@ -90,6 +114,7 @@ class _BookInfoPageBody extends riverpod.ConsumerStatefulWidget {
     this.readStatusPort,
     this.groupCommandPort,
     this.lifecyclePort,
+    this.cacheDownloadPort,
   });
 
   @override
@@ -110,6 +135,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   late final BookReadStatusPort _readStatusPort;
   late final BookshelfArrangeGroupCommandPort _groupCommandPort;
   late final BookshelfBookLifecyclePort _lifecyclePort;
+  late final CacheBookDownloadPort _cacheDownloadPort;
 
   @override
   void initState() {
@@ -138,6 +164,10 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
         widget.lifecyclePort ??
         Provider.of<BookshelfBookLifecyclePort?>(context, listen: false) ??
         const EmptyBookshelfBookLifecyclePort();
+    _cacheDownloadPort =
+        widget.cacheDownloadPort ??
+        Provider.of<CacheBookDownloadPort?>(context, listen: false) ??
+        _fallbackBookInfoCacheDownloadPort(context);
     _membershipPort =
         widget.membershipPort ??
         Provider.of<BookshelfMembershipPort?>(context, listen: false) ??
@@ -395,9 +425,10 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     }
   }
 
-  Future<void> _downloadAllChapters(BookProvider provider) async {
-    if (provider.isDownloading) {
-      provider.cancelDownload();
+  Future<void> _downloadAllChapters() async {
+    final state = _cacheDownloadPort.state;
+    if (state.isDownloading) {
+      _cacheDownloadPort.cancelDownload();
       return;
     }
     final source = _sourceForBook(_book);
@@ -420,7 +451,9 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
       }
       return;
     }
-    provider.downloadAllChapters(_book.id, toDownload, source);
+    unawaited(
+      _cacheDownloadPort.downloadAllChapters(_book.id, toDownload, source),
+    );
   }
 
   Future<void> _openChangeSource() async {
@@ -848,7 +881,6 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
             offset: legadoAppBarPopupOffset(context),
             icon: const Icon(Icons.more_vert, color: Colors.white),
             onSelected: (v) async {
-              final provider = context.read<BookProvider>();
               switch (v) {
                 case 'edit':
                   await _editBookInfo();
@@ -861,7 +893,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
                 case 'refresh':
                   await _refreshChapters(force: true);
                 case 'cache':
-                  await _downloadAllChapters(provider);
+                  await _downloadAllChapters();
                 case 'toc':
                   await _openToc();
                 case 'shelf':

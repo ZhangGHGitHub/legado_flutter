@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/application/book/book_read_status_port.dart';
+import 'package:legado_flutter/application/cache/cache_book_download_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_membership_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
@@ -26,6 +27,23 @@ import '../../application/source_management/source_controller_test.dart'
     as source_fixtures;
 
 void main() {
+  test('详情页宿主可以显式注入缓存下载端口', () {
+    final cachePort = CacheBookDownloadPortCallbacks(
+      changes: ChangeNotifier(),
+      state: () => const CacheBookDownloadState(),
+      loadChapters: (book, {required source}) async => const [],
+      downloadAllChapters:
+          (bookId, chapters, source, {concurrency = 1}) async {},
+      cancelDownload: () {},
+    );
+    final page = BookInfoPage(
+      book: const Book(id: 'book-1', name: '测试书'),
+      cacheDownloadPort: cachePort,
+    );
+
+    expect(page.cacheDownloadPort, same(cachePort));
+  });
+
   testWidgets('详情页阅读状态通过应用端口写入', (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 1000));
     final readStatusPort = _RecordingBookReadStatusPort();
