@@ -1,5 +1,7 @@
 # Legado Flutter — 项目重构主计划
 
+2026-08-05 Phase 4/R6 配置页 AppConfig scope 收口：`ConfigPage` 移除页面内对 `AppConfig.instance` 的局部 Riverpod override，直接复用组合根/父级 `appConfigProvider` 的同一配置事实源；保留配置页标签、主题、备份、其它设置和 AppConfig notifier 行为。配置/主题相关测试 `10/10`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1284`（`3` 项既有条件跳过）和 `git diff --check` 通过；R6 尚未退出。
+
 2026-08-05 Phase 4/R6 全文搜索与 RSS 源编辑/管理页 controller scope 收口：`SearchContentPage`、`RssSourceEditPage`、`RssSourceManagePage` 移除页面内旧 Provider 读取和嵌套 Riverpod scope，生产入口复用父级共享 controller，独立宿主保留显式注入；补齐既有缓存端口测试宿主的 ReplaceController 注入。保留全文搜索净化、RSS 编辑校验保存、源管理和导入行为。受影响定向 `9/9`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1284`（`3` 项既有条件跳过）和 `git diff --check` 通过；R6 尚未退出。
 
 2026-08-05 Phase 4/R6 替换页、规则订阅与缓存页 controller scope 收口：`ReplacePage`、`RuleSubPage`、`CacheBookPage` 移除页面内旧 Provider 读取和嵌套 Riverpod scope，生产入口复用父级共享 controller，独立宿主保留显式注入；保留规则增删改/预览、订阅导入和缓存下载/书源查找行为。受影响定向 `15/15`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1282`（`3` 项既有条件跳过）和 `git diff --check` 通过；R6 尚未退出。

@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../../application/config/app_config_notifier.dart';
 import '../../application/preferences/bookshelf_config_prefs_port.dart';
-import '../../config/app_config.dart';
 import '../../theme/legado_tokens.dart';
 import '../../features/bookshelf/bookshelf_config_dialog.dart';
 import 'backup_config_page.dart';
@@ -21,10 +20,7 @@ class ConfigPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ProviderScope(
-      overrides: [appConfigProvider.overrideWithValue(AppConfig.instance)],
-      child: _ConfigPageContent(initialTab: initialTab),
-    );
+    return _ConfigPageContent(initialTab: initialTab);
   }
 }
 
