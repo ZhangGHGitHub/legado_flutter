@@ -1,5 +1,7 @@
 # Legado Flutter 架构重构基线
 
+> 2026-08-05 Phase 4/R6 Reader 模拟追读、当前目录与 BookInfo 元数据边界：`ReaderPage` 的模拟追读和当前目录读取通过显式 application port、共享 port 或明确空实现获取，页面不再直接用 `BookProvider` 组装这两个 fallback；`BookInfoPage` 元数据写入通过 `BookMetadataPort`，生产适配器继续复用 `BookMetadataController` 的字段裁剪和 Provider 快照语义。定向联合 `28/28`、Flutter 全量 `1289`（`3` 项既有条件跳过）、Rust workspace `270` 测试、`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过；正文、目录顺序、分页、章节身份、UTF-16 阅读位置和第 3 条断行规则保持不变，R6 尚未退出。
+
 > 2026-08-05 Phase 4/R6 Reader 与 BookInfo 端口 fallback 边界：`ReaderPage` 的进度写入和章节缓存状态通过显式 application port 或组合根真实 port 获取；`BookInfoPage` 的目录加载通过显式 `BookInfoChapterPort`、共享 Provider port 或明确空实现获取。Android 快照宿主显式保留原 `BookProvider` 回调，未创建第二份事实源；正文、目录顺序、分页、章节身份、UTF-16 阅读位置和第 3 条断行规则保持不变。定向联合 `26/26`、Flutter 全量 `1288`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过；R6 尚未退出。
 
 > 2026-08-05 Phase 4/R6 配置页 AppConfig scope 边界：`ConfigPage` 不再创建局部 `appConfigProvider` override，直接消费组合根/父级默认的 `AppConfig.instance`；配置页子页面、AppConfig notifier、主题和其它设置行为保持不变。配置/主题相关测试 `10/10`，Flutter 全量 `1284`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过；R6 尚未退出。

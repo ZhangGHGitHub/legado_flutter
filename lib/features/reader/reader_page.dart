@@ -308,12 +308,7 @@ class _ReaderPageState extends State<ReaderPage> {
     _simulatedReadingPort =
         widget.simulatedReadingPort ??
         Provider.of<ReaderSimulatedReadingPort?>(context, listen: false) ??
-        ReaderSimulatedReadingPortCallbacks(
-          findBookById: context.read<BookProvider>().findBookById,
-          updateSimulatedReading: context
-              .read<BookProvider>()
-              .updateSimulatedReading,
-        );
+        const EmptyReaderSimulatedReadingPort();
     _cacheDownloadPort =
         widget.cacheDownloadPort ??
         Provider.of<CacheBookDownloadPort?>(context, listen: false) ??
@@ -321,9 +316,7 @@ class _ReaderPageState extends State<ReaderPage> {
     _chapterListPort =
         widget.chapterListPort ??
         Provider.of<ReaderChapterListPort?>(context, listen: false) ??
-        ReaderChapterListPortCallbacks(
-          chapters: () => context.read<BookProvider>().currentChapters,
-        );
+        const EmptyReaderChapterListPort();
     _sourceAccessPort =
         widget.sourceAccessPort ??
         Provider.of<ReaderSourceAccessPort?>(context, listen: false) ??

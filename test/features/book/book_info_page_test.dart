@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/book/book_info_chapter_port.dart';
+import 'package:legado_flutter/application/book/book_metadata_port.dart';
 import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/application/book/book_read_status_port.dart';
 import 'package:legado_flutter/application/cache/cache_book_download_port.dart';
@@ -59,6 +60,28 @@ void main() {
     );
 
     expect(page.sourceAccessPort, same(sourcePort));
+  });
+
+  testWidgets('详情页显式元数据端口优先于组合根端口', (tester) async {
+    final widgetPort = _RecordingBookMetadataPort();
+    final sharedPort = _RecordingBookMetadataPort();
+
+    await _pumpEditPage(
+      tester,
+      inShelf: true,
+      metadataPort: widgetPort,
+      providerMetadataPort: sharedPort,
+    );
+
+    await _editBookInfo(
+      tester,
+      name: ' 新书名 ',
+      author: ' 新作者 ',
+      description: ' 新简介 ',
+    );
+
+    expect(widgetPort.detailsCalls, [('book-1', ' 新书名 ', ' 新作者 ', ' 新简介 ')]);
+    expect(sharedPort.detailsCalls, isEmpty);
   });
 
   testWidgets('详情页显式章节端口优先并保留初次加载和强制刷新参数', (tester) async {
@@ -174,6 +197,9 @@ void main() {
           ListenableProvider<BookshelfMembershipPort>.value(
             value: _StaticBookshelfMembershipPort([book, groupedBook]),
           ),
+          Provider<BookMetadataPort>.value(
+            value: const EmptyBookMetadataPort(),
+          ),
           Provider<BookSourceSearchPort>.value(value: const _EmptySearchPort()),
         ],
         child: riverpod.ProviderScope(
@@ -229,6 +255,9 @@ void main() {
           ListenableProvider<BookshelfMembershipPort>.value(
             value: _TestBookshelfMembershipPort(bookProvider),
           ),
+          Provider<BookMetadataPort>.value(
+            value: const EmptyBookMetadataPort(),
+          ),
           Provider<BookSourceSearchPort>.value(value: const _EmptySearchPort()),
         ],
         child: riverpod.ProviderScope(
@@ -281,7 +310,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('书架内编辑基础信息走 Provider 字段级写入', (tester) async {
+  testWidgets('书架内编辑基础信息走元数据端口字段级写入', (tester) async {
     final fixture = await _pumpEditPage(tester, inShelf: true);
 
     await _editBookInfo(
@@ -346,6 +375,8 @@ _pumpEditPage(
   BookReadStatusPort? readStatusPort,
   BookInfoChapterPort? chapterPort,
   BookInfoChapterPort? providerChapterPort,
+  BookMetadataPort? metadataPort,
+  BookMetadataPort? providerMetadataPort,
 }) async {
   final source = BookSource(
     bookSourceUrl: 'https://source.example',
@@ -378,6 +409,12 @@ _pumpEditPage(
     contentCache: const _NoopChapterCache(),
   );
   await bookProvider.loadBooks(runMaintenance: false);
+  final sharedMetadataPort =
+      providerMetadataPort ??
+      BookMetadataPortCallbacks(
+        updateCover: bookProvider.updateBookCover,
+        updateBookDetails: bookProvider.updateBookDetails,
+      );
 
   await tester.pumpWidget(
     MultiProvider(
@@ -387,6 +424,7 @@ _pumpEditPage(
         ListenableProvider<BookshelfMembershipPort>.value(
           value: _TestBookshelfMembershipPort(bookProvider),
         ),
+        Provider<BookMetadataPort>.value(value: sharedMetadataPort),
         Provider<BookSourceSearchPort>.value(value: const _EmptySearchPort()),
         if (providerChapterPort != null)
           Provider<BookInfoChapterPort>.value(value: providerChapterPort),
@@ -400,6 +438,7 @@ _pumpEditPage(
             book: book,
             readStatusPort: readStatusPort,
             chapterPort: chapterPort,
+            metadataPort: metadataPort,
           ),
         ),
       ),
@@ -444,6 +483,10 @@ _pumpCoverPage(
     contentCache: const _NoopChapterCache(),
   );
   await bookProvider.loadBooks(runMaintenance: false);
+  final metadataPort = BookMetadataPortCallbacks(
+    updateCover: bookProvider.updateBookCover,
+    updateBookDetails: bookProvider.updateBookDetails,
+  );
 
   await tester.pumpWidget(
     MultiProvider(
@@ -453,6 +496,7 @@ _pumpCoverPage(
         ListenableProvider<BookshelfMembershipPort>.value(
           value: _TestBookshelfMembershipPort(bookProvider),
         ),
+        Provider<BookMetadataPort>.value(value: metadataPort),
         Provider<BookSourceSearchPort>.value(value: const _CoverSearchPort()),
       ],
       child: riverpod.ProviderScope(
@@ -615,6 +659,28 @@ final class _RecordingBookReadStatusPort implements BookReadStatusPort {
   @override
   Future<void> updateReadIteration(Book book, int readIteration) async {
     calls.add((book.id, readIteration));
+  }
+}
+
+final class _RecordingBookMetadataPort implements BookMetadataPort {
+  final coverCalls = <(String, String)>[];
+  final detailsCalls = <(String, String, String, String)>[];
+
+  @override
+  Future<Book> updateCover(Book book, String coverUrl) async {
+    coverCalls.add((book.id, coverUrl));
+    return book.copyWith(coverUrl: coverUrl);
+  }
+
+  @override
+  Future<Book?> updateBookDetails(
+    String bookId, {
+    required String name,
+    required String author,
+    required String description,
+  }) async {
+    detailsCalls.add((bookId, name, author, description));
+    return null;
   }
 }
 

@@ -150,13 +150,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     _book = widget.book;
     final provider = context.read<BookProvider>();
     final sourceNotifier = ref.read(sourceNotifierProvider.notifier);
-    _metadataPort =
-        widget.metadataPort ??
-        Provider.of<BookMetadataPort?>(context, listen: false) ??
-        BookMetadataPortCallbacks(
-          updateCover: provider.updateBookCover,
-          updateBookDetails: provider.updateBookDetails,
-        );
+    _metadataPort = widget.metadataPort ?? context.read<BookMetadataPort>();
     _readStatusPort =
         widget.readStatusPort ??
         Provider.of<BookReadStatusPort?>(context, listen: false) ??

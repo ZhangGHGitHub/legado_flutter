@@ -49,6 +49,7 @@ import 'package:legado_flutter/infrastructure/reader/reader_font_port_adapter.da
 import 'package:legado_flutter/infrastructure/reader/reader_image_cache_port_adapter.dart';
 import 'package:legado_flutter/infrastructure/reader/reader_selection_port_adapter.dart';
 import 'package:legado_flutter/infrastructure/reader/reader_session_prefs_port_adapter.dart';
+import 'package:legado_flutter/infrastructure/reader/reader_chapter_list_port_adapter.dart';
 import 'package:legado_flutter/infrastructure/preferences/shared_preferences_click_action_prefs_adapter.dart';
 import 'package:legado_flutter/infrastructure/preferences/shared_preferences_simulated_reading_prefs.dart';
 import 'package:legado_flutter/infrastructure/network/frb_application_binary_http_request_port.dart';
@@ -224,6 +225,9 @@ void main() {
               allChapters: [chapter],
               progressPort: ReaderProgressPortCallbacks(
                 update: bookProvider.updateProgress,
+              ),
+              chapterListPort: ReaderChapterListPortAdapter(
+                chapters: () => bookProvider.currentChapters,
               ),
               chapterCacheStatusPort: ReaderChapterCacheStatusPortCallbacks(
                 markChapterDownloaded: bookProvider.markChapterDownloaded,

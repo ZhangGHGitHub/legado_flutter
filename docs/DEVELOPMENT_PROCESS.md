@@ -1,5 +1,7 @@
 # Legado Flutter — Jingshiro/legado Rust + Flutter 重构开发流程
 
+2026-08-05 Phase 4/R6 Reader 模拟追读、当前目录与 BookInfo 元数据端口边界追溯：本批按三个不重叠调用面移除 `ReaderPage` 的模拟追读/当前目录 `BookProvider` fallback，并将 `BookInfoPage` 元数据写入改接 `BookMetadataPort`；生产组合根继续使用同一 Provider 事实源，字段 trim 仍由 `BookMetadataController` 负责。先执行定向联合 `28/28`，再执行 Flutter 串行全量 `1289`（`3` 项既有条件跳过）、Rust workspace `270` 测试、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check`，全部通过。只提交本批实现、测试、Android 快照宿主和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
+
 2026-08-05 Phase 4/R6 Reader 与 BookInfo 端口 fallback 边界追溯：本批按三个不重叠调用面收口 `ReaderPage` 的进度写入、章节缓存状态和 `BookInfoPage` 的目录加载。生产组合根继续提供真实 application port；独立宿主必须显式注入对应能力，未提供 BookInfo 目录能力时使用明确空实现。保留旧 `BookProvider` 回调行为、Android 快照宿主行为及正文/目录/分页/章节身份语义。先执行定向联合 `26/26`，再执行 Flutter 串行全量 `1288`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check`，全部通过。只提交本批实现、测试、Android 快照宿主和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
 
 2026-08-05 Phase 4/R6 配置页 AppConfig scope 边界追溯：`ConfigPage` 移除页面内对 `AppConfig.instance` 的局部 Riverpod override，复用父级默认 `appConfigProvider`，保持配置页子页面和 notifier 事实源不变。先执行配置/主题相关测试 `10/10`，再执行 `flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Flutter 串行全量 `1284`（`3` 项既有条件跳过）和 `git diff --check`，全部通过。仅提交本批页面和四份追溯文档，不提交用户本地文件，不自动 push。

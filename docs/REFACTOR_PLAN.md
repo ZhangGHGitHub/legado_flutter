@@ -1,5 +1,7 @@
 # Legado Flutter — 项目重构主计划
 
+2026-08-05 Phase 4/R6 Reader 模拟追读、当前目录与 BookInfo 元数据端口收口：`ReaderPage` 移除模拟追读和当前目录的 `BookProvider` 页面 fallback，改为显式端口、共享端口或明确空实现；`BookInfoPage` 的元数据写入改为显式或组合根 `BookMetadataPort`，真实组合根继续由 `BookMetadataController` 保持字段 trim。定向联合测试 `28/28`；Flutter 全量 `1289`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、Rust workspace `270` 测试和 `git diff --check` 全部通过；本批不改变正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁，R6 尚未退出。
+
 2026-08-05 Phase 4/R6 Reader 与 BookInfo 端口 fallback 收口：`ReaderPage` 的进度写入和章节缓存状态改为显式端口优先、生产组合根端口兜底；`BookInfoPage` 的目录加载改为显式端口、共享 `BookInfoChapterPort` 或明确空实现。两个 Android Reader 快照宿主显式注入原有进度与章节缓存回调，保留 `BookProvider` 的真实行为。定向联合测试 `26/26`；Flutter 全量 `1288`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 全部通过；本批不改变正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁，R6 尚未退出。
 
 2026-08-05 Phase 4/R6 配置页 AppConfig scope 收口：`ConfigPage` 移除页面内对 `AppConfig.instance` 的局部 Riverpod override，直接复用组合根/父级 `appConfigProvider` 的同一配置事实源；保留配置页标签、主题、备份、其它设置和 AppConfig notifier 行为。配置/主题相关测试 `10/10`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1284`（`3` 项既有条件跳过）和 `git diff --check` 通过；R6 尚未退出。
