@@ -109,6 +109,7 @@ class AppBootstrap {
     required BookmarkSyncService bookmarkSyncService,
     required CacheService cacheService,
     required WebDavRepository webdavRepository,
+    Future<void>? waitForDatabase,
     BookshelfChangePort? bookshelfChangePort,
     void Function(String stage)? reportStartupStage,
     void Function(StartupTaskReport report)? reportStartupTask,
@@ -130,6 +131,7 @@ class AppBootstrap {
        _bookmarkSyncService = bookmarkSyncService,
        _cacheService = cacheService,
        _webdavRepository = webdavRepository,
+       _waitForDatabase = waitForDatabase,
        _bookshelfChangePort =
            bookshelfChangePort ?? const NoopBookshelfChangePort(),
        _reportStartupStage = reportStartupStage,
@@ -153,6 +155,7 @@ class AppBootstrap {
   final BookmarkSyncService _bookmarkSyncService;
   final CacheService _cacheService;
   final WebDavRepository _webdavRepository;
+  final Future<void>? _waitForDatabase;
   final BookshelfChangePort _bookshelfChangePort;
   final void Function(String stage)? _reportStartupStage;
   final void Function(StartupTaskReport report)? _reportStartupTask;
@@ -218,6 +221,17 @@ class AppBootstrap {
   }
 
   void _startStartupTasks(StartupTaskRunner runner, BookProvider bookProvider) {
+    unawaited(_startStartupTasksAfterDatabase(runner, bookProvider));
+  }
+
+  Future<void> _startStartupTasksAfterDatabase(
+    StartupTaskRunner runner,
+    BookProvider bookProvider,
+  ) async {
+    final waitForDatabase = _waitForDatabase;
+    if (waitForDatabase != null) {
+      await waitForDatabase;
+    }
     final engineAvailable = _isEngineAvailable();
     if (engineAvailable) {
       unawaited(runner.run('network.restore', _restoreNetwork));

@@ -11,10 +11,10 @@ import '../../application/reader/manga_prefs_port.dart';
 import '../../application/reader/manga_progress_port.dart';
 import '../../application/reader/manga_source_presentation_port.dart';
 import '../../application/reader/reader_chapter_content_port.dart';
+import '../../application/reader/reader_image_headers_port.dart';
 import '../../help/manga_image_extractor.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
-import '../../providers/source_provider.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/legado_popup_menu.dart';
 import '../../widgets/remote_binary_image.dart';
@@ -33,6 +33,7 @@ class MangaReaderPage extends StatefulWidget {
   final MangaPrefsPort? prefs;
   final MangaProgressPort? progressPort;
   final MangaSourcePresentationPort? sourcePresentationPort;
+  final ReaderImageHeadersPort? imageHeadersPort;
 
   const MangaReaderPage({
     super.key,
@@ -45,6 +46,7 @@ class MangaReaderPage extends StatefulWidget {
     this.prefs,
     this.progressPort,
     this.sourcePresentationPort,
+    this.imageHeadersPort,
   });
 
   static Future<void> open(
@@ -58,6 +60,7 @@ class MangaReaderPage extends StatefulWidget {
     MangaPrefsPort? prefs,
     MangaProgressPort? progressPort,
     MangaSourcePresentationPort? sourcePresentationPort,
+    ReaderImageHeadersPort? imageHeadersPort,
   }) {
     return Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -71,6 +74,7 @@ class MangaReaderPage extends StatefulWidget {
           prefs: prefs,
           progressPort: progressPort,
           sourcePresentationPort: sourcePresentationPort,
+          imageHeadersPort: imageHeadersPort,
         ),
       ),
     );
@@ -87,6 +91,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
   late final MangaChapterListPort _chapterListPort;
   late final MangaProgressPort? _progressPort;
   late final MangaSourcePresentationPort _sourcePresentationPort;
+  late final ReaderImageHeadersPort _imageHeadersPort;
   late int _chapterIndex;
   List<String> _imageUrls = const [];
   Map<String, String> _imageHeaders = const {};
@@ -121,6 +126,10 @@ class _MangaReaderPageState extends State<MangaReaderPage>
         widget.sourcePresentationPort ??
         Provider.of<MangaSourcePresentationPort?>(context, listen: false) ??
         const EmptyMangaSourcePresentationPort();
+    _imageHeadersPort =
+        widget.imageHeadersPort ??
+        Provider.of<ReaderImageHeadersPort?>(context, listen: false) ??
+        const _EmptyReaderImageHeadersPort();
     _chapterIndex = widget.initialChapterIndex.clamp(
       0,
       math.max(0, widget.chapters.length - 1),
@@ -206,7 +215,6 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       _loading = true;
       _error = null;
     });
-    final sourceProvider = context.read<SourceProvider>();
     try {
       String content;
       if (seed != null && seed.isNotEmpty) {
@@ -220,7 +228,7 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       }
       final base = _chapter?.url;
       final urls = MangaImageExtractor.extract(content, baseUrl: base);
-      final imageHeaders = await sourceProvider.imageHeadersForBook(
+      final imageHeaders = await _imageHeadersPort.imageHeadersForBook(
         widget.book,
       );
       if (!mounted) return;
@@ -1525,6 +1533,13 @@ class _MangaReaderPageState extends State<MangaReaderPage>
       ),
     );
   }
+}
+
+final class _EmptyReaderImageHeadersPort implements ReaderImageHeadersPort {
+  const _EmptyReaderImageHeadersPort();
+
+  @override
+  Future<Map<String, String>> imageHeadersForBook(Book book) async => const {};
 }
 
 /// ReaderInfoBarView 描边文字近似

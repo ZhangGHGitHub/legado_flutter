@@ -25,6 +25,61 @@ import '../../application/source_management/source_controller_test.dart'
     as source_fixtures;
 
 void main() {
+  testWidgets('详情页设置分组从书架成员端口读取分组列表', (tester) async {
+    final source = BookSource(
+      bookSourceUrl: 'https://source.example',
+      bookSourceName: '分组书源',
+    );
+    final sourceService = _createSourceService();
+    final sourceProvider = SourceProvider(
+      repository: _MemorySourceRepository([source]),
+      validationPort: source_fixtures.createValidationPortForNotifierTest(),
+      sourceService: sourceService,
+    );
+    await sourceProvider.loadSources();
+
+    const book = Book(
+      id: 'book-1',
+      name: '测试书',
+      author: '作者',
+      sourceUrl: 'https://source.example/book',
+      bookSourceUrl: 'https://source.example',
+    );
+    const groupedBook = Book(id: 'book-2', name: '另一本书', group: '来自端口');
+    final bookProvider = BookProvider(
+      repository: _MemoryBookRepository(),
+      sourceService: sourceService,
+      contentCache: const _NoopChapterCache(),
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
+          ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+          ListenableProvider<BookshelfMembershipPort>.value(
+            value: _StaticBookshelfMembershipPort([book, groupedBook]),
+          ),
+          Provider<BookSourceSearchPort>.value(value: const _EmptySearchPort()),
+        ],
+        child: riverpod.ProviderScope(
+          overrides: [
+            sourceControllerProvider.overrideWithValue(
+              sourceProvider.controller,
+            ),
+          ],
+          child: const MaterialApp(home: BookInfoPage(book: book)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('设置分组'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('来自端口'), findsOneWidget);
+  });
+
   testWidgets('详情页从共享 SourceController 读取书源名称', (tester) async {
     final source = BookSource(
       bookSourceUrl: 'https://source.example',
@@ -424,6 +479,17 @@ final class _TestBookshelfMembershipPort extends ChangeNotifier
 
   @override
   List<Book> get books => _provider.books;
+}
+
+final class _StaticBookshelfMembershipPort extends ChangeNotifier
+    implements BookshelfMembershipPort {
+  _StaticBookshelfMembershipPort(Iterable<Book> books)
+    : _books = List<Book>.unmodifiable(books);
+
+  final List<Book> _books;
+
+  @override
+  List<Book> get books => _books;
 }
 
 final class _NoopChapterCache implements ChapterContentCachePort {

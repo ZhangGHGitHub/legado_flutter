@@ -3,6 +3,7 @@ import 'package:legado_flutter/application/reader/manga_chapter_content_port.dar
 import 'package:legado_flutter/application/reader/manga_chapter_list_port.dart';
 import 'package:legado_flutter/application/reader/manga_progress_port.dart';
 import 'package:legado_flutter/application/reader/manga_source_presentation_port.dart';
+import 'package:legado_flutter/application/reader/reader_image_headers_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/features/reader/manga_reader_page.dart';
@@ -67,6 +68,17 @@ void main() {
       expect(page.sourcePresentationPort, same(sourcePresentationPort));
     },
   );
+
+  test('test hosts can explicitly inject the image headers port', () {
+    const imageHeadersPort = _FakeReaderImageHeadersPort();
+    final page = MangaReaderPage(
+      book: const Book(id: 'book-1', name: '测试漫画'),
+      chapters: const [],
+      imageHeadersPort: imageHeadersPort,
+    );
+
+    expect(page.imageHeadersPort, same(imageHeadersPort));
+  });
 }
 
 final class _FakeMangaChapterContentPort implements MangaChapterContentPort {
@@ -105,4 +117,11 @@ final class _FakeMangaSourcePresentationPort
 
   @override
   String sourceNameForBook(Book book) => '测试书源';
+}
+
+final class _FakeReaderImageHeadersPort implements ReaderImageHeadersPort {
+  const _FakeReaderImageHeadersPort();
+
+  @override
+  Future<Map<String, String>> imageHeadersForBook(Book book) async => const {};
 }

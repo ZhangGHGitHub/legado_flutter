@@ -361,14 +361,48 @@ abstract final class AppCompositionRoot {
   }
 
   static Future<void> run({required CrashLogService crashLog}) async {
-    final composition = await _compose(crashLog);
+    // 先提交 Flutter 首帧，避免 Rust/SQLite 初始化期间 Android Splash
+    // 长时间遮挡空的 Activity surface。完整依赖组装完成后再替换为正式应用。
+    runApp(
+      const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('正在启动 Legado Flutter'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await WidgetsBinding.instance.endOfFrame;
+    debugPrint('[StartupTrace] 开始组装正式应用');
+    ({Widget app, GlobalKey<NavigatorState> navigatorKey}) composition;
+    try {
+      composition = await _compose(crashLog);
+    } catch (error, stackTrace) {
+      crashLog.updateStartupStage('正式应用组装失败');
+      debugPrint('[StartupTrace] 正式应用组装失败: $error\n$stackTrace');
+      runApp(_startupFailureApp(error));
+      return;
+    }
+    debugPrint('[StartupTrace] 正式应用组装完成，开始挂载');
     crashLog.updateStartupStage('首屏挂载');
     runApp(composition.app);
     crashLog.updateStartupStage('首屏运行');
     unawaited(AppLog.i('首屏运行', category: 'startup'));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startSourceVerificationBrowserHost(crashLog, composition.navigatorKey);
+    });
   }
 
-  static Future<({Widget app})> _compose(CrashLogService crashLog) async {
+  static Future<({Widget app, GlobalKey<NavigatorState> navigatorKey})>
+  _compose(CrashLogService crashLog) async {
     void reportStartupStage(String stage) {
       crashLog.updateStartupStage(stage);
       unawaited(AppLog.i(stage, category: 'startup'));
@@ -512,29 +546,11 @@ abstract final class AppCompositionRoot {
         unawaited(diagnosticsMonitor.recordStartupTask(report));
       },
     ).initialize();
+    debugPrint('[StartupTrace] AppBootstrap 初始化完成');
 
-    final runtime = await const PlatformCrashMetadataLoader().call();
-    AppLog.configureRuntime(
-      DiagnosticRuntimeInfo(
-        platform: runtime.platform,
-        platformVersion: runtime.platformVersion,
-        appVersion: runtime.appVersion,
-        engineVersion: runtime.engineVersion,
-      ),
-    );
-
-    if (LegadoEngineBridge.isAvailable) {
-      FrbSourceVerificationBrowserHost(
-        browserPort: NavigatorSourceVerificationBrowserPort(
-          navigatorKey: navigatorKey,
-          captureCookie: ({required sourceKey, required cookie}) =>
-              SourceLoginCookieService.capture(
-                sourceUrl: sourceKey,
-                cookie: cookie,
-              ),
-        ),
-      ).start();
-    }
+    // PackageInfo/平台元数据属于诊断旁路，不能阻塞正式首屏替换。
+    unawaited(_configureRuntimeDiagnostics());
+    debugPrint('[StartupTrace] 正式应用 Widget 组装完成');
 
     return (
       app: MultiProvider(
@@ -677,7 +693,9 @@ abstract final class AppCompositionRoot {
           Provider<BookReaderPrefsPort>.value(
             value: const BookReaderPrefsPortAdapter(),
           ),
-          Provider<TtsPort>.value(value: TtsPortAdapter(TtsService.instance)),
+          ListenableProvider<TtsPort>.value(
+            value: TtsPortAdapter(TtsService.instance),
+          ),
           Provider<BookCacheExportPort>.value(
             value: BookCacheExportPortAdapter(contentCache),
           ),
@@ -688,7 +706,7 @@ abstract final class AppCompositionRoot {
               getLocalChapters: bootstrap.bookProvider.getLocalChapters,
             ),
           ),
-          Provider<CacheBookDownloadPort>.value(
+          ListenableProvider<CacheBookDownloadPort>.value(
             value: CacheBookDownloadPortAdapter(
               changes: bootstrap.bookProvider,
               state: () => CacheBookDownloadState(
@@ -1050,6 +1068,7 @@ abstract final class AppCompositionRoot {
           ),
         ),
       ),
+      navigatorKey: navigatorKey,
     );
   }
 
@@ -1081,6 +1100,65 @@ abstract final class AppCompositionRoot {
     );
     CodeEditPrefs.configureStore(
       await SharedPreferencesCodeEditPrefsStore.load(),
+    );
+  }
+
+  static void _startSourceVerificationBrowserHost(
+    CrashLogService crashLog,
+    GlobalKey<NavigatorState> navigatorKey,
+  ) {
+    if (!LegadoEngineBridge.isAvailable) return;
+    FrbSourceVerificationBrowserHost(
+      browserPort: NavigatorSourceVerificationBrowserPort(
+        navigatorKey: navigatorKey,
+        captureCookie: ({required sourceKey, required cookie}) =>
+            SourceLoginCookieService.capture(
+              sourceUrl: sourceKey,
+              cookie: cookie,
+            ),
+      ),
+    ).start();
+    crashLog.updateStartupStage('书源验证宿主启动');
+  }
+
+  static Future<void> _configureRuntimeDiagnostics() async {
+    try {
+      final runtime = await const PlatformCrashMetadataLoader().call();
+      AppLog.configureRuntime(
+        DiagnosticRuntimeInfo(
+          platform: runtime.platform,
+          platformVersion: runtime.platformVersion,
+          appVersion: runtime.appVersion,
+          engineVersion: runtime.engineVersion,
+        ),
+      );
+    } catch (error) {
+      debugPrint('[Diagnostics] 运行时元数据加载失败: $error');
+    }
+  }
+
+  static Widget _startupFailureApp(Object error) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline, size: 48),
+                SizedBox(height: 16),
+                Text('应用启动失败', style: TextStyle(fontSize: 20)),
+                SizedBox(height: 12),
+                SelectableText('$error', textAlign: TextAlign.center),
+                SizedBox(height: 20),
+                Text('请关闭应用后重新打开，并保留此错误信息用于排查。'),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

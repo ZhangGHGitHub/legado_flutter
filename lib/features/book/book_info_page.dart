@@ -433,9 +433,8 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
       await _addToShelf();
       if (!mounted || !_isInShelf) return;
     }
-    final provider = context.read<BookProvider>();
     final groups =
-        provider.books
+        _membershipPort.books
             .map((b) => b.group)
             .where((g) => g.isNotEmpty)
             .toSet()
@@ -517,7 +516,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     );
     controller.dispose();
     if (chosen == null || !mounted) return;
-    await provider.updateBookGroup(_book.id, chosen);
+    await context.read<BookProvider>().updateBookGroup(_book.id, chosen);
     if (mounted) {
       setState(() => _book = _book.copyWith(group: chosen));
     }
