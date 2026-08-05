@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:legado_flutter/application/book/book_info_chapter_port.dart';
+import 'package:legado_flutter/application/book/book_metadata_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_membership_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
@@ -35,6 +36,7 @@ class BookInfoPage extends StatelessWidget {
   final bool openReaderImmediately;
   final BookInfoChapterPort? chapterPort;
   final BookshelfMembershipPort? membershipPort;
+  final BookMetadataPort? metadataPort;
 
   const BookInfoPage({
     super.key,
@@ -42,6 +44,7 @@ class BookInfoPage extends StatelessWidget {
     this.openReaderImmediately = false,
     this.chapterPort,
     this.membershipPort,
+    this.metadataPort,
   });
 
   @override
@@ -51,6 +54,7 @@ class BookInfoPage extends StatelessWidget {
       openReaderImmediately: openReaderImmediately,
       chapterPort: chapterPort,
       membershipPort: membershipPort,
+      metadataPort: metadataPort,
     );
   }
 }
@@ -60,12 +64,14 @@ class _BookInfoPageBody extends riverpod.ConsumerStatefulWidget {
   final bool openReaderImmediately;
   final BookInfoChapterPort? chapterPort;
   final BookshelfMembershipPort? membershipPort;
+  final BookMetadataPort? metadataPort;
 
   const _BookInfoPageBody({
     required this.book,
     required this.openReaderImmediately,
     this.chapterPort,
     this.membershipPort,
+    this.metadataPort,
   });
 
   @override
@@ -82,12 +88,20 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   bool _autoStartScheduled = false;
   late final BookInfoChapterPort _chapterPort;
   late final BookshelfMembershipPort _membershipPort;
+  late final BookMetadataPort _metadataPort;
 
   @override
   void initState() {
     super.initState();
     _book = widget.book;
     final provider = context.read<BookProvider>();
+    _metadataPort =
+        widget.metadataPort ??
+        Provider.of<BookMetadataPort?>(context, listen: false) ??
+        BookMetadataPortCallbacks(
+          updateCover: provider.updateBookCover,
+          updateBookDetails: provider.updateBookDetails,
+        );
     _membershipPort =
         widget.membershipPort ??
         Provider.of<BookshelfMembershipPort?>(context, listen: false) ??
@@ -194,10 +208,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
       if (foundCover != null && mounted) {
         setState(() => _coverUrl = foundCover!);
         if (_isInShelf && foundCover.isNotEmpty) {
-          final next = await context.read<BookProvider>().updateBookCover(
-            _book,
-            foundCover,
-          );
+          final next = await _metadataPort.updateCover(_book, foundCover);
           if (mounted) setState(() => _book = next);
         }
       }
@@ -689,7 +700,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     );
     if (saved == true && mounted) {
       if (_isInShelf) {
-        final next = await context.read<BookProvider>().updateBookDetails(
+        final next = await _metadataPort.updateBookDetails(
           _book.id,
           name: name,
           author: author,

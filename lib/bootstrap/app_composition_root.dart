@@ -10,6 +10,7 @@ import '../application/ai/ai_config_http_port.dart';
 import '../application/ai/ai_config_prefs_port.dart';
 import '../application/book/batch_book_progress_sync_port.dart';
 import '../application/book/book_info_chapter_port.dart';
+import '../application/book/book_metadata_port.dart';
 import '../application/book/book_provider_source_port.dart';
 import '../application/book/book_source_change_port.dart';
 import '../application/book/local_book_import_port.dart';
@@ -159,6 +160,7 @@ import '../infrastructure/bookmark/bookmark_page_port_adapter.dart';
 import '../infrastructure/bookmark/bookmark_reader_port_adapter.dart';
 import '../infrastructure/book/batch_book_progress_sync_port_adapter.dart';
 import '../infrastructure/book/book_info_chapter_port_adapter.dart';
+import '../infrastructure/book/book_metadata_port_adapter.dart';
 import '../infrastructure/book/book_provider_source_port_adapter.dart';
 import '../infrastructure/book/book_source_change_port_adapter.dart';
 import '../infrastructure/book/local_book_import_port_adapter.dart';
@@ -617,6 +619,12 @@ abstract final class AppCompositionRoot {
               isLoading: () => bootstrap.bookProvider.isLoading,
               isRefreshingToc: () => bootstrap.bookProvider.isRefreshingToc,
               loadChapters: bootstrap.bookProvider.loadChapters,
+            ),
+          ),
+          Provider<BookMetadataPort>.value(
+            value: BookMetadataPortAdapter(
+              updateCover: bootstrap.bookProvider.updateBookCover,
+              updateBookDetails: bootstrap.bookProvider.updateBookDetails,
             ),
           ),
           Provider<AppDiagnosticsMonitor>.value(value: diagnosticsMonitor),
