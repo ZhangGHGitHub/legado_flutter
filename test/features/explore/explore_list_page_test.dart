@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart';
 
+import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/application/source_management/source_management_book_source_port.dart';
 import 'package:legado_flutter/database/dao/book_dao.dart';
 import 'package:legado_flutter/domain/book/book.dart';
@@ -37,16 +39,25 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: MultiProvider(
-          providers: [
-            ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
-            ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
-            Provider<BookSourceExplorePort>.value(value: explorePort),
+        home: riverpod.ProviderScope(
+          overrides: [
+            sourceControllerProvider.overrideWithValue(
+              sourceProvider.controller,
+            ),
           ],
-          child: ExploreListPage(
-            source: source,
-            exploreUrl: 'https://source.example/explore/category',
-            title: '玄幻',
+          child: MultiProvider(
+            providers: [
+              ChangeNotifierProvider<SourceProvider>.value(
+                value: sourceProvider,
+              ),
+              ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+              Provider<BookSourceExplorePort>.value(value: explorePort),
+            ],
+            child: ExploreListPage(
+              source: source,
+              exploreUrl: 'https://source.example/explore/category',
+              title: '玄幻',
+            ),
           ),
         ),
       ),

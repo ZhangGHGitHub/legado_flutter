@@ -8,7 +8,6 @@ import 'package:legado_flutter/domain/source/book_source.dart';
 import '../../application/book/book_source_result_mapper.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../domain/ports/book_source_explore_port.dart';
-import '../../providers/source_provider.dart';
 import '../../widgets/book_list_tile.dart';
 import '../../widgets/empty_state.dart';
 import '../book/book_info_page.dart';
@@ -32,17 +31,11 @@ class ExploreListPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sourceProvider = context.read<SourceProvider>();
-    return riverpod.ProviderScope(
-      overrides: [
-        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
-      ],
-      child: _ExploreListPageBody(
-        source: source,
-        exploreUrl: exploreUrl,
-        title: title,
-        membershipPort: membershipPort,
-      ),
+    return _ExploreListPageBody(
+      source: source,
+      exploreUrl: exploreUrl,
+      title: title,
+      membershipPort: membershipPort,
     );
   }
 }

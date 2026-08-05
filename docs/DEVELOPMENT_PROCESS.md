@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-05
 
+2026-08-05 Phase 4/R6 探索页 SourceController 边界追溯：本批移除 `ExploreListPage` 页面内对旧 `SourceProvider` 的直接依赖和嵌套 Riverpod scope，改由生产组合根/测试宿主提供共享 `SourceController`；保留当前书源、探索请求、结果映射和书架过滤行为。先执行探索页定向 `1/1`，再执行 `flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 Flutter 串行全量 `1280`（`3` 项既有条件跳过），全部通过；随后执行 `git diff --check` 并创建中文本地提交，只提交本批页面、测试和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
+
 2026-08-05 Phase 4/R6 书架导入对话框 SourceController 边界追溯：本批移除 `AddBookUrlDialog` 与 `ImportBookshelfDialog` 页面内对旧 `SourceProvider` 的直接依赖和嵌套 Riverpod scope，改由生产组合根/测试宿主提供共享 `SourceController`；保留源列表读取、网址导入、书单解析、进度和错误提示。先执行对话框定向 `4/4`，再执行 `flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 Flutter 串行全量 `1280`（`3` 项既有条件跳过），全部通过；随后执行 `git diff --check` 并创建中文本地提交，只提交本批页面、测试和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
 
 2026-08-05 Phase 4/R6 目录持久化边界追溯：本批新增 `TocPersistencePort`，`TocSheet` 的书籍状态读取、倒序目录章节保存和书籍状态保存改通过 application 端口；生产组合根继续委托同一 `BookRepository`，缓存元数据改从已注册 `ChapterContentCachePort` 读取，保留 `bookRepository` 显式兼容参数和目录既有行为。先执行目录/详情定向 `15/15`，再执行 `flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 Flutter 串行全量 `1280`（`3` 项既有条件跳过），全部通过；随后执行 `git diff --check` 并创建中文本地提交，只提交本批代码和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。

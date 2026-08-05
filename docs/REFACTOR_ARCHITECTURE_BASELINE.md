@@ -3807,3 +3807,9 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 保留源列表读取、网址导入、书单解析、进度更新、错误记录和原有 UI 行为；不改变书源顺序、正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 - 对话框定向 `4/4`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280`（`3` 项既有条件跳过）通过。
 - 本批未修改 Rust、`legado-main/`、R1-12 或暂停平台门禁；R6 尚未退出。
+## 212. 2026-08-05：R6 探索页 SourceController 边界
+
+- `ExploreListPage` 移除页面内对旧 `SourceProvider` 的直接依赖和嵌套 Riverpod scope；生产组合根已提供共享 `SourceController`，测试宿主显式设置同一 `sourceControllerProvider` override。
+- 保留当前书源读取、探索请求、结果映射、书架成员过滤、分页和原有 UI 行为；本批未改变正文、目录、分页语义、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+- 探索页定向 `1/1`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280`（`3` 项既有条件跳过）通过。
+- 本批未修改 Rust、`legado-main/`、R1-12 或暂停平台门禁；R6 尚未退出。
