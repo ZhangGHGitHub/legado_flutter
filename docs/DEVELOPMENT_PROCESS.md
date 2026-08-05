@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-05
 
+2026-08-05 Phase 4/R6 普通阅读器进度写入边界追溯：本批新增 `ReaderProgressPort` 和回调适配器，`ReaderPage._saveProgress` 通过 application 端口写入章节进度，生产组合根继续委托 `BookProvider.updateProgress`；保留进度比例、章节标题、`pageIndex`、`durChapterIndex` 和原异步时序。定向 `5/5`、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过后，执行 Flutter 全量 `1268`（`3` 项既有条件跳过）并通过。创建中文本地提交，只提交本批代码、测试和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
+
 2026-08-05 Phase 4/R6 书籍详情书架生命周期边界追溯：本批新增 `BookshelfBookLifecyclePort` 和 Provider 回调适配器，`BookInfoPage` 的加入书架、当前目录保存和移除书架通过 application 端口完成；生产组合根继续复用 Provider 的快照、章节元数据、变更总线和通知语义，阅读启动保持原职责。定向 `9/9`、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过后，执行 Flutter 全量 `1267`（`3` 项既有条件跳过）并通过。创建中文本地提交，只提交本批代码、测试和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
 
 2026-08-05 Phase 4/R6 书籍详情分组命令边界追溯：本批将 `BookInfoPage._setGroup` 的单本写入改接已存在的 `BookshelfArrangeGroupCommandPort`，组合根继续绑定 `BookProvider` 适配器，独立宿主缺少能力时使用 application 空实现；保留分组读取、加入书架前置、输入裁剪、取消和原 UI 行为。定向联合 `15/15`、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过后，执行 Flutter 全量 `1266`（`3` 项既有条件跳过）并通过。创建中文本地提交，只提交本批代码和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。

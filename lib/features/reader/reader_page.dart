@@ -20,6 +20,7 @@ import '../../application/reader/reader_selection_port.dart';
 import '../../application/reader/reader_content_refetch_port.dart';
 import '../../application/reader/reader_bookmark_readiness_port.dart';
 import '../../application/reader/reader_progress_sync_port.dart';
+import '../../application/reader/reader_progress_port.dart';
 import '../../application/reader/reader_image_cache_port.dart';
 import '../../application/reader/reader_image_headers_port.dart';
 import '../../application/reader/reader_source_presentation_port.dart';
@@ -96,6 +97,9 @@ class ReaderPage extends StatefulWidget {
   /// 顶栏书源展示端口；未注入时从组合根读取。
   final ReaderSourcePresentationPort? sourcePresentationPort;
 
+  /// 阅读进度写入端口；未注入时从组合根读取。
+  final ReaderProgressPort? progressPort;
+
   const ReaderPage({
     super.key,
     required this.book,
@@ -108,6 +112,7 @@ class ReaderPage extends StatefulWidget {
     this.contentPort,
     this.imageHeadersPort,
     this.sourcePresentationPort,
+    this.progressPort,
   });
 
   @override
@@ -136,6 +141,7 @@ class _ReaderPageState extends State<ReaderPage> {
   late final ReaderContentRefetchPort _contentRefetchPort;
   late final ReaderBookmarkReadinessPort _bookmarkReadinessPort;
   late final ReaderProgressSyncPort _progressSyncPort;
+  late final ReaderProgressPort _progressPort;
   late final ReaderChapterContentPort _contentPort;
   late final ReaderImageHeadersPort _imageHeadersPort;
   late final ReaderSourcePresentationPort _sourcePresentationPort;
@@ -238,6 +244,12 @@ class _ReaderPageState extends State<ReaderPage> {
     _contentRefetchPort = context.read<ReaderContentRefetchPort>();
     _bookmarkReadinessPort = context.read<ReaderBookmarkReadinessPort>();
     _progressSyncPort = context.read<ReaderProgressSyncPort>();
+    _progressPort =
+        widget.progressPort ??
+        Provider.of<ReaderProgressPort?>(context, listen: false) ??
+        ReaderProgressPortCallbacks(
+          update: context.read<BookProvider>().updateProgress,
+        );
     _contentPort =
         widget.contentPort ?? context.read<ReaderChapterContentPort>();
     _imageHeadersPort =
@@ -1949,12 +1961,11 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   void _saveProgress() {
-    final bp = _bookProvider;
-    if (bp == null) return;
+    if (_bookProvider == null) return;
     final progress = (_currentIndex + 1) / widget.allChapters.length;
     final currentChapter = widget.allChapters[_currentIndex].title;
     final chapterPosition = _currentChapterPosition();
-    bp.updateProgress(
+    _progressPort.updateProgress(
       widget.book.id,
       progress,
       currentChapter,

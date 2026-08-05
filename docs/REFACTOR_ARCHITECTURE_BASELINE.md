@@ -3720,3 +3720,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：书架生命周期适配器和书籍详情回归定向 `9/9`；Flutter 全量 `1267` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
 
 边界结论：本批完成书籍详情三个书架生命周期调用面的 application 端口收口，不宣称 BookInfoPage 其他 Provider 职责迁移完成或 R6 退出。
+
+## 201. 2026-08-05：R6 普通阅读器进度写入边界
+
+- 新增 `ReaderProgressPort` 和 `ReaderProgressPortAdapter`；`ReaderPage._saveProgress` 通过 application 端口写入章节进度，生产组合根继续复用 `BookProvider.updateProgress`，未创建第二份阅读进度事实源。
+- 保留进度比例、章节标题、`pageIndex`、`durChapterIndex`、异步写入时序和异常行为；本批不迁移正文、目录、换源、缓存、模拟追读或云端同步职责，不改变 `legado-main`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：阅读进度适配器和 Reader 端口宿主定向 `5/5`；Flutter 全量 `1268` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
+
+边界结论：本批完成普通阅读器一个进度写入调用点的 application 端口收口，不宣称 ReaderPage 其他 Provider 职责迁移完成或 R6 退出。
