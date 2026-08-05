@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/source_management/source_notifier.dart';
 import 'package:legado_flutter/application/book/book_read_status_port.dart';
 import 'package:legado_flutter/application/cache/cache_book_download_port.dart';
+import 'package:legado_flutter/application/reader/reader_source_access_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_membership_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
@@ -42,6 +43,21 @@ void main() {
     );
 
     expect(page.cacheDownloadPort, same(cachePort));
+  });
+
+  test('详情页宿主可以显式注入书源访问端口', () {
+    final sourcePort = ReaderSourceAccessPortCallbacks(
+      sourceForBook: (_) => null,
+      availableSources: () => const [],
+      autoChangeSource: (book, {required sources, concurrency = 4}) async =>
+          null,
+    );
+    final page = BookInfoPage(
+      book: const Book(id: 'book-1', name: '测试书'),
+      sourceAccessPort: sourcePort,
+    );
+
+    expect(page.sourceAccessPort, same(sourcePort));
   });
 
   testWidgets('详情页阅读状态通过应用端口写入', (tester) async {

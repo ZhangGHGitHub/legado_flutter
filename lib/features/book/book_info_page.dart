@@ -13,6 +13,7 @@ import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_group_com
 import 'package:legado_flutter/application/bookshelf/bookshelf_book_lifecycle_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_membership_port.dart';
 import 'package:legado_flutter/application/cache/cache_book_download_port.dart';
+import 'package:legado_flutter/application/reader/reader_source_access_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
@@ -64,6 +65,7 @@ class BookInfoPage extends StatelessWidget {
   final BookshelfArrangeGroupCommandPort? groupCommandPort;
   final BookshelfBookLifecyclePort? lifecyclePort;
   final CacheBookDownloadPort? cacheDownloadPort;
+  final ReaderSourceAccessPort? sourceAccessPort;
 
   const BookInfoPage({
     super.key,
@@ -76,6 +78,7 @@ class BookInfoPage extends StatelessWidget {
     this.groupCommandPort,
     this.lifecyclePort,
     this.cacheDownloadPort,
+    this.sourceAccessPort,
   });
 
   @override
@@ -90,6 +93,7 @@ class BookInfoPage extends StatelessWidget {
       groupCommandPort: groupCommandPort,
       lifecyclePort: lifecyclePort,
       cacheDownloadPort: cacheDownloadPort,
+      sourceAccessPort: sourceAccessPort,
     );
   }
 }
@@ -104,6 +108,7 @@ class _BookInfoPageBody extends riverpod.ConsumerStatefulWidget {
   final BookshelfArrangeGroupCommandPort? groupCommandPort;
   final BookshelfBookLifecyclePort? lifecyclePort;
   final CacheBookDownloadPort? cacheDownloadPort;
+  final ReaderSourceAccessPort? sourceAccessPort;
 
   const _BookInfoPageBody({
     required this.book,
@@ -115,6 +120,7 @@ class _BookInfoPageBody extends riverpod.ConsumerStatefulWidget {
     this.groupCommandPort,
     this.lifecyclePort,
     this.cacheDownloadPort,
+    this.sourceAccessPort,
   });
 
   @override
@@ -136,12 +142,14 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   late final BookshelfArrangeGroupCommandPort _groupCommandPort;
   late final BookshelfBookLifecyclePort _lifecyclePort;
   late final CacheBookDownloadPort _cacheDownloadPort;
+  late final ReaderSourceAccessPort _sourceAccessPort;
 
   @override
   void initState() {
     super.initState();
     _book = widget.book;
     final provider = context.read<BookProvider>();
+    final sourceNotifier = ref.read(sourceNotifierProvider.notifier);
     _metadataPort =
         widget.metadataPort ??
         Provider.of<BookMetadataPort?>(context, listen: false) ??
@@ -168,6 +176,14 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
         widget.cacheDownloadPort ??
         Provider.of<CacheBookDownloadPort?>(context, listen: false) ??
         _fallbackBookInfoCacheDownloadPort(context);
+    _sourceAccessPort =
+        widget.sourceAccessPort ??
+        Provider.of<ReaderSourceAccessPort?>(context, listen: false) ??
+        ReaderSourceAccessPortCallbacks(
+          sourceForBook: sourceNotifier.findSourceForBook,
+          availableSources: () => sourceNotifier.sources,
+          autoChangeSource: provider.autoChangeSource,
+        );
     _membershipPort =
         widget.membershipPort ??
         Provider.of<BookshelfMembershipPort?>(context, listen: false) ??
@@ -184,11 +200,8 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _initPage());
   }
 
-  SourceNotifier get _sourceNotifier =>
-      ref.read(sourceNotifierProvider.notifier);
-
   BookSource? _sourceForBook(Book book) =>
-      _sourceNotifier.findSourceForBook(book);
+      _sourceAccessPort.sourceForBook(book);
 
   /// 保留旧版书架匹配优先级，仅把只读成员查询移到应用端口。
   Book? _findShelfBook(Book book) {
@@ -209,7 +222,6 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   }
 
   Future<void> _initPage() async {
-    final bookProvider = context.read<BookProvider>();
     _coverUrl = _book.coverUrl;
 
     final shelf = _findShelfBook(_book);
@@ -249,7 +261,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
         _chapterPort.currentChapters.isNotEmpty) {
       _autoStartScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _startReading(bookProvider);
+        if (mounted) _startReading();
       });
     }
   }
@@ -342,7 +354,6 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   }
 
   Future<void> _addToShelf() async {
-    final provider = context.read<BookProvider>();
     final existing = _findShelfBook(_book);
     if (existing != null) {
       if (mounted) {
@@ -368,7 +379,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
             label: '去阅读',
             onPressed: () {
               messenger.hideCurrentSnackBar();
-              if (mounted) _startReading(provider);
+              if (mounted) _startReading();
             },
           ),
         ),
@@ -804,7 +815,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     await Share.share(buf.toString(), subject: _book.name);
   }
 
-  void _startReading(BookProvider provider) {
+  void _startReading() {
     final chapters = _chapterPort.currentChapters;
     if (chapters.isEmpty) {
       ScaffoldMessenger.of(
@@ -812,10 +823,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
       ).showSnackBar(SnackBar(content: Text(_errorMessage ?? '暂无章节，无法阅读')));
       return;
     }
-    final latestBook = provider.books.firstWhere(
-      (b) => b.id == _book.id,
-      orElse: () => _book,
-    );
+    final latestBook = _findShelfBook(_book) ?? _book;
     Chapter startChapter;
     if (latestBook.currentChapter != null &&
         latestBook.currentChapter!.isNotEmpty) {
@@ -923,38 +931,34 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
       body: Column(
         children: [
           Expanded(
-            child: Consumer<BookProvider>(
-              builder: (context, provider, _) {
-                return SingleChildScrollView(
-                  padding: EdgeInsets.only(bottom: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildHero(topPad + appBarH),
-                      const SizedBox(height: 12),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Text(
-                          _book.name,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF333333),
-                            height: 1.3,
-                          ),
-                        ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildHero(topPad + appBarH),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      _book.name,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF333333),
+                        height: 1.3,
                       ),
-                      const SizedBox(height: 16),
-                      _buildMetaRows(provider, sourceState.sources),
-                      if (_book.description.trim().isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        _buildSynopsis(),
-                      ],
-                    ],
+                    ),
                   ),
-                );
-              },
+                  const SizedBox(height: 16),
+                  _buildMetaRows(sourceState.sources),
+                  if (_book.description.trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _buildSynopsis(),
+                  ],
+                ],
+              ),
             ),
           ),
           _buildBottomBar(),
@@ -1021,7 +1025,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     );
   }
 
-  Widget _buildMetaRows(BookProvider provider, List<BookSource> sources) {
+  Widget _buildMetaRows(List<BookSource> sources) {
     final groupLabel = _book.group.isEmpty ? '未分组' : _book.group;
     final sourceText = '${_originLabel()} ${_sourceDisplayName(sources)}';
     return Padding(
@@ -1104,7 +1108,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
                 child: Material(
                   color: _kAccentRed,
                   child: InkWell(
-                    onTap: () => _startReading(context.read<BookProvider>()),
+                    onTap: _startReading,
                     child: const Center(
                       child: Text(
                         '阅读',

@@ -3789,3 +3789,9 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 目录加载、书源缺失、空目录提示、缓存过滤、并发参数、同书取消和完成计数语义保持不变；独立宿主未注入端口时使用回调适配器，不创建第二份下载状态。
 - 新增详情页显式端口注入回归，定向 `10/10`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1279`（`3` 项既有条件跳过）通过。
 - 本批未修改 Rust、`legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；R6 尚未退出。
+## 209. 2026-08-05：R6 书籍详情阅读启动与书源访问边界
+
+- `BookInfoPage` 的书源匹配改用既有 `ReaderSourceAccessPort`，生产组合根继续复用 `SourceProvider` 书源事实源和 `BookProvider` 自动换源能力，独立宿主可显式注入该端口。
+- 阅读入口的最新书籍读取改用 `BookshelfMembershipPort`，移除页面对 `BookProvider.books` 的直接读取；移除未使用的 `Consumer<BookProvider>` 展示包装，书源状态仍通过共享 `SourceState` 驱动名称刷新。
+- 保留书架匹配优先级、章节定位、普通/漫画阅读分流、书源回退和原 UI 行为。新增书源端口显式注入回归，详情定向 `10/10`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280`（`3` 项既有条件跳过）通过。
+- 本批未修改 Rust、`legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；R6 尚未退出。

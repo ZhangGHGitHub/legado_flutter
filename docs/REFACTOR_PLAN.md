@@ -1,5 +1,7 @@
 # Legado Flutter — 项目重构主计划
 
+2026-08-05 Phase 4/R6 书籍详情阅读启动与书源访问边界：`BookInfoPage` 的书源匹配改用既有 `ReaderSourceAccessPort`，阅读入口从 `BookshelfMembershipPort` 读取最新书架书籍，移除对 `BookProvider.books` 的直接读取；移除未使用的 `Consumer<BookProvider>` 展示包装，保留书源状态刷新和所有阅读/换源行为。详情定向 `10/10`；`flutter analyze --no-pub`、架构边界、Flutter 全量 `1280` 通过（`3` 项既有条件跳过）；R6 尚未退出。
+
 2026-08-05 Phase 4/R6 书籍详情缓存下载边界：`BookInfoPage` 的“缓存全部”入口改用既有 `CacheBookDownloadPort`，生产组合根继续复用 `BookProvider` 的下载状态、目录加载、批量下载和取消事实源；保留同书取消、书源缺失、空目录提示、缓存过滤、并发参数和完成计数语义。书籍详情定向 `10/10`，`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1279` 通过（`3` 项既有条件跳过）；R6 尚未退出。
 
 2026-08-05 Phase 4/R6 普通阅读器正文读取边界：ReaderPage 正文加载改用既有 ReaderChapterContentPort，章节成功缓存标记新增 ReaderChapterCacheStatusPort；生产组合根继续复用 BookProvider 缓存正文和目录状态事实源。保留正文失败文案、缓存失效、正文处理、分页和章节身份语义。定向 11/11；Flutter 全量 1278 通过、3 项既有条件跳过；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。
