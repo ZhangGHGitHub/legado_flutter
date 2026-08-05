@@ -22,6 +22,7 @@ import '../../application/reader/reader_bookmark_readiness_port.dart';
 import '../../application/reader/reader_progress_sync_port.dart';
 import '../../application/reader/reader_progress_port.dart';
 import '../../application/reader/reader_chapter_refresh_port.dart';
+import '../../application/reader/reader_chapter_list_port.dart';
 import '../../application/reader/reader_simulated_reading_port.dart';
 import '../../application/reader/reader_image_cache_port.dart';
 import '../../application/reader/reader_image_headers_port.dart';
@@ -131,6 +132,9 @@ class ReaderPage extends StatefulWidget {
   /// 离线缓存下载端口；未注入时从组合根读取。
   final CacheBookDownloadPort? cacheDownloadPort;
 
+  /// 当前目录快照端口；未注入时从组合根读取。
+  final ReaderChapterListPort? chapterListPort;
+
   const ReaderPage({
     super.key,
     required this.book,
@@ -147,6 +151,7 @@ class ReaderPage extends StatefulWidget {
     this.chapterRefreshPort,
     this.simulatedReadingPort,
     this.cacheDownloadPort,
+    this.chapterListPort,
   });
 
   @override
@@ -179,6 +184,7 @@ class _ReaderPageState extends State<ReaderPage> {
   late final ReaderChapterRefreshPort _chapterRefreshPort;
   late final ReaderSimulatedReadingPort _simulatedReadingPort;
   late final CacheBookDownloadPort _cacheDownloadPort;
+  late final ReaderChapterListPort _chapterListPort;
   late final ReaderChapterContentPort _contentPort;
   late final ReaderImageHeadersPort _imageHeadersPort;
   late final ReaderSourcePresentationPort _sourcePresentationPort;
@@ -304,6 +310,12 @@ class _ReaderPageState extends State<ReaderPage> {
         widget.cacheDownloadPort ??
         Provider.of<CacheBookDownloadPort?>(context, listen: false) ??
         _fallbackCacheDownloadPort(context);
+    _chapterListPort =
+        widget.chapterListPort ??
+        Provider.of<ReaderChapterListPort?>(context, listen: false) ??
+        ReaderChapterListPortCallbacks(
+          chapters: () => context.read<BookProvider>().currentChapters,
+        );
     _contentPort =
         widget.contentPort ?? context.read<ReaderChapterContentPort>();
     _imageHeadersPort =
@@ -2094,12 +2106,12 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _showTocSheet() async {
-    final provider = context.read<BookProvider>();
     // 对齐 Legado：目录秒开，不在此等待联网 / 扫盘
+    final currentChapters = _chapterListPort.currentChapters;
     final chapters =
-        provider.currentChapters.isNotEmpty &&
-            provider.currentChapters.first.bookId == widget.book.id
-        ? provider.currentChapters
+        currentChapters.isNotEmpty &&
+            currentChapters.first.bookId == widget.book.id
+        ? currentChapters
         : widget.allChapters;
     if (!mounted) return;
     final current = widget.allChapters[_currentIndex];
@@ -2707,8 +2719,7 @@ class _ReaderPageState extends State<ReaderPage> {
       MaterialPageRoute(builder: (_) => ChangeSourcePage(book: widget.book)),
     );
     if (result == null || !mounted) return;
-    final provider = context.read<BookProvider>();
-    final chapters = provider.currentChapters;
+    final chapters = _chapterListPort.currentChapters;
     if (chapters.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -2732,7 +2743,6 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Future<void> _autoChangeSource() async {
     final sourceProvider = context.read<SourceProvider>();
-    final provider = context.read<BookProvider>();
     if (sourceProvider.sources.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -2742,12 +2752,12 @@ class _ReaderPageState extends State<ReaderPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('正在自动寻找可用书源…')));
-    final updated = await provider.autoChangeSource(
+    final updated = await context.read<BookProvider>().autoChangeSource(
       widget.book,
       sources: sourceProvider.sources,
     );
     if (!mounted) return;
-    final chapters = provider.currentChapters;
+    final chapters = _chapterListPort.currentChapters;
     if (updated == null || chapters.isEmpty) {
       ScaffoldMessenger.of(
         context,

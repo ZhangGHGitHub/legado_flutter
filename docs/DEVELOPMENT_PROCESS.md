@@ -475,6 +475,7 @@ Day 2  PR/Issue 模板
  2026-08-03 当前 R6 追溯记录：Style1/Style2 错误态重试统一调用 `BookProvider.loadBooks()`，共享变更总线负责最终快照同步，页面同时观察 Provider loading 状态；新增延迟重试 loading 回归，书架相关定向 `41/41`，Flutter 全量 `1167` 通过、`3` 项既有条件跳过。未修改 Rust、`legado-main/`、目录刷新、缓存、删除、分组写入、Reader、正文、目录、分页、章节身份、UTF-16 阅读位置、R1-12 或暂停平台门禁；不宣称 R6 全量退出。
  2026-08-05 当前 R6 追溯记录：普通阅读器模拟追读书籍查询和字段写入收口到 `ReaderSimulatedReadingPort`；组合根以 `BookProvider` 回调适配器接入，页面保留 SharedPreferences 配置、旧书字段迁移、参数裁剪、阅读限制和原 UI 时序。先执行模拟追读适配器与 Reader 宿主定向 `6/6`，再执行 `flutter analyze --no-pub`、架构边界、Flutter 全量 `1271`（`3` 项既有条件跳过）和 `git diff --check`，全部通过。未修改 Rust、`legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；R6 尚未退出。
  2026-08-05 当前 R6 追溯记录：普通阅读器离线缓存入口复用已有 `CacheBookDownloadPort`，页面不再直接读取 `BookProvider` 的下载状态或调用目录加载、取消、批量下载；生产组合根继续接入同一 Provider 事实源，保留缓存选择、同书取消、并发参数、完成计数和提示语义。先执行 Reader 注入与缓存适配器定向 `7/7`，再执行 `flutter analyze --no-pub`、架构边界、Flutter 全量 `1272`（`3` 项既有条件跳过）和 `git diff --check`，全部通过。未修改 Rust、`legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；R6 尚未退出。
+ 2026-08-05 当前 R6 追溯记录：普通阅读器三个当前目录只读调用面收口到 `ReaderChapterListPort`，目录面板、手动换源后导航和自动换源后导航都读取不可变快照，换源命令仍由 Provider 承载。先执行目录适配器与 Reader 宿主定向 `8/8`，再执行 `flutter analyze --no-pub`、架构边界、compact reporter Flutter 全量 `1274`（`3` 项既有条件跳过）和 `git diff --check`，全部通过；首次默认 reporter 因 `120s` 工具时限终止，未产生测试失败，延长后重跑通过。未修改 Rust、`legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；R6 尚未退出。
 
 ---
 
