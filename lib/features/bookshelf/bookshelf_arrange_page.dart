@@ -10,10 +10,10 @@ import '../../application/bookshelf/bookshelf_arrange_delete_command_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_group_command_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_port.dart';
 import '../../application/bookshelf/bookshelf_arrange_snapshot_port.dart';
+import '../../application/source_management/source_controller.dart';
 import '../../application/source_management/source_notifier.dart';
 import '../../domain/book/book_group.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import '../../providers/source_provider.dart';
 import '../../widgets/book_group_manage_dialog.dart';
 import '../../widgets/book_group_select_dialog.dart';
 import '../../widgets/legado_popup_menu.dart';
@@ -31,6 +31,7 @@ class BookshelfArrangePage extends StatelessWidget {
     this.groupCommands,
     this.deleteCommands,
     this.snapshot,
+    this.sourceController,
   });
 
   /// `null` = 全部；`''` = 未分组；其它 = 分组名
@@ -54,24 +55,25 @@ class BookshelfArrangePage extends StatelessWidget {
 
   /// 当前完整书架快照边界；生产由组合根注入，测试宿主可显式提供。
   final BookshelfArrangeSnapshotPort? snapshot;
+  final SourceController? sourceController;
 
   @override
   Widget build(BuildContext context) {
-    final sourceProvider = context.read<SourceProvider>();
+    final body = _BookshelfArrangePageBody(
+      groupFilter: groupFilter,
+      groupLabel: groupLabel,
+      gridLayout: gridLayout,
+      preferences: preferences,
+      groupStore: groupStore,
+      groupCommands: groupCommands,
+      deleteCommands: deleteCommands,
+      snapshot: snapshot,
+    );
+    final controller = sourceController;
+    if (controller == null) return body;
     return riverpod.ProviderScope(
-      overrides: [
-        sourceControllerProvider.overrideWithValue(sourceProvider.controller),
-      ],
-      child: _BookshelfArrangePageBody(
-        groupFilter: groupFilter,
-        groupLabel: groupLabel,
-        gridLayout: gridLayout,
-        preferences: preferences,
-        groupStore: groupStore,
-        groupCommands: groupCommands,
-        deleteCommands: deleteCommands,
-        snapshot: snapshot,
-      ),
+      overrides: [sourceControllerProvider.overrideWithValue(controller)],
+      child: body,
     );
   }
 }

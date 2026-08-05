@@ -3,6 +3,8 @@
 > 本文档定义项目的**正规协作流程**，补齐「有计划、无流程」的缺口。  
 > 最后更新：2026-08-05
 
+2026-08-05 Phase 4/R6 书架整理 SourceController 边界追溯：本批将 `BookshelfArrangePage` 的 SourceController 注入改为可选显式端口，移除页面内对旧 `SourceProvider` 的直接依赖；生产环境继续使用组合根共享 scope，测试宿主显式注入 controller，保留源标签刷新、分组、删除、排序和选择状态行为。先执行书架整理定向 `18/18`，再执行 `flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 Flutter 串行全量 `1280`（`3` 项既有条件跳过），全部通过；随后执行 `git diff --check` 并创建中文本地提交，只提交本批页面、测试和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
+
 2026-08-05 Phase 4/R6 探索页 SourceController 边界追溯：本批移除 `ExploreListPage` 页面内对旧 `SourceProvider` 的直接依赖和嵌套 Riverpod scope，改由生产组合根/测试宿主提供共享 `SourceController`；保留当前书源、探索请求、结果映射和书架过滤行为。先执行探索页定向 `1/1`，再执行 `flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 Flutter 串行全量 `1280`（`3` 项既有条件跳过），全部通过；随后执行 `git diff --check` 并创建中文本地提交，只提交本批页面、测试和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。
 
 2026-08-05 Phase 4/R6 书架导入对话框 SourceController 边界追溯：本批移除 `AddBookUrlDialog` 与 `ImportBookshelfDialog` 页面内对旧 `SourceProvider` 的直接依赖和嵌套 Riverpod scope，改由生产组合根/测试宿主提供共享 `SourceController`；保留源列表读取、网址导入、书单解析、进度和错误提示。先执行对话框定向 `4/4`，再执行 `flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 Flutter 串行全量 `1280`（`3` 项既有条件跳过），全部通过；随后执行 `git diff --check` 并创建中文本地提交，只提交本批页面、测试和追溯文档，不提交 `android/gradle.properties`、`reasonix.toml`、`.agents/`、`.tmp/`、`skills-lock.json`，不自动 push。

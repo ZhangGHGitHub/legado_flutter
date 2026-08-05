@@ -1,5 +1,7 @@
 # Legado Flutter — 项目重构主计划
 
+2026-08-05 Phase 4/R6 书架整理 SourceController 边界：`BookshelfArrangePage` 移除页面内直接依赖旧 `SourceProvider`，增加可选 `SourceController` 显式注入；生产环境继续使用组合根共享 scope，测试宿主显式注入 controller。保留源标签刷新、分组、删除、排序和选择状态行为。定向 `18/18`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280` 通过（`3` 项既有条件跳过）；R6 尚未退出。
+
 2026-08-05 Phase 4/R6 探索页 SourceController 边界：`ExploreListPage` 移除页面内直接依赖旧 `SourceProvider` 和嵌套 Riverpod scope，统一由生产组合根/测试宿主提供共享 `SourceController`；保留当前书源、探索请求、结果映射和书架过滤行为。定向 `1/1`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280` 通过（`3` 项既有条件跳过）；R6 尚未退出。
 
 2026-08-05 Phase 4/R6 书架导入对话框 SourceController 边界：`AddBookUrlDialog` 与 `ImportBookshelfDialog` 移除页面内直接依赖旧 `SourceProvider` 和嵌套 Riverpod scope，统一由生产组合根/测试宿主提供共享 `SourceController`；保留源列表读取、网址导入、书单解析、进度和错误提示。定向 `4/4`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280` 通过（`3` 项既有条件跳过）；R6 尚未退出。

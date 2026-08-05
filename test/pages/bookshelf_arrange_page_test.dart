@@ -176,6 +176,11 @@ void main() {
   ) async {
     final preferences = _FakeBookshelfArrangePrefs();
     final groupStore = _FakeBookGroupStore();
+    final sourceProvider = SourceProvider(
+      repository: SourceDao(),
+      validationPort: FrbBookSourceValidationPort(),
+      sourceService: createTestBookSourceService(),
+    );
 
     await tester.pumpWidget(
       MultiProvider(
@@ -187,16 +192,11 @@ void main() {
               sourceService: createTestBookSourceService(),
             ),
           ),
-          ChangeNotifierProvider(
-            create: (_) => SourceProvider(
-              repository: SourceDao(),
-              validationPort: FrbBookSourceValidationPort(),
-              sourceService: createTestBookSourceService(),
-            ),
-          ),
+          ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
         ],
         child: MaterialApp(
           home: BookshelfArrangePage(
+            sourceController: sourceProvider.controller,
             preferences: preferences,
             groupStore: groupStore,
             groupCommands: _FakeGroupCommands(),
@@ -269,6 +269,7 @@ void main() {
         ],
         child: MaterialApp(
           home: BookshelfArrangePage(
+            sourceController: sourceProvider.controller,
             preferences: _FakeBookshelfArrangePrefs(),
             groupStore: _FakeBookGroupStore(),
             groupCommands: _FakeGroupCommands(),
@@ -743,6 +744,7 @@ void main() {
         ],
         child: MaterialApp(
           home: BookshelfArrangePage(
+            sourceController: sourceProvider.controller,
             preferences: preferences,
             groupStore: _FakeBookGroupStore(),
             groupCommands: _FakeGroupCommands(),
@@ -792,21 +794,21 @@ Future<void> _pumpArrangePage(
 }) async {
   final groupManagement = _FakeBookGroupManagementPort()
     ..selectGroups = const [BookGroup(groupId: 1, groupName: '目标分组', order: 1)];
+  final sourceProvider = SourceProvider(
+    repository: _MemoryBookSourceRepository(const []),
+    validationPort: FrbBookSourceValidationPort(),
+    sourceService: createTestBookSourceService(),
+  );
   await tester.pumpWidget(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
-        ChangeNotifierProvider(
-          create: (_) => SourceProvider(
-            repository: _MemoryBookSourceRepository(const []),
-            validationPort: FrbBookSourceValidationPort(),
-            sourceService: createTestBookSourceService(),
-          ),
-        ),
+        ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
         Provider<BookGroupManagementPort>.value(value: groupManagement),
       ],
       child: MaterialApp(
         home: BookshelfArrangePage(
+          sourceController: sourceProvider.controller,
           preferences: preferences ?? _FakeBookshelfArrangePrefs(),
           groupStore: _FakeBookGroupStore(),
           groupCommands: commands,

@@ -3813,3 +3813,9 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 保留当前书源读取、探索请求、结果映射、书架成员过滤、分页和原有 UI 行为；本批未改变正文、目录、分页语义、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 - 探索页定向 `1/1`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280`（`3` 项既有条件跳过）通过。
 - 本批未修改 Rust、`legado-main/`、R1-12 或暂停平台门禁；R6 尚未退出。
+## 213. 2026-08-05：R6 书架整理 SourceController 边界
+
+- `BookshelfArrangePage` 移除页面内对旧 `SourceProvider` 的直接依赖，增加可选 `SourceController` 显式注入；生产环境不创建新 scope，继续消费组合根共享 `sourceControllerProvider`，独立测试宿主可显式提供 controller。
+- 保留源标签刷新、分组命令、删除命令、排序、选择状态和原有 UI 行为；本批未改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
+- 书架整理定向 `18/18`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280`（`3` 项既有条件跳过）通过。
+- 本批未修改 Rust、`legado-main/`、R1-12 或暂停平台门禁；R6 尚未退出。
