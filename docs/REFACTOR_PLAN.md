@@ -1,5 +1,7 @@
 # Legado Flutter — 项目重构主计划
 
+2026-08-05 Phase 4/R6 Reader 书源访问与 BookInfo 阅读状态/缓存下载端口收口：`ReaderPage` 移除页面内 `SourceProvider`/`BookProvider.autoChangeSource` fallback，`BookInfoPage` 移除读完轮次和缓存下载的 `BookProvider` fallback，统一使用显式端口、共享端口或明确空实现；Android 快照宿主保留原 Provider 回调行为。定向联合测试 `31/31`；Flutter 全量 `1293`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、Rust workspace `270` 测试和 `git diff --check` 全部通过；本批不改变正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁，R6 尚未退出。
+
 2026-08-05 Phase 4/R6 Reader 模拟追读、当前目录与 BookInfo 元数据端口收口：`ReaderPage` 移除模拟追读和当前目录的 `BookProvider` 页面 fallback，改为显式端口、共享端口或明确空实现；`BookInfoPage` 的元数据写入改为显式或组合根 `BookMetadataPort`，真实组合根继续由 `BookMetadataController` 保持字段 trim。定向联合测试 `28/28`；Flutter 全量 `1289`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、Rust workspace `270` 测试和 `git diff --check` 全部通过；本批不改变正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁，R6 尚未退出。
 
 2026-08-05 Phase 4/R6 Reader 与 BookInfo 端口 fallback 收口：`ReaderPage` 的进度写入和章节缓存状态改为显式端口优先、生产组合根端口兜底；`BookInfoPage` 的目录加载改为显式端口、共享 `BookInfoChapterPort` 或明确空实现。两个 Android Reader 快照宿主显式注入原有进度与章节缓存回调，保留 `BookProvider` 的真实行为。定向联合测试 `26/26`；Flutter 全量 `1288`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 全部通过；本批不改变正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁，R6 尚未退出。

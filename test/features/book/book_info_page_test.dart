@@ -139,6 +139,84 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('详情页显式缓存端口优先并保留过滤、并发和同书取消', (tester) async {
+    final chapterPort = _RecordingBookInfoChapterPort(
+      loadedChapters: const [
+        Chapter(
+          id: 'chapter-downloaded',
+          bookId: 'book-1',
+          title: '已缓存',
+          index: 0,
+          url: 'https://source.example/downloaded',
+          isDownloaded: true,
+        ),
+        Chapter(
+          id: 'chapter-pending',
+          bookId: 'book-1',
+          title: '待缓存',
+          index: 1,
+          url: 'https://source.example/pending',
+        ),
+      ],
+    );
+    final widgetCachePort = _RecordingCacheBookDownloadPort();
+    final sharedCachePort = _RecordingCacheBookDownloadPort();
+
+    await _pumpEditPage(
+      tester,
+      inShelf: false,
+      chapterPort: chapterPort,
+      cacheDownloadPort: widgetCachePort,
+      providerCacheDownloadPort: sharedCachePort,
+    );
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('缓存全部'));
+    await tester.pumpAndSettle();
+
+    expect(widgetCachePort.downloadCalls, hasLength(1));
+    expect(widgetCachePort.downloadCalls.single.bookId, 'book-1');
+    expect(widgetCachePort.downloadCalls.single.chapters, hasLength(1));
+    expect(
+      widgetCachePort.downloadCalls.single.chapters.single.id,
+      'chapter-pending',
+    );
+    expect(widgetCachePort.downloadCalls.single.concurrency, 1);
+    expect(sharedCachePort.downloadCalls, isEmpty);
+
+    widgetCachePort.downloadState = const CacheBookDownloadState(
+      isDownloading: true,
+      downloadBookId: 'book-1',
+      completed: 1,
+      total: 1,
+    );
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('缓存全部'));
+    await tester.pumpAndSettle();
+
+    expect(widgetCachePort.cancelCalls, 1);
+  });
+
+  testWidgets('详情页未显式注入时复用共享缓存下载端口', (tester) async {
+    final cachePort = _RecordingCacheBookDownloadPort();
+
+    await _pumpEditPage(
+      tester,
+      inShelf: false,
+      chapterPort: _RecordingBookInfoChapterPort(),
+      providerCacheDownloadPort: cachePort,
+    );
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('缓存全部'));
+    await tester.pumpAndSettle();
+
+    expect(cachePort.downloadCalls, hasLength(1));
+  });
+
   testWidgets('详情页阅读状态通过应用端口写入', (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 1000));
     final readStatusPort = _RecordingBookReadStatusPort();
@@ -157,6 +235,37 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(readStatusPort.calls, [('book-1', 3)]);
+    } finally {
+      await tester.binding.setSurfaceSize(null);
+    }
+  });
+
+  testWidgets('详情页未显式注入时复用共享阅读状态端口', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1000));
+    final readStatusPort = _RecordingBookReadStatusPort();
+    try {
+      await _pumpEditPage(
+        tester,
+        inShelf: true,
+        providerReadStatusPort: readStatusPort,
+      );
+
+      await _selectReadIteration(tester, '2刷完');
+
+      expect(readStatusPort.calls, [('book-1', 3)]);
+    } finally {
+      await tester.binding.setSurfaceSize(null);
+    }
+  });
+
+  testWidgets('详情页缺少阅读状态端口时不回落到旧 Provider 写入', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1000));
+    try {
+      final fixture = await _pumpEditPage(tester, inShelf: true);
+
+      await _selectReadIteration(tester, '2刷完');
+
+      expect(fixture.repository.books.values.single.readIteration, 0);
     } finally {
       await tester.binding.setSurfaceSize(null);
     }
@@ -368,15 +477,27 @@ Future<void> _editBookInfo(
   await tester.pumpAndSettle();
 }
 
+Future<void> _selectReadIteration(WidgetTester tester, String label) async {
+  await tester.tap(find.byType(PopupMenuButton<String>));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('阅读状态'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label));
+  await tester.pumpAndSettle();
+}
+
 Future<({BookProvider provider, _MemoryBookRepository repository})>
 _pumpEditPage(
   WidgetTester tester, {
   required bool inShelf,
   BookReadStatusPort? readStatusPort,
+  BookReadStatusPort? providerReadStatusPort,
   BookInfoChapterPort? chapterPort,
   BookInfoChapterPort? providerChapterPort,
   BookMetadataPort? metadataPort,
   BookMetadataPort? providerMetadataPort,
+  CacheBookDownloadPort? cacheDownloadPort,
+  CacheBookDownloadPort? providerCacheDownloadPort,
 }) async {
   final source = BookSource(
     bookSourceUrl: 'https://source.example',
@@ -426,8 +547,14 @@ _pumpEditPage(
         ),
         Provider<BookMetadataPort>.value(value: sharedMetadataPort),
         Provider<BookSourceSearchPort>.value(value: const _EmptySearchPort()),
+        if (providerReadStatusPort != null)
+          Provider<BookReadStatusPort>.value(value: providerReadStatusPort),
         if (providerChapterPort != null)
           Provider<BookInfoChapterPort>.value(value: providerChapterPort),
+        if (providerCacheDownloadPort != null)
+          ListenableProvider<CacheBookDownloadPort>.value(
+            value: providerCacheDownloadPort,
+          ),
       ],
       child: riverpod.ProviderScope(
         overrides: [
@@ -439,6 +566,7 @@ _pumpEditPage(
             readStatusPort: readStatusPort,
             chapterPort: chapterPort,
             metadataPort: metadataPort,
+            cacheDownloadPort: cacheDownloadPort,
           ),
         ),
       ),
@@ -685,9 +813,13 @@ final class _RecordingBookMetadataPort implements BookMetadataPort {
 }
 
 final class _RecordingBookInfoChapterPort implements BookInfoChapterPort {
-  _RecordingBookInfoChapterPort({this.failure});
+  _RecordingBookInfoChapterPort({
+    this.failure,
+    Iterable<Chapter>? loadedChapters,
+  }) : _loadedChapters = loadedChapters?.toList();
 
   final String? failure;
+  final List<Chapter>? _loadedChapters;
   final calls = <bool>[];
   final chapters = <Chapter>[];
 
@@ -710,16 +842,61 @@ final class _RecordingBookInfoChapterPort implements BookInfoChapterPort {
     if (failure != null) throw StateError(failure!);
     chapters
       ..clear()
-      ..add(
-        const Chapter(
-          id: 'chapter-1',
-          bookId: 'book-1',
-          title: '第一章',
-          index: 0,
-          url: 'https://source.example/chapter-1',
-        ),
+      ..addAll(
+        _loadedChapters ??
+            const [
+              Chapter(
+                id: 'chapter-1',
+                bookId: 'book-1',
+                title: '第一章',
+                index: 0,
+                url: 'https://source.example/chapter-1',
+              ),
+            ],
       );
   }
+}
+
+final class _RecordingCacheBookDownloadPort extends ChangeNotifier
+    implements CacheBookDownloadPort {
+  CacheBookDownloadState downloadState = const CacheBookDownloadState();
+  final downloadCalls =
+      <
+        ({
+          String bookId,
+          List<Chapter> chapters,
+          BookSource source,
+          int concurrency,
+        })
+      >[];
+  int cancelCalls = 0;
+
+  @override
+  CacheBookDownloadState get state => downloadState;
+
+  @override
+  Future<List<Chapter>> loadChapters(
+    Book book, {
+    required BookSource source,
+  }) async => const [];
+
+  @override
+  Future<void> downloadAllChapters(
+    String bookId,
+    List<Chapter> chapters,
+    BookSource source, {
+    int concurrency = 1,
+  }) async {
+    downloadCalls.add((
+      bookId: bookId,
+      chapters: List<Chapter>.unmodifiable(chapters),
+      source: source,
+      concurrency: concurrency,
+    ));
+  }
+
+  @override
+  void cancelDownload() => cancelCalls++;
 }
 
 final class _StaticBookshelfMembershipPort extends ChangeNotifier

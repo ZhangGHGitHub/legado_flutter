@@ -44,7 +44,6 @@ import '../../model/read_book.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import '../../providers/book_provider.dart';
-import '../../providers/source_provider.dart';
 import '../../utils/chinese_convert.dart';
 import '../../features/book/change_source_page.dart';
 import '../../features/book/toc_sheet.dart';
@@ -320,11 +319,7 @@ class _ReaderPageState extends State<ReaderPage> {
     _sourceAccessPort =
         widget.sourceAccessPort ??
         Provider.of<ReaderSourceAccessPort?>(context, listen: false) ??
-        ReaderSourceAccessPortCallbacks(
-          sourceForBook: context.read<SourceProvider>().findSourceForBook,
-          availableSources: () => context.read<SourceProvider>().sources,
-          autoChangeSource: context.read<BookProvider>().autoChangeSource,
-        );
+        const EmptyReaderSourceAccessPort();
     _contentCache = context.read<ChapterContentCachePort>();
     _chapterCacheStatusPort =
         widget.chapterCacheStatusPort ??

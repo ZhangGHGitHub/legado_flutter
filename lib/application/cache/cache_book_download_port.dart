@@ -100,3 +100,32 @@ final class CacheBookDownloadPortCallbacks implements CacheBookDownloadPort {
   void removeListener(VoidCallback listener) =>
       _changes.removeListener(listener);
 }
+
+/// 独立宿主未提供缓存下载能力时的明确空实现。
+final class EmptyCacheBookDownloadPort implements CacheBookDownloadPort {
+  const EmptyCacheBookDownloadPort();
+
+  @override
+  CacheBookDownloadState get state => const CacheBookDownloadState();
+
+  @override
+  Future<List<Chapter>> loadChapters(Book book, {required BookSource source}) =>
+      Future<List<Chapter>>.error(UnsupportedError('缓存目录服务不可用'));
+
+  @override
+  Future<void> downloadAllChapters(
+    String bookId,
+    List<Chapter> chapters,
+    BookSource source, {
+    int concurrency = 1,
+  }) => Future<void>.error(UnsupportedError('章节缓存服务不可用'));
+
+  @override
+  void cancelDownload() {}
+
+  @override
+  void addListener(VoidCallback listener) {}
+
+  @override
+  void removeListener(VoidCallback listener) {}
+}

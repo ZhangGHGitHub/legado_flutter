@@ -32,25 +32,6 @@ import 'change_source_page.dart';
 import 'toc_sheet.dart';
 import '../../utils/site_busy_guard.dart';
 
-CacheBookDownloadPort _fallbackBookInfoCacheDownloadPort(BuildContext context) {
-  final provider = context.read<BookProvider>();
-  return CacheBookDownloadPortCallbacks(
-    changes: provider,
-    state: () => CacheBookDownloadState(
-      isDownloading: provider.isDownloading,
-      downloadBookId: provider.downloadBookId,
-      completed: provider.downloadCompleted,
-      total: provider.downloadTotal,
-    ),
-    loadChapters: (book, {required source}) async {
-      await provider.loadChapters(book, source: source);
-      return List<Chapter>.unmodifiable(provider.currentChapters);
-    },
-    downloadAllChapters: provider.downloadAllChapters,
-    cancelDownload: provider.cancelDownload,
-  );
-}
-
 /// Legado 主色红（换源芯片 / 阅读按钮），对齐 Jingshiro BookInfo
 const Color _kAccentRed = LegadoTokens.sourceDotRed;
 
@@ -154,7 +135,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     _readStatusPort =
         widget.readStatusPort ??
         Provider.of<BookReadStatusPort?>(context, listen: false) ??
-        BookReadStatusPortCallbacks(update: provider.updateReadIteration);
+        const EmptyBookReadStatusPort();
     _groupCommandPort =
         widget.groupCommandPort ??
         Provider.of<BookshelfArrangeGroupCommandPort?>(
@@ -169,7 +150,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     _cacheDownloadPort =
         widget.cacheDownloadPort ??
         Provider.of<CacheBookDownloadPort?>(context, listen: false) ??
-        _fallbackBookInfoCacheDownloadPort(context);
+        const EmptyCacheBookDownloadPort();
     _sourceAccessPort =
         widget.sourceAccessPort ??
         Provider.of<ReaderSourceAccessPort?>(context, listen: false) ??

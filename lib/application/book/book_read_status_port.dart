@@ -17,5 +17,13 @@ final class BookReadStatusPortCallbacks implements BookReadStatusPort {
       _update(book, readIteration);
 }
 
+/// 独立宿主未提供阅读状态写入能力时的明确空实现。
+final class EmptyBookReadStatusPort implements BookReadStatusPort {
+  const EmptyBookReadStatusPort();
+
+  @override
+  Future<void> updateReadIteration(Book book, int readIteration) async {}
+}
+
 typedef UpdateReadIteration =
     Future<void> Function(Book book, int readIteration);
