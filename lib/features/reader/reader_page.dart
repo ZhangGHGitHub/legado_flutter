@@ -43,7 +43,6 @@ import '../../domain/reader/book_progress.dart';
 import '../../model/read_book.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
-import '../../providers/book_provider.dart';
 import '../../utils/chinese_convert.dart';
 import '../../features/book/change_source_page.dart';
 import '../../features/book/toc_sheet.dart';
@@ -161,7 +160,6 @@ class _ReaderPageState extends State<ReaderPage> {
   late ScrollController _scrollController;
   final GlobalKey<ReaderTurnViewState> _turnKey =
       GlobalKey<ReaderTurnViewState>();
-  BookProvider? _bookProvider; // 缓存引用，避免 dispose 时 context.read 崩溃
   late final ReadingRecordPort _readingRecordPort;
   late final TtsPort _ttsPort;
   late final ReaderFontPort _readerFontPort;
@@ -764,12 +762,6 @@ class _ReaderPageState extends State<ReaderPage> {
 
   String get _displayContentWithoutHardPageBreaks =>
       _displayDocumentWithoutHardPageBreaks.plainText;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _bookProvider = context.read<BookProvider>();
-  }
 
   @override
   void dispose() {
@@ -2009,7 +2001,6 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   void _saveProgress() {
-    if (_bookProvider == null) return;
     final progress = (_currentIndex + 1) / widget.allChapters.length;
     final currentChapter = widget.allChapters[_currentIndex].title;
     final chapterPosition = _currentChapterPosition();

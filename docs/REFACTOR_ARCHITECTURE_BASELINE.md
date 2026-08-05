@@ -3847,3 +3847,10 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 生产组合根继续复用原 Provider 回调、下载状态和书源事实源；显式注入仍优先于共享端口，独立宿主未提供能力时保持可渲染但不执行旧数据层操作。保留离线缓存的书源/目录/并发/取消/完成计数、详情页书源展示与缓存入口、缓存页书架列表和下载行为；本批不改变 `legado-main`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
 - Reader 缓存、书籍详情和缓存页定向联合 `26/26`；Flutter 全量 `1296` 通过、`3` 项既有条件跳过；`dart format --output=none --set-exit-if-changed`、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。
 - 本批未修改 Rust、`legado-main/` 或 Android UI 基线；R6 尚未退出。
+
+## 216. 2026-08-06：R6 Reader 残余 Provider 清理与 RSS 能力门禁
+
+- `ReaderPage` 移除最后一个无业务用途的 `BookProvider` 导入、缓存字段和依赖变化回调；`_saveProgress` 不再依赖旧 Provider 的空值门槛，仍由既有 `ReaderProgressPort` 执行进度写入，保持调用位置和 dispose 时序不变。
+- `RssSourceManagePage` 对分组管理、默认 RSS 规则和帮助动作补充能力门禁注释及回归测试；当前缺少分组写入端口、默认规则资产/导入契约和帮助资源/展示契约，因此继续显示原有明确占位，不在页面绕过 application 边界或虚构后端。书架菜单审查确认导入/导出等动作已有统一分发，`BookshelfListPort` 已由组合根注册，本批不重复实现。
+- Reader/RSS 合并定向 `13/13`；Flutter 全量 `1297` 通过、`3` 项既有条件跳过；`dart format --output=none --set-exit-if-changed`、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。
+- 本批未修改 Rust、`legado-main`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；R6 尚未退出。

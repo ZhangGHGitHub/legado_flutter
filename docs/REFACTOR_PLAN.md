@@ -1,5 +1,7 @@
 # Legado Flutter — 项目重构主计划
 
+2026-08-06 Phase 4/R6 Reader 残余 Provider 清理与 RSS 能力门禁：`ReaderPage` 移除最后一个无业务用途的 `BookProvider` 依赖及 `didChangeDependencies` 缓存逻辑，`_saveProgress` 继续通过既有 application 端口写入；`RssSourceManagePage` 对分组管理、默认规则和帮助保留明确占位，并登记缺失的 application/资源契约；书架菜单并行审查确认导入/导出等动作已有统一分发和组合根端口注册，不重复实现。合并定向测试 `13/13`；Flutter 全量 `1297`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 `git diff --check` 全部通过；本批未修改 Rust、`legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁，R6 尚未退出。
+
 2026-08-05 Phase 4/R6 Reader 离线缓存、BookInfo 书源访问与缓存页 fallback 收口：`ReaderPage` 的离线缓存下载、`BookInfoPage` 的书源访问以及 `CacheBookPage` 的书架/下载能力统一按显式端口、共享端口或明确空实现解析，移除页面内 `BookProvider`/`SourceProvider` fallback；生产组合根继续复用原 Provider 事实源，独立宿主缺少能力时不隐式读取旧 Provider。定向联合测试 `26/26`；Flutter 全量 `1296`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 全部通过；本批未修改 Rust、`legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁，R6 尚未退出。
 
 2026-08-05 Phase 4/R6 Reader 书源访问与 BookInfo 阅读状态/缓存下载端口收口：`ReaderPage` 移除页面内 `SourceProvider`/`BookProvider.autoChangeSource` fallback，`BookInfoPage` 移除读完轮次和缓存下载的 `BookProvider` fallback，统一使用显式端口、共享端口或明确空实现；Android 快照宿主保留原 Provider 回调行为。定向联合测试 `31/31`；Flutter 全量 `1293`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、Rust workspace `270` 测试和 `git diff --check` 全部通过；本批不改变正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁，R6 尚未退出。

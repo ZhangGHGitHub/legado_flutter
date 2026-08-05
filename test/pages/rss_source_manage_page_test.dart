@@ -87,4 +87,40 @@ void main() {
     expect(find.text('示例订阅'), findsOneWidget);
     expect(find.byType(Switch), findsOneWidget);
   });
+
+  testWidgets(
+    'RssSourceManagePage keeps unsupported RSS actions behind explicit gates',
+    (tester) async {
+      await tester.pumpWidget(
+        Provider<ReaderFontPort>.value(
+          value: _FakeReaderFontPort(),
+          child: MaterialApp(
+            home: RssSourceManagePage(
+              controller: RssSourceController(),
+              transfer: _FakeRssSourceTransfer(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('分组'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('分组管理'));
+      await tester.pumpAndSettle();
+      expect(find.text('「分组管理」暂未实现'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+
+      const gatedOverflowActions = {'导入默认规则': '「导入默认规则」暂未实现', '帮助': '「帮助」暂未实现'};
+      for (final entry in gatedOverflowActions.entries) {
+        await tester.tap(find.byTooltip('更多'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(entry.key));
+        await tester.pumpAndSettle();
+
+        expect(find.text(entry.value), findsOneWidget);
+        await tester.pump(const Duration(seconds: 5));
+      }
+    },
+  );
 }
