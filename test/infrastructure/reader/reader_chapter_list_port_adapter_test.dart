@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/infrastructure/reader/reader_chapter_list_port_adapter.dart';
 
@@ -13,9 +14,15 @@ void main() {
     );
     final adapter = ReaderChapterListPortAdapter(chapters: () => [chapter]);
 
-    final chapters = adapter.currentChapters;
+    final chapters = adapter.currentChaptersFor(
+      const Book(id: 'book-1', name: '测试书'),
+    );
 
     expect(chapters, [chapter]);
     expect(() => chapters.add(chapter), throwsUnsupportedError);
+    expect(
+      adapter.currentChaptersFor(const Book(id: 'book-2', name: '其他书')),
+      isEmpty,
+    );
   });
 }

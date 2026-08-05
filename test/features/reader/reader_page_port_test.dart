@@ -7,6 +7,7 @@ import 'package:legado_flutter/application/reader/reader_image_headers_port.dart
 import 'package:legado_flutter/application/reader/reader_source_presentation_port.dart';
 import 'package:legado_flutter/application/reader/reader_simulated_reading_port.dart';
 import 'package:legado_flutter/application/reader/reader_chapter_list_port.dart';
+import 'package:legado_flutter/application/reader/reader_source_access_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/features/reader/reader_page.dart';
@@ -191,5 +192,29 @@ void main() {
     );
 
     expect(page.chapterListPort, same(chapterListPort));
+  });
+
+  test('test hosts can explicitly inject the reader source access port', () {
+    final sourceAccessPort = ReaderSourceAccessPortCallbacks(
+      sourceForBook: (_) => null,
+      availableSources: () => const [],
+      autoChangeSource: (book, {required sources, concurrency = 4}) async =>
+          null,
+    );
+    final chapter = Chapter(
+      id: 'chapter-1',
+      bookId: 'book-1',
+      title: '第一章',
+      index: 0,
+      url: '',
+    );
+    final page = ReaderPage(
+      book: Book(id: 'book-1', name: '测试书'),
+      chapter: chapter,
+      allChapters: [chapter],
+      sourceAccessPort: sourceAccessPort,
+    );
+
+    expect(page.sourceAccessPort, same(sourceAccessPort));
   });
 }

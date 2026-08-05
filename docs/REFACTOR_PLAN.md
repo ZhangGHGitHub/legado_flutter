@@ -1,5 +1,6 @@
 # Legado Flutter — 项目重构主计划
 
+2026-08-05 Phase 4/R6 Reader 外部访问边界：新增 ReaderSourceAccessPort，普通阅读器的书源匹配、可用书源快照和自动换源改经 application 端口；ReaderChapterListPort 增加按 bookId 校验并返回不可变目录快照；缓存章节 ID/清洗改用 ChapterContentCachePort。定向 10/10；Flutter 全量 1276 通过、3 项既有条件跳过；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。
 2026-08-05 Phase 4/R6 普通阅读器目录快照边界：新增 ReaderChapterListPort 及不可变快照适配器，ReaderPage 的目录面板、手动换源后导航和自动换源后导航改通过 application 端口读取当前目录；换源命令仍由既有 BookProvider 负责。定向 8/8；Flutter 全量 1274 通过、3 项既有条件跳过；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。
 2026-08-05 Phase 4/R6 普通阅读器离线缓存边界：ReaderPage 的缓存状态、取消下载、空目录加载和批量章节下载改用已有 CacheBookDownloadPort，生产组合根继续复用 BookProvider 下载事实源，未创建第二份下载状态。保留同书取消、其他书籍占用提示、书源缺失/空目录提示、缓存过滤、并发参数和完成计数语义。定向 7/7；Flutter 全量 1272 通过、3 项既有条件跳过；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。
 2026-08-05 Phase 4/R6 普通阅读器模拟追读边界：新增 ReaderSimulatedReadingPort 及 ReaderSimulatedReadingPortAdapter，ReaderPage 的模拟追读书籍查询和字段写入改通过 application 端口；生产组合根继续复用 BookProvider.findBookById/updateSimulatedReading，保留 SharedPreferences 配置、旧书字段迁移、日期/章节/每日章节参数和阅读限制语义。定向 6/6；Flutter 全量 1271 通过、3 项既有条件跳过；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。

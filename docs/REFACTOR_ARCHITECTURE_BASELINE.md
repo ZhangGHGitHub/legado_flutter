@@ -3765,3 +3765,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：Reader 目录适配器与端口宿主定向 `8/8`；Flutter 全量 `1274` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。
 
 边界结论：本批完成普通阅读器三个当前目录只读调用面的 application 端口收口，不宣称 ReaderPage 其他 Provider/SourceProvider 职责迁移完成或 R6 退出。
+
+## 206. 2026-08-05：R6 Reader 外部访问边界
+
+- 新增 `ReaderSourceAccessPort` 和 `ReaderSourceAccessPortAdapter`；普通阅读器的书源匹配、可用书源不可变快照和自动换源命令通过 application 端口接入，组合根分别复用 `SourceProvider` 与 `BookProvider` 的现有事实源/算法。
+- `ReaderChapterListPort` 改为 `currentChaptersFor(Book)`，适配器先按首章 `bookId` 校验再返回不可变快照；缓存章节 ID 读取和清洗改用已注册的 `ChapterContentCachePort`。保留书源顺序、自动换源并发默认值、目录顺序和章节身份，不改变 `legado-main`、正文、分页、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：Reader 源访问、目录校验、缓存端口与页面宿主定向 `10/10`；Flutter 全量 `1276` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。
+
+边界结论：本批完成普通阅读器书源/目录/缓存外部访问的 application 端口收口，不宣称 ReaderPage 自动换源内部算法或其他 Provider 职责迁移完成或 R6 退出。
