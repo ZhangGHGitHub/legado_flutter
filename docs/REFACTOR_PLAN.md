@@ -1,5 +1,7 @@
 # Legado Flutter — 项目重构主计划
 
+2026-08-05 Phase 4/R6 书架未读角标元数据边界：新增可监听只读 ShelfUnreadMetaPort 及 ShelfUnreadMetaPortAdapter，ShelfUnreadBadge 不再直接依赖 BookProvider，改通过 application 端口读取章节数量和当前阅读索引；生产组合根继续复用同一 Provider 事实源。未读公式、更新文案、999+ 截断、主题色、显示条件和元数据变化通知保持不变。定向 5/5；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。
+
 > **开发流程：** [DEVELOPMENT_PROCESS.md](./DEVELOPMENT_PROCESS.md) · **文档索引：** [README.md](./README.md)  
 > **主目标：** 在不改变 [Jingshiro/legado](https://github.com/Jingshiro/legado) 可观察行为的前提下，将其 Android/Kotlin 工程重构为 Rust + Flutter 跨平台工程，并收敛模块边界、数据流、缓存链路和 UI 组织方式。
 > **行为验收：** [LEGADO_COMPATIBILITY_DEVELOPMENT_PLAN.md](./LEGADO_COMPATIBILITY_DEVELOPMENT_PLAN.md) 是本计划的验收子计划，不是独立的功能开发主线。

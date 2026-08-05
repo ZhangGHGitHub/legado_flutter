@@ -3675,3 +3675,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：缓存下载、漫画与普通阅读器书源展示联合定向 `21/21`；Flutter 串行全量 `1254` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
 
 边界结论：本批完成三个独立调用面的 application 端口收口，不宣称 CacheBookPage、ReaderPage、MangaReaderPage 的其他 Provider/SourceProvider 职责迁移完成或 R6 退出。
+
+## 196. 2026-08-05：R6 书架未读角标元数据边界
+
+- 新增可监听只读 ShelfUnreadMetaPort 和 ShelfUnreadMetaPortAdapter；ShelfUnreadBadge 通过 application 端口读取章节数量与当前阅读索引，不再直接依赖 BookProvider。生产组合根继续委托同一 Provider 的章节元数据事实源，未创建第二份状态。
+- 保留未读计算、更新文案、999+ 截断、主题色、显示条件和元数据变化后的重建行为；本批不改变 legado-main、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：端口与角标 Widget 定向 5/5；flutter analyze --no-pub、scripts/check_architecture_boundaries.ps1 和 git diff --check 通过；R6 尚未退出。
+
+边界结论：本批完成书架未读角标一个只读调用点的 application 端口收口，不宣称 BookProvider 其他书架职责迁移完成或 R6 退出。
