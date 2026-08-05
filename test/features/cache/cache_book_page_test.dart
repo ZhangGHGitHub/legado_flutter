@@ -188,6 +188,27 @@ void main() {
     addTearDown(sourceProvider.dispose);
     await sourceProvider.loadSources();
 
+    final shelfPort = CacheBookShelfPortCallbacks(
+      books: () => bookProvider.books,
+      getChapterCount: bookProvider.getChapterCount,
+      getLocalChapters: bookProvider.getLocalChapters,
+    );
+    final downloadPort = CacheBookDownloadPortCallbacks(
+      changes: bookProvider,
+      state: () => CacheBookDownloadState(
+        isDownloading: bookProvider.isDownloading,
+        downloadBookId: bookProvider.downloadBookId,
+        completed: bookProvider.downloadCompleted,
+        total: bookProvider.downloadTotal,
+      ),
+      loadChapters: (book, {required source}) async {
+        await bookProvider.loadChapters(book, source: source);
+        return bookProvider.currentChapters;
+      },
+      downloadAllChapters: bookProvider.downloadAllChapters,
+      cancelDownload: bookProvider.cancelDownload,
+    );
+
     await tester.pumpWidget(
       riverpod.ProviderScope(
         child: MultiProvider(
@@ -200,6 +221,8 @@ void main() {
           child: MaterialApp(
             home: CacheBookPage(
               contentCache: cache,
+              shelfPort: shelfPort,
+              downloadPort: downloadPort,
               sourceController: sourceProvider.controller,
             ),
           ),
@@ -218,6 +241,30 @@ void main() {
 
     expect(bookProvider.loadedSource, same(source));
     expect(bookProvider.downloadedSource, same(source));
+  });
+
+  testWidgets('缺少缓存端口时使用明确空实现，不读取 BookProvider', (tester) async {
+    final book = const Book(id: 'book-1', name: '测试书', author: '测试作者');
+    final bookProvider = _RecordingBookProvider(
+      book: book,
+      chapters: const [],
+      cache: _FakeChapterContentCache(),
+    );
+    addTearDown(bookProvider.dispose);
+
+    await tester.pumpWidget(
+      riverpod.ProviderScope(
+        child: ChangeNotifierProvider<BookProvider>.value(
+          value: bookProvider,
+          child: MaterialApp(
+            home: CacheBookPage(contentCache: _FakeChapterContentCache()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('书架暂无书籍'), findsOneWidget);
   });
 }
 

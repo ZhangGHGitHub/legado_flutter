@@ -75,25 +75,6 @@ import '../../widgets/legado_popup_menu.dart';
 import '../../widgets/note_editor_sheet.dart';
 import '../../widgets/reader_selectable_text.dart';
 
-CacheBookDownloadPort _fallbackCacheDownloadPort(BuildContext context) {
-  final provider = context.read<BookProvider>();
-  return CacheBookDownloadPortCallbacks(
-    changes: provider,
-    state: () => CacheBookDownloadState(
-      isDownloading: provider.isDownloading,
-      downloadBookId: provider.downloadBookId,
-      completed: provider.downloadCompleted,
-      total: provider.downloadTotal,
-    ),
-    loadChapters: (book, {required source}) async {
-      await provider.loadChapters(book, source: source);
-      return List<Chapter>.unmodifiable(provider.currentChapters);
-    },
-    downloadAllChapters: provider.downloadAllChapters,
-    cancelDownload: provider.cancelDownload,
-  );
-}
-
 /// 阅读器页面 — Phase F UI-1：chrome 自动隐藏 / 底栏章进度 / 更多菜单
 class ReaderPage extends StatefulWidget {
   final Book book;
@@ -311,7 +292,7 @@ class _ReaderPageState extends State<ReaderPage> {
     _cacheDownloadPort =
         widget.cacheDownloadPort ??
         Provider.of<CacheBookDownloadPort?>(context, listen: false) ??
-        _fallbackCacheDownloadPort(context);
+        const EmptyCacheBookDownloadPort();
     _chapterListPort =
         widget.chapterListPort ??
         Provider.of<ReaderChapterListPort?>(context, listen: false) ??

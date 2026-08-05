@@ -3840,3 +3840,10 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - 保留源标签刷新、分组命令、删除命令、排序、选择状态和原有 UI 行为；本批未改变正文、目录、分页、章节身份、UTF-16 阅读位置或第 3 条断行规则。
 - 书架整理定向 `18/18`；`flutter analyze --no-pub`、架构边界和 Flutter 全量 `1280`（`3` 项既有条件跳过）通过。
 - 本批未修改 Rust、`legado-main/`、R1-12 或暂停平台门禁；R6 尚未退出。
+
+## 215. 2026-08-05：R6 Reader 离线缓存、BookInfo 书源访问与缓存页 fallback 收口
+
+- `ReaderPage` 的离线缓存下载、`BookInfoPage` 的书源访问以及 `CacheBookPage` 的书架/下载能力统一按显式端口、共享端口或明确空实现解析；移除这些页面对 `BookProvider`/`SourceProvider` 的隐式 fallback，并新增 `EmptyCacheBookShelfPort` 作为独立宿主缺少书架能力时的明确空实现。
+- 生产组合根继续复用原 Provider 回调、下载状态和书源事实源；显式注入仍优先于共享端口，独立宿主未提供能力时保持可渲染但不执行旧数据层操作。保留离线缓存的书源/目录/并发/取消/完成计数、详情页书源展示与缓存入口、缓存页书架列表和下载行为；本批不改变 `legado-main`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+- Reader 缓存、书籍详情和缓存页定向联合 `26/26`；Flutter 全量 `1296` 通过、`3` 项既有条件跳过；`dart format --output=none --set-exit-if-changed`、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。
+- 本批未修改 Rust、`legado-main/` 或 Android UI 基线；R6 尚未退出。

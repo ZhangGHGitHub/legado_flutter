@@ -18,9 +18,7 @@ import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
 import 'package:legado_flutter/domain/book/chapter.dart';
 import 'package:legado_flutter/domain/source/book_source_type.dart';
-import '../../application/source_management/source_notifier.dart';
 import '../../domain/ports/book_source_search_port.dart';
-import '../../providers/book_provider.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/legado_popup_menu.dart';
@@ -129,8 +127,6 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   void initState() {
     super.initState();
     _book = widget.book;
-    final provider = context.read<BookProvider>();
-    final sourceNotifier = ref.read(sourceNotifierProvider.notifier);
     _metadataPort = widget.metadataPort ?? context.read<BookMetadataPort>();
     _readStatusPort =
         widget.readStatusPort ??
@@ -154,11 +150,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     _sourceAccessPort =
         widget.sourceAccessPort ??
         Provider.of<ReaderSourceAccessPort?>(context, listen: false) ??
-        ReaderSourceAccessPortCallbacks(
-          sourceForBook: sourceNotifier.findSourceForBook,
-          availableSources: () => sourceNotifier.sources,
-          autoChangeSource: provider.autoChangeSource,
-        );
+        const EmptyReaderSourceAccessPort();
     _membershipPort =
         widget.membershipPort ??
         Provider.of<BookshelfMembershipPort?>(context, listen: false) ??
@@ -835,7 +827,6 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
 
   @override
   Widget build(BuildContext context) {
-    final sourceState = ref.watch(sourceNotifierProvider);
     final topPad = MediaQuery.paddingOf(context).top;
     const appBarH = kToolbarHeight;
 
@@ -922,7 +913,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  _buildMetaRows(sourceState.sources),
+                  _buildMetaRows(_sourceAccessPort.availableSources),
                   if (_book.description.trim().isNotEmpty) ...[
                     const SizedBox(height: 8),
                     _buildSynopsis(),

@@ -62,6 +62,44 @@ void main() {
     expect(page.sourceAccessPort, same(sourcePort));
   });
 
+  testWidgets('详情页显式书源访问端口优先于共享端口', (tester) async {
+    final source = BookSource(
+      bookSourceUrl: 'https://explicit.example',
+      bookSourceName: '显式书源',
+    );
+    final explicitPort = ReaderSourceAccessPortCallbacks(
+      sourceForBook: (_) => source,
+      availableSources: () => [source],
+      autoChangeSource: (book, {required sources, concurrency = 4}) async =>
+          null,
+    );
+    final chapterPort = _RecordingBookInfoChapterPort();
+
+    await _pumpEditPage(
+      tester,
+      inShelf: false,
+      chapterPort: chapterPort,
+      sourceAccessPort: explicitPort,
+      providerSourceAccessPort: const EmptyReaderSourceAccessPort(),
+    );
+
+    expect(chapterPort.calls, [false]);
+  });
+
+  testWidgets('详情页缺少书源访问端口时使用明确空实现', (tester) async {
+    final chapterPort = _RecordingBookInfoChapterPort();
+
+    await _pumpEditPage(
+      tester,
+      inShelf: false,
+      chapterPort: chapterPort,
+      includeProviderSourceAccessPort: false,
+    );
+
+    expect(chapterPort.calls, isEmpty);
+    expect(find.textContaining('编辑书源'), findsNothing);
+  });
+
   testWidgets('详情页显式元数据端口优先于组合根端口', (tester) async {
     final widgetPort = _RecordingBookMetadataPort();
     final sharedPort = _RecordingBookMetadataPort();
@@ -303,6 +341,9 @@ void main() {
         providers: [
           ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
           ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+          Provider<ReaderSourceAccessPort>.value(
+            value: _readerSourceAccessPortFor(sourceProvider, bookProvider),
+          ),
           ListenableProvider<BookshelfMembershipPort>.value(
             value: _StaticBookshelfMembershipPort([book, groupedBook]),
           ),
@@ -361,6 +402,9 @@ void main() {
         providers: [
           ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
           ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+          Provider<ReaderSourceAccessPort>.value(
+            value: _readerSourceAccessPortFor(sourceProvider, bookProvider),
+          ),
           ListenableProvider<BookshelfMembershipPort>.value(
             value: _TestBookshelfMembershipPort(bookProvider),
           ),
@@ -498,6 +542,9 @@ _pumpEditPage(
   BookMetadataPort? providerMetadataPort,
   CacheBookDownloadPort? cacheDownloadPort,
   CacheBookDownloadPort? providerCacheDownloadPort,
+  ReaderSourceAccessPort? sourceAccessPort,
+  ReaderSourceAccessPort? providerSourceAccessPort,
+  bool includeProviderSourceAccessPort = true,
 }) async {
   final source = BookSource(
     bookSourceUrl: 'https://source.example',
@@ -542,6 +589,12 @@ _pumpEditPage(
       providers: [
         ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
         ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+        if (includeProviderSourceAccessPort)
+          Provider<ReaderSourceAccessPort>.value(
+            value:
+                providerSourceAccessPort ??
+                _readerSourceAccessPortFor(sourceProvider, bookProvider),
+          ),
         ListenableProvider<BookshelfMembershipPort>.value(
           value: _TestBookshelfMembershipPort(bookProvider),
         ),
@@ -567,6 +620,7 @@ _pumpEditPage(
             chapterPort: chapterPort,
             metadataPort: metadataPort,
             cacheDownloadPort: cacheDownloadPort,
+            sourceAccessPort: sourceAccessPort,
           ),
         ),
       ),
@@ -575,6 +629,15 @@ _pumpEditPage(
   await tester.pumpAndSettle();
   return (provider: bookProvider, repository: repository);
 }
+
+ReaderSourceAccessPort _readerSourceAccessPortFor(
+  SourceProvider sourceProvider,
+  BookProvider bookProvider,
+) => ReaderSourceAccessPortCallbacks(
+  sourceForBook: sourceProvider.findSourceForBook,
+  availableSources: () => sourceProvider.sources,
+  autoChangeSource: bookProvider.autoChangeSource,
+);
 
 Future<({BookProvider provider, _MemoryBookRepository repository})>
 _pumpCoverPage(
@@ -621,6 +684,9 @@ _pumpCoverPage(
       providers: [
         ChangeNotifierProvider<SourceProvider>.value(value: sourceProvider),
         ChangeNotifierProvider<BookProvider>.value(value: bookProvider),
+        Provider<ReaderSourceAccessPort>.value(
+          value: _readerSourceAccessPortFor(sourceProvider, bookProvider),
+        ),
         ListenableProvider<BookshelfMembershipPort>.value(
           value: _TestBookshelfMembershipPort(bookProvider),
         ),

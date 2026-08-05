@@ -37,3 +37,17 @@ final class CacheBookShelfPortCallbacks implements CacheBookShelfPort {
   Future<List<Chapter>> getLocalChapters(String bookId) =>
       _getLocalChapters(bookId);
 }
+
+/// 独立宿主未提供书架能力时的明确空实现。
+final class EmptyCacheBookShelfPort implements CacheBookShelfPort {
+  const EmptyCacheBookShelfPort();
+
+  @override
+  List<Book> get books => const [];
+
+  @override
+  Future<int> getChapterCount(String bookId) async => 0;
+
+  @override
+  Future<List<Chapter>> getLocalChapters(String bookId) async => const [];
+}

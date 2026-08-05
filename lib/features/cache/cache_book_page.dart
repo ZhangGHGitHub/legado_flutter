@@ -13,7 +13,6 @@ import '../../application/source_management/source_notifier.dart';
 import '../../application/source_management/source_controller.dart';
 import '../../domain/ports/chapter_content_cache_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
-import '../../providers/book_provider.dart';
 import '../../widgets/legado_popup_menu.dart';
 import 'download_choice_dialog.dart';
 import 'download_helpers.dart';
@@ -35,11 +34,14 @@ class CacheBookPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedShelfPort = shelfPort ?? _fallbackShelfPort(context);
+    final resolvedShelfPort =
+        shelfPort ??
+        Provider.of<CacheBookShelfPort?>(context, listen: false) ??
+        const EmptyCacheBookShelfPort();
     final resolvedDownloadPort =
         downloadPort ??
         Provider.of<CacheBookDownloadPort?>(context, listen: false) ??
-        _fallbackDownloadPort(context);
+        const EmptyCacheBookDownloadPort();
     return _CacheBookPageBody(
       contentCache: contentCache,
       shelfPort: resolvedShelfPort,
@@ -47,34 +49,6 @@ class CacheBookPage extends StatelessWidget {
       sourceController: sourceController,
     );
   }
-}
-
-CacheBookShelfPort _fallbackShelfPort(BuildContext context) {
-  final bookProvider = context.read<BookProvider>();
-  return CacheBookShelfPortCallbacks(
-    books: () => bookProvider.books,
-    getChapterCount: bookProvider.getChapterCount,
-    getLocalChapters: bookProvider.getLocalChapters,
-  );
-}
-
-CacheBookDownloadPort _fallbackDownloadPort(BuildContext context) {
-  final bookProvider = context.read<BookProvider>();
-  return CacheBookDownloadPortCallbacks(
-    changes: bookProvider,
-    state: () => CacheBookDownloadState(
-      isDownloading: bookProvider.isDownloading,
-      downloadBookId: bookProvider.downloadBookId,
-      completed: bookProvider.downloadCompleted,
-      total: bookProvider.downloadTotal,
-    ),
-    loadChapters: (book, {required source}) async {
-      await bookProvider.loadChapters(book, source: source);
-      return List.unmodifiable(bookProvider.currentChapters);
-    },
-    downloadAllChapters: bookProvider.downloadAllChapters,
-    cancelDownload: bookProvider.cancelDownload,
-  );
 }
 
 class _CacheBookPageBody extends riverpod.ConsumerStatefulWidget {
