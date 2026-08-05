@@ -32,6 +32,7 @@ import '../../application/reader/reading_session_tracker.dart';
 import '../../application/reader/tts_port.dart';
 import '../../domain/ports/chapter_content_cache_port.dart';
 import '../../domain/ports/reading_record_port.dart';
+import '../../application/cache/cache_book_download_port.dart';
 import '../../application/reader/reading_position_mapper.dart';
 import '../../application/reader/book_progress_factory.dart';
 import '../../application/preferences/click_action_prefs_port.dart';
@@ -72,6 +73,25 @@ import '../../widgets/legado_popup_menu.dart';
 import '../../widgets/note_editor_sheet.dart';
 import '../../widgets/reader_selectable_text.dart';
 
+CacheBookDownloadPort _fallbackCacheDownloadPort(BuildContext context) {
+  final provider = context.read<BookProvider>();
+  return CacheBookDownloadPortCallbacks(
+    changes: provider,
+    state: () => CacheBookDownloadState(
+      isDownloading: provider.isDownloading,
+      downloadBookId: provider.downloadBookId,
+      completed: provider.downloadCompleted,
+      total: provider.downloadTotal,
+    ),
+    loadChapters: (book, {required source}) async {
+      await provider.loadChapters(book, source: source);
+      return List<Chapter>.unmodifiable(provider.currentChapters);
+    },
+    downloadAllChapters: provider.downloadAllChapters,
+    cancelDownload: provider.cancelDownload,
+  );
+}
+
 /// 阅读器页面 — Phase F UI-1：chrome 自动隐藏 / 底栏章进度 / 更多菜单
 class ReaderPage extends StatefulWidget {
   final Book book;
@@ -108,6 +128,9 @@ class ReaderPage extends StatefulWidget {
   /// 模拟追读书籍读写端口；未注入时从组合根读取。
   final ReaderSimulatedReadingPort? simulatedReadingPort;
 
+  /// 离线缓存下载端口；未注入时从组合根读取。
+  final CacheBookDownloadPort? cacheDownloadPort;
+
   const ReaderPage({
     super.key,
     required this.book,
@@ -123,6 +146,7 @@ class ReaderPage extends StatefulWidget {
     this.progressPort,
     this.chapterRefreshPort,
     this.simulatedReadingPort,
+    this.cacheDownloadPort,
   });
 
   @override
@@ -154,6 +178,7 @@ class _ReaderPageState extends State<ReaderPage> {
   late final ReaderProgressPort _progressPort;
   late final ReaderChapterRefreshPort _chapterRefreshPort;
   late final ReaderSimulatedReadingPort _simulatedReadingPort;
+  late final CacheBookDownloadPort _cacheDownloadPort;
   late final ReaderChapterContentPort _contentPort;
   late final ReaderImageHeadersPort _imageHeadersPort;
   late final ReaderSourcePresentationPort _sourcePresentationPort;
@@ -275,6 +300,10 @@ class _ReaderPageState extends State<ReaderPage> {
               .read<BookProvider>()
               .updateSimulatedReading,
         );
+    _cacheDownloadPort =
+        widget.cacheDownloadPort ??
+        Provider.of<CacheBookDownloadPort?>(context, listen: false) ??
+        _fallbackCacheDownloadPort(context);
     _contentPort =
         widget.contentPort ?? context.read<ReaderChapterContentPort>();
     _imageHeadersPort =
@@ -2515,10 +2544,10 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _openOfflineCache() async {
-    final provider = context.read<BookProvider>();
-    if (provider.isDownloading) {
-      if (provider.downloadBookId == widget.book.id) {
-        provider.cancelDownload();
+    final downloadState = _cacheDownloadPort.state;
+    if (downloadState.isDownloading) {
+      if (downloadState.downloadBookId == widget.book.id) {
+        _cacheDownloadPort.cancelDownload();
         if (mounted) {
           ScaffoldMessenger.of(
             context,
@@ -2546,9 +2575,11 @@ class _ReaderPageState extends State<ReaderPage> {
 
     var chapters = List<Chapter>.from(widget.allChapters);
     if (chapters.isEmpty) {
-      await provider.loadChapters(widget.book, source: source);
+      chapters = await _cacheDownloadPort.loadChapters(
+        widget.book,
+        source: source,
+      );
       if (!mounted) return;
-      chapters = List<Chapter>.from(provider.currentChapters);
     }
     if (chapters.isEmpty) {
       if (mounted) {
@@ -2598,7 +2629,7 @@ class _ReaderPageState extends State<ReaderPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('开始缓存 ${toDownload.length} 章…')));
-    await provider.downloadAllChapters(
+    await _cacheDownloadPort.downloadAllChapters(
       widget.book.id,
       toDownload,
       source,
@@ -2608,7 +2639,7 @@ class _ReaderPageState extends State<ReaderPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '缓存完成 ${provider.downloadCompleted}/${toDownload.length}',
+            '缓存完成 ${_cacheDownloadPort.state.completed}/${toDownload.length}',
           ),
         ),
       );

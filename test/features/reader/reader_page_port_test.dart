@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/foundation.dart';
+import 'package:legado_flutter/application/cache/cache_book_download_port.dart';
 import 'package:legado_flutter/application/reader/book_reader_prefs_port.dart';
 import 'package:legado_flutter/application/reader/read_book_config_prefs_port.dart';
 import 'package:legado_flutter/application/reader/reader_image_headers_port.dart';
@@ -141,5 +143,31 @@ void main() {
     );
 
     expect(page.simulatedReadingPort, same(simulatedReadingPort));
+  });
+
+  test('test hosts can explicitly inject the offline cache port', () {
+    final cachePort = CacheBookDownloadPortCallbacks(
+      changes: ChangeNotifier(),
+      state: () => const CacheBookDownloadState(),
+      loadChapters: (book, {required source}) async => const [],
+      downloadAllChapters:
+          (bookId, chapters, source, {concurrency = 1}) async {},
+      cancelDownload: () {},
+    );
+    final chapter = Chapter(
+      id: 'chapter-1',
+      bookId: 'book-1',
+      title: '第一章',
+      index: 0,
+      url: '',
+    );
+    final page = ReaderPage(
+      book: Book(id: 'book-1', name: '测试书'),
+      chapter: chapter,
+      allChapters: [chapter],
+      cacheDownloadPort: cachePort,
+    );
+
+    expect(page.cacheDownloadPort, same(cachePort));
   });
 }

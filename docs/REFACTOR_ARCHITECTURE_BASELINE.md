@@ -3747,3 +3747,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：模拟追读适配器与 Reader 端口宿主定向 `6/6`；Flutter 全量 `1271` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。
 
 边界结论：本批完成普通阅读器模拟追读一个读写调用面的 application 端口收口，不宣称 ReaderPage 其他 Provider 职责迁移完成或 R6 退出。
+
+## 204. 2026-08-05：R6 普通阅读器离线缓存边界
+
+- `ReaderPage._openOfflineCache` 的下载状态读取、同书取消、目录加载和批量章节下载改用已有 `CacheBookDownloadPort`；页面通过端口读取不可变下载状态，生产组合根继续复用 `BookProvider` 的下载回调与通知，不创建第二份下载状态事实源。
+- 保留书源缺失、其他书籍正在缓存、空目录、缓存章节过滤、选择对话框、并发参数、完成计数和原有提示语义；本批不改变 `legado-main`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：Reader 端口宿主与缓存下载适配器定向 `7/7`；Flutter 全量 `1272` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。
+
+边界结论：本批完成普通阅读器离线缓存一个下载调用面的 application 端口复用，不宣称 ReaderPage 其他 Provider/SourceProvider 职责迁移完成或 R6 退出。
