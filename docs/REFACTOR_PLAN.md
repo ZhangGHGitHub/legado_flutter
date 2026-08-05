@@ -1,5 +1,7 @@
 # Legado Flutter — 项目重构主计划
 
+2026-08-05 Phase 4/R6 书籍详情书架生命周期边界：新增 BookshelfBookLifecyclePort 及适配器，BookInfoPage 的加入书架、当前目录保存和移除书架改通过 application 端口；生产组合根继续复用 BookProvider 的快照、章节元数据、变更总线和通知语义。保留加入顺序、移除行为、成功提示和阅读入口，不迁移阅读启动。定向 9/9；Flutter 全量 1267 通过、3 项既有条件跳过；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。
+
 2026-08-05 Phase 4/R6 书籍详情分组命令边界：BookInfoPage 的单本分组写入改用已存在的 BookshelfArrangeGroupCommandPort，生产组合根继续复用现有 BookProvider 适配器；独立宿主缺少能力时使用 application 空实现。保留分组列表读取、加入书架前置、输入裁剪、取消和原 UI 行为。定向联合 15/15；Flutter 全量 1266 通过、3 项既有条件跳过；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。
 
 2026-08-05 Phase 4/R6 书籍详情阅读状态写入边界：新增 BookReadStatusPort 及 BookReadStatusPortAdapter，BookInfoPage 的读完/N 刷轮次写入改通过 application 端口；生产组合根继续复用 BookProvider.updateReadIteration，独立宿主保留显式回调能力。保留阅读状态选项、书架内落库条件、异常传播和现有 UI 行为。定向 9/9；Flutter 全量 1266 通过、3 项既有条件跳过；flutter analyze --no-pub、架构边界和 git diff --check 通过，R6 尚未退出。

@@ -10,6 +10,7 @@ import 'package:legado_flutter/application/book/book_info_chapter_port.dart';
 import 'package:legado_flutter/application/book/book_metadata_port.dart';
 import 'package:legado_flutter/application/book/book_read_status_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_arrange_group_command_port.dart';
+import 'package:legado_flutter/application/bookshelf/bookshelf_book_lifecycle_port.dart';
 import 'package:legado_flutter/application/bookshelf/bookshelf_membership_port.dart';
 import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/source/book_source.dart';
@@ -41,6 +42,7 @@ class BookInfoPage extends StatelessWidget {
   final BookMetadataPort? metadataPort;
   final BookReadStatusPort? readStatusPort;
   final BookshelfArrangeGroupCommandPort? groupCommandPort;
+  final BookshelfBookLifecyclePort? lifecyclePort;
 
   const BookInfoPage({
     super.key,
@@ -51,6 +53,7 @@ class BookInfoPage extends StatelessWidget {
     this.metadataPort,
     this.readStatusPort,
     this.groupCommandPort,
+    this.lifecyclePort,
   });
 
   @override
@@ -63,6 +66,7 @@ class BookInfoPage extends StatelessWidget {
       metadataPort: metadataPort,
       readStatusPort: readStatusPort,
       groupCommandPort: groupCommandPort,
+      lifecyclePort: lifecyclePort,
     );
   }
 }
@@ -75,6 +79,7 @@ class _BookInfoPageBody extends riverpod.ConsumerStatefulWidget {
   final BookMetadataPort? metadataPort;
   final BookReadStatusPort? readStatusPort;
   final BookshelfArrangeGroupCommandPort? groupCommandPort;
+  final BookshelfBookLifecyclePort? lifecyclePort;
 
   const _BookInfoPageBody({
     required this.book,
@@ -84,6 +89,7 @@ class _BookInfoPageBody extends riverpod.ConsumerStatefulWidget {
     this.metadataPort,
     this.readStatusPort,
     this.groupCommandPort,
+    this.lifecyclePort,
   });
 
   @override
@@ -103,6 +109,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   late final BookMetadataPort _metadataPort;
   late final BookReadStatusPort _readStatusPort;
   late final BookshelfArrangeGroupCommandPort _groupCommandPort;
+  late final BookshelfBookLifecyclePort _lifecyclePort;
 
   @override
   void initState() {
@@ -127,6 +134,10 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
           listen: false,
         ) ??
         const EmptyBookshelfArrangeGroupCommandPort();
+    _lifecyclePort =
+        widget.lifecyclePort ??
+        Provider.of<BookshelfBookLifecyclePort?>(context, listen: false) ??
+        const EmptyBookshelfBookLifecyclePort();
     _membershipPort =
         widget.membershipPort ??
         Provider.of<BookshelfMembershipPort?>(context, listen: false) ??
@@ -312,8 +323,8 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
       }
       return;
     }
-    await provider.addBook(_book);
-    await provider.persistCurrentTocFor(_book);
+    await _lifecyclePort.addBook(_book);
+    await _lifecyclePort.persistCurrentTocFor(_book);
     if (mounted) {
       setState(() => _isInShelf = true);
       final messenger = ScaffoldMessenger.of(context);
@@ -340,8 +351,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   }
 
   Future<void> _removeFromShelf() async {
-    final provider = context.read<BookProvider>();
-    await provider.removeBook(_book.id);
+    await _lifecyclePort.removeBook(_book.id);
     if (mounted) {
       setState(() => _isInShelf = false);
       final messenger = ScaffoldMessenger.of(context);

@@ -3711,3 +3711,12 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 验证结果：分组适配器与书籍详情定向联合 `15/15`；Flutter 全量 `1266` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
 
 边界结论：本批完成书籍详情一个单本分组写入调用点的 application 端口收口，不宣称 BookInfoPage 其他 Provider 职责迁移完成或 R6 退出。
+
+## 200. 2026-08-05：R6 书籍详情书架生命周期边界
+
+- 新增 `BookshelfBookLifecyclePort` 和 `BookshelfBookLifecyclePortAdapter`；`BookInfoPage` 的加入书架、加入后的当前目录保存和移除书架均通过 application 端口执行。生产组合根继续复用现有 `BookProvider.addBook`、`persistCurrentTocFor`、`removeBook`，因此保留书架快照、章节元数据、变更总线和通知语义。
+- 保留加入顺序、移除行为、成功提示、失败传播和“去阅读”入口；阅读启动、目录刷新、书源匹配和其他 Provider 职责本批不迁移，不改变 `legado-main`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁。
+
+验证结果：书架生命周期适配器和书籍详情回归定向 `9/9`；Flutter 全量 `1267` 通过、`3` 项既有条件跳过；`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1`、Dart 格式和 `git diff --check` 通过。
+
+边界结论：本批完成书籍详情三个书架生命周期调用面的 application 端口收口，不宣称 BookInfoPage 其他 Provider 职责迁移完成或 R6 退出。
