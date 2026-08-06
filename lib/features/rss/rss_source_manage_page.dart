@@ -7,6 +7,7 @@ import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:legado_flutter/application/rss/rss_controller.dart';
 import 'package:legado_flutter/application/rss/rss_notifier.dart';
 import 'package:legado_flutter/application/rss/rss_state.dart';
+import 'package:legado_flutter/application/rss/rss_source_group_management_port.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
 import 'package:legado_flutter/application/rss/rss_source_transfer_port.dart';
 import '../../theme/legado_tokens.dart';
@@ -18,23 +19,38 @@ import 'rss_source_edit_page.dart';
 /// 订阅源管理 — 对齐 Jingshiro [RssSourceActivity] /
 /// `activity_rss_source.xml` + `item_rss_source.xml` + `menu/rss_source.xml`
 class RssSourceManagePage extends StatelessWidget {
-  const RssSourceManagePage({super.key, this.controller, this.transfer});
+  const RssSourceManagePage({
+    super.key,
+    this.controller,
+    this.transfer,
+    this.groupManagement,
+  });
 
   /// 独立宿主可直接注入 controller；生产入口由父级 Riverpod scope 提供。
   final RssSourceController? controller;
   final RssSourceTransferPort? transfer;
+  final RssSourceGroupManagementPort? groupManagement;
 
   @override
   Widget build(BuildContext context) {
-    return _RssSourceManagePageBody(controller: controller, transfer: transfer);
+    return _RssSourceManagePageBody(
+      controller: controller,
+      transfer: transfer,
+      groupManagement: groupManagement,
+    );
   }
 }
 
 class _RssSourceManagePageBody extends riverpod.ConsumerStatefulWidget {
-  const _RssSourceManagePageBody({this.controller, this.transfer});
+  const _RssSourceManagePageBody({
+    this.controller,
+    this.transfer,
+    this.groupManagement,
+  });
 
   final RssSourceController? controller;
   final RssSourceTransferPort? transfer;
+  final RssSourceGroupManagementPort? groupManagement;
 
   @override
   riverpod.ConsumerState<_RssSourceManagePageBody> createState() =>
@@ -209,14 +225,21 @@ class _RssSourceManagePageBodyState
     });
   }
 
+  RssSourceGroupManagementPort get _groupManagement =>
+      widget.groupManagement ?? context.read<RssSourceGroupManagementPort>();
+
+  Future<void> _showGroupManagement() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _RssSourceGroupManagementDialog(port: _groupManagement),
+    );
+    if (mounted) setState(() {});
+  }
+
   Future<void> _onGroupMenu(String value) async {
     switch (value) {
       case 'manage':
-        // 门禁：RSS application 目前只有分组读取能力，没有分组增删改写入端口。
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('「分组管理」暂未实现')));
+        await _showGroupManagement();
       case 'enabled':
         _setFilter('enabled');
       case 'disabled':
@@ -821,6 +844,164 @@ class _RssSourceManagePageBodyState
           ],
         ),
       ),
+    );
+  }
+}
+
+class _RssSourceGroupManagementDialog extends StatefulWidget {
+  const _RssSourceGroupManagementDialog({required this.port});
+
+  final RssSourceGroupManagementPort port;
+
+  @override
+  State<_RssSourceGroupManagementDialog> createState() =>
+      _RssSourceGroupManagementDialogState();
+}
+
+class _RssSourceGroupManagementDialogState
+    extends State<_RssSourceGroupManagementDialog> {
+  Future<String?> _requestGroupName({
+    required String title,
+    String initialValue = '',
+  }) => showDialog<String>(
+    context: context,
+    builder: (_) =>
+        _RssSourceGroupNameDialog(title: title, initialValue: initialValue),
+  );
+
+  Future<void> _addGroup() async {
+    final group = await _requestGroupName(title: '新建分组');
+    if (group == null) return;
+    await widget.port.addGroup(group);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _renameGroup(String oldGroup) async {
+    final group = await _requestGroupName(
+      title: '编辑分组',
+      initialValue: oldGroup,
+    );
+    if (group == null) return;
+    await widget.port.renameGroup(oldGroup, group);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _deleteGroup(String group) async {
+    await widget.port.deleteGroup(group);
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = widget.port.allGroups();
+    return AlertDialog(
+      title: Row(
+        children: [
+          const Expanded(child: Text('分组管理')),
+          IconButton(
+            tooltip: '新建分组',
+            icon: const Icon(Icons.add),
+            onPressed: _addGroup,
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 360,
+        height: groups.isEmpty ? 48 : 320,
+        child: groups.isEmpty
+            ? const Center(child: Text('暂无分组'))
+            : ListView.separated(
+                itemCount: groups.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (_, index) {
+                  final group = groups[index];
+                  return ListTile(
+                    dense: true,
+                    title: Text(group),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: '重命名',
+                          icon: const Icon(Icons.edit_outlined),
+                          onPressed: () => _renameGroup(group),
+                        ),
+                        IconButton(
+                          tooltip: '删除分组',
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => _deleteGroup(group),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('关闭'),
+        ),
+      ],
+    );
+  }
+}
+
+class _RssSourceGroupNameDialog extends StatefulWidget {
+  const _RssSourceGroupNameDialog({
+    required this.title,
+    required this.initialValue,
+  });
+
+  final String title;
+  final String initialValue;
+
+  @override
+  State<_RssSourceGroupNameDialog> createState() =>
+      _RssSourceGroupNameDialogState();
+}
+
+class _RssSourceGroupNameDialogState extends State<_RssSourceGroupNameDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = _controller.text.trim();
+    if (value.isNotEmpty) Navigator.pop(context, value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => _submit(),
+        decoration: const InputDecoration(
+          hintText: '分组名称',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('确定')),
+      ],
     );
   }
 }

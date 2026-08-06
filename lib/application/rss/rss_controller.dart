@@ -63,6 +63,42 @@ final class RssSourceController {
 
   List<String> allGroups() => _groups(enabledOnly: false);
 
+  /// 对齐原版 GroupManageDialog：新建分组会把未分组源归入该组。
+  Future<void> addGroup(String group) async {
+    final normalized = group.trim();
+    if (normalized.isEmpty) return;
+
+    var changed = false;
+    for (var i = 0; i < _sources.length; i++) {
+      if (_sources[i].sourceGroup.trim().isEmpty) {
+        _sources[i] = _sources[i].copyWith(sourceGroup: normalized);
+        changed = true;
+      }
+    }
+    if (changed) await _persist();
+  }
+
+  /// 对齐原版 upGroup：只改写包含旧组名的源，并规范化为逗号分隔。
+  Future<void> renameGroup(String oldGroup, String newGroup) async {
+    final oldName = oldGroup.trim();
+    if (oldName.isEmpty) return;
+    final newName = newGroup.trim();
+    var changed = false;
+    for (var i = 0; i < _sources.length; i++) {
+      final groups = _splitGroups(_sources[i].sourceGroup);
+      if (!groups.contains(oldName)) continue;
+      groups.remove(oldName);
+      if (newName.isNotEmpty) groups.add(newName);
+      final sourceGroup = groups.join(',');
+      if (sourceGroup == _sources[i].sourceGroup) continue;
+      _sources[i] = _sources[i].copyWith(sourceGroup: sourceGroup);
+      changed = true;
+    }
+    if (changed) await _persist();
+  }
+
+  Future<void> deleteGroup(String group) => renameGroup(group, '');
+
   List<RssSource> managedSources({String? searchKey, String filter = 'all'}) {
     var list = List<RssSource>.of(_sources)..sort(_compareOrder);
     switch (filter) {
@@ -201,20 +237,23 @@ final class RssSourceController {
 
   static bool _matchGroup(String sourceGroup, String target) {
     if (target.isEmpty) return sourceGroup.isEmpty;
-    return sourceGroup.split(',').map((group) => group.trim()).contains(target);
+    return _splitGroups(sourceGroup).contains(target);
   }
 
   List<String> _groups({required bool enabledOnly}) {
     final groups = <String>{};
     for (final source in _sources) {
       if (enabledOnly && !source.enabled) continue;
-      for (final group in source.sourceGroup.split(',')) {
-        final trimmed = group.trim();
-        if (trimmed.isNotEmpty) groups.add(trimmed);
-      }
+      groups.addAll(_splitGroups(source.sourceGroup));
     }
     return groups.toList()..sort();
   }
+
+  static Set<String> _splitGroups(String sourceGroup) => sourceGroup
+      .split(RegExp(r'[,;，；]'))
+      .map((group) => group.trim())
+      .where((group) => group.isNotEmpty)
+      .toSet();
 
   int _maxOrder() => _sources.fold<int>(
     0,

@@ -8,6 +8,7 @@ import 'package:legado_flutter/application/rss/rss_controller.dart';
 import 'package:legado_flutter/application/rss/rss_notifier.dart';
 import 'package:legado_flutter/application/rss/rss_source_transfer_port.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
+import 'package:legado_flutter/infrastructure/rss/rss_source_group_management_port_adapter.dart';
 import '../helpers/fake_reader_font_port.dart';
 import 'package:legado_flutter/features/rss/rss_source_manage_page.dart';
 
@@ -88,6 +89,53 @@ void main() {
     expect(find.byType(Switch), findsOneWidget);
   });
 
+  testWidgets('RssSourceManagePage supports RSS group management commands', (
+    tester,
+  ) async {
+    final controller = RssSourceController();
+    await controller.upsertSource(
+      const RssSource(
+        sourceUrl: 'https://example.com/rss',
+        sourceName: '示例订阅',
+        sourceGroup: '旧组',
+      ),
+    );
+    final groupPort = RssSourceGroupManagementPortAdapter(controller);
+
+    await tester.pumpWidget(
+      Provider<ReaderFontPort>.value(
+        value: _FakeReaderFontPort(),
+        child: MaterialApp(
+          home: RssSourceManagePage(
+            controller: controller,
+            transfer: _FakeRssSourceTransfer(),
+            groupManagement: groupPort,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('分组'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('分组管理'));
+    await tester.pumpAndSettle();
+    expect(find.text('旧组'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('重命名'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, '新组');
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    expect(controller.sources.single.sourceGroup, '新组');
+
+    await tester.tap(find.byTooltip('删除分组'));
+    await tester.pumpAndSettle();
+    expect(controller.sources.single.sourceGroup, isEmpty);
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets(
     'RssSourceManagePage keeps unsupported RSS actions behind explicit gates',
     (tester) async {
@@ -103,13 +151,6 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-
-      await tester.tap(find.byTooltip('分组'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('分组管理'));
-      await tester.pumpAndSettle();
-      expect(find.text('「分组管理」暂未实现'), findsOneWidget);
-      await tester.pump(const Duration(seconds: 5));
 
       const gatedOverflowActions = {'导入默认规则': '「导入默认规则」暂未实现', '帮助': '「帮助」暂未实现'};
       for (final entry in gatedOverflowActions.entries) {

@@ -148,4 +148,31 @@ void main() {
     expect(fake.ensureDirCalls, 1);
     expect(fake.listCalls, 1);
   });
+
+  testWidgets(
+    'keeps the help placeholder until the original help contract is ready',
+    (tester) async {
+      await tester.pumpWidget(
+        Provider<AppLogPort>.value(
+          value: const AppLogPortAdapter(),
+          child: MaterialApp(
+            home: RemoteBookPage(
+              webdavRepository: _FakeWebDavRepository(),
+              archiveImporter: _FakeArchiveImporter(),
+              bookSorter: _FakeBookSorter(),
+              webdavPrefs: const _FakeWebDavPrefs(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('更多'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('帮助'));
+      await tester.pump();
+
+      expect(find.text('WebDAV 远程书籍帮助页尚未移植'), findsOneWidget);
+    },
+  );
 }

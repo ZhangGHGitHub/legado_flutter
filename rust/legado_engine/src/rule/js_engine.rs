@@ -1343,6 +1343,38 @@ fn json_escape(s: &str) -> String {
 mod tests {
     use super::*;
 
+    fn read_fixture_request(stream: &mut std::net::TcpStream) -> String {
+        use std::io::Read;
+
+        let mut request = Vec::new();
+        let mut chunk = [0_u8; 4096];
+        loop {
+            let size = stream.read(&mut chunk).unwrap();
+            if size == 0 {
+                break;
+            }
+            request.extend_from_slice(&chunk[..size]);
+            let Some(header_end) = request.windows(4).position(|window| window == b"\r\n\r\n")
+            else {
+                continue;
+            };
+            let header = String::from_utf8_lossy(&request[..header_end]);
+            let content_length = header
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse::<usize>().ok())
+                        .flatten()
+                })
+                .unwrap_or(0);
+            if request.len() >= header_end + 4 + content_length {
+                break;
+            }
+        }
+        String::from_utf8(request).unwrap()
+    }
+
     struct BrowserHostReset;
 
     impl Drop for BrowserHostReset {
@@ -1871,6 +1903,85 @@ crypto.encryptBase64(key);
     fn java_ajax_ssrf_returns_empty() {
         let out = run_eval_script("java.ajax('http://127.0.0.1/')", "", "").unwrap();
         assert_eq!(out, "");
+    }
+
+    #[test]
+    fn java_ajax_fetches_loopback_get_and_resolves_relative_url() {
+        use std::io::Write;
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let expected_referer = format!("{base_url}/book");
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_fixture_request(&mut stream);
+            assert!(
+                request.starts_with("GET /relative HTTP/1.1"),
+                "请求={request}"
+            );
+            assert!(
+                request.contains(&format!("Referer: {expected_referer}"))
+                    || request.contains(&format!("referer: {expected_referer}")),
+                "相对 URL 请求必须保留 baseUrl 作为 Referer: {request}"
+            );
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\nloopback-get",
+                )
+                .unwrap();
+        });
+
+        let out =
+            run_eval_script("java.ajax('/relative')", "", &format!("{base_url}/book")).unwrap();
+        assert_eq!(out, "loopback-get");
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn java_ajax_posts_analyze_url_body_and_headers_to_loopback_fixture() {
+        use std::io::Write;
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/submit", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_fixture_request(&mut stream);
+            assert!(
+                request.starts_with("POST /submit HTTP/1.1"),
+                "请求={request}"
+            );
+            assert!(
+                request.lines().any(|line| {
+                    line.split_once(':')
+                        .map(|(name, value)| {
+                            name.eq_ignore_ascii_case("x-test") && value.trim() == "fixture"
+                        })
+                        .unwrap_or(false)
+                }),
+                "请求头未传递: {request}"
+            );
+            assert!(request.ends_with("a=1&b=2"), "请求体未传递: {request}");
+            stream
+                .write_all(
+                    b"HTTP/1.1 201 Created\r\nContent-Length: 13\r\nConnection: close\r\n\r\nloopback-post",
+                )
+                .unwrap();
+        });
+
+        let ajax_url = format!(
+            "{url},{}",
+            serde_json::json!({
+                "method": "POST",
+                "body": "a=1&b=2",
+                "headers": {"X-Test": "fixture"}
+            })
+        );
+        let script = format!("java.ajax({})", json_escape(&ajax_url));
+        let out = run_eval_script(&script, "", "").unwrap();
+        assert_eq!(out, "loopback-post");
+        server.join().unwrap();
     }
 
     #[test]

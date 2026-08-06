@@ -1,5 +1,7 @@
 # Legado Flutter 架构重构基线
 
+> 2026-08-06 Phase 4/R6 RSS 分组管理边界与 JS 宿主回归：RSS 分组不作为独立持久化实体，页面仅依赖 application `RssSourceGroupManagementPort`，infrastructure 适配器将命令委托给既有 `RssSourceController`，组合根注册的仍是同一 RSS 状态和持久化事实源。新建分组仅归入未分组源，重命名/删除只改目标组并保留其他组成员关系。`RemoteBookPage` 的原版 WebDAV 帮助因缺少帮助版本状态与完整 Markdown/外链渲染契约继续显式占位；Rust `java.ajax` 仅增加离线 loopback GET/POST、相对 URL、Referer、请求头和请求体回归。定向 Flutter `9/9`、Rust JS `31/31`、Flutter 全量 `1302`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、Dart/Rust 格式和 `git diff --check` 通过；正文、目录顺序、分页、章节身份、UTF-16 阅读位置和第 3 条断行规则保持不变，R6 尚未退出。
+
 > 2026-08-05 Phase 4/R6 Reader 书源访问与 BookInfo 阅读状态/缓存下载边界：`ReaderPage` 的书源匹配、可用书源和自动换源通过 `ReaderSourceAccessPort`，`BookInfoPage` 的读完轮次与缓存下载分别通过 application port；生产组合根继续复用 `SourceProvider`/`BookProvider` 适配器，独立宿主缺失能力时使用明确空实现。Android 快照宿主保留原 Provider 回调，未创建第二份事实源。定向联合 `31/31`、Flutter 全量 `1293`（`3` 项既有条件跳过）、Rust workspace `270` 测试、`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过；正文、目录顺序、分页、章节身份、UTF-16 阅读位置和第 3 条断行规则保持不变，R6 尚未退出。
 
 > 2026-08-05 Phase 4/R6 Reader 模拟追读、当前目录与 BookInfo 元数据边界：`ReaderPage` 的模拟追读和当前目录读取通过显式 application port、共享 port 或明确空实现获取，页面不再直接用 `BookProvider` 组装这两个 fallback；`BookInfoPage` 元数据写入通过 `BookMetadataPort`，生产适配器继续复用 `BookMetadataController` 的字段裁剪和 Provider 快照语义。定向联合 `28/28`、Flutter 全量 `1289`（`3` 项既有条件跳过）、Rust workspace `270` 测试、`flutter analyze --no-pub`、架构边界和 `git diff --check` 通过；正文、目录顺序、分页、章节身份、UTF-16 阅读位置和第 3 条断行规则保持不变，R6 尚未退出。
