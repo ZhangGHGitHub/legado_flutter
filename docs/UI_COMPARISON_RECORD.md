@@ -2,6 +2,14 @@
 
 状态：进行中。该记录只记录已实际采集的同设备证据，不把源码核对或不同数据状态截图记为像素通过。
 
+## 2026-08-06：标准 APK 与集成测试 APK 的启动边界
+
+- 标准手工 UI 对照构建命令：`flutter build apk --debug --no-pub`。
+- 集成测试命令可能生成测试入口 APK；测试结束后不得直接把该产物用 `monkey` 当作生产应用启动，否则可能出现 Flutter 内容区白屏，不能据此判定 `lib/main.dart` 启动失败。
+- 复验命令：`D:\Android\platform-tools\adb.exe -s emulator-5558 install -r -d build\app\outputs\flutter-apk\app-debug.apk`，并在 `emulator-5556` 重复安装。
+- 标准 APK 在 `emulator-5556`、`emulator-5558` 均显示隐私协议首屏；截图证据为 `.tmp/ui-compare-20260806/standard-5556-current.png` 和 `.tmp/ui-compare-20260806/standard-5558-current.png`，仅作本地临时证据，不提交仓库。
+- 两台设备日志均能到达 `AppBootstrap 初始化完成`、`正式应用组装完成`、`首屏运行`；本次白屏结论为测试构建产物误用，不是生产启动链路缺陷。
+
 ## 2026-08-02：当前 Android 设备对照约定
 
 - 当前设备：雷电模拟器 `emulator-5556`，Android 9 / API 28，`720x1280`，DPI `320`。
