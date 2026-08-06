@@ -67,7 +67,7 @@
 > 当前暂停项（2026-07-26）：Web 平台/WASM/PWA 构建、Web 平台适配和相关验收；TTS 真实 Android 引擎验收。除这两类门禁外，Android/Windows 重构继续按固定顺序推进。
 
 > **统一设计约束：** [LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md](./LEGADO_FLUTTER_RUST_UNIFIED_ARCHITECTURE.md) 已于 2026-08-01 固化为目标架构和后续迁移的硬约束。当前 Provider、剩余手写模型、字符串错误和宿主级 QuickJS 超时缺口均视为待迁移项；在对应门禁通过前，不得宣称严格设计一致。
-> **Android UI 目标基线：** 原版 UI/功能对照固定使用 `emulator-5556` 上的 `io.legado.app.debug`，版本为 `3.26.072317debug`；重构版使用 `com.legado.legado_flutter` 单独验证。截图、交互、主题、文字、布局和功能验收均以该版本为准，其他版本不得替代该 UI 基线。
+> **Android UI 目标基线：** 原版 UI/功能对照固定使用 `emulator-5556` 上的 `io.legado.app.releaseS`，实机核验版本为 `3.26.071309`（应用界面显示“阅读 Sigma”，桌面图标显示“阅读Beta”）；重构版使用当前工程实际 applicationId 单独验证。截图、交互、主题、文字、布局和功能验收均以该版本为准，其他版本不得替代该 UI 基线。
 
 > **R1-12 表范围口径：** 当前 Rust v17 业务映射为六张核心表（`books`、`book_sources`、`chapters`、`bookmarks`、`detailedReadRecord`、`replace_rules`）；`readRecord` 作为第七张迁移关注表仅 archive-only 保存。文档历史记录中的“七张核心表”按此口径解释，不代表七张表均已业务化。
 

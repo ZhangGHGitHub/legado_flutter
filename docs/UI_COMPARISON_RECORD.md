@@ -5,10 +5,17 @@
 ## 2026-08-02：当前 Android 设备对照约定
 
 - 当前设备：雷电模拟器 `emulator-5556`，Android 9 / API 28，`720x1280`，DPI `320`。
-- UI 目标版本：重构前原版 `3.26.072317debug`；原版包为 `io.legado.app.debug`，重构版包为 `com.legado.legado_flutter`。
-- ADB：`D:\Android\platform-tools\adb.exe`；所有 UI/功能对照均固定使用上述原版版本。
+- UI 目标版本：重构前原版 `3.26.071309`；实机包为 `io.legado.app.releaseS`，关于页显示“阅读 Sigma”，桌面图标显示“阅读Beta”。重构版以当前工程实际 applicationId 单独验证。
+- ADB：`D:\leidian\LDPlayer9\adb.exe`；所有 UI/功能对照均固定使用 `emulator-5556` 上述原版版本。
 - 旧设备截图已移除，当前原版只读参考集需要在 `emulator-5556` 上重新采集；在重新采集完成前不宣称 UI 像素验收通过。
 - 截图中的棕色/红色主题属于设备当前主题配置，不是固定色值；后续对照固定同数据、同主题、同启动状态。
+
+## 2026-08-06：原版 UI 包名与版本实机复核
+
+- `adb -s emulator-5556 shell pm list packages` 确认原版候选包为 `io.legado.app.releaseS`。
+- `dumpsys package io.legado.app.releaseS` 确认 `versionName=3.26.071309`，启动 Activity 为 `io.legado.app.ui.welcome.WelcomeActivity`。
+- `monkey -p io.legado.app.releaseS 1` 后截图保存于 `.tmp/ui-compare-20260806/releaseS-current.png`；截图与用户提供的“关于 / 阅读Sigma”界面一致。
+- `io.legado.app.debug` 当前未安装；`com.legado.app.release` 为 `3.26080322`，均不作为本 UI 目标版本。
 
 ## 2026-07-27：Android 书架首屏初测
 
