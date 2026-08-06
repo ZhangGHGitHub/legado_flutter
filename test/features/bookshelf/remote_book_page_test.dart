@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/application/bookshelf/remote_archive_import_port.dart';
+import 'package:legado_flutter/application/bookshelf/remote_book_help_port.dart';
 import 'package:legado_flutter/application/bookshelf/remote_book_sort_port.dart';
 import 'package:legado_flutter/application/bookshelf/webdav_prefs_port.dart';
 import 'package:legado_flutter/application/diagnostics/app_log_port.dart';
@@ -121,6 +122,19 @@ final class _FakeWebDavPrefs implements WebDavPrefsPort {
   );
 }
 
+final class _FakeRemoteBookHelpPort implements RemoteBookHelpPort {
+  _FakeRemoteBookHelpPort({this.autoShow = false});
+
+  final bool autoShow;
+  int calls = 0;
+
+  @override
+  Future<bool> shouldAutoShow() async {
+    calls++;
+    return autoShow;
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -149,30 +163,60 @@ void main() {
     expect(fake.listCalls, 1);
   });
 
-  testWidgets(
-    'keeps the help placeholder until the original help contract is ready',
-    (tester) async {
-      await tester.pumpWidget(
-        Provider<AppLogPort>.value(
-          value: const AppLogPortAdapter(),
-          child: MaterialApp(
-            home: RemoteBookPage(
-              webdavRepository: _FakeWebDavRepository(),
-              archiveImporter: _FakeArchiveImporter(),
-              bookSorter: _FakeBookSorter(),
-              webdavPrefs: const _FakeWebDavPrefs(),
-            ),
+  testWidgets('opens the original WebDAV book help asset manually', (
+    tester,
+  ) async {
+    final help = _FakeRemoteBookHelpPort();
+    await tester.pumpWidget(
+      Provider<AppLogPort>.value(
+        value: const AppLogPortAdapter(),
+        child: MaterialApp(
+          home: RemoteBookPage(
+            webdavRepository: _FakeWebDavRepository(),
+            archiveImporter: _FakeArchiveImporter(),
+            bookSorter: _FakeBookSorter(),
+            webdavPrefs: const _FakeWebDavPrefs(),
+            helpPort: help,
           ),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('更多'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('帮助'));
-      await tester.pump();
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('帮助'));
+    await tester.pumpAndSettle();
 
-      expect(find.text('WebDAV 远程书籍帮助页尚未移植'), findsOneWidget);
-    },
-  );
+    expect(find.text('WebDav 书籍简明使用教程'), findsNWidgets(2));
+    expect(find.text('上传书籍到 WebDav'), findsOneWidget);
+    expect(find.text('坚果云注册与配置 · 语雀 (yuque.com)'), findsOneWidget);
+    expect(help.calls, 1);
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('shows WebDAV book help on the original first-open gate', (
+    tester,
+  ) async {
+    final help = _FakeRemoteBookHelpPort(autoShow: true);
+    await tester.pumpWidget(
+      Provider<AppLogPort>.value(
+        value: const AppLogPortAdapter(),
+        child: MaterialApp(
+          home: RemoteBookPage(
+            webdavRepository: _FakeWebDavRepository(),
+            archiveImporter: _FakeArchiveImporter(),
+            bookSorter: _FakeBookSorter(),
+            webdavPrefs: const _FakeWebDavPrefs(),
+            helpPort: help,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(help.calls, 1);
+    expect(find.text('WebDav 书籍简明使用教程'), findsNWidgets(2));
+  });
 }

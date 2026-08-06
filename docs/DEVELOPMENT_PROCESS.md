@@ -523,3 +523,5 @@ Day 2  PR/Issue 模板
 
 > 相关：[文档索引](./README.md) | [历史 UI 功能库存](./archive/UI_REPLICATION_PLAN.md) | [重构计划](./REFACTOR_PLAN.md)
 > 当前执行顺序以 `docs/REFACTOR_PLAN.md` 第 0 节和当前 R1-12 门禁为准；本节只保留流程基建历史建议。
+
+2026-08-07 当前 R6 追溯记录：完成 WebDAV 远程书籍帮助迁移。新增 `RemoteBookHelpPort` 与 SharedPreferences 适配器，按原版版本号 `1` 和 `firstOpenWebDavBook == false` 规则决定自动展示；`RemoteBookPage` 的手动帮助和首次自动帮助均读取原版资产，未改变 WebDAV 目录加载、导入和阅读行为。统一帮助弹窗增加资产内容缓存，保留原版 Markdown 文本、标题、嵌套列表、引用、序号、粗体及外链渲染；应用/原版资产 SHA-256 已核对一致。先执行 WebDAV 定向 `3/3`，再执行 `flutter analyze --no-pub`、架构边界和 Flutter 串行全量 `1306`（`3` 项既有条件跳过），均通过；最终 `git diff --check` 待文档更新后执行。未修改 `legado-main/`、Rust、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；R6 尚未退出。

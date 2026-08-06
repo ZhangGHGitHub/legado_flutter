@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../../application/bookshelf/remote_archive_import_port.dart';
 import '../../application/bookshelf/remote_book_controller.dart';
+import '../../application/bookshelf/remote_book_help_port.dart';
 import '../../application/bookshelf/remote_book_import_port.dart';
 import '../../application/bookshelf/remote_book_notifier.dart';
 import '../../application/bookshelf/remote_book_sort_port.dart';
@@ -21,6 +22,7 @@ import '../../widgets/legado_popup_menu.dart';
 import '../../features/book/book_info_page.dart';
 import '../../features/my/webdav_config_dialog.dart';
 import 'app_log_dialog.dart';
+import '../../widgets/source_manage_help_dialog.dart';
 
 /// 远程书籍（WebDAV）— 对齐 Jingshiro [RemoteBookActivity] /
 /// [RemoteBookViewModel] / [AppWebDav.defaultBookWebDav]。
@@ -34,6 +36,7 @@ class RemoteBookPage extends StatefulWidget {
     this.bookSorter,
     this.webdavPrefs,
     this.bookImportPort,
+    this.helpPort,
   });
 
   @visibleForTesting
@@ -51,6 +54,9 @@ class RemoteBookPage extends StatefulWidget {
   @visibleForTesting
   final RemoteBookImportPort? bookImportPort;
 
+  @visibleForTesting
+  final RemoteBookHelpPort? helpPort;
+
   @override
   State<RemoteBookPage> createState() => _RemoteBookPageState();
 }
@@ -59,6 +65,7 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
   late final WebDavRepository _webdav;
   late final RemoteBookController _remoteBookController;
   late final RemoteBookImportPort _bookImportPort;
+  late final RemoteBookHelpPort _helpPort;
   final _searchCtl = TextEditingController();
   RemoteArchiveImportPort get _archiveImporter =>
       widget.archiveImporter ?? context.read<RemoteArchiveImportPort>();
@@ -77,6 +84,10 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
         widget.bookImportPort ??
         Provider.of<RemoteBookImportPort?>(context, listen: false) ??
         const EmptyRemoteBookImportPort();
+    _helpPort =
+        widget.helpPort ??
+        Provider.of<RemoteBookHelpPort?>(context, listen: false) ??
+        const UnavailableRemoteBookHelpPort();
     _remoteBookController = RemoteBookController(
       webdavRepository: _webdav,
       archiveImporter: _archiveImporter,
@@ -85,6 +96,19 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
       appLog: context.read<AppLogPort>(),
     );
     _remoteBookController.bootstrap();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeShowHelp();
+    });
+  }
+
+  Future<void> _maybeShowHelp() async {
+    final shouldShow = await _helpPort.shouldAutoShow();
+    if (!shouldShow || !mounted) return;
+    await SourceManageHelpDialog.show(
+      context,
+      assetPath: 'assets/help/webDavBookHelp.md',
+      title: 'WebDav 书籍简明使用教程',
+    );
   }
 
   @override
@@ -351,13 +375,10 @@ class _RemoteBookPageState extends State<RemoteBookPage> {
                 } else if (v == 'log') {
                   await AppLogDialog.show(context);
                 } else if (v == 'help') {
-                  // 契约门禁：原版通过 LocalConfig 记录首次展示版本，并用
-                  // Markwon 完整渲染 webDavBookHelp.md（含引用、粗体和外链）。
-                  // 当前 Flutter 尚无对应的 WebDAV 帮助状态端口，现有轻量帮助
-                  // 组件也不能保持原版 Markdown/链接行为，因此暂不虚构替代页。
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('WebDAV 远程书籍帮助页尚未移植')),
+                  await SourceManageHelpDialog.show(
+                    context,
+                    assetPath: 'assets/help/webDavBookHelp.md',
+                    title: 'WebDav 书籍简明使用教程',
                   );
                 }
               },

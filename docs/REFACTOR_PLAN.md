@@ -1,5 +1,7 @@
 # Legado Flutter — 项目重构主计划
 
+2026-08-07 Phase 4/R6 WebDAV 远程书籍帮助迁移：将原版 `webDavBookHelp.md` 逐字节复制为应用资产，`RemoteBookPage` 通过 `RemoteBookHelpPort` 接入原版 `webDavBookHelpVersion = 1` 与 `firstOpenWebDavBook` 首次展示门禁，手动帮助始终可打开；帮助弹窗复用统一 Markdown 子集渲染器，支持标题、嵌套列表、引用、序号、粗体和链接，并按资产路径缓存已读取内容。定向 WebDAV 测试 `3/3`、Flutter 串行全量 `1306`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界和 Dart 格式均通过；WebDAV 帮助资产与原版 SHA-256 均为 `A33D3F0C0B290002CC9E385CEDD323825922946ED42BD1955BF0E480C47F3E91`。本批未修改 `legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；R6 尚未退出。
+
 2026-08-07 Phase 4/R6 RSS 订阅源管理帮助：将原版 `SourceMRssHelp.md` 按 SHA-256 逐字节复制为应用资产；RSS 管理页“帮助”复用既有本地帮助弹窗，弹窗改为支持标题和资产路径参数，并正确解析原版两个空格缩进的嵌套列表。原版 RSS 帮助不含外链或复杂 Markdown，标题/列表渲染契约已足够，不再将此项列为门禁；远程书籍 WebDAV 帮助仍保持原有门禁。定向 Flutter `7/7`、Flutter 串行全量 `1305`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 全部通过；未修改 `legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁，R6 尚未退出。
 
 2026-08-06 Phase 4/R6 RSS 默认规则 JSON 导入：将原版 `defaultData/rssSources.json` 逐字节复制为应用资产并注册；`RssDefaultSourceImportPort` 由基础设施资产适配器加载 JSON，页面不直接访问 `rootBundle`。控制器对齐原版顺序：仅删除 `sourceGroup == legado` 的旧默认源，再按 `sourceUrl` 覆盖写入 4 条默认源，保留未分组、混合分组和 `raw` 未映射字段；RSS 帮助和远程 WebDAV 帮助仍因完整 Markdown/外链/版本状态契约缺失而保持显式门禁。原版资产 SHA-256 对照、定向 Flutter `10/10`、Flutter 全量 `1305`（`3` 项既有条件跳过）、`flutter analyze --no-pub`、架构边界、Dart 格式和 `git diff --check` 全部通过；未修改 `legado-main/`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁，R6 尚未退出。

@@ -47,6 +47,7 @@ import '../application/main/main_shell_startup_port.dart';
 import '../application/obsidian/obsidian_export_port.dart';
 import '../application/bookshelf/remote_archive_import_port.dart';
 import '../application/bookshelf/remote_book_import_port.dart';
+import '../application/bookshelf/remote_book_help_port.dart';
 import '../application/bookshelf/remote_book_sort_port.dart';
 import '../application/cache/book_cache_export_port.dart';
 import '../application/cache/cache_book_download_port.dart';
@@ -196,6 +197,7 @@ import '../infrastructure/bookshelf/bookshelf_toc_refresh_port_adapter.dart';
 import '../infrastructure/bookshelf/remote_archive_import_port_adapter.dart';
 import '../infrastructure/bookshelf/remote_book_import_port_adapter.dart';
 import '../infrastructure/bookshelf/remote_book_sort_port_adapter.dart';
+import '../infrastructure/bookshelf/shared_preferences_remote_book_help_port_adapter.dart';
 import '../infrastructure/bookshelf/shared_preferences_webdav_prefs_port_adapter.dart';
 import '../infrastructure/cache/book_cache_export_port_adapter.dart';
 import '../infrastructure/cache/cache_book_download_port_adapter.dart';
@@ -702,6 +704,9 @@ abstract final class AppCompositionRoot {
           ),
           Provider<RemoteBookSortPort>.value(
             value: const RemoteBookSortPortAdapter(),
+          ),
+          Provider<RemoteBookHelpPort>.value(
+            value: const SharedPreferencesRemoteBookHelpPortAdapter(),
           ),
           Provider<RemoteBookImportPort>.value(
             value: RemoteBookImportPortAdapter(

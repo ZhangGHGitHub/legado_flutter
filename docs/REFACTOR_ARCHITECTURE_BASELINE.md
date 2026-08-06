@@ -3860,3 +3860,10 @@ Cookie 项仅为平台 WebView 的定域过期；规则宿主仍需实现 `java.
 - `RssSourceManagePage` 对分组管理、默认 RSS 规则和帮助动作补充能力门禁注释及回归测试；当前缺少分组写入端口、默认规则资产/导入契约和帮助资源/展示契约，因此继续显示原有明确占位，不在页面绕过 application 边界或虚构后端。书架菜单审查确认导入/导出等动作已有统一分发，`BookshelfListPort` 已由组合根注册，本批不重复实现。
 - Reader/RSS 合并定向 `13/13`；Flutter 全量 `1297` 通过、`3` 项既有条件跳过；`dart format --output=none --set-exit-if-changed`、`flutter analyze --no-pub`、`scripts/check_architecture_boundaries.ps1` 和 `git diff --check` 通过。
 - 本批未修改 Rust、`legado-main`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；R6 尚未退出。
+
+## 217. 2026-08-07：R6 WebDAV 远程书籍帮助边界
+
+- 新增 `RemoteBookHelpPort` 及 `SharedPreferencesRemoteBookHelpPortAdapter`；适配原版 `webDavBookHelpVersion = 1` 和 `firstOpenWebDavBook` 兼容规则，自动展示状态通过 infrastructure 端口读取，手动帮助不受首次展示门禁影响。
+- `RemoteBookPage` 只通过 application 帮助端口决定自动展示，并复用 `SourceManageHelpDialog` 读取原版 `webDavBookHelp.md`；帮助弹窗按资产路径缓存文本，支持当前帮助资产需要的标题、嵌套列表、引用、序号、粗体和链接。生产组合根注册该端口，页面测试通过显式 fake 注入。
+- 应用资产与 `legado-main` 原版资产逐字节核对，SHA-256 均为 `A33D3F0C0B290002CC9E385CEDD323825922946ED42BD1955BF0E480C47F3E91`。WebDAV 定向 `3/3`；`flutter analyze --no-pub`、架构边界和 Flutter 串行全量 `1306`（`3` 项既有条件跳过）通过。
+- 本批不迁移正式外部 WebDAV、Web/WASM/PWA 或真实 Android TTS，不修改 Rust、`legado-main`、正文、目录顺序、分页、章节身份、UTF-16 阅读位置、第 3 条断行规则、R1-12 或暂停平台门禁；不宣称 R6 退出。
