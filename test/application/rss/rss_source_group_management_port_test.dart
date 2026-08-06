@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/rss/rss_controller.dart';
 import 'package:legado_flutter/application/rss/rss_source_group_management_port.dart';
@@ -95,6 +97,67 @@ void main() {
       expect(controller.sources[1].sourceGroup, '另一组');
       expect(port.allGroups(), containsAll(<String>['保留组', '另一组']));
       expect(port.allGroups(), isNot(contains('新组')));
+    },
+  );
+
+  test(
+    'default import replaces only exact legado sources and keeps raw JSON',
+    () async {
+      final store = _RecordingRssSourceStore([
+        const RssSource(
+          sourceUrl: 'https://example.com/old-default',
+          sourceName: '旧默认',
+          sourceGroup: 'legado',
+        ),
+        const RssSource(
+          sourceUrl: 'https://example.com/mixed',
+          sourceName: '保留混合分组',
+          sourceGroup: 'legado,用户分组',
+        ),
+        const RssSource(
+          sourceUrl: 'https://example.com/user',
+          sourceName: '用户源',
+        ),
+      ]);
+      final controller = RssSourceController(sourceStore: store);
+      await controller.loadSources();
+
+      final imported = await controller.importDefaultSources(
+        jsonEncode([
+          {
+            'sourceUrl': 'https://example.com/default',
+            'sourceName': '新默认',
+            'sourceGroup': 'legado',
+            'customField': '必须保留',
+          },
+          {'sourceUrl': 'https://example.com/user', 'sourceName': '按 URL 覆盖'},
+        ]),
+      );
+
+      expect(imported, isTrue);
+      expect(
+        controller.sources.map((source) => source.sourceUrl),
+        isNot(contains('https://example.com/old-default')),
+      );
+      expect(
+        controller.sources
+            .singleWhere((source) => source.sourceUrl.contains('mixed'))
+            .sourceGroup,
+        'legado,用户分组',
+      );
+      expect(
+        controller.sources
+            .singleWhere((source) => source.sourceUrl.contains('default'))
+            .raw,
+        containsPair('customField', '必须保留'),
+      );
+      expect(
+        controller.sources
+            .singleWhere((source) => source.sourceUrl.endsWith('/user'))
+            .sourceName,
+        '按 URL 覆盖',
+      );
+      expect(store.saved, hasLength(1));
     },
   );
 }

@@ -191,20 +191,7 @@ final class RssSourceController {
 
   Future<bool> importSources(String jsonText) async {
     try {
-      final decoded = jsonDecode(jsonText.trim());
-      final list = decoded is List
-          ? decoded
-          : decoded is Map && decoded['sources'] is List
-          ? decoded['sources'] as List
-          : <dynamic>[];
-      if (list.isEmpty) return false;
-      final imported = <RssSource>[];
-      for (final item in list) {
-        if (item is! Map<String, dynamic>) continue;
-        final source = RssSource.fromJson(item);
-        if (source.sourceUrl.trim().isEmpty) continue;
-        imported.add(source);
-      }
+      final imported = _parseSources(jsonText);
       if (imported.isEmpty) return false;
       for (final source in imported) {
         _upsertInMemory(source);
@@ -213,6 +200,24 @@ final class RssSourceController {
       return true;
     } catch (error) {
       debugPrint('RSS import failed: $error');
+      return false;
+    }
+  }
+
+  /// 对齐原版 DefaultData.importDefaultRssSources：仅移除旧 `legado`
+  /// 分组默认源，再按 sourceUrl 覆盖写入打包 JSON 中的默认源。
+  Future<bool> importDefaultSources(String jsonText) async {
+    try {
+      final imported = _parseSources(jsonText);
+      if (imported.isEmpty) return false;
+      _sources.removeWhere((source) => source.sourceGroup == 'legado');
+      for (final source in imported) {
+        _upsertInMemory(source);
+      }
+      await _persist();
+      return true;
+    } catch (error) {
+      debugPrint('RSS default import failed: $error');
       return false;
     }
   }
@@ -270,6 +275,20 @@ final class RssSourceController {
     } else {
       _sources.add(source);
     }
+  }
+
+  static List<RssSource> _parseSources(String jsonText) {
+    final decoded = jsonDecode(jsonText.trim());
+    final list = decoded is List
+        ? decoded
+        : decoded is Map && decoded['sources'] is List
+        ? decoded['sources'] as List
+        : <dynamic>[];
+    return list
+        .whereType<Map>()
+        .map((item) => RssSource.fromJson(Map<String, dynamic>.from(item)))
+        .where((source) => source.sourceUrl.trim().isNotEmpty)
+        .toList(growable: false);
   }
 
   Future<void> _persist() async {

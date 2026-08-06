@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:legado_flutter/application/rss/rss_controller.dart';
+import 'package:legado_flutter/application/rss/rss_default_source_import_port.dart';
 import 'package:legado_flutter/application/rss/rss_notifier.dart';
 import 'package:legado_flutter/application/rss/rss_source_transfer_port.dart';
 import 'package:legado_flutter/domain/rss/rss_source.dart';
@@ -23,6 +24,16 @@ class _FakeRssSourceTransfer implements RssSourceTransferPort {
 
   @override
   Future<void> copyText(String text) async {}
+}
+
+class _FakeDefaultRssSourceImport implements RssDefaultSourceImportPort {
+  int calls = 0;
+
+  @override
+  Future<bool> importDefaults() async {
+    calls++;
+    return true;
+  }
 }
 
 class _FakeReaderFontPort extends FakeReaderFontPort {
@@ -137,6 +148,34 @@ void main() {
   });
 
   testWidgets(
+    'RssSourceManagePage imports default RSS sources through its port',
+    (tester) async {
+      final importer = _FakeDefaultRssSourceImport();
+      await tester.pumpWidget(
+        Provider<ReaderFontPort>.value(
+          value: _FakeReaderFontPort(),
+          child: MaterialApp(
+            home: RssSourceManagePage(
+              controller: RssSourceController(),
+              transfer: _FakeRssSourceTransfer(),
+              defaultSourceImport: importer,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('更多'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('导入默认规则'));
+      await tester.pumpAndSettle();
+
+      expect(importer.calls, 1);
+      expect(find.text('导入成功'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'RssSourceManagePage keeps unsupported RSS actions behind explicit gates',
     (tester) async {
       await tester.pumpWidget(
@@ -152,7 +191,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      const gatedOverflowActions = {'导入默认规则': '「导入默认规则」暂未实现', '帮助': '「帮助」暂未实现'};
+      const gatedOverflowActions = {'帮助': '「帮助」暂未实现'};
       for (final entry in gatedOverflowActions.entries) {
         await tester.tap(find.byTooltip('更多'));
         await tester.pumpAndSettle();

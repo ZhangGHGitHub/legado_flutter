@@ -114,6 +114,7 @@ import '../application/rss/rss_read_state_port.dart';
 import '../application/rss/rss_sort_urls_port.dart';
 import '../application/rss/rss_login_port.dart';
 import '../application/rss/rss_source_edit_port.dart';
+import '../application/rss/rss_default_source_import_port.dart';
 import '../application/rss/rss_source_transfer_port.dart';
 import '../application/rss/rss_source_store_port.dart';
 import '../application/rss/rss_source_group_management_port.dart';
@@ -299,6 +300,7 @@ import '../infrastructure/rss/rss_star_prefs_port_adapter.dart';
 import '../infrastructure/rss/rss_sort_urls_port_adapter.dart';
 import '../infrastructure/rss/rss_login_port_adapter.dart';
 import '../infrastructure/rss/rss_source_group_management_port_adapter.dart';
+import '../infrastructure/rss/rss_default_source_import_port_adapter.dart';
 import '../infrastructure/rss/rss_provider_source_edit_adapter.dart';
 import '../infrastructure/rss/rss_source_transfer_port_adapter.dart';
 import '../infrastructure/rss/shared_preferences_rss_source_store_adapter.dart';
@@ -1129,6 +1131,11 @@ abstract final class AppCompositionRoot {
           ),
           Provider<RssSourceGroupManagementPort>(
             create: (context) => RssSourceGroupManagementPortAdapter(
+              context.read<RssProvider>().controller,
+            ),
+          ),
+          Provider<RssDefaultSourceImportPort>(
+            create: (context) => RssDefaultSourceImportPortAdapter(
               context.read<RssProvider>().controller,
             ),
           ),

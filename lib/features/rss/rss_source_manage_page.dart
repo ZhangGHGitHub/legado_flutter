@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'package:legado_flutter/application/reader/reader_font_port.dart';
 import 'package:legado_flutter/application/rss/rss_controller.dart';
+import 'package:legado_flutter/application/rss/rss_default_source_import_port.dart';
 import 'package:legado_flutter/application/rss/rss_notifier.dart';
 import 'package:legado_flutter/application/rss/rss_state.dart';
 import 'package:legado_flutter/application/rss/rss_source_group_management_port.dart';
@@ -24,12 +25,14 @@ class RssSourceManagePage extends StatelessWidget {
     this.controller,
     this.transfer,
     this.groupManagement,
+    this.defaultSourceImport,
   });
 
   /// 独立宿主可直接注入 controller；生产入口由父级 Riverpod scope 提供。
   final RssSourceController? controller;
   final RssSourceTransferPort? transfer;
   final RssSourceGroupManagementPort? groupManagement;
+  final RssDefaultSourceImportPort? defaultSourceImport;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +40,7 @@ class RssSourceManagePage extends StatelessWidget {
       controller: controller,
       transfer: transfer,
       groupManagement: groupManagement,
+      defaultSourceImport: defaultSourceImport,
     );
   }
 }
@@ -46,11 +50,13 @@ class _RssSourceManagePageBody extends riverpod.ConsumerStatefulWidget {
     this.controller,
     this.transfer,
     this.groupManagement,
+    this.defaultSourceImport,
   });
 
   final RssSourceController? controller;
   final RssSourceTransferPort? transfer;
   final RssSourceGroupManagementPort? groupManagement;
+  final RssDefaultSourceImportPort? defaultSourceImport;
 
   @override
   riverpod.ConsumerState<_RssSourceManagePageBody> createState() =>
@@ -228,6 +234,9 @@ class _RssSourceManagePageBodyState
   RssSourceGroupManagementPort get _groupManagement =>
       widget.groupManagement ?? context.read<RssSourceGroupManagementPort>();
 
+  RssDefaultSourceImportPort get _defaultSourceImport =>
+      widget.defaultSourceImport ?? context.read<RssDefaultSourceImportPort>();
+
   Future<void> _showGroupManagement() async {
     await showDialog<void>(
       context: context,
@@ -269,11 +278,7 @@ class _RssSourceManagePageBodyState
       case 'import_qr':
         await _importQr();
       case 'import_default':
-        // 门禁：原版默认 RSS 源依赖 defaultData/rssSources.json，当前应用未接入该资产或导入契约。
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('「导入默认规则」暂未实现')));
+        await _importDefaults();
       case 'help':
         // 门禁：原版帮助依赖 SourceMRssHelp.md 与 showHelp，当前应用未提供 RSS 帮助展示契约。
         if (!mounted) return;
@@ -282,6 +287,21 @@ class _RssSourceManagePageBodyState
         ).showSnackBar(const SnackBar(content: Text('「帮助」暂未实现')));
       case 'paste':
         await _importPaste();
+    }
+  }
+
+  Future<void> _importDefaults() async {
+    try {
+      final ok = await _defaultSourceImport.importDefaults();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(ok ? '导入成功' : '导入失败，请检查默认规则')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('导入失败: $error')));
     }
   }
 
