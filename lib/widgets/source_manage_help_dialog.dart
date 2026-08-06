@@ -3,26 +3,35 @@ import 'package:flutter/services.dart';
 
 /// 书源管理帮助 — 轻量 md 渲染（# 标题、* 列表），无 flutter_markdown
 class SourceManageHelpDialog extends StatelessWidget {
-  const SourceManageHelpDialog({super.key, required this.content});
+  const SourceManageHelpDialog({
+    super.key,
+    required this.content,
+    this.title = '书源管理帮助',
+  });
 
   static const assetPath = 'assets/help/SourceMBookHelp.md';
 
-  static Future<void> show(BuildContext context) async {
+  static Future<void> show(
+    BuildContext context, {
+    String assetPath = SourceManageHelpDialog.assetPath,
+    String title = '书源管理帮助',
+  }) async {
     final content = await rootBundle.loadString(assetPath);
     if (!context.mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (_) => SourceManageHelpDialog(content: content),
+      builder: (_) => SourceManageHelpDialog(content: content, title: title),
     );
   }
 
   final String content;
+  final String title;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AlertDialog(
-      title: const Text('书源管理帮助'),
+      title: Text(title),
       content: SizedBox(
         width: double.maxFinite,
         child: SingleChildScrollView(
@@ -67,17 +76,20 @@ class SourceManageHelpDialog extends StatelessWidget {
         widgets.add(
           Padding(
             padding: const EdgeInsets.only(left: 8, bottom: 4),
-            child: Text('• ${line.substring(2)}', style: theme.textTheme.bodyMedium),
+            child: Text(
+              '• ${line.substring(2)}',
+              style: theme.textTheme.bodyMedium,
+            ),
           ),
         );
         continue;
       }
-      if (line.startsWith(' * ')) {
+      if (line.trimLeft().startsWith('* ')) {
         widgets.add(
           Padding(
             padding: const EdgeInsets.only(left: 24, bottom: 2),
             child: Text(
-              '◦ ${line.substring(3)}',
+              '◦ ${line.trimLeft().substring(2)}',
               style: theme.textTheme.bodySmall,
             ),
           ),

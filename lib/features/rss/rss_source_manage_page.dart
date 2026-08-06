@@ -14,6 +14,7 @@ import 'package:legado_flutter/application/rss/rss_source_transfer_port.dart';
 import '../../theme/legado_tokens.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/legado_popup_menu.dart';
+import '../../widgets/source_manage_help_dialog.dart';
 import '../sources/qrcode_capture_page.dart';
 import 'rss_source_edit_page.dart';
 
@@ -280,11 +281,11 @@ class _RssSourceManagePageBodyState
       case 'import_default':
         await _importDefaults();
       case 'help':
-        // 门禁：原版帮助依赖 SourceMRssHelp.md 与 showHelp，当前应用未提供 RSS 帮助展示契约。
-        if (!mounted) return;
-        ScaffoldMessenger.of(
+        await SourceManageHelpDialog.show(
           context,
-        ).showSnackBar(const SnackBar(content: Text('「帮助」暂未实现')));
+          assetPath: 'assets/help/SourceMRssHelp.md',
+          title: '订阅源管理帮助',
+        );
       case 'paste':
         await _importPaste();
     }

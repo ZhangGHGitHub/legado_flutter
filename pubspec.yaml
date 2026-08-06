@@ -73,6 +73,7 @@ flutter:
   assets:
     - assets/default_data/rssSources.json
     - assets/help/SourceMBookHelp.md
+    - assets/help/SourceMRssHelp.md
     - assets/builtin_sources/7497.json
     - assets/builtin_sources/7565.json
     - assets/welcome/icon_read_book.png

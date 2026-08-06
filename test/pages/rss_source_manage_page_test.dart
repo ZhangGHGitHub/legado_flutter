@@ -175,32 +175,29 @@ void main() {
     },
   );
 
-  testWidgets(
-    'RssSourceManagePage keeps unsupported RSS actions behind explicit gates',
-    (tester) async {
-      await tester.pumpWidget(
-        Provider<ReaderFontPort>.value(
-          value: _FakeReaderFontPort(),
-          child: MaterialApp(
-            home: RssSourceManagePage(
-              controller: RssSourceController(),
-              transfer: _FakeRssSourceTransfer(),
-            ),
+  testWidgets('RssSourceManagePage opens the original RSS help asset', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      Provider<ReaderFontPort>.value(
+        value: _FakeReaderFontPort(),
+        child: MaterialApp(
+          home: RssSourceManagePage(
+            controller: RssSourceController(),
+            transfer: _FakeRssSourceTransfer(),
           ),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      const gatedOverflowActions = {'帮助': '「帮助」暂未实现'};
-      for (final entry in gatedOverflowActions.entries) {
-        await tester.tap(find.byTooltip('更多'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text(entry.key));
-        await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('帮助'));
+    await tester.pumpAndSettle();
 
-        expect(find.text(entry.value), findsOneWidget);
-        await tester.pump(const Duration(seconds: 5));
-      }
-    },
-  );
+    expect(find.text('订阅源管理帮助'), findsOneWidget);
+    expect(find.text('• 订阅源可以通过规则订阅一些网络内容'), findsOneWidget);
+    expect(find.text('◦ 启用所选'), findsOneWidget);
+  });
 }
