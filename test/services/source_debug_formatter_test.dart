@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/domain/ports/book_source_debug_port.dart';
 import 'package:legado_flutter/services/source_debug_formatter.dart';
-import 'package:legado_flutter/src/rust/api.dart' as rust_api;
 
 void main() {
   test('formatDebugLog includes steps and results', () {
-    final result = rust_api.DebugResult(
+    const result = BookSourceDebugSnapshot(
       requestUrl: 'http://test/search?q=斗破',
       requestMethod: 'GET',
       responseStatus: '200',
@@ -12,7 +12,7 @@ void main() {
       responseSize: 1024,
       responseBodyPreview: '<html>test</html>',
       ruleSteps: [
-        const rust_api.RuleDebugStep(
+        BookSourceDebugStep(
           step: 'HTTP 响应',
           rule: 'url',
           result: 'status=200',
@@ -20,7 +20,7 @@ void main() {
         ),
       ],
       results: [
-        const rust_api.DebugItem(
+        BookSourceDebugItem(
           name: '斗破苍穹',
           author: '土豆',
           coverUrl: '',

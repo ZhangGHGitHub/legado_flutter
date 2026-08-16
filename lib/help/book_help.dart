@@ -85,9 +85,131 @@ class BookHelp {
     }
   }
 
+  /// 删除数据库中已不存在的书籍缓存目录（对齐 legado clearInvalidCache）。
+  static Future<int> clearInvalidCache(Set<String> validBookIds) async {
+    var removed = 0;
+    try {
+      final root = await _cacheRoot();
+      final valid = validBookIds.map(_sanitize).toSet();
+      if (!await root.exists()) return 0;
+      await for (final entity in root.list()) {
+        if (entity is! Directory) continue;
+        if (valid.contains(p.basename(entity.path))) continue;
+        await entity.delete(recursive: true);
+        removed++;
+      }
+    } catch (e) {
+      debugPrint('BookHelp 清理孤立缓存失败: $e');
+    }
+    return removed;
+  }
+
   /// 是否已有文件缓存
   static Future<bool> hasCachedContent(String bookId, String chapterId) async {
-    final file = await _chapterFile(bookId, chapterId);
-    return file.exists();
+    try {
+      final file = await _chapterFile(bookId, chapterId);
+      return file.exists();
+    } catch (e) {
+      debugPrint('BookHelp 检查缓存失败: $e');
+      return false;
+    }
+  }
+
+  /// 列出某书已有正文文件缓存的章节 id（文件名已 sanitize）
+  static Future<Set<String>> listCachedChapterIds(String bookId) async {
+    try {
+      final root = await _cacheRoot();
+      final bookDir = Directory(p.join(root.path, _sanitize(bookId)));
+      if (!await bookDir.exists()) return {};
+      final ids = <String>{};
+      await for (final entity in bookDir.list()) {
+        if (entity is! File) continue;
+        final name = p.basename(entity.path);
+        if (!name.endsWith('.txt')) continue;
+        // 文件名为 sanitize(chapterId).txt；调用方应用同规则比对
+        ids.add(p.basenameWithoutExtension(name));
+      }
+      return ids;
+    } catch (e) {
+      debugPrint('BookHelp 列举缓存失败: $e');
+      return {};
+    }
+  }
+
+  /// 与 [_chapterFile] 相同的 id 规范化（供目录标记比对）
+  static String sanitizeId(String id) => _sanitize(id);
+
+  /// 已缓存正文字数（sanitize(chapterId) → 字符数，对齐目录「2974字」）。
+  ///
+  /// [chapterIds] 用于目录按可见行懒加载，避免打开大目录时读取整本书的
+  /// 所有正文文件。传入的 id 应与 [sanitizeId] 返回值一致。
+  static Future<Map<String, int>> mapCachedWordCounts(
+    String bookId, {
+    Set<String>? chapterIds,
+  }) async {
+    try {
+      final root = await _cacheRoot();
+      final bookDir = Directory(p.join(root.path, _sanitize(bookId)));
+      if (!await bookDir.exists()) return {};
+      final counts = <String, int>{};
+      await for (final entity in bookDir.list()) {
+        if (entity is! File) continue;
+        final name = p.basename(entity.path);
+        if (!name.endsWith('.txt')) continue;
+        final id = p.basenameWithoutExtension(name);
+        if (chapterIds != null && !chapterIds.contains(id)) continue;
+        try {
+          final text = await entity.readAsString();
+          if (text.isEmpty) continue;
+          counts[id] = text.length;
+        } catch (_) {
+          // 单文件失败跳过
+        }
+      }
+      return counts;
+    } catch (e) {
+      debugPrint('BookHelp 统计缓存字数失败: $e');
+      return {};
+    }
+  }
+
+  /// 单书缓存体积（字节）与章节文件数
+  static Future<({int bytes, int chapterFiles})> bookCacheStats(
+    String bookId,
+  ) async {
+    try {
+      final root = await _cacheRoot();
+      final bookDir = Directory(p.join(root.path, _sanitize(bookId)));
+      if (!await bookDir.exists()) return (bytes: 0, chapterFiles: 0);
+      var bytes = 0;
+      var files = 0;
+      await for (final entity in bookDir.list()) {
+        if (entity is! File) continue;
+        if (!entity.path.endsWith('.txt')) continue;
+        try {
+          bytes += await entity.length();
+          files++;
+        } catch (_) {}
+      }
+      return (bytes: bytes, chapterFiles: files);
+    } catch (e) {
+      debugPrint('BookHelp 统计缓存体积失败: $e');
+      return (bytes: 0, chapterFiles: 0);
+    }
+  }
+
+  /// 删除单章文件缓存（用于阅读器「刷新」）
+  static Future<void> deleteChapterContent(
+    String bookId,
+    String chapterId,
+  ) async {
+    try {
+      final file = await _chapterFile(bookId, chapterId);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      debugPrint('BookHelp 删除章节缓存失败: $e');
+    }
   }
 }

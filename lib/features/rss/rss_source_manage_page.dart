@@ -1,0 +1,1028 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
+import 'package:provider/provider.dart';
+
+import 'package:legado_flutter/application/reader/reader_font_port.dart';
+import 'package:legado_flutter/application/rss/rss_controller.dart';
+import 'package:legado_flutter/application/rss/rss_default_source_import_port.dart';
+import 'package:legado_flutter/application/rss/rss_notifier.dart';
+import 'package:legado_flutter/application/rss/rss_state.dart';
+import 'package:legado_flutter/application/rss/rss_source_group_management_port.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
+import 'package:legado_flutter/application/rss/rss_source_transfer_port.dart';
+import '../../theme/legado_tokens.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/legado_popup_menu.dart';
+import '../../widgets/source_manage_help_dialog.dart';
+import '../sources/qrcode_capture_page.dart';
+import 'rss_source_edit_page.dart';
+
+/// 订阅源管理 — 对齐 Jingshiro [RssSourceActivity] /
+/// `activity_rss_source.xml` + `item_rss_source.xml` + `menu/rss_source.xml`
+class RssSourceManagePage extends StatelessWidget {
+  const RssSourceManagePage({
+    super.key,
+    this.controller,
+    this.transfer,
+    this.groupManagement,
+    this.defaultSourceImport,
+  });
+
+  /// 独立宿主可直接注入 controller；生产入口由父级 Riverpod scope 提供。
+  final RssSourceController? controller;
+  final RssSourceTransferPort? transfer;
+  final RssSourceGroupManagementPort? groupManagement;
+  final RssDefaultSourceImportPort? defaultSourceImport;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RssSourceManagePageBody(
+      controller: controller,
+      transfer: transfer,
+      groupManagement: groupManagement,
+      defaultSourceImport: defaultSourceImport,
+    );
+  }
+}
+
+class _RssSourceManagePageBody extends riverpod.ConsumerStatefulWidget {
+  const _RssSourceManagePageBody({
+    this.controller,
+    this.transfer,
+    this.groupManagement,
+    this.defaultSourceImport,
+  });
+
+  final RssSourceController? controller;
+  final RssSourceTransferPort? transfer;
+  final RssSourceGroupManagementPort? groupManagement;
+  final RssDefaultSourceImportPort? defaultSourceImport;
+
+  @override
+  riverpod.ConsumerState<_RssSourceManagePageBody> createState() =>
+      _RssSourceManagePageBodyState();
+}
+
+class _RssSourceManagePageBodyState
+    extends riverpod.ConsumerState<_RssSourceManagePageBody> {
+  final _searchController = TextEditingController();
+  final _selected = <String>{};
+  final _selectBarKey = GlobalKey();
+  late final RssSourceTransferPort _transfer;
+
+  /// all | enabled | disabled | login | null_group | group:xxx
+  String _filter = 'all';
+
+  RssSourceController? get _injectedController => widget.controller;
+
+  RssNotifier get _notifier => ref.read(rssNotifierProvider.notifier);
+
+  RssState get _state =>
+      _injectedController?.state ?? ref.read(rssNotifierProvider);
+
+  @override
+  void initState() {
+    super.initState();
+    _transfer = widget.transfer ?? context.read<RssSourceTransferPort>();
+    _injectedController?.addListener(_onInjectedControllerChanged);
+  }
+
+  @override
+  void dispose() {
+    _injectedController?.removeListener(_onInjectedControllerChanged);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onInjectedControllerChanged(RssState _) {
+    if (mounted) setState(() {});
+  }
+
+  List<RssSource> _visible() => _injectedController == null
+      ? _notifier.managedSources(
+          searchKey: _searchController.text,
+          filter: _filter,
+        )
+      : _injectedController!.managedSources(
+          searchKey: _searchController.text,
+          filter: _filter,
+        );
+
+  List<String> _allGroups() => _injectedController == null
+      ? _notifier.allGroups()
+      : _injectedController!.allGroups();
+
+  Future<void> _setEnabled(RssSource source, bool enabled) =>
+      _injectedController == null
+      ? _notifier.setEnabled(source, enabled)
+      : _injectedController!.setEnabled(source, enabled);
+
+  Future<void> _setEnabledMany(Iterable<String> urls, bool enabled) =>
+      _injectedController == null
+      ? _notifier.setEnabledMany(urls, enabled)
+      : _injectedController!.setEnabledMany(urls, enabled);
+
+  Future<void> _deleteSources(Iterable<String> urls) =>
+      _injectedController == null
+      ? _notifier.deleteSources(urls)
+      : _injectedController!.deleteSources(urls);
+
+  Future<void> _topSources(Iterable<String> urls) => _injectedController == null
+      ? _notifier.topSources(urls)
+      : _injectedController!.topSources(urls);
+
+  Future<bool> _importSources(String jsonText) => _injectedController == null
+      ? _notifier.importSources(jsonText)
+      : _injectedController!.importSources(jsonText);
+
+  Future<bool> _importSourcesFromUrl(String url) => _injectedController == null
+      ? _notifier.importSourcesFromUrl(url)
+      : _injectedController!.importSourcesFromUrl(url);
+
+  Future<void> _topSource(RssSource source) => _injectedController == null
+      ? _notifier.topSource(source)
+      : _injectedController!.topSource(source);
+
+  Future<void> _deleteSource(RssSource source) => _injectedController == null
+      ? _notifier.deleteSource(source)
+      : _injectedController!.deleteSource(source);
+
+  TextStyle _uiText({
+    required Color color,
+    double size = 14,
+    FontWeight weight = FontWeight.w400,
+  }) {
+    final font = context.read<ReaderFontPort>();
+    return TextStyle(
+      color: color,
+      fontSize: size,
+      fontWeight: weight,
+      height: 1.25,
+      fontFamily: font.platformSansFamily(),
+      fontFamilyFallback: font.cjkFallbackFamilies(),
+    );
+  }
+
+  Widget _buildSearchField(ColorScheme scheme) {
+    final onBar = scheme.onPrimary;
+    return SizedBox(
+      height: 36,
+      child: TextField(
+        controller: _searchController,
+        onChanged: (_) => setState(_selected.clear),
+        style: _uiText(color: onBar),
+        cursorColor: onBar,
+        decoration: InputDecoration(
+          hintText: '搜索订阅源',
+          hintStyle: _uiText(color: onBar.withValues(alpha: 0.72)),
+          isDense: true,
+          filled: true,
+          fillColor: onBar.withValues(alpha: 0.10),
+          contentPadding: EdgeInsets.zero,
+          prefixIcon: Icon(
+            Icons.search,
+            size: 20,
+            color: onBar.withValues(alpha: 0.85),
+          ),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 36,
+            minHeight: 36,
+          ),
+          suffixIcon: _searchController.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: Icon(
+                    Icons.close,
+                    size: 18,
+                    color: onBar.withValues(alpha: 0.85),
+                  ),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() {});
+                  },
+                ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide(
+              color: onBar.withValues(alpha: 0.10),
+              width: 0.5,
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide(
+              color: onBar.withValues(alpha: 0.22),
+              width: 0.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _setFilter(String filter) {
+    setState(() {
+      _filter = filter;
+      _selected.clear();
+    });
+  }
+
+  RssSourceGroupManagementPort get _groupManagement =>
+      widget.groupManagement ?? context.read<RssSourceGroupManagementPort>();
+
+  RssDefaultSourceImportPort get _defaultSourceImport =>
+      widget.defaultSourceImport ?? context.read<RssDefaultSourceImportPort>();
+
+  Future<void> _showGroupManagement() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _RssSourceGroupManagementDialog(port: _groupManagement),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _onGroupMenu(String value) async {
+    switch (value) {
+      case 'manage':
+        await _showGroupManagement();
+      case 'enabled':
+        _setFilter('enabled');
+      case 'disabled':
+        _setFilter('disabled');
+      case 'login':
+        _setFilter('login');
+      case 'null_group':
+        _setFilter('null_group');
+      case 'all':
+        _setFilter('all');
+      default:
+        if (value.startsWith('group:')) _setFilter(value);
+    }
+  }
+
+  Future<void> _onOverflow(String value) async {
+    switch (value) {
+      case 'add':
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const RssSourceEditPage()),
+        );
+      case 'import_local':
+        await _importLocal();
+      case 'import_online':
+        await _importOnline();
+      case 'import_qr':
+        await _importQr();
+      case 'import_default':
+        await _importDefaults();
+      case 'help':
+        await SourceManageHelpDialog.show(
+          context,
+          assetPath: 'assets/help/SourceMRssHelp.md',
+          title: '订阅源管理帮助',
+        );
+      case 'paste':
+        await _importPaste();
+    }
+  }
+
+  Future<void> _importDefaults() async {
+    try {
+      final ok = await _defaultSourceImport.importDefaults();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(ok ? '导入成功' : '导入失败，请检查默认规则')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('导入失败: $error')));
+    }
+  }
+
+  Future<void> _importLocal() async {
+    try {
+      final jsonText = await _transfer.pickImportText();
+      if (jsonText == null) return;
+      if (!mounted) return;
+      final ok = await _importSources(jsonText);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(ok ? '导入成功' : '导入失败，请检查文件内容')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('导入失败: $e')));
+    }
+  }
+
+  Future<void> _importOnline() async {
+    final controller = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('网络导入'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: '订阅源 JSON URL…',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('导入'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final url = controller.text.trim();
+    if (url.isEmpty) return;
+    final success = await _importSourcesFromUrl(url);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(success ? '导入成功' : '导入失败，请检查 URL')));
+  }
+
+  Future<void> _importQr() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const QrCodeCapturePage()),
+    );
+    if (result == null || result.isEmpty || !mounted) return;
+    final success = await _importSources(result);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(success ? '导入成功' : '导入失败')));
+  }
+
+  Future<void> _importPaste() async {
+    final controller = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('粘贴导入'),
+        content: TextField(
+          controller: controller,
+          maxLines: 8,
+          decoration: const InputDecoration(
+            hintText: '粘贴 RSS 源 JSON…',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('导入'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final success = await _importSources(controller.text);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(success ? '导入成功' : '导入失败，请检查 JSON 格式')),
+    );
+  }
+
+  Future<void> _deleteSelected() async {
+    if (_selected.isEmpty) return;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除'),
+        content: Text('确定删除选中的 ${_selected.length} 个订阅源？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+    await _deleteSources(_selected);
+    setState(() => _selected.clear());
+  }
+
+  Future<void> _onBottomMore(String value) async {
+    if (_selected.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先选择订阅源')));
+      return;
+    }
+    switch (value) {
+      case 'enable':
+        await _setEnabledMany(_selected, true);
+      case 'disable':
+        await _setEnabledMany(_selected, false);
+      case 'top':
+        await _topSources(_selected);
+      case 'export':
+        final list = _state.sources
+            .where((s) => _selected.contains(s.sourceUrl))
+            .map((s) => s.toJson())
+            .toList();
+        final text = const JsonEncoder.withIndent('  ').convert(list);
+        await _transfer.copyText(text);
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已复制选中源到剪贴板')));
+      default:
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('该批量操作暂未实现')));
+    }
+  }
+
+  void _showItemMenu(RssSource source, Offset anchor) {
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        anchor.dx,
+        anchor.dy,
+        anchor.dx,
+        anchor.dy,
+      ),
+      items: [
+        const PopupMenuItem(value: 'top', child: Text('置顶')),
+        const PopupMenuItem(value: 'edit', child: Text('编辑')),
+        PopupMenuItem(
+          value: 'toggle',
+          child: Text(source.enabled ? '禁用' : '启用'),
+        ),
+        const PopupMenuItem(value: 'del', child: Text('删除')),
+      ],
+    ).then((action) async {
+      if (action == null || !mounted) return;
+      switch (action) {
+        case 'top':
+          await _topSource(source);
+        case 'edit':
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => RssSourceEditPage(source: source),
+            ),
+          );
+        case 'toggle':
+          await _setEnabled(source, !source.enabled);
+        case 'del':
+          final yes = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('删除'),
+              content: Text('确定删除\n${source.sourceName}？'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('删除'),
+                ),
+              ],
+            ),
+          );
+          if (yes == true) {
+            await _deleteSource(source);
+            _selected.remove(source.sourceUrl);
+            if (mounted) setState(() {});
+          }
+      }
+    });
+  }
+
+  PopupMenuItem<String> _menuItem(
+    IconData icon,
+    String label,
+    String value,
+    ColorScheme scheme,
+  ) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: scheme.onSurface),
+          const SizedBox(width: 12),
+          Text(label, style: _uiText(color: scheme.onSurface)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final accent = scheme.secondary;
+
+    return Scaffold(
+      appBar: AppBar(
+        titleSpacing: 0,
+        title: Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: _buildSearchField(scheme),
+        ),
+        actions: [
+          riverpod.Consumer(
+            builder: (context, ref, _) {
+              final groups = _allGroups();
+              return PopupMenuButton<String>(
+                offset: legadoAppBarPopupOffset(context),
+                tooltip: '分组',
+                icon: const Icon(Icons.hub_outlined),
+                onSelected: _onGroupMenu,
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'manage',
+                    child: Text(
+                      '分组管理',
+                      style: _uiText(color: scheme.onSurface),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'enabled',
+                    child: Text('已启用', style: _uiText(color: scheme.onSurface)),
+                  ),
+                  PopupMenuItem(
+                    value: 'disabled',
+                    child: Text('已禁用', style: _uiText(color: scheme.onSurface)),
+                  ),
+                  PopupMenuItem(
+                    value: 'login',
+                    child: Text(
+                      '需要登录',
+                      style: _uiText(color: scheme.onSurface),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'null_group',
+                    child: Text('未分组', style: _uiText(color: scheme.onSurface)),
+                  ),
+                  if (groups.isNotEmpty) const PopupMenuDivider(),
+                  ...groups.map(
+                    (g) => PopupMenuItem(
+                      value: 'group:$g',
+                      child: Text(g, style: _uiText(color: scheme.onSurface)),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          PopupMenuButton<String>(
+            offset: legadoAppBarPopupOffset(context),
+            tooltip: '更多',
+            icon: const Icon(Icons.more_vert),
+            onSelected: _onOverflow,
+            itemBuilder: (_) => [
+              _menuItem(Icons.add, '新建订阅源', 'add', scheme),
+              _menuItem(
+                Icons.file_download_outlined,
+                '本地导入',
+                'import_local',
+                scheme,
+              ),
+              _menuItem(
+                Icons.cloud_download_outlined,
+                '网络导入',
+                'import_online',
+                scheme,
+              ),
+              _menuItem(Icons.qr_code_scanner, '二维码导入', 'import_qr', scheme),
+              _menuItem(Icons.rule, '导入默认规则', 'import_default', scheme),
+              _menuItem(Icons.help_outline, '帮助', 'help', scheme),
+              _menuItem(Icons.content_paste, '粘贴导入', 'paste', scheme),
+            ],
+          ),
+        ],
+      ),
+      body: Builder(
+        builder: (context) {
+          if (_injectedController == null) ref.watch(rssNotifierProvider);
+          final state = _state;
+          final visible = _visible();
+          if (state.sources.isEmpty) {
+            return EmptyState(
+              icon: Icons.subscriptions_outlined,
+              title: '暂无订阅源',
+              subtitle: '右上角菜单可新建或导入',
+              actionLabel: '粘贴导入',
+              onAction: _importPaste,
+            );
+          }
+          if (visible.isEmpty) {
+            return Center(
+              child: Text(
+                '没有匹配的订阅源',
+                style: _uiText(color: scheme.onSurfaceVariant),
+              ),
+            );
+          }
+
+          return Column(
+            children: [
+              Expanded(
+                child: ListView.separated(
+                  itemCount: visible.length,
+                  separatorBuilder: (_, _) => Divider(
+                    height: 1,
+                    color: scheme.outlineVariant.withValues(alpha: 0.35),
+                  ),
+                  itemBuilder: (ctx, i) {
+                    final s = visible[i];
+                    final checked = _selected.contains(s.sourceUrl);
+                    return Material(
+                      color: scheme.surface,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: LegadoTokens.spacingMd,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: CheckboxListTile(
+                                value: checked,
+                                onChanged: (v) {
+                                  setState(() {
+                                    if (v == true) {
+                                      _selected.add(s.sourceUrl);
+                                    } else {
+                                      _selected.remove(s.sourceUrl);
+                                    }
+                                  });
+                                },
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                                visualDensity: VisualDensity.compact,
+                                title: Text(
+                                  s.sourceName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: _uiText(
+                                    color: scheme.onSurface,
+                                    size: 15,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Switch(
+                              value: s.enabled,
+                              activeThumbColor: Colors.white,
+                              activeTrackColor: accent,
+                              onChanged: (v) => _setEnabled(s, v),
+                            ),
+                            IconButton(
+                              tooltip: '编辑',
+                              icon: Icon(
+                                Icons.open_in_new,
+                                size: 20,
+                                color: scheme.onSurface,
+                              ),
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => RssSourceEditPage(source: s),
+                                ),
+                              ),
+                            ),
+                            Builder(
+                              builder: (tileCtx) => IconButton(
+                                tooltip: '更多',
+                                icon: Icon(
+                                  Icons.more_vert,
+                                  size: 20,
+                                  color: scheme.onSurface,
+                                ),
+                                onPressed: () {
+                                  final box =
+                                      tileCtx.findRenderObject() as RenderBox?;
+                                  final offset =
+                                      box?.localToGlobal(Offset.zero) ??
+                                      Offset.zero;
+                                  _showItemMenu(s, offset);
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              _buildSelectActionBar(scheme, visible),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  ButtonStyle _selectBarButtonStyle(ColorScheme scheme) {
+    return OutlinedButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      minimumSize: const Size(0, 32),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      foregroundColor: scheme.onSurface,
+      side: BorderSide(color: scheme.outline.withValues(alpha: 0.55)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+    );
+  }
+
+  /// 对齐 `view_select_action_bar.xml`：全选 / 反选 / 删除 / 更多
+  Widget _buildSelectActionBar(ColorScheme scheme, List<RssSource> visible) {
+    final total = visible.length;
+    final selectedCount = visible
+        .where((s) => _selected.contains(s.sourceUrl))
+        .length;
+    final allSelected = total > 0 && selectedCount == total;
+    final hasSelection = selectedCount > 0;
+
+    final bottomBg =
+        Theme.of(context).bottomAppBarTheme.color ?? scheme.surface;
+    return Material(
+      key: _selectBarKey,
+      elevation: 2,
+      color: bottomBg,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Row(
+          children: [
+            Checkbox(
+              value: allSelected ? true : (selectedCount > 0 ? null : false),
+              tristate: true,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+              onChanged: (_) {
+                setState(() {
+                  if (allSelected) {
+                    for (final s in visible) {
+                      _selected.remove(s.sourceUrl);
+                    }
+                  } else {
+                    for (final s in visible) {
+                      _selected.add(s.sourceUrl);
+                    }
+                  }
+                });
+              },
+            ),
+            Expanded(
+              child: Text(
+                '全选 ($selectedCount/$total)',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _uiText(color: scheme.onSurface, size: 14),
+              ),
+            ),
+            OutlinedButton(
+              style: _selectBarButtonStyle(scheme),
+              onPressed: total == 0
+                  ? null
+                  : () {
+                      setState(() {
+                        for (final s in visible) {
+                          if (_selected.contains(s.sourceUrl)) {
+                            _selected.remove(s.sourceUrl);
+                          } else {
+                            _selected.add(s.sourceUrl);
+                          }
+                        }
+                      });
+                    },
+              child: Text('反选', style: _uiText(color: scheme.onSurface)),
+            ),
+            const SizedBox(width: 6),
+            OutlinedButton(
+              style: _selectBarButtonStyle(scheme),
+              onPressed: hasSelection ? _deleteSelected : null,
+              child: Text(
+                '删除',
+                style: _uiText(
+                  color: hasSelection
+                      ? scheme.onSurface
+                      : scheme.onSurface.withValues(alpha: 0.38),
+                ),
+              ),
+            ),
+            LegadoBottomBarPopupButton<String>(
+              barKey: _selectBarKey,
+              onSelected: (v) => _onBottomMore(v),
+              icon: Icon(Icons.more_vert, color: scheme.onSurface, size: 22),
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: 'enable',
+                  child: Text('启用所选', style: _uiText(color: scheme.onSurface)),
+                ),
+                PopupMenuItem(
+                  value: 'disable',
+                  child: Text('禁用所选', style: _uiText(color: scheme.onSurface)),
+                ),
+                PopupMenuItem(
+                  value: 'top',
+                  child: Text('置顶所选', style: _uiText(color: scheme.onSurface)),
+                ),
+                PopupMenuItem(
+                  value: 'export',
+                  child: Text('导出所选', style: _uiText(color: scheme.onSurface)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RssSourceGroupManagementDialog extends StatefulWidget {
+  const _RssSourceGroupManagementDialog({required this.port});
+
+  final RssSourceGroupManagementPort port;
+
+  @override
+  State<_RssSourceGroupManagementDialog> createState() =>
+      _RssSourceGroupManagementDialogState();
+}
+
+class _RssSourceGroupManagementDialogState
+    extends State<_RssSourceGroupManagementDialog> {
+  Future<String?> _requestGroupName({
+    required String title,
+    String initialValue = '',
+  }) => showDialog<String>(
+    context: context,
+    builder: (_) =>
+        _RssSourceGroupNameDialog(title: title, initialValue: initialValue),
+  );
+
+  Future<void> _addGroup() async {
+    final group = await _requestGroupName(title: '新建分组');
+    if (group == null) return;
+    await widget.port.addGroup(group);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _renameGroup(String oldGroup) async {
+    final group = await _requestGroupName(
+      title: '编辑分组',
+      initialValue: oldGroup,
+    );
+    if (group == null) return;
+    await widget.port.renameGroup(oldGroup, group);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _deleteGroup(String group) async {
+    await widget.port.deleteGroup(group);
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = widget.port.allGroups();
+    return AlertDialog(
+      title: Row(
+        children: [
+          const Expanded(child: Text('分组管理')),
+          IconButton(
+            tooltip: '新建分组',
+            icon: const Icon(Icons.add),
+            onPressed: _addGroup,
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 360,
+        height: groups.isEmpty ? 48 : 320,
+        child: groups.isEmpty
+            ? const Center(child: Text('暂无分组'))
+            : ListView.separated(
+                itemCount: groups.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (_, index) {
+                  final group = groups[index];
+                  return ListTile(
+                    dense: true,
+                    title: Text(group),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: '重命名',
+                          icon: const Icon(Icons.edit_outlined),
+                          onPressed: () => _renameGroup(group),
+                        ),
+                        IconButton(
+                          tooltip: '删除分组',
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => _deleteGroup(group),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('关闭'),
+        ),
+      ],
+    );
+  }
+}
+
+class _RssSourceGroupNameDialog extends StatefulWidget {
+  const _RssSourceGroupNameDialog({
+    required this.title,
+    required this.initialValue,
+  });
+
+  final String title;
+  final String initialValue;
+
+  @override
+  State<_RssSourceGroupNameDialog> createState() =>
+      _RssSourceGroupNameDialogState();
+}
+
+class _RssSourceGroupNameDialogState extends State<_RssSourceGroupNameDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = _controller.text.trim();
+    if (value.isNotEmpty) Navigator.pop(context, value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => _submit(),
+        decoration: const InputDecoration(
+          hintText: '分组名称',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('确定')),
+      ],
+    );
+  }
+}

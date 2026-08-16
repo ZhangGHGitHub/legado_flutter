@@ -4,13 +4,33 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+
+// These functions are ignored because they are not marked as `pub`: `map_database_error`
+
+/// 初始化应用数据目录下固定的 `legado.db`。
+void init({required String appDir}) =>
+    LegadoEngine.instance.api.crateApiDbInit(appDir: appDir);
 
 /// 初始化数据库（与 Flutter `legado.db` 同路径）
 void dbInit({required String path}) =>
     LegadoEngine.instance.api.crateApiDbDbInit(path: path);
 
 int dbSchemaVersion() => LegadoEngine.instance.api.crateApiDbDbSchemaVersion();
+
+String dbProbeLegacyRoomDatabase({required String path}) =>
+    LegadoEngine.instance.api.crateApiDbDbProbeLegacyRoomDatabase(path: path);
+
+String dbImportLegacyRoomDatabase({
+  required String path,
+  String? backupPath,
+  required bool replace,
+}) => LegadoEngine.instance.api.crateApiDbDbImportLegacyRoomDatabase(
+  path: path,
+  backupPath: backupPath,
+  replace: replace,
+);
 
 void dbInsertBook({required String bookJson}) =>
     LegadoEngine.instance.api.crateApiDbDbInsertBook(bookJson: bookJson);
@@ -37,6 +57,26 @@ void dbUpdateBookCover({required String bookId, required String coverUrl}) =>
       bookId: bookId,
       coverUrl: coverUrl,
     );
+
+void dbUpdateBookCustomCover({
+  required String bookId,
+  required String customCoverUrl,
+}) => LegadoEngine.instance.api.crateApiDbDbUpdateBookCustomCover(
+  bookId: bookId,
+  customCoverUrl: customCoverUrl,
+);
+
+void dbUpdateBookDetails({
+  required String bookId,
+  required String name,
+  required String author,
+  required String description,
+}) => LegadoEngine.instance.api.crateApiDbDbUpdateBookDetails(
+  bookId: bookId,
+  name: name,
+  author: author,
+  description: description,
+);
 
 void dbUpdateBookGroup({required String bookId, required String group}) =>
     LegadoEngine.instance.api.crateApiDbDbUpdateBookGroup(
@@ -66,6 +106,11 @@ void dbInsertChapters({required String chaptersJson}) => LegadoEngine
 
 List<String> dbGetChapters({required String bookId}) =>
     LegadoEngine.instance.api.crateApiDbDbGetChapters(bookId: bookId);
+
+String? dbGetChapterContent({required String chapterId}) => LegadoEngine
+    .instance
+    .api
+    .crateApiDbDbGetChapterContent(chapterId: chapterId);
 
 void dbSaveChapterContent({
   required String chapterId,

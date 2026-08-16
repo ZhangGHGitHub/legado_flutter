@@ -20,7 +20,12 @@ pub fn extract_text(element: &ElementRef<'_>, rule: &str) -> String {
     for (idx, seg) in segments.iter().enumerate() {
         let is_last = idx == segments.len() - 1;
         if is_last && seg.is_terminal {
-            let mut out = extract_terminal(&current[0], seg);
+            let mut out = current
+                .iter()
+                .map(|el| extract_terminal(el, seg))
+                .filter(|value| !value.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n");
             if let Some((pat, rep)) = regex {
                 out = apply_regex(&out, &pat, &rep);
             }
@@ -96,6 +101,7 @@ pub fn is_legado_chain_rule(rule: &str) -> bool {
         || body.contains("@href")
         || body.contains("@src")
         || body.contains("@html")
+        || body.contains("@all")
         || body.contains("@ownText")
 }
 
@@ -136,9 +142,7 @@ fn parse_segments(rule: &str) -> Vec<Segment> {
 
 fn parse_one_segment(raw: &str) -> Segment {
     let raw = raw.trim();
-    let terminals = [
-        "text", "href", "src", "html", "ownText", "textNodes", "all",
-    ];
+    let terminals = ["text", "href", "src", "html", "ownText", "textNodes", "all"];
     if terminals.contains(&raw) {
         return Segment {
             seg_type: raw.to_string(),
@@ -213,9 +217,7 @@ fn apply_segment<'a>(parents: &[ElementRef<'a>], seg: &Segment) -> Vec<ElementRe
                 let parsed = Selector::parse(seg.name.as_str());
                 if let Ok(s) = parsed {
                     result.extend(parent.select(&s));
-                    if result.is_empty()
-                        && parent.value().name().eq_ignore_ascii_case(&seg.name)
-                    {
+                    if result.is_empty() && parent.value().name().eq_ignore_ascii_case(&seg.name) {
                         result.push(parent.clone());
                     }
                 }
@@ -260,12 +262,9 @@ fn apply_segment<'a>(parents: &[ElementRef<'a>], seg: &Segment) -> Vec<ElementRe
 
 fn extract_terminal(el: &ElementRef<'_>, seg: &Segment) -> String {
     match seg.terminal_type.as_deref() {
-        Some("text") | Some("all") | None => el.text().collect::<String>().trim().to_string(),
-        Some("ownText") => el
-            .text()
-            .collect::<String>()
-            .trim()
-            .to_string(),
+        Some("text") | None => el.text().collect::<String>().trim().to_string(),
+        Some("all") => el.html(),
+        Some("ownText") => el.text().collect::<String>().trim().to_string(),
         Some("html") => el.html(),
         Some("href") => el.value().attr("href").unwrap_or("").to_string(),
         Some("src") => el.value().attr("src").unwrap_or("").to_string(),
@@ -294,6 +293,19 @@ mod tests {
         let body = doc.select(&Selector::parse("div").unwrap()).next().unwrap();
         let out = extract_text(&body, "text.作者@text##.*作者[：:]\\s*##");
         assert_eq!(out, "天蚕土豆");
+    }
+
+    #[test]
+    fn all_terminal_returns_outer_html_like_analyze_by_jsoup() {
+        let document = Html::parse_fragment(
+            r#"<div class="search-page"><a href="/video"><h3>标题</h3></a></div>"#,
+        );
+        let root = document.root_element();
+
+        assert_eq!(
+            extract_text(&root, ".search-page@all"),
+            r#"<div class="search-page"><a href="/video"><h3>标题</h3></a></div>"#
+        );
     }
 
     #[test]

@@ -6,7 +6,9 @@ use regex::Regex;
 use scraper::{Html, Selector};
 use zip::ZipArchive;
 
-use super::{LocalBookInfo, LocalChapterItem};
+use super::{LocalBookInfo, LocalChapterItem, RemoteArchiveBookFile};
+
+const MAX_REMOTE_ZIP_BYTES: usize = 50 * 1024 * 1024;
 
 /// TXT 分章 — 匹配常见章节标题
 pub fn parse_txt_chapters(content: &str) -> Vec<LocalChapterItem> {
@@ -58,7 +60,11 @@ pub fn parse_txt_chapters(content: &str) -> Vec<LocalChapterItem> {
 }
 
 /// EPUB 解析 — zip → OPF spine → 章节正文
-pub fn parse_epub(data: &[u8]) -> Result<LocalBookInfo, String> {
+pub fn parse_epub(data: &[u8]) -> Result<LocalBookInfo, super::AppError> {
+    parse_epub_legacy(data).map_err(super::AppError::Parse)
+}
+
+fn parse_epub_legacy(data: &[u8]) -> Result<LocalBookInfo, String> {
     let cursor = Cursor::new(data);
     let mut archive = ZipArchive::new(cursor).map_err(|e| format!("EPUB 解压失败: {e}"))?;
 
@@ -84,8 +90,7 @@ pub fn parse_epub(data: &[u8]) -> Result<LocalBookInfo, String> {
         if text.trim().len() < 10 {
             continue;
         }
-        let title = chapter_title_from_html(&html)
-            .unwrap_or_else(|| format!("第{}章", idx + 1));
+        let title = chapter_title_from_html(&html).unwrap_or_else(|| format!("第{}章", idx + 1));
         chapters.push(LocalChapterItem {
             title,
             content: text,
@@ -101,6 +106,115 @@ pub fn parse_epub(data: &[u8]) -> Result<LocalBookInfo, String> {
         author: meta.author,
         chapters,
     })
+}
+
+pub(crate) fn parse_remote_archive_book_files(
+    data: &[u8],
+) -> Result<Vec<RemoteArchiveBookFile>, super::AppError> {
+    parse_remote_archive_book_files_with_limits(data, MAX_REMOTE_ZIP_BYTES, MAX_REMOTE_ZIP_BYTES)
+        .map_err(super::AppError::Parse)
+}
+
+fn parse_remote_archive_book_files_with_limits(
+    data: &[u8],
+    max_archive_bytes: usize,
+    max_extracted_bytes: usize,
+) -> Result<Vec<RemoteArchiveBookFile>, String> {
+    if data.len() > max_archive_bytes {
+        return Err(format!(
+            "远程压缩包超过 {}MB 导入上限",
+            max_archive_bytes / (1024 * 1024)
+        ));
+    }
+
+    let cursor = Cursor::new(data);
+    let mut archive =
+        ZipArchive::new(cursor).map_err(|e| format!("ZIP 压缩包损坏或无法读取: {e}"))?;
+    let mut files = Vec::new();
+    let mut extracted_bytes = 0usize;
+
+    for index in 0..archive.len() {
+        let entry = archive
+            .by_index(index)
+            .map_err(|e| format!("ZIP 压缩包损坏或无法读取第 {} 项: {e}", index + 1))?;
+        if entry.is_dir() {
+            continue;
+        }
+
+        let entry_name = entry.name().to_string();
+        if !is_supported_book_path(&entry_name) {
+            continue;
+        }
+        let relative_path = safe_zip_relative_path(&entry_name)
+            .ok_or_else(|| format!("压缩包包含不安全路径: {entry_name}"))?;
+
+        let remaining = max_extracted_bytes.saturating_sub(extracted_bytes);
+        if entry.size() > remaining as u64 {
+            return Err(format!(
+                "压缩包解压内容超过 {}MB 导入上限",
+                max_extracted_bytes / (1024 * 1024)
+            ));
+        }
+
+        let read_limit = remaining.saturating_add(1) as u64;
+        let mut bytes = Vec::with_capacity(entry.size() as usize);
+        entry
+            .take(read_limit)
+            .read_to_end(&mut bytes)
+            .map_err(|e| format!("读取 ZIP 文件 {relative_path} 失败: {e}"))?;
+        if bytes.len() > remaining {
+            return Err(format!(
+                "压缩包解压内容超过 {}MB 导入上限",
+                max_extracted_bytes / (1024 * 1024)
+            ));
+        }
+
+        extracted_bytes += bytes.len();
+        files.push(RemoteArchiveBookFile {
+            relative_path,
+            bytes,
+        });
+    }
+
+    if files.is_empty() {
+        return Err("压缩包内没有可导入的 TXT/EPUB 文件".into());
+    }
+    Ok(files)
+}
+
+fn is_supported_book_path(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".txt") || lower.ends_with(".epub")
+}
+
+fn safe_zip_relative_path(path: &str) -> Option<String> {
+    let normalized = path.replace('\\', "/");
+    if normalized.is_empty() || normalized.starts_with('/') {
+        return None;
+    }
+
+    let mut parts = normalized.split('/');
+    let first = parts.next()?;
+    if is_windows_drive_segment(first) || !is_safe_path_segment(first) {
+        return None;
+    }
+    let mut safe_parts = vec![first];
+    for part in parts {
+        if !is_safe_path_segment(part) {
+            return None;
+        }
+        safe_parts.push(part);
+    }
+    Some(safe_parts.join("/"))
+}
+
+fn is_safe_path_segment(segment: &str) -> bool {
+    !segment.is_empty() && segment != "." && segment != ".."
+}
+
+fn is_windows_drive_segment(segment: &str) -> bool {
+    let bytes = segment.as_bytes();
+    bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':'
 }
 
 struct OpfMeta {
@@ -212,10 +326,7 @@ fn parse_opf(xml: &str) -> Result<OpfMeta, String> {
     })
 }
 
-fn attr_value(
-    e: &quick_xml::events::BytesStart,
-    key: &str,
-) -> Option<String> {
+fn attr_value(e: &quick_xml::events::BytesStart, key: &str) -> Option<String> {
     e.attributes()
         .filter_map(|a| a.ok())
         .find(|a| a.key.as_ref() == key.as_bytes())
@@ -232,7 +343,11 @@ fn join_zip_path(base: &str, href: &str) -> String {
     if base.is_empty() {
         return href.replace('\\', "/");
     }
-    format!("{}/{}", base.trim_end_matches('/'), href.trim_start_matches('/'))
+    format!(
+        "{}/{}",
+        base.trim_end_matches('/'),
+        href.trim_start_matches('/')
+    )
 }
 
 fn html_to_plain(html: &str) -> String {
@@ -286,6 +401,20 @@ fn collapse_blank_lines(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::AppError;
+    use std::io::Write;
+    use zip::write::SimpleFileOptions;
+
+    fn zip_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (name, content) in entries {
+            writer
+                .start_file(name, SimpleFileOptions::default())
+                .unwrap();
+            writer.write_all(content).unwrap();
+        }
+        writer.finish().unwrap().into_inner()
+    }
 
     #[test]
     fn txt_splits_chapters() {
@@ -300,5 +429,95 @@ mod tests {
     #[test]
     fn txt_no_chapters_returns_empty() {
         assert!(parse_txt_chapters("没有章节标记的纯文本").is_empty());
+    }
+
+    #[test]
+    fn epub_maps_malformed_archive_to_parse_error() {
+        let error = parse_epub(b"not an epub").unwrap_err();
+
+        assert!(matches!(
+            error,
+            AppError::Parse(ref message) if message.starts_with("EPUB 解压失败:")
+        ));
+    }
+
+    #[test]
+    fn remote_archive_maps_corrupted_archive_to_parse_error() {
+        let error = parse_remote_archive_book_files(b"not a zip").unwrap_err();
+
+        assert!(matches!(
+            error,
+            AppError::Parse(ref message) if message.starts_with("ZIP 压缩包损坏或无法读取:")
+        ));
+    }
+
+    #[test]
+    fn remote_zip_filters_supported_files_and_keeps_archive_order() {
+        let data = zip_bytes(&[
+            ("books/second.EPUB", b"epub"),
+            ("cover.png", b"image"),
+            ("first.txt", b"text"),
+        ]);
+
+        let files = parse_remote_archive_book_files_with_limits(&data, 1024, 1024).unwrap();
+
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0].relative_path, "books/second.EPUB");
+        assert_eq!(files[0].bytes, b"epub");
+        assert_eq!(files[1].relative_path, "first.txt");
+        assert_eq!(files[1].bytes, b"text");
+    }
+
+    #[test]
+    fn remote_zip_rejects_unsafe_paths() {
+        for path in [
+            "../evil.txt",
+            "folder/./evil.txt",
+            "folder//evil.txt",
+            "/absolute.txt",
+            "C:/drive.txt",
+            "C:drive.txt",
+            "..\\evil.txt",
+        ] {
+            let data = zip_bytes(&[(path, b"unsafe")]);
+            let error = parse_remote_archive_book_files_with_limits(&data, 1024, 1024).unwrap_err();
+            assert!(error.contains("不安全路径"), "path={path}, error={error}");
+        }
+    }
+
+    #[test]
+    fn remote_zip_reports_corrupted_archive() {
+        let error =
+            parse_remote_archive_book_files_with_limits(b"not a zip", 1024, 1024).unwrap_err();
+        assert!(error.contains("ZIP 压缩包损坏或无法读取"));
+    }
+
+    #[test]
+    fn remote_zip_rejects_archive_over_input_limit() {
+        let data = zip_bytes(&[("book.txt", b"text")]);
+        let error = parse_remote_archive_book_files_with_limits(&data, 8, 1024).unwrap_err();
+        assert!(error.contains("远程压缩包超过"));
+    }
+
+    #[test]
+    fn remote_zip_reports_when_no_supported_files_exist() {
+        let data = zip_bytes(&[("cover.png", b"image")]);
+        let error = parse_remote_archive_book_files_with_limits(&data, 1024, 1024).unwrap_err();
+        assert_eq!(error, "压缩包内没有可导入的 TXT/EPUB 文件");
+    }
+
+    #[test]
+    fn remote_zip_ignores_unsafe_paths_for_unsupported_files() {
+        let data = zip_bytes(&[("../cover.png", b"image"), ("book.txt", b"text")]);
+        let files = parse_remote_archive_book_files_with_limits(&data, 1024, 1024).unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].relative_path, "book.txt");
+    }
+
+    #[test]
+    fn remote_zip_rejects_supported_files_over_total_limit() {
+        let data = zip_bytes(&[("first.txt", b"12345"), ("second.epub", b"6789")]);
+        let error = parse_remote_archive_book_files_with_limits(&data, 1024, 8).unwrap_err();
+        assert!(error.contains("解压内容超过"));
     }
 }

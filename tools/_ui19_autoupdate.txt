@@ -1,0 +1,16 @@
+=== https://raw.githubusercontent.com/Jingshiro/legado/master/app/src/main/java/io/legado/app/ui/main/MainActivity.kt ===
+                viewModel.ruleSubsUp()
+            if (AppConfig.autoUpdateVariant) {
+NOMATCH https://raw.githubusercontent.com/Jingshiro/legado/master/app/src/main/java/io/legado/app/App.kt
+FAIL https://raw.githubusercontent.com/Jingshiro/legado/master/app/src/main/java/io/legado/app/help/AppConfig.kt
+NOMATCH https://raw.githubusercontent.com/Jingshiro/legado/master/app/src/main/java/io/legado/app/constant/PreferKey.kt
+FAIL https://raw.githubusercontent.com/Jingshiro/legado/master/app/src/main/java/io/legado/app/service/BaseCacheBookService.kt
+NOMATCH https://raw.githubusercontent.com/Jingshiro/legado/master/app/src/main/java/io/legado/app/model/localBook/LocalBook.kt
+app/src/main/java/io/legado/app/help/update
+app/src/main/java/io/legado/app/help/update/AppReleaseInfo.kt
+app/src/main/java/io/legado/app/help/update/AppUpdate.kt
+app/src/main/java/io/legado/app/help/update/AppUpdateGitHub.kt
+app/src/main/java/io/legado/app/help/update/AppUpdateGitee.kt
+app/src/main/java/io/legado/app/help/update/AppUpdateR2.kt
+app/src/main/java/io/legado/app/model/RuleUpdate.kt
+app/src/main/java/io/legado/app/ui/about/UpdateDialog.kt

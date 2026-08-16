@@ -1,11 +1,11 @@
 //! Phase 3.1 功能对齐验证（离线，无需网络）
 //! 对照 REFACTOR_PLAN.md §3.1 矩阵
 
+use legado_engine::http::analyze_url::resolve_search_request;
 use legado_engine::model::book_source::BookSource;
 use legado_engine::rule::{
     html_book_info, html_content, html_search, html_toc, json_content, replace_regex,
 };
-use legado_engine::http::analyze_url::resolve_search_request;
 
 const HTML_SOURCE: &str = r###"{
     "bookSourceUrl": "http://test.example.com/",
@@ -137,13 +137,9 @@ fn phase3_book_info_cover_intro_last_chapter() {
 fn phase3_html_toc_at_least_10() {
     let mut items = String::new();
     for i in 1..=12 {
-        items.push_str(&format!(
-            r#"<li><a href="/c/{i}">第{i}章</a></li>"#
-        ));
+        items.push_str(&format!(r#"<li><a href="/c/{i}">第{i}章</a></li>"#));
     }
-    let html = format!(
-        r#"<html><body><ul class="chapter-list">{items}</ul></body></html>"#
-    );
+    let html = format!(r#"<html><body><ul class="chapter-list">{items}</ul></body></html>"#);
     let chapters = html_toc::parse_html_toc(&html, &html_source()).unwrap();
     assert!(chapters.len() >= 10, "HTML 目录应 ≥ 10 章");
 }

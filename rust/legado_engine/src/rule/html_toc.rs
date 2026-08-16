@@ -1,28 +1,54 @@
 use crate::model::book_source::BookSource;
-use crate::rule::engine;
+use crate::rule::{engine, js_engine};
 use scraper::{ElementRef, Html, Selector};
+use serde_json::Value;
 use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
 pub struct HtmlChapter {
     pub title: String,
     pub url: String,
+    pub is_volume: bool,
+    pub is_vip: bool,
+    pub is_pay: bool,
+    pub tag: String,
+    pub base_url: String,
 }
 
 pub fn parse_html_toc(html: &str, source: &BookSource) -> Result<Vec<HtmlChapter>, String> {
-    let document = Html::parse_document(html);
-    let body = document
-        .select(&Selector::parse("body").unwrap())
-        .next()
-        .ok_or("HTML 无 body 元素")?;
+    parse_html_toc_at(html, source, "")
+}
 
+/// `page_url` 作为 JS `baseUrl`（目录页绝对地址）
+pub fn parse_html_toc_at(
+    html: &str,
+    source: &BookSource,
+    page_url: &str,
+) -> Result<Vec<HtmlChapter>, String> {
     let list_rule = source.rule_toc_chapter_list.trim();
     let mut reverse = false;
     let mut effective_rule = list_rule.to_string();
     if effective_rule.starts_with('-') {
         reverse = true;
         effective_rule = effective_rule[1..].trim().to_string();
+    } else if effective_rule.starts_with('+') {
+        effective_rule = effective_rule[1..].trim().to_string();
     }
+
+    // Jingshiro：chapterList 整段 `<js>` 可返回对象数组，再以 chapterName/Url 作属性取值
+    if js_engine::contains_js_block(&effective_rule) {
+        let mut chapters = parse_toc_via_js(html, source, &effective_rule, page_url)?;
+        if reverse {
+            chapters.reverse();
+        }
+        return Ok(chapters);
+    }
+
+    let document = Html::parse_document(html);
+    let body = document
+        .select(&Selector::parse("body").unwrap())
+        .next()
+        .ok_or("HTML 无 body 元素")?;
 
     let items = if !effective_rule.is_empty() {
         query_toc_list_items(&document, &body, &effective_rule)
@@ -32,7 +58,7 @@ pub fn parse_html_toc(html: &str, source: &BookSource) -> Result<Vec<HtmlChapter
 
     let mut chapters = Vec::new();
     let mut seen_urls = HashSet::new();
-    for item in items {
+    for (index, item) in items.into_iter().enumerate() {
         let mut title = engine::extract_text(&item, &source.rule_toc_chapter_name);
         let name_rule = source.rule_toc_chapter_name.trim();
         if title.is_empty() && (name_rule == "text" || name_rule.is_empty()) {
@@ -52,11 +78,7 @@ pub fn parse_html_toc(html: &str, source: &BookSource) -> Result<Vec<HtmlChapter
                 if let Some(link) = item.select(&sel).next() {
                     title = link.text().collect::<String>().trim().to_string();
                     if url.is_empty() {
-                        url = link
-                            .value()
-                            .attr("href")
-                            .unwrap_or("")
-                            .to_string();
+                        url = link.value().attr("href").unwrap_or("").to_string();
                     }
                 }
             }
@@ -65,8 +87,31 @@ pub fn parse_html_toc(html: &str, source: &BookSource) -> Result<Vec<HtmlChapter
             title = item.text().collect::<String>().trim().to_string();
         }
 
-        if !title.is_empty() && !url.is_empty() && seen_urls.insert(url.clone()) {
-            chapters.push(HtmlChapter { title, url });
+        let is_volume = is_true(engine::extract_text(&item, &source.rule_toc_is_volume));
+        if url.is_empty() {
+            if is_volume {
+                url = format!("{title}{index}");
+            } else if !page_url.is_empty() {
+                url = page_url.to_string();
+            } else {
+                url = source.book_source_url.clone();
+            }
+        }
+
+        if !title.is_empty() && seen_urls.insert(url.clone()) {
+            chapters.push(HtmlChapter {
+                title,
+                url,
+                is_volume,
+                is_vip: is_true(engine::extract_text(&item, &source.rule_toc_is_vip)),
+                is_pay: is_true(engine::extract_text(&item, &source.rule_toc_is_pay)),
+                tag: engine::extract_text(&item, &source.rule_toc_update_time),
+                base_url: if page_url.is_empty() {
+                    source.book_source_url.clone()
+                } else {
+                    page_url.to_string()
+                },
+            });
         }
     }
 
@@ -74,6 +119,138 @@ pub fn parse_html_toc(html: &str, source: &BookSource) -> Result<Vec<HtmlChapter
         chapters.reverse();
     }
     Ok(chapters)
+}
+
+fn is_true(value: String) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "y" | "是" | "卷"
+    )
+}
+
+fn parse_toc_via_js(
+    html: &str,
+    source: &BookSource,
+    list_rule: &str,
+    page_url: &str,
+) -> Result<Vec<HtmlChapter>, String> {
+    let script = js_engine::extract_js_block(list_rule).ok_or("目录 chapterList 无 <js> 块")?;
+    let base = if page_url.is_empty() {
+        source.book_source_url.as_str()
+    } else {
+        page_url
+    };
+    let book_url = page_url
+        .replace("/chapter/", "/book/")
+        .replace("/read/", "/book/");
+    let out = js_engine::run_with_result_opts(
+        &script,
+        html,
+        &source.js_lib,
+        base,
+        Some(if book_url.is_empty() { base } else { &book_url }),
+    )?;
+
+    let trimmed = out.trim();
+    if trimmed.is_empty() || trimmed == "[]" || trimmed == "null" {
+        return Ok(vec![]);
+    }
+
+    let data: Value = serde_json::from_str(trimmed)
+        .map_err(|e| format!("目录 JS 返回非 JSON: {e}; head={}", trunc(trimmed, 80)))?;
+
+    let arr = match &data {
+        Value::Array(a) => a.clone(),
+        Value::Object(o) => {
+            // 偶发包一层
+            if let Some(Value::Array(a)) = o.get("data").or_else(|| o.get("list")) {
+                a.clone()
+            } else {
+                return Err("目录 JS 未返回数组".to_string());
+            }
+        }
+        _ => return Err("目录 JS 未返回数组".to_string()),
+    };
+
+    let name_key = source.rule_toc_chapter_name.trim();
+    let url_key = source.rule_toc_chapter_url.trim();
+    let mut chapters = Vec::new();
+    let mut seen = HashSet::new();
+
+    for item in arr {
+        let title = json_prop(&item, name_key);
+        let url = json_prop(&item, url_key);
+        if !title.is_empty() && !url.is_empty() && seen.insert(url.clone()) {
+            chapters.push(HtmlChapter {
+                title,
+                url,
+                is_volume: false,
+                is_vip: false,
+                is_pay: false,
+                tag: String::new(),
+                base_url: base.to_string(),
+            });
+        }
+    }
+    Ok(chapters)
+}
+
+fn json_prop(v: &Value, key: &str) -> String {
+    if key.is_empty() {
+        return String::new();
+    }
+    // 纯属性名 + 常见别名（chaptername / chapterName 等）
+    let mut keys: Vec<&str> = if js_engine::is_plain_property_rule(key) {
+        vec![key]
+    } else {
+        vec![key]
+    };
+    for alias in [
+        "chaptername",
+        "chapterName",
+        "chapterurl",
+        "chapterUrl",
+        "name",
+        "title",
+        "url",
+        "href",
+    ] {
+        if !keys.iter().any(|k| k.eq_ignore_ascii_case(alias)) {
+            keys.push(alias);
+        }
+    }
+    for k in keys {
+        if let Some(s) = v.get(k).and_then(|x| x.as_str()) {
+            let t = s.trim();
+            if !t.is_empty() {
+                return t.to_string();
+            }
+        }
+        // 大小写不敏感再扫一遍 Object 键
+        if let Some(obj) = v.as_object() {
+            for (ok, ov) in obj {
+                if ok.eq_ignore_ascii_case(k) {
+                    if let Some(s) = ov.as_str() {
+                        let t = s.trim();
+                        if !t.is_empty() {
+                            return t.to_string();
+                        }
+                    }
+                    if let Some(n) = ov.as_i64() {
+                        return n.to_string();
+                    }
+                }
+            }
+        }
+        if let Some(n) = v.get(k).and_then(|x| x.as_i64()) {
+            return n.to_string();
+        }
+    }
+    String::new()
+}
+
+fn trunc(s: &str, n: usize) -> String {
+    s.chars().take(n).collect()
 }
 
 /// 目录列表查询：限定 body 范围；多容器时取章节最多的一块（避免「最新章节」干扰）
@@ -126,24 +303,93 @@ fn split_container_list_rule(rule: &str) -> Option<(String, String)> {
 }
 
 pub fn extract_next_toc_url(html: &str, source: &BookSource, base_url: &str) -> String {
+    extract_next_toc_url_at(html, source, base_url, "")
+}
+
+pub fn extract_next_toc_url_at(
+    html: &str,
+    source: &BookSource,
+    base_url: &str,
+    book_url: &str,
+) -> String {
+    extract_next_toc_urls_at(html, source, base_url, book_url)
+        .ok()
+        .and_then(|urls| urls.into_iter().next())
+        .map(|url| engine::resolve_url(&url, base_url))
+        .unwrap_or_default()
+}
+
+/// 提取全部下一页 URL，保持原版 `getStringList` 的多值语义。
+pub fn extract_next_toc_urls_at(
+    html: &str,
+    source: &BookSource,
+    base_url: &str,
+    book_url: &str,
+) -> Result<Vec<String>, String> {
     let rule = source.rule_toc_next_toc_url.trim();
     if rule.is_empty() {
-        return String::new();
+        return Ok(Vec::new());
     }
+    if js_engine::contains_js_block(rule) {
+        if let Some(script) = js_engine::extract_js_block(rule) {
+            let bu = if book_url.is_empty() {
+                base_url
+            } else {
+                book_url
+            };
+            if let Ok(out) =
+                js_engine::run_with_result_opts(&script, html, &source.js_lib, base_url, Some(bu))
+            {
+                let out = out.trim().to_string();
+                if !out.is_empty() && out != "null" && out != "undefined" {
+                    if let Ok(values) = serde_json::from_str::<Value>(&out) {
+                        if let Value::Array(items) = values {
+                            return Ok(items
+                                .into_iter()
+                                .filter_map(|item| item.as_str().map(str::to_string))
+                                .collect());
+                        }
+                    }
+                    return Ok(vec![out]);
+                }
+            }
+        }
+        return Ok(Vec::new());
+    }
+
     let document = Html::parse_document(html);
     let body = match document.select(&Selector::parse("body").unwrap()).next() {
         Some(b) => b,
-        None => return String::new(),
+        None => return Ok(Vec::new()),
     };
 
-    let mut url = engine::extract_attr(&body, rule, "href");
-    if url.is_empty() {
-        url = engine::extract_text(&body, rule);
+    let (selector, terminal) = if let Some(index) = rule.rfind('@') {
+        (&rule[..index], &rule[index + 1..])
+    } else {
+        (rule, "href")
+    };
+    if let Ok(selector) = Selector::parse(selector.trim()) {
+        let values: Vec<String> = body
+            .select(&selector)
+            .filter_map(|element| {
+                if terminal == "text" || terminal == "ownText" {
+                    Some(element.text().collect::<String>().trim().to_string())
+                } else {
+                    let attr = terminal.strip_prefix('@').unwrap_or(terminal);
+                    element.value().attr(attr).map(str::to_string)
+                }
+            })
+            .filter(|value| !value.is_empty())
+            .collect();
+        if !values.is_empty() {
+            return Ok(values);
+        }
     }
+    let url = engine::extract_text(&body, rule);
     if url.is_empty() {
-        return String::new();
+        return Ok(Vec::new());
     }
-    engine::resolve_url(&url, base_url)
+    Ok(vec![url])
 }
 
 fn smart_chapter_items<'a>(body: &'a ElementRef<'a>) -> Vec<ElementRef<'a>> {
@@ -161,7 +407,12 @@ fn smart_chapter_items<'a>(body: &'a ElementRef<'a>) -> Vec<ElementRef<'a>> {
             }
         }
     }
-    for fallback in ["#list a", ".chapter-list a", "ul.chapter li a", "#list li a"] {
+    for fallback in [
+        "#list a",
+        ".chapter-list a",
+        "ul.chapter li a",
+        "#list li a",
+    ] {
         if let Ok(sel) = Selector::parse(fallback) {
             let items: Vec<_> = body.select(&sel).collect();
             if items.len() >= 3 {
@@ -208,5 +459,64 @@ mod tests {
         assert_eq!(chapters[0].title, "第一章 开始");
         assert_eq!(chapters[0].url, "/b/1.html");
         assert_eq!(chapters.last().unwrap().title, "第三十章 决战");
+    }
+
+    #[test]
+    fn and_union_chapter_list_skips_nav_li() {
+        // 对齐搬山人：`li[class~=volume_chapter] a&&ul[class~=chapter_list] a`
+        // 若 && 未实现，会落到 li 兜底，误收导航链接
+        let source_json = r##"{
+            "bookSourceUrl": "https://www.banshanren.com",
+            "ruleToc": {
+                "chapterList": "li[class~=volume_chapter] a&&ul[class~=chapter_list] a",
+                "chapterName": "text",
+                "chapterUrl": "href"
+            }
+        }"##;
+        let html = r#"
+        <html><body>
+          <ul class="nav">
+            <li><a href="/">首页</a></li>
+            <li><a href="/all/">全部小说</a></li>
+            <li><a href="/plan">搬山人计划</a></li>
+          </ul>
+          <ul class="chapter_list">
+            <li><a href="/novel/book/1">第1章 重生</a></li>
+            <li><a href="/novel/book/2">第2章 美杜莎</a></li>
+            <li><a href="/novel/book/3">第3章 沦陷</a></li>
+          </ul>
+        </body></html>
+        "#;
+        let source = BookSource::from_json(source_json).unwrap();
+        let chapters = parse_html_toc(html, &source).unwrap();
+        assert_eq!(chapters.len(), 3, "{:?}", chapters);
+        assert_eq!(chapters[0].title, "第1章 重生");
+        assert_eq!(chapters[0].url, "/novel/book/1");
+        assert!(!chapters.iter().any(|c| c.title == "首页"));
+    }
+
+    #[test]
+    fn kele_chapter_list_js_parses_chap_list_html() {
+        let source_json = r##"{
+            "bookSourceUrl": "https://www.rrssk.com/",
+            "ruleToc": {
+                "chapterList": "<js>var resStr = result.toString().trim(); var elements = []; var startIdx = resStr.indexOf('class=\"chapList chapListBody\"'); if (startIdx != -1) { var endIdx = resStr.indexOf('</ul>', startIdx); if (endIdx != -1) { var section = resStr.substring(startIdx, endIdx + 5); var liRegex = /<li[\\s\\S]*?<\\/li>/g; var m; while ((m = liRegex.exec(section)) !== null) { var aMatch = m[0].match(/<a\\s+[^>]*href=\"([^\"]+)\"[^>]*>([^<]+)<\\/a>/i); if (aMatch) { elements.push({ chaptername: aMatch[2], chapterurl: 'https://www.kelexs.com' + aMatch[1] }); } } } } elements</js>",
+                "chapterName": "chaptername",
+                "chapterUrl": "chapterurl"
+            }
+        }"##;
+        let html = r#"<html><body>
+<ul class="chapList chapListBody">
+<li><a href="/read/1.html">第一章 序章</a></li>
+<li><a href="/read/2.html">第二章 崛起</a></li>
+</ul>
+</body></html>"#;
+        let source = BookSource::from_json(source_json).unwrap();
+        let chapters =
+            parse_html_toc_at(html, &source, "https://www.kelexs.com/chapter/ABC.html").unwrap();
+        assert_eq!(chapters.len(), 2);
+        assert_eq!(chapters[0].title, "第一章 序章");
+        assert_eq!(chapters[0].url, "https://www.kelexs.com/read/1.html");
+        assert_eq!(chapters[1].url, "https://www.kelexs.com/read/2.html");
     }
 }

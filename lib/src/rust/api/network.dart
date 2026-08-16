@@ -4,9 +4,11 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `map_application_http_error`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
 
 /// 应用代理 / DNS 配置
 void setNetworkConfig({
@@ -31,9 +33,128 @@ void setNetworkConfig({
 void clearEngineCache() =>
     LegadoEngine.instance.api.crateApiNetworkClearEngineCache();
 
+/// 用扁平 Cookie 整串替换书源 eTLD+1 Cookie 桶；空串等价于清除。
+void setSourceCookie({required String sourceUrl, required String cookie}) =>
+    LegadoEngine.instance.api.crateApiNetworkSetSourceCookie(
+      sourceUrl: sourceUrl,
+      cookie: cookie,
+    );
+
+/// 清除且仅清除目标书源 eTLD+1 Cookie 桶。
+void clearSourceCookie({required String sourceUrl}) => LegadoEngine.instance.api
+    .crateApiNetworkClearSourceCookie(sourceUrl: sourceUrl);
+
+/// 返回书源 Cookie 桶使用的 eTLD+1；IP 保持自身。
+String sourceCookieDomain({required String sourceUrl}) => LegadoEngine
+    .instance
+    .api
+    .crateApiNetworkSourceCookieDomain(sourceUrl: sourceUrl);
+
+/// 开启一次 debug HTTP 请求轨迹采集。
+void startHttpRequestTrace() =>
+    LegadoEngine.instance.api.crateApiNetworkStartHttpRequestTrace();
+
+/// 停止并取出 debug HTTP 请求轨迹 JSON。
+String drainHttpRequestTrace() =>
+    LegadoEngine.instance.api.crateApiNetworkDrainHttpRequestTrace();
+
 /// 当前网络配置
 NetworkConfigDto getNetworkConfig() =>
     LegadoEngine.instance.api.crateApiNetworkGetNetworkConfig();
+
+/// 通过统一 Rust HTTP 客户端抓取公开文本资源。
+///
+/// `user_agent` 为空时使用引擎默认值；传入 `null` 对齐规则订阅
+/// `#requestWithoutUA` 的既有请求语义。
+Future<String> fetchPublicText({
+  required String url,
+  required String userAgent,
+}) => LegadoEngine.instance.api.crateApiNetworkFetchPublicText(
+  url: url,
+  userAgent: userAgent,
+);
+
+/// 发送应用服务 HTTP 请求。`allow_private_network` 仅供用户显式配置的本地服务使用。
+Future<ApplicationHttpResponseDto> sendApplicationHttpRequest({
+  required String url,
+  required String method,
+  required Map<String, String> headers,
+  String? body,
+  required int timeoutSeconds,
+  required bool allowPrivateNetwork,
+}) => LegadoEngine.instance.api.crateApiNetworkSendApplicationHttpRequest(
+  url: url,
+  method: method,
+  headers: headers,
+  body: body,
+  timeoutSeconds: timeoutSeconds,
+  allowPrivateNetwork: allowPrivateNetwork,
+);
+
+/// 发送应用服务二进制 HTTP 请求。`max_response_bytes = 0` 表示保持调用者原有的无上限行为。
+Future<ApplicationBinaryHttpResponseDto> sendApplicationBinaryHttpRequest({
+  required String url,
+  required String method,
+  required Map<String, String> headers,
+  Uint8List? body,
+  required int timeoutSeconds,
+  required bool allowPrivateNetwork,
+  required int maxResponseBytes,
+}) => LegadoEngine.instance.api.crateApiNetworkSendApplicationBinaryHttpRequest(
+  url: url,
+  method: method,
+  headers: headers,
+  body: body,
+  timeoutSeconds: timeoutSeconds,
+  allowPrivateNetwork: allowPrivateNetwork,
+  maxResponseBytes: maxResponseBytes,
+);
+
+class ApplicationBinaryHttpResponseDto {
+  final int statusCode;
+  final String contentType;
+  final Uint8List body;
+
+  const ApplicationBinaryHttpResponseDto({
+    required this.statusCode,
+    required this.contentType,
+    required this.body,
+  });
+
+  @override
+  int get hashCode =>
+      statusCode.hashCode ^ contentType.hashCode ^ body.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ApplicationBinaryHttpResponseDto &&
+          runtimeType == other.runtimeType &&
+          statusCode == other.statusCode &&
+          contentType == other.contentType &&
+          body == other.body;
+}
+
+class ApplicationHttpResponseDto {
+  final int statusCode;
+  final String body;
+
+  const ApplicationHttpResponseDto({
+    required this.statusCode,
+    required this.body,
+  });
+
+  @override
+  int get hashCode => statusCode.hashCode ^ body.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ApplicationHttpResponseDto &&
+          runtimeType == other.runtimeType &&
+          statusCode == other.statusCode &&
+          body == other.body;
+}
 
 /// 网络配置 DTO
 class NetworkConfigDto {

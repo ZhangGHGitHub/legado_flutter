@@ -121,6 +121,24 @@ pub fn query_all<'a>(_html: &'a Html, body: &ElementRef<'a>, rule: &str) -> Vec<
         processed = processed[1..].trim().to_string();
     }
 
+    // Jingshiro 列表规则：`||` 取首个非空；`&&` 取并集
+    if processed.contains("||") {
+        for part in split_top_level(&processed, "||") {
+            let items = query_all(_html, body, part.trim());
+            if !items.is_empty() {
+                return items;
+            }
+        }
+        return vec![];
+    }
+    if processed.contains("&&") {
+        let mut all = Vec::new();
+        for part in split_top_level(&processed, "&&") {
+            all.extend(query_all(_html, body, part.trim()));
+        }
+        return all;
+    }
+
     if xpath::is_xpath_rule(&processed) {
         return xpath::query_all(body, &processed);
     }
@@ -142,8 +160,24 @@ pub fn query_all<'a>(_html: &'a Html, body: &ElementRef<'a>, rule: &str) -> Vec<
 }
 
 pub fn resolve_url(url: &str, base_url: &str) -> String {
-    if url.starts_with("http") {
+    let url = url.trim();
+    if url.is_empty() {
+        return String::new();
+    }
+    // 协议相对 URL：//cdn.example.com/a.jpg → https://cdn.example.com/a.jpg
+    if url.starts_with("//") {
+        if let Ok(base) = url::Url::parse(base_url) {
+            return format!("{}:{}", base.scheme(), url);
+        }
+        return format!("https:{url}");
+    }
+    if url.starts_with("http://") || url.starts_with("https://") {
         return url.to_string();
+    }
+    if let Ok(base) = url::Url::parse(base_url) {
+        if let Ok(joined) = base.join(url) {
+            return joined.into();
+        }
     }
     let base = base_url.trim_end_matches('/');
     if url.starts_with('/') {
@@ -174,4 +208,17 @@ fn split_top_level(s: &str, sep: &str) -> Vec<String> {
     }
     parts.push(current);
     parts
+}
+
+#[cfg(test)]
+mod return_semantics_tests {
+    use super::*;
+
+    #[test]
+    fn default_text_rule_joins_all_matching_elements() {
+        let document =
+            Html::parse_fragment(r#"<div class="item">第一项</div><div class="item">第二项</div>"#);
+        let root = document.root_element();
+        assert_eq!(extract_text(&root, ".item@text"), "第一项\n第二项");
+    }
 }

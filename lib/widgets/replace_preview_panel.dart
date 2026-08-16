@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../models/replace_rule.dart';
-import '../services/replace_service.dart';
+import '../application/source_rules/replace_preview_port.dart';
+import '../domain/content/replace_rule.dart';
+
+typedef ApplyPreviewRules =
+    String Function(String text, List<ReplaceRule> rules);
 
 /// 替换规则实时预览面板
 class ReplacePreviewPanel extends StatefulWidget {
   const ReplacePreviewPanel({
     super.key,
     required this.rules,
+    this.applyRules,
+    this.port,
     this.initialSample,
   });
 
   final List<ReplaceRule> rules;
+  final ApplyPreviewRules? applyRules;
+  final ReplacePreviewPort? port;
   final String? initialSample;
 
   @override
@@ -20,14 +28,20 @@ class ReplacePreviewPanel extends StatefulWidget {
 
 class ReplacePreviewPanelState extends State<ReplacePreviewPanel> {
   late final TextEditingController _inputController;
+  late final ApplyPreviewRules _applyRules;
   String _output = '';
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    final port =
+        widget.port ??
+        Provider.of<ReplacePreviewPort?>(context, listen: false) ??
+        const UnavailableReplacePreviewPort();
+    _applyRules = widget.applyRules ?? port.apply;
     _inputController = TextEditingController(
-      text: widget.initialSample ?? ReplaceService.defaultSampleText,
+      text: widget.initialSample ?? port.defaultSampleText,
     );
     _inputController.addListener(_refreshPreview);
     _refreshPreview();
@@ -50,10 +64,7 @@ class ReplacePreviewPanelState extends State<ReplacePreviewPanel> {
   void _refreshPreview() {
     try {
       setState(() {
-        _output = ReplaceService.applyWithRules(
-          _inputController.text,
-          widget.rules,
-        );
+        _output = _applyRules(_inputController.text, widget.rules);
         _error = null;
       });
     } catch (e) {

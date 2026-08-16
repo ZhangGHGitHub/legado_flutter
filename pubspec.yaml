@@ -13,14 +13,15 @@ dependencies:
 
   # ── 状态管理 ──
   provider: ^6.1.2
+  flutter_riverpod: ^2.6.1
 
   # ── 本地数据库 ──
   sqlite3: 2.4.6
   path_provider: ^2.1.5
   path: ^1.9.1
 
-  # ── 网络请求 ──
-  dio: ^5.7.0
+  # ── 加密与摘要 ──
+  crypto: ^3.0.7
 
   # ── HTML 解析（用于书源规则） ──
   html: ^0.15.5
@@ -28,6 +29,7 @@ dependencies:
   # ── 工具 ──
   uuid: ^4.5.1
   intl: ^0.20.2
+  package_info_plus: ^9.0.1
   shared_preferences: ^2.3.5
   file_picker: ^8.1.6
   charset_converter: ^2.3.0
@@ -36,10 +38,25 @@ dependencies:
 
   # ── Rust 书源引擎 FFI ──
   flutter_rust_bridge: 2.11.1
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
   json_path: ^0.9.0
   rust_lib_legado_flutter:
     path: rust_builder
   dynamic_color: ^1.8.1
+  # Path vendored without Windows plugin (avoids nuget.exe CMake requirement).
+  flutter_tts:
+    path: packages/flutter_tts
+  battery_plus: ^7.1.0
+  wakelock_plus: ^1.5.2
+  archive: ^4.0.9
+  mobile_scanner: ^7.2.1
+  zxing2: ^0.2.4
+  image: ^4.8.0
+  flutter_svg: ^2.0.17
+  webview_flutter: ^4.13.0
+  xml: ^6.5.0
+  audioplayers: 6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -47,9 +64,22 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   integration_test:
     sdk: flutter
+  build_runner: ^2.5.4
+  freezed: ^2.5.8
+  json_serializable: ^6.9.5
 
 flutter:
   uses-material-design: true
   assets:
+    - assets/default_data/rssSources.json
+    - assets/default_data/coverRule.json
+    - assets/help/SourceMBookHelp.md
+    - assets/help/SourceMRssHelp.md
+    - assets/help/webDavBookHelp.md
     - assets/builtin_sources/7497.json
     - assets/builtin_sources/7565.json
+    - assets/welcome/icon_read_book.png
+    - assets/file_picker/file.png
+    - assets/file_picker/folder.png
+    - assets/file_picker/updir.png
+    - assets/file_picker/arrow.png

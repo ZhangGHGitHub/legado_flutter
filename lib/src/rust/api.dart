@@ -3,13 +3,27 @@
 
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
+import 'api/error.dart';
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `map_http_fetch_error`, `map_source_browser_host_error`, `to_content_rules`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 初始化 Rust 书源引擎
 void initEngine() => LegadoEngine.instance.api.crateApiInitEngine();
+
+/// 运行可见 WebView 宿主循环。Flutter 启动后保持此 Future，Rust 后台规则线程按请求等待回调。
+Future<void> serveSourceBrowserHost({
+  required FutureOr<SourceBrowserResponseDto> Function(SourceBrowserRequestDto)
+  host,
+}) => LegadoEngine.instance.api.crateApiServeSourceBrowserHost(host: host);
+
+/// FRB 回调契约探针；供桥接测试确认 Dart 回调可在 Rust 异步任务等待期间完成。
+Future<SourceBrowserResponseDto> probeSourceBrowserHost({
+  required SourceBrowserRequestDto request,
+}) =>
+    LegadoEngine.instance.api.crateApiProbeSourceBrowserHost(request: request);
 
 /// 引擎版本号
 String engineVersion() => LegadoEngine.instance.api.crateApiEngineVersion();
@@ -61,6 +75,17 @@ Future<String> getContent({
   chapterUrl: chapterUrl,
 );
 
+/// 获取章节正文，并在正文下一页指向下一章时停止。
+Future<String> getContentWithNextChapter({
+  required String sourceJson,
+  required String chapterUrl,
+  String? nextChapterUrl,
+}) => LegadoEngine.instance.api.crateApiGetContentWithNextChapter(
+  sourceJson: sourceJson,
+  chapterUrl: chapterUrl,
+  nextChapterUrl: nextChapterUrl,
+);
+
 /// 书源校验（搜索 / 发现 / 目录 / 正文）
 Future<SourceValidation> validateSource({
   required String sourceJson,
@@ -88,16 +113,6 @@ Future<DebugResult> debugToc({
   bookUrl: bookUrl,
 );
 
-/// 启动 Web API 服务
-Future<WebApiStatus> startWebApi({required int port, required String token}) =>
-    LegadoEngine.instance.api.crateApiStartWebApi(port: port, token: token);
-
-/// 停止 Web API 服务
-Future<void> stopWebApi() => LegadoEngine.instance.api.crateApiStopWebApi();
-
-/// Web API 运行状态
-WebApiStatus webApiStatus() => LegadoEngine.instance.api.crateApiWebApiStatus();
-
 /// TXT 分章
 List<LocalChapterItem> parseTxtChapters({required String content}) =>
     LegadoEngine.instance.api.crateApiParseTxtChapters(content: content);
@@ -105,6 +120,54 @@ List<LocalChapterItem> parseTxtChapters({required String content}) =>
 /// EPUB 解析
 LocalBookInfo parseEpub({required List<int> data}) =>
     LegadoEngine.instance.api.crateApiParseEpub(data: data);
+
+/// 安全解析远程 ZIP，并按压缩包顺序返回其中的 TXT/EPUB 文件。
+List<RemoteArchiveBookFile> parseRemoteArchiveBookFiles({
+  required List<int> data,
+}) => LegadoEngine.instance.api.crateApiParseRemoteArchiveBookFiles(data: data);
+
+/// 应用正文替换规则。
+String applyContentReplaceRules({
+  required String text,
+  required List<ContentReplaceRuleDto> rules,
+}) => LegadoEngine.instance.api.crateApiApplyContentReplaceRules(
+  text: text,
+  rules: rules,
+);
+
+/// 应用全局及书源级正文替换规则。
+String processContent({
+  required String text,
+  required List<ContentReplaceRuleDto> rules,
+  ContentProcessingSourceRulesDto? sourceRules,
+}) => LegadoEngine.instance.api.crateApiProcessContent(
+  text: text,
+  rules: rules,
+  sourceRules: sourceRules,
+);
+
+/// 阅读前正文净化处理；不负责分页、断行或章节边界。
+String processContentForReading({
+  required String raw,
+  required String chapterTitle,
+  required String bookName,
+  required bool includeTitle,
+  required bool useReplace,
+  required String paragraphIndent,
+  required bool reSegment,
+  required List<ContentReplaceRuleDto> rules,
+  ContentProcessingSourceRulesDto? sourceRules,
+}) => LegadoEngine.instance.api.crateApiProcessContentForReading(
+  raw: raw,
+  chapterTitle: chapterTitle,
+  bookName: bookName,
+  includeTitle: includeTitle,
+  useReplace: useReplace,
+  paragraphIndent: paragraphIndent,
+  reSegment: reSegment,
+  rules: rules,
+  sourceRules: sourceRules,
+);
 
 /// 记录阅读（按书 + 日期累加）
 void recordReading({
@@ -127,6 +190,23 @@ ReadingStats getReadingStats({required String range}) =>
 String exportReadingRecords({required String format}) =>
     LegadoEngine.instance.api.crateApiExportReadingRecords(format: format);
 
+/// 写入详细阅读会话
+void recordDetailedReadSession({
+  required String bookName,
+  required PlatformInt64 startTime,
+  required PlatformInt64 endTime,
+  required PlatformInt64 readIteration,
+}) => LegadoEngine.instance.api.crateApiRecordDetailedReadSession(
+  bookName: bookName,
+  startTime: startTime,
+  endTime: endTime,
+  readIteration: readIteration,
+);
+
+/// 导出详细阅读会话
+String exportDetailedReadRecords() =>
+    LegadoEngine.instance.api.crateApiExportDetailedReadRecords();
+
 /// 单本书阅读统计（阅读小票）
 BookReadingStats getBookReadingStats({required String bookId}) =>
     LegadoEngine.instance.api.crateApiGetBookReadingStats(bookId: bookId);
@@ -139,6 +219,7 @@ void upsertNote({
   required String selectedText,
   required String noteContent,
   required int position,
+  required int chapterPos,
 }) => LegadoEngine.instance.api.crateApiUpsertNote(
   id: id,
   bookId: bookId,
@@ -146,6 +227,7 @@ void upsertNote({
   selectedText: selectedText,
   noteContent: noteContent,
   position: position,
+  chapterPos: chapterPos,
 );
 
 /// 删除想法笔记
@@ -159,6 +241,81 @@ List<NoteDto> listNotes({required String bookId}) =>
 /// 导出 Obsidian 风格 Markdown
 String exportNotesMarkdown({required String bookId}) =>
     LegadoEngine.instance.api.crateApiExportNotesMarkdown(bookId: bookId);
+
+/// 保存独立书签；time 对齐原版 Bookmark 主键
+void upsertBookmark({
+  required PlatformInt64 time,
+  required String bookId,
+  required String bookName,
+  required String bookAuthor,
+  required int chapterIndex,
+  required int chapterPos,
+  required String chapterName,
+  required String bookText,
+  required String content,
+}) => LegadoEngine.instance.api.crateApiUpsertBookmark(
+  time: time,
+  bookId: bookId,
+  bookName: bookName,
+  bookAuthor: bookAuthor,
+  chapterIndex: chapterIndex,
+  chapterPos: chapterPos,
+  chapterName: chapterName,
+  bookText: bookText,
+  content: content,
+);
+
+/// 删除独立书签
+void deleteBookmark({required PlatformInt64 time}) =>
+    LegadoEngine.instance.api.crateApiDeleteBookmark(time: time);
+
+/// 列出独立书签；book_id 为空则全部
+List<BookmarkDto> listBookmarks({required String bookId}) =>
+    LegadoEngine.instance.api.crateApiListBookmarks(bookId: bookId);
+
+/// 执行裸 JS（登录 UI / loginUrl / 按钮脚本）
+String evalJs({
+  required String script,
+  required String jsLib,
+  required String baseUrl,
+}) => LegadoEngine.instance.api.crateApiEvalJs(
+  script: script,
+  jsLib: jsLib,
+  baseUrl: baseUrl,
+);
+
+/// 预热 Rust 登录头缓存（Dart SharedPreferences → 引擎）
+void seedLoginHeader({required String sourceUrl, required String header}) =>
+    LegadoEngine.instance.api.crateApiSeedLoginHeader(
+      sourceUrl: sourceUrl,
+      header: header,
+    );
+
+/// 取出 loginCheckJs 新写入的登录头（JSON: url → header），供 Dart 回写 prefs
+String drainLoginHeaderUpdates() =>
+    LegadoEngine.instance.api.crateApiDrainLoginHeaderUpdates();
+
+/// 获取 RSS 文章列表 — 对齐 Jingshiro Rss.getArticlesAwait
+Future<RssArticlesResult> getRssArticles({
+  required String sourceJson,
+  required String sortUrl,
+  required String sortName,
+  required int page,
+}) => LegadoEngine.instance.api.crateApiGetRssArticles(
+  sourceJson: sourceJson,
+  sortUrl: sortUrl,
+  sortName: sortName,
+  page: page,
+);
+
+/// 获取 RSS 正文 — 对齐 Jingshiro Rss.getContentAwait
+Future<String> getRssContent({
+  required String sourceJson,
+  required String articleLink,
+}) => LegadoEngine.instance.api.crateApiGetRssContent(
+  sourceJson: sourceJson,
+  articleLink: articleLink,
+);
 
 /// HTTP 请求并返回解码后的文本（调试用）
 Future<String> httpFetch({
@@ -259,15 +416,87 @@ class BookReadingStats {
           readingDays == other.readingDays;
 }
 
+/// 独立书签实体；字段对齐 Jingshiro Bookmark
+class BookmarkDto {
+  final PlatformInt64 time;
+  final String bookId;
+  final String bookName;
+  final String bookAuthor;
+  final int chapterIndex;
+  final int chapterPos;
+  final String chapterName;
+  final String bookText;
+  final String content;
+
+  const BookmarkDto({
+    required this.time,
+    required this.bookId,
+    required this.bookName,
+    required this.bookAuthor,
+    required this.chapterIndex,
+    required this.chapterPos,
+    required this.chapterName,
+    required this.bookText,
+    required this.content,
+  });
+
+  @override
+  int get hashCode =>
+      time.hashCode ^
+      bookId.hashCode ^
+      bookName.hashCode ^
+      bookAuthor.hashCode ^
+      chapterIndex.hashCode ^
+      chapterPos.hashCode ^
+      chapterName.hashCode ^
+      bookText.hashCode ^
+      content.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BookmarkDto &&
+          runtimeType == other.runtimeType &&
+          time == other.time &&
+          bookId == other.bookId &&
+          bookName == other.bookName &&
+          bookAuthor == other.bookAuthor &&
+          chapterIndex == other.chapterIndex &&
+          chapterPos == other.chapterPos &&
+          chapterName == other.chapterName &&
+          bookText == other.bookText &&
+          content == other.content;
+}
+
 /// 目录章节条目
 class ChapterItem {
   final String title;
   final String url;
+  final bool isVolume;
+  final bool isVip;
+  final bool isPay;
+  final String tag;
+  final String baseUrl;
 
-  const ChapterItem({required this.title, required this.url});
+  const ChapterItem({
+    required this.title,
+    required this.url,
+    required this.isVolume,
+    required this.isVip,
+    required this.isPay,
+    required this.tag,
+    required this.baseUrl,
+  });
 
   @override
-  int get hashCode => title.hashCode ^ url.hashCode;
+  int get hashCode =>
+      title.hashCode ^
+      url.hashCode ^
+      isVolume.hashCode ^
+      isVip.hashCode ^
+      isPay.hashCode ^
+      tag.hashCode ^
+      baseUrl.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -275,7 +504,74 @@ class ChapterItem {
       other is ChapterItem &&
           runtimeType == other.runtimeType &&
           title == other.title &&
-          url == other.url;
+          url == other.url &&
+          isVolume == other.isVolume &&
+          isVip == other.isVip &&
+          isPay == other.isPay &&
+          tag == other.tag &&
+          baseUrl == other.baseUrl;
+}
+
+/// 书源级正文替换规则 DTO。
+class ContentProcessingSourceRulesDto {
+  final String contentReplace;
+  final String contentReplaceTo;
+
+  const ContentProcessingSourceRulesDto({
+    required this.contentReplace,
+    required this.contentReplaceTo,
+  });
+
+  @override
+  int get hashCode => contentReplace.hashCode ^ contentReplaceTo.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ContentProcessingSourceRulesDto &&
+          runtimeType == other.runtimeType &&
+          contentReplace == other.contentReplace &&
+          contentReplaceTo == other.contentReplaceTo;
+}
+
+/// 正文替换规则 DTO。
+class ContentReplaceRuleDto {
+  final String id;
+  final String name;
+  final String pattern;
+  final String replacement;
+  final bool isEnabled;
+  final bool isRegex;
+
+  const ContentReplaceRuleDto({
+    required this.id,
+    required this.name,
+    required this.pattern,
+    required this.replacement,
+    required this.isEnabled,
+    required this.isRegex,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      pattern.hashCode ^
+      replacement.hashCode ^
+      isEnabled.hashCode ^
+      isRegex.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ContentReplaceRuleDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          pattern == other.pattern &&
+          replacement == other.replacement &&
+          isEnabled == other.isEnabled &&
+          isRegex == other.isRegex;
 }
 
 /// 单日阅读统计
@@ -443,6 +739,9 @@ class NoteDto {
   final String selectedText;
   final String noteContent;
   final int position;
+
+  /// 章内字符偏移（对齐 Jingshiro Bookmark.chapterPos）；-1=未知
+  final int chapterPos;
   final String createdAt;
 
   const NoteDto({
@@ -452,6 +751,7 @@ class NoteDto {
     required this.selectedText,
     required this.noteContent,
     required this.position,
+    required this.chapterPos,
     required this.createdAt,
   });
 
@@ -463,6 +763,7 @@ class NoteDto {
       selectedText.hashCode ^
       noteContent.hashCode ^
       position.hashCode ^
+      chapterPos.hashCode ^
       createdAt.hashCode;
 
   @override
@@ -476,6 +777,7 @@ class NoteDto {
           selectedText == other.selectedText &&
           noteContent == other.noteContent &&
           position == other.position &&
+          chapterPos == other.chapterPos &&
           createdAt == other.createdAt;
 }
 
@@ -517,6 +819,95 @@ class ReadingStats {
           todayDurationSeconds == other.todayDurationSeconds &&
           weekChars == other.weekChars &&
           daily == other.daily;
+}
+
+/// 远程 ZIP 中可导入的本地书籍文件。
+class RemoteArchiveBookFile {
+  final String relativePath;
+  final Uint8List bytes;
+
+  const RemoteArchiveBookFile({
+    required this.relativePath,
+    required this.bytes,
+  });
+
+  @override
+  int get hashCode => relativePath.hashCode ^ bytes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RemoteArchiveBookFile &&
+          runtimeType == other.runtimeType &&
+          relativePath == other.relativePath &&
+          bytes == other.bytes;
+}
+
+/// RSS 文章 DTO
+class RssArticleDto {
+  final String title;
+  final String link;
+  final String pubDate;
+  final String description;
+  final String content;
+  final String image;
+  final String origin;
+  final String sort;
+
+  const RssArticleDto({
+    required this.title,
+    required this.link,
+    required this.pubDate,
+    required this.description,
+    required this.content,
+    required this.image,
+    required this.origin,
+    required this.sort,
+  });
+
+  @override
+  int get hashCode =>
+      title.hashCode ^
+      link.hashCode ^
+      pubDate.hashCode ^
+      description.hashCode ^
+      content.hashCode ^
+      image.hashCode ^
+      origin.hashCode ^
+      sort.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RssArticleDto &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          link == other.link &&
+          pubDate == other.pubDate &&
+          description == other.description &&
+          content == other.content &&
+          image == other.image &&
+          origin == other.origin &&
+          sort == other.sort;
+}
+
+/// RSS 列表结果
+class RssArticlesResult {
+  final List<RssArticleDto> articles;
+  final String? nextUrl;
+
+  const RssArticlesResult({required this.articles, this.nextUrl});
+
+  @override
+  int get hashCode => articles.hashCode ^ nextUrl.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RssArticlesResult &&
+          runtimeType == other.runtimeType &&
+          articles == other.articles &&
+          nextUrl == other.nextUrl;
 }
 
 /// 规则调试步骤
@@ -588,6 +979,65 @@ class SearchItem {
           note == other.note;
 }
 
+/// `java.startBrowserAwait` 发往 Flutter 可见 WebView 宿主的请求。
+class SourceBrowserRequestDto {
+  final String sourceKey;
+  final String url;
+  final String title;
+  final String? html;
+  final Map<String, String> headers;
+  final bool refetchAfterSuccess;
+
+  const SourceBrowserRequestDto({
+    required this.sourceKey,
+    required this.url,
+    required this.title,
+    this.html,
+    required this.headers,
+    required this.refetchAfterSuccess,
+  });
+
+  @override
+  int get hashCode =>
+      sourceKey.hashCode ^
+      url.hashCode ^
+      title.hashCode ^
+      html.hashCode ^
+      headers.hashCode ^
+      refetchAfterSuccess.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SourceBrowserRequestDto &&
+          runtimeType == other.runtimeType &&
+          sourceKey == other.sourceKey &&
+          url == other.url &&
+          title == other.title &&
+          html == other.html &&
+          headers == other.headers &&
+          refetchAfterSuccess == other.refetchAfterSuccess;
+}
+
+/// Flutter WebView 完成验证后返回的最终页面。
+class SourceBrowserResponseDto {
+  final String finalUrl;
+  final String body;
+
+  const SourceBrowserResponseDto({required this.finalUrl, required this.body});
+
+  @override
+  int get hashCode => finalUrl.hashCode ^ body.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SourceBrowserResponseDto &&
+          runtimeType == other.runtimeType &&
+          finalUrl == other.finalUrl &&
+          body == other.body;
+}
+
 /// 书源校验结果
 class SourceValidation {
   final bool searchOk;
@@ -626,33 +1076,4 @@ class SourceValidation {
           contentOk == other.contentOk &&
           searchTimeMs == other.searchTimeMs &&
           errors == other.errors;
-}
-
-/// Web API 运行状态
-class WebApiStatus {
-  final bool running;
-  final int port;
-  final String token;
-  final String baseUrl;
-
-  const WebApiStatus({
-    required this.running,
-    required this.port,
-    required this.token,
-    required this.baseUrl,
-  });
-
-  @override
-  int get hashCode =>
-      running.hashCode ^ port.hashCode ^ token.hashCode ^ baseUrl.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is WebApiStatus &&
-          runtimeType == other.runtimeType &&
-          running == other.running &&
-          port == other.port &&
-          token == other.token &&
-          baseUrl == other.baseUrl;
 }

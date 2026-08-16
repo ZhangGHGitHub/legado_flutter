@@ -35,6 +35,22 @@ pub fn resolve_string(item: &Value, path: &str) -> String {
     String::new()
 }
 
+/// Resolve every JSONPath result using AnalyzeByJSonPath.getStringList semantics.
+pub fn resolve_strings(item: &Value, path: &str) -> Vec<String> {
+    if path.is_empty() {
+        return Vec::new();
+    }
+    let Ok(jp) = JsonPath::from_str(path) else {
+        return Vec::new();
+    };
+    jp.find_slice(item)
+        .into_iter()
+        .filter(|v| v.has_value())
+        .flat_map(|v| value_to_strings(&v.to_data()))
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
 pub fn resolve_first_string(item: &Value, paths: &str) -> String {
     for part in paths.split("||") {
         let s = resolve_string(item, part.trim());
@@ -57,9 +73,7 @@ pub fn resolve_template(template: &str, item: &Value) -> String {
         let replacement = if key.starts_with('$') {
             resolve_string(item, key)
         } else if let Some(obj) = item.as_object() {
-            obj.get(key)
-                .map(value_to_string)
-                .unwrap_or_default()
+            obj.get(key).map(value_to_string).unwrap_or_default()
         } else {
             String::new()
         };
@@ -95,6 +109,14 @@ pub fn value_to_string(val: &Value) -> String {
         Value::Bool(b) => b.to_string(),
         Value::Array(arr) => arr.first().map(value_to_string).unwrap_or_default(),
         _ => val.to_string(),
+    }
+}
+
+pub fn value_to_strings(val: &Value) -> Vec<String> {
+    match val {
+        Value::Array(arr) => arr.iter().flat_map(value_to_strings).collect(),
+        Value::Null => Vec::new(),
+        _ => vec![value_to_string(val)],
     }
 }
 

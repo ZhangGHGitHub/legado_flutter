@@ -1,4 +1,5 @@
-use legado_webdav::{WebDavClient, WebDavItem};
+use crate::http::network_config;
+use legado_webdav::{WebDavClient, WebDavItem, WebDavProxy};
 
 /// WebDAV 文件条目
 #[derive(Debug, Clone)]
@@ -7,6 +8,8 @@ pub struct WebDavEntry {
     pub path: String,
     pub is_dir: bool,
     pub size: i32,
+    pub last_modified: i64,
+    pub etag: Option<String>,
 }
 
 fn map_items(items: Vec<WebDavItem>) -> Vec<WebDavEntry> {
@@ -17,8 +20,33 @@ fn map_items(items: Vec<WebDavItem>) -> Vec<WebDavEntry> {
             path: i.path,
             is_dir: i.is_dir,
             size: i.size as i32,
+            last_modified: i.last_modified,
+            etag: i.etag,
         })
         .collect()
+}
+
+fn build_webdav_proxy(cfg: &network_config::NetworkConfig) -> Option<WebDavProxy> {
+    network_config::build_proxy_url(cfg).map(|url| WebDavProxy {
+        url,
+        username: cfg.proxy_username.clone(),
+        password: cfg.proxy_password.clone(),
+    })
+}
+
+fn new_webdav_client(url: &str, username: &str, password: &str) -> Result<WebDavClient, String> {
+    let cfg = network_config::get_network_config();
+    new_webdav_client_with_config(url, username, password, &cfg)
+}
+
+fn new_webdav_client_with_config(
+    url: &str,
+    username: &str,
+    password: &str,
+    cfg: &network_config::NetworkConfig,
+) -> Result<WebDavClient, String> {
+    let proxy = build_webdav_proxy(cfg);
+    WebDavClient::new_with_proxy(url, username, password, proxy.as_ref()).map_err(|e| e.to_string())
 }
 
 /// 列出 WebDAV 目录
@@ -29,9 +57,33 @@ pub async fn webdav_list(
     password: String,
     path: String,
 ) -> Result<Vec<WebDavEntry>, String> {
-    let client = WebDavClient::new(&url, &username, &password).map_err(|e| e.to_string())?;
+    let client = new_webdav_client(&url, &username, &password)?;
     let items = client.list(&path).await.map_err(|e| e.to_string())?;
     Ok(map_items(items))
+}
+
+/// 验证 WebDAV 目录访问权限
+#[flutter_rust_bridge::frb]
+pub async fn webdav_check(
+    url: String,
+    username: String,
+    password: String,
+    path: String,
+) -> Result<(), String> {
+    let client = new_webdav_client(&url, &username, &password)?;
+    client.check(&path).await.map_err(|e| e.to_string())
+}
+
+/// 确保 WebDAV 目录存在
+#[flutter_rust_bridge::frb]
+pub async fn webdav_ensure_dir(
+    url: String,
+    username: String,
+    password: String,
+    path: String,
+) -> Result<(), String> {
+    let client = new_webdav_client(&url, &username, &password)?;
+    client.ensure_dir(&path).await.map_err(|e| e.to_string())
 }
 
 /// 上传文件到 WebDAV
@@ -43,9 +95,26 @@ pub async fn webdav_upload(
     remote_path: String,
     data: Vec<u8>,
 ) -> Result<(), String> {
-    let client = WebDavClient::new(&url, &username, &password).map_err(|e| e.to_string())?;
+    let client = new_webdav_client(&url, &username, &password)?;
     client
         .upload(&data, &remote_path)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 按 ETag 条件上传文件，避免覆盖其他设备的更新。
+#[flutter_rust_bridge::frb]
+pub async fn webdav_upload_if_match(
+    url: String,
+    username: String,
+    password: String,
+    remote_path: String,
+    data: Vec<u8>,
+    etag: Option<String>,
+) -> Result<(), String> {
+    let client = new_webdav_client(&url, &username, &password)?;
+    client
+        .upload_with_etag(&data, &remote_path, etag.as_deref())
         .await
         .map_err(|e| e.to_string())
 }
@@ -58,7 +127,7 @@ pub async fn webdav_download(
     password: String,
     remote_path: String,
 ) -> Result<Vec<u8>, String> {
-    let client = WebDavClient::new(&url, &username, &password).map_err(|e| e.to_string())?;
+    let client = new_webdav_client(&url, &username, &password)?;
     client
         .download(&remote_path)
         .await
@@ -73,9 +142,53 @@ pub async fn webdav_delete(
     password: String,
     remote_path: String,
 ) -> Result<(), String> {
-    let client = WebDavClient::new(&url, &username, &password).map_err(|e| e.to_string())?;
+    let client = new_webdav_client(&url, &username, &password)?;
+    client.delete(&remote_path).await.map_err(|e| e.to_string())
+}
+
+/// 重命名 WebDAV 文件
+#[flutter_rust_bridge::frb]
+pub async fn webdav_move(
+    url: String,
+    username: String,
+    password: String,
+    remote_path: String,
+    destination_path: String,
+) -> Result<(), String> {
+    let client = new_webdav_client(&url, &username, &password)?;
     client
-        .delete(&remote_path)
+        .move_to(&remote_path, &destination_path)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::http::network_config::NetworkConfig;
+
+    #[test]
+    fn disabled_network_proxy_keeps_webdav_client_constructible_without_proxy() {
+        let cfg = NetworkConfig::default();
+        assert!(build_webdav_proxy(&cfg).is_none());
+        new_webdav_client_with_config("https://dav.example.com/", "", "", &cfg).unwrap();
+    }
+
+    #[test]
+    fn network_proxy_is_mapped_to_webdav_with_credentials() {
+        let cfg = NetworkConfig {
+            proxy_enabled: true,
+            proxy_type: "socks5".into(),
+            proxy_host: "127.0.0.1".into(),
+            proxy_port: 1080,
+            proxy_username: "proxy-user".into(),
+            proxy_password: "proxy-pass".into(),
+            ..Default::default()
+        };
+        let proxy = build_webdav_proxy(&cfg).unwrap();
+        assert_eq!(proxy.url, "socks5://127.0.0.1:1080");
+        assert_eq!(proxy.username, "proxy-user");
+        assert_eq!(proxy.password, "proxy-pass");
+        new_webdav_client_with_config("https://dav.example.com/", "", "", &cfg).unwrap();
+    }
 }

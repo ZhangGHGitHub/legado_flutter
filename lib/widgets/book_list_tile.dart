@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/book.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import 'book_cover.dart';
 
 /// 书籍列表行（搜索 / 发现结果共用）

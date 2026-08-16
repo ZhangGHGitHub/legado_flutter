@@ -107,10 +107,7 @@ abstract final class LegadoColorPresets {
     }
 
     return switch (preset) {
-      LegadoColorPreset.light => ColorScheme.fromSeed(
-          seedColor: _lightSeed,
-          brightness: brightness,
-        ),
+      LegadoColorPreset.light => _lightScheme(brightness),
       LegadoColorPreset.dark => _darkScheme(brightness),
       LegadoColorPreset.eyeCare => _eyeCareScheme(brightness),
       LegadoColorPreset.paper => _paperScheme(brightness),
@@ -120,6 +117,21 @@ abstract final class LegadoColorPresets {
           brightness: brightness,
         ),
     };
+  }
+
+  static ColorScheme _lightScheme(Brightness brightness) {
+    final base = ColorScheme.fromSeed(
+      seedColor: _lightSeed,
+      brightness: brightness,
+    );
+    if (brightness == Brightness.dark) return base;
+    // 主色顶栏 / 强调色底栏选中分离（对齐 Jingshiro primary + accent）
+    return base.copyWith(
+      primary: const Color(0xFF1976D2),
+      onPrimary: Colors.white,
+      secondary: const Color(0xFFE53935),
+      onSecondary: Colors.white,
+    );
   }
 
   static ColorScheme _darkScheme(Brightness brightness) {
@@ -162,9 +174,18 @@ abstract final class LegadoColorPresets {
       return base.copyWith(
         surface: const Color(0xFF2C2824),
         surfaceContainerLow: const Color(0xFF3A3530),
+        // 强调色与主色分离（对齐 Jingshiro primary/accent）
+        secondary: const Color(0xFFE57373),
+        onSecondary: const Color(0xFF3E2723),
       );
     }
     return base.copyWith(
+      // 主色：暖棕顶栏（接近截图）
+      primary: const Color(0xFF6D4C41),
+      onPrimary: Colors.white,
+      // 强调色：底栏选中 / Switch（截图红）
+      secondary: const Color(0xFFE53935),
+      onSecondary: Colors.white,
       surface: const Color(0xFFF5F0E8),
       surfaceContainerLow: const Color(0xFFFAF6F0),
       surfaceContainer: const Color(0xFFEDE4D8),

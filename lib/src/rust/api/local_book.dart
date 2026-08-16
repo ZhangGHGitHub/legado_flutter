@@ -5,9 +5,10 @@
 
 import '../api.dart';
 import '../frb_generated.dart';
+import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `attr_value`, `chapter_title_from_html`, `collapse_blank_lines`, `html_to_plain`, `join_zip_path`, `opf_path_from_container`, `parse_opf`, `path_dir`, `read_zip_entry`
+// These functions are ignored because they are not marked as `pub`: `attr_value`, `chapter_title_from_html`, `collapse_blank_lines`, `html_to_plain`, `is_safe_path_segment`, `is_supported_book_path`, `is_windows_drive_segment`, `join_zip_path`, `opf_path_from_container`, `parse_epub_legacy`, `parse_opf`, `parse_remote_archive_book_files_with_limits`, `parse_remote_archive_book_files`, `path_dir`, `read_zip_entry`, `safe_zip_relative_path`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `OpfMeta`
 
 /// TXT 分章 — 匹配常见章节标题

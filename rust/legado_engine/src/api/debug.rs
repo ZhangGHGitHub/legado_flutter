@@ -2,15 +2,8 @@ use super::{DebugItem, DebugResult, RuleDebugStep};
 use crate::http;
 use crate::model::book_source::BookSource;
 use crate::rule;
-use crate::rule::js_engine;
 
-fn push_step(
-    steps: &mut Vec<RuleDebugStep>,
-    step: &str,
-    rule: &str,
-    result: &str,
-    ok: bool,
-) {
+fn push_step(steps: &mut Vec<RuleDebugStep>, step: &str, rule: &str, result: &str, ok: bool) {
     steps.push(RuleDebugStep {
         step: step.to_string(),
         rule: rule.to_string(),
@@ -23,7 +16,11 @@ fn preview_body(body: &str, max: usize) -> String {
     if body.len() <= max {
         body.to_string()
     } else {
-        format!("{}\n\n... (truncated, {} chars total)", &body[..max], body.len())
+        format!(
+            "{}\n\n... (truncated, {} chars total)",
+            &body[..max],
+            body.len()
+        )
     }
 }
 
@@ -42,19 +39,13 @@ fn search_items_to_debug(items: Vec<super::SearchItem>) -> Vec<DebugItem> {
 }
 
 /// 分步调试搜索
-pub async fn debug_search(source_json: &str, keyword: &str) -> Result<DebugResult, String> {
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) async fn debug_search(source_json: &str, keyword: &str) -> Result<DebugResult, String> {
     let source = BookSource::from_json(source_json)?;
-    let _ = js_engine::reset_cache();
     let mut steps = Vec::new();
 
     if source.rule_search_url.is_empty() {
-        push_step(
-            &mut steps,
-            "检查搜索 URL",
-            "ruleSearchUrl",
-            "未配置",
-            false,
-        );
+        push_step(&mut steps, "检查搜索 URL", "ruleSearchUrl", "未配置", false);
         return Ok(DebugResult {
             request_url: String::new(),
             request_method: "GET".to_string(),
@@ -78,13 +69,7 @@ pub async fn debug_search(source_json: &str, keyword: &str) -> Result<DebugResul
     let cfg = match http::analyze_url::resolve_search_request(&source, keyword, 1) {
         Ok(c) => c,
         Err(e) => {
-            push_step(
-                &mut steps,
-                "解析搜索 URL",
-                "ruleSearchUrl",
-                &e,
-                false,
-            );
+            push_step(&mut steps, "解析搜索 URL", "ruleSearchUrl", &e, false);
             return Err(e);
         }
     };
@@ -133,10 +118,7 @@ pub async fn debug_search(source_json: &str, keyword: &str) -> Result<DebugResul
         &mut steps,
         "HTTP 响应",
         &resolved_url,
-        &format!(
-            "status={} size={} bytes",
-            fetch.status_code, fetch.byte_len
-        ),
+        &format!("status={} size={} bytes", fetch.status_code, fetch.byte_len),
         fetch.status_code == 200,
     );
 
@@ -145,13 +127,7 @@ pub async fn debug_search(source_json: &str, keyword: &str) -> Result<DebugResul
 
     // JSON API 路径
     if let Ok(data) = serde_json::from_str::<serde_json::Value>(body) {
-        push_step(
-            &mut steps,
-            "响应类型",
-            "Content-Type",
-            "JSON",
-            true,
-        );
+        push_step(&mut steps, "响应类型", "Content-Type", "JSON", true);
 
         if source.is_json_api() {
             let list_rule = source
@@ -201,33 +177,15 @@ pub async fn debug_search(source_json: &str, keyword: &str) -> Result<DebugResul
                     });
                 }
                 Ok(_) => {
-                    push_step(
-                        &mut steps,
-                        "解析搜索结果",
-                        "ruleSearch",
-                        "0 条",
-                        false,
-                    );
+                    push_step(&mut steps, "解析搜索结果", "ruleSearch", "0 条", false);
                 }
                 Err(e) => {
-                    push_step(
-                        &mut steps,
-                        "解析搜索结果",
-                        "ruleSearch",
-                        &e,
-                        false,
-                    );
+                    push_step(&mut steps, "解析搜索结果", "ruleSearch", &e, false);
                 }
             }
         }
     } else {
-        push_step(
-            &mut steps,
-            "响应类型",
-            "Content-Type",
-            "HTML/Text",
-            true,
-        );
+        push_step(&mut steps, "响应类型", "Content-Type", "HTML/Text", true);
     }
 
     // HTML 路径
@@ -285,13 +243,7 @@ pub async fn debug_search(source_json: &str, keyword: &str) -> Result<DebugResul
             })
         }
         Err(e) => {
-            push_step(
-                &mut steps,
-                "解析搜索结果",
-                "ruleSearchList",
-                &e,
-                false,
-            );
+            push_step(&mut steps, "解析搜索结果", "ruleSearchList", &e, false);
             Ok(DebugResult {
                 request_url: resolved_url,
                 request_method: cfg.method,
@@ -307,11 +259,11 @@ pub async fn debug_search(source_json: &str, keyword: &str) -> Result<DebugResul
 }
 
 /// 分步调试目录
-pub async fn debug_toc(source_json: &str, book_url: &str) -> Result<DebugResult, String> {
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) async fn debug_toc(source_json: &str, book_url: &str) -> Result<DebugResult, String> {
     use super::ChapterItem;
 
     let source = BookSource::from_json(source_json)?;
-    let _ = js_engine::reset_cache();
     let mut steps = Vec::new();
 
     push_step(

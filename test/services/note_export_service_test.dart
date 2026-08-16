@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/domain/annotation/note_snapshot.dart';
 import 'package:legado_flutter/services/app_paths.dart';
 import 'package:legado_flutter/services/note_export_service.dart';
-import 'package:legado_flutter/src/rust/api.dart' as rust_api;
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -26,13 +26,14 @@ void main() {
 
   test('exportPerNoteFiles writes markdown files', () async {
     const notes = [
-      rust_api.NoteDto(
+      NoteSnapshot(
         id: 'n1',
         bookId: 'b1',
         chapterTitle: '第一章',
         selectedText: '选中片段',
         noteContent: '我的想法',
         position: 0,
+        chapterPos: 0,
         createdAt: '2026-07-11',
       ),
     ];

@@ -1,94 +1,66 @@
 import 'package:flutter/foundation.dart';
-import '../models/replace_rule.dart';
-import '../database/database_helper.dart';
-import '../help/content_processor.dart';
-import '../services/replace_service.dart';
+import '../application/replace/replace_controller.dart';
+import '../application/replace/replace_preset_port.dart';
+import '../domain/content/replace_rule.dart';
+import '../domain/ports/content_processing_port.dart';
+import '../domain/repositories/replace_rule_repository.dart';
 
 /// 替换净化 Provider — 替换规则管理
 class ReplaceProvider extends ChangeNotifier {
-  final DatabaseHelper _db = DatabaseHelper();
-  final ReplaceService _replaceService = ReplaceService();
+  ReplaceProvider({
+    required ReplaceRuleRepository repository,
+    required ContentProcessingPort contentProcessor,
+    ReplacePresetPort? presetPort,
+    ReplaceRulesController? controller,
+  }) : _controller =
+           controller ??
+           ReplaceRulesController(
+             repository: repository,
+             contentProcessor: contentProcessor,
+             presetPort: presetPort,
+           ) {
+    _controller.addListener(_onControllerStateChanged);
+  }
 
-  List<ReplaceRule> _replaceRules = [];
+  final ReplaceRulesController _controller;
 
-  List<ReplaceRule> get replaceRules => _replaceRules;
-  ReplaceService get replaceService => _replaceService;
+  ReplaceRulesController get controller => _controller;
+
+  List<ReplaceRule> get replaceRules => _controller.replaceRules;
 
   /// 加载替换规则（首次运行时初始化默认规则）
-  Future<void> loadRules() async {
-    _replaceRules = await _db.getReplaceRules();
-    if (_replaceRules.isEmpty) {
-      await _db.insertReplaceRules(ReplaceService.builtInRules());
-      _replaceRules = await _db.getReplaceRules();
-    }
-    _replaceService.loadRules(_replaceRules);
-    ContentProcessor.instance.loadRules(_replaceRules);
-    notifyListeners();
-  }
+  Future<void> loadRules() => _controller.loadRules();
 
   /// 添加规则
-  Future<void> addRule(ReplaceRule rule) async {
-    await _db.insertReplaceRule(rule);
-    _replaceRules = await _db.getReplaceRules();
-    _replaceService.loadRules(_replaceRules);
-    ContentProcessor.instance.loadRules(_replaceRules);
-    notifyListeners();
-  }
+  Future<void> addRule(ReplaceRule rule) => _controller.addRule(rule);
 
   /// 更新规则
-  Future<void> updateRule(ReplaceRule rule) async {
-    await _db.updateReplaceRule(rule);
-    _replaceRules = await _db.getReplaceRules();
-    _replaceService.loadRules(_replaceRules);
-    ContentProcessor.instance.loadRules(_replaceRules);
-    notifyListeners();
-  }
+  Future<void> updateRule(ReplaceRule rule) => _controller.updateRule(rule);
 
   /// 删除规则
-  Future<void> deleteRule(String ruleId) async {
-    await _db.deleteReplaceRule(ruleId);
-    _replaceRules = await _db.getReplaceRules();
-    _replaceService.loadRules(_replaceRules);
-    ContentProcessor.instance.loadRules(_replaceRules);
-    notifyListeners();
-  }
+  Future<void> deleteRule(String ruleId) => _controller.deleteRule(ruleId);
 
   /// 启用/禁用规则
-  Future<void> toggleRule(String ruleId, bool enabled) async {
-    await _db.toggleReplaceRule(ruleId, enabled);
-    _replaceRules = await _db.getReplaceRules();
-    _replaceService.loadRules(_replaceRules);
-    ContentProcessor.instance.loadRules(_replaceRules);
-    notifyListeners();
-  }
+  Future<void> toggleRule(String ruleId, bool enabled) =>
+      _controller.toggleRule(ruleId, enabled);
 
   /// 重置为默认规则
-  Future<void> resetReplaceRules() async {
-    await _db.clearReplaceRules();
-    await _db.insertReplaceRules(ReplaceService.builtInRules());
-    _replaceRules = await _db.getReplaceRules();
-    _replaceService.loadRules(_replaceRules);
-    ContentProcessor.instance.loadRules(_replaceRules);
-    notifyListeners();
-  }
+  Future<void> resetReplaceRules() => _controller.resetReplaceRules();
 
   /// 导入预设规则（按 pattern 去重，已存在则跳过）
-  Future<int> importPresets(List<ReplaceRule> presets) async {
-    final existingPatterns =
-        _replaceRules.map((r) => r.pattern).toSet();
-    var added = 0;
-    for (final rule in presets) {
-      if (existingPatterns.contains(rule.pattern)) continue;
-      await _db.insertReplaceRule(rule);
-      existingPatterns.add(rule.pattern);
-      added++;
-    }
-    if (added > 0) {
-      _replaceRules = await _db.getReplaceRules();
-      _replaceService.loadRules(_replaceRules);
-      ContentProcessor.instance.loadRules(_replaceRules);
-      notifyListeners();
-    }
-    return added;
+  Future<int> importPresets(List<ReplaceRule> presets) =>
+      _controller.importPresets(presets);
+
+  String processContent(String raw) => _controller.processContent(raw);
+
+  String previewContent(String raw, List<ReplaceRule> rules) =>
+      _controller.previewContent(raw, rules);
+
+  void _onControllerStateChanged(_) => notifyListeners();
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onControllerStateChanged);
+    super.dispose();
   }
 }

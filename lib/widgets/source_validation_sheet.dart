@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/source_validation_result.dart';
+import 'package:legado_flutter/domain/source/source_validation_result.dart';
 
 /// 书源校验结果展示
 class SourceValidationSheet extends StatelessWidget {

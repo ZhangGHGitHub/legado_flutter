@@ -1,18 +1,26 @@
 pub mod backup;
 pub mod book_info;
 pub mod content;
+pub mod cover;
 pub mod db;
 pub mod debug;
+pub mod dict;
+pub mod error;
 pub mod explore;
 pub mod local_book;
 pub mod network;
 pub mod read_record;
+pub mod rss;
 pub mod search;
 pub mod toc;
 pub mod validate;
 pub mod webdav;
 
-use flutter_rust_bridge::frb;
+pub use dict::query_dict_rule;
+
+use flutter_rust_bridge::{frb, DartFnFuture};
+
+pub use error::AppError;
 
 /// FRB 默认初始化（日志等）
 #[frb(init)]
@@ -22,7 +30,7 @@ pub fn init_app() {
 
 /// 初始化 Rust 书源引擎
 #[frb(sync)]
-pub fn init_engine() -> Result<(), String> {
+pub fn init_engine() -> Result<(), AppError> {
     Ok(())
 }
 
@@ -35,6 +43,54 @@ pub struct SourceValidation {
     pub content_ok: bool,
     pub search_time_ms: u64,
     pub errors: Vec<String>,
+}
+
+/// `java.startBrowserAwait` 发往 Flutter 可见 WebView 宿主的请求。
+#[derive(Debug, Clone)]
+pub struct SourceBrowserRequestDto {
+    pub source_key: String,
+    pub url: String,
+    pub title: String,
+    pub html: Option<String>,
+    pub headers: std::collections::HashMap<String, String>,
+    pub refetch_after_success: bool,
+}
+
+/// Flutter WebView 完成验证后返回的最终页面。
+#[derive(Debug, Clone)]
+pub struct SourceBrowserResponseDto {
+    pub final_url: String,
+    pub body: String,
+}
+
+/// 运行可见 WebView 宿主循环。Flutter 启动后保持此 Future，Rust 后台规则线程按请求等待回调。
+pub async fn serve_source_browser_host(
+    host: impl Fn(SourceBrowserRequestDto) -> DartFnFuture<anyhow::Result<SourceBrowserResponseDto>>,
+) -> Result<(), AppError> {
+    crate::browser_host::serve(host)
+        .await
+        .map_err(map_source_browser_host_error)
+}
+
+/// FRB 回调契约探针；供桥接测试确认 Dart 回调可在 Rust 异步任务等待期间完成。
+pub async fn probe_source_browser_host(
+    request: SourceBrowserRequestDto,
+) -> Result<SourceBrowserResponseDto, AppError> {
+    tokio::task::spawn_blocking(move || crate::browser_host::invoke(request))
+        .await
+        .map_err(|e| map_source_browser_host_error(format!("浏览器宿主探针线程失败: {e}")))?
+        .map_err(map_source_browser_host_error)
+}
+
+fn map_source_browser_host_error(message: String) -> AppError {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("cancel") || message.contains("取消") {
+        return AppError::Cancelled(message);
+    }
+    if lower.contains("unsupported") || message.contains("不支持") {
+        return AppError::Unsupported(message);
+    }
+    AppError::Unknown(message)
 }
 
 /// 本地书籍章节（含正文）
@@ -50,6 +106,31 @@ pub struct LocalBookInfo {
     pub title: String,
     pub author: String,
     pub chapters: Vec<LocalChapterItem>,
+}
+
+/// 远程 ZIP 中可导入的本地书籍文件。
+#[derive(Debug, Clone)]
+pub struct RemoteArchiveBookFile {
+    pub relative_path: String,
+    pub bytes: Vec<u8>,
+}
+
+/// 正文替换规则 DTO。
+#[derive(Debug, Clone)]
+pub struct ContentReplaceRuleDto {
+    pub id: String,
+    pub name: String,
+    pub pattern: String,
+    pub replacement: String,
+    pub is_enabled: bool,
+    pub is_regex: bool,
+}
+
+/// 书源级正文替换规则 DTO。
+#[derive(Debug, Clone)]
+pub struct ContentProcessingSourceRulesDto {
+    pub content_replace: String,
+    pub content_replace_to: String,
 }
 
 /// 单日阅读统计
@@ -90,22 +171,29 @@ pub struct NoteDto {
     pub selected_text: String,
     pub note_content: String,
     pub position: i32,
+    /// 章内字符偏移（对齐 Jingshiro Bookmark.chapterPos）；-1=未知
+    pub chapter_pos: i32,
     pub created_at: String,
+}
+
+/// 独立书签实体；字段对齐 Jingshiro Bookmark
+#[derive(Debug, Clone)]
+pub struct BookmarkDto {
+    pub time: i64,
+    pub book_id: String,
+    pub book_name: String,
+    pub book_author: String,
+    pub chapter_index: i32,
+    pub chapter_pos: i32,
+    pub chapter_name: String,
+    pub book_text: String,
+    pub content: String,
 }
 
 /// 引擎版本号
 #[frb(sync)]
 pub fn engine_version() -> String {
     "0.5.6".to_string()
-}
-
-/// Web API 运行状态
-#[derive(Debug, Clone)]
-pub struct WebApiStatus {
-    pub running: bool,
-    pub port: i32,
-    pub token: String,
-    pub base_url: String,
 }
 
 /// 规则调试步骤
@@ -157,6 +245,11 @@ pub struct SearchItem {
 pub struct ChapterItem {
     pub title: String,
     pub url: String,
+    pub is_volume: bool,
+    pub is_vip: bool,
+    pub is_pay: bool,
+    pub tag: String,
+    pub base_url: String,
 }
 
 /// 书籍详情
@@ -173,8 +266,10 @@ pub struct BookInfoItem {
 
 /// 搜索书籍
 #[frb]
-pub async fn search(source_json: String, keyword: String) -> Result<Vec<SearchItem>, String> {
-    search::search(&source_json, &keyword).await
+pub async fn search(source_json: String, keyword: String) -> Result<Vec<SearchItem>, AppError> {
+    search::search(&source_json, &keyword)
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// 发现页 / 分类页
@@ -183,26 +278,47 @@ pub async fn explore(
     source_json: String,
     explore_url: String,
     page: i32,
-) -> Result<Vec<SearchItem>, String> {
-    explore::explore(&source_json, &explore_url, page).await
+) -> Result<Vec<SearchItem>, AppError> {
+    explore::explore(&source_json, &explore_url, page)
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// 获取书籍详情
 #[frb]
-pub async fn get_book_info(source_json: String, book_url: String) -> Result<BookInfoItem, String> {
+pub async fn get_book_info(
+    source_json: String,
+    book_url: String,
+) -> Result<BookInfoItem, AppError> {
     book_info::get_book_info(&source_json, &book_url).await
 }
 
 /// 获取目录
 #[frb]
-pub async fn get_toc(source_json: String, book_url: String) -> Result<Vec<ChapterItem>, String> {
-    toc::get_toc(&source_json, &book_url).await
+pub async fn get_toc(source_json: String, book_url: String) -> Result<Vec<ChapterItem>, AppError> {
+    toc::get_toc(&source_json, &book_url)
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// 获取章节正文
 #[frb]
-pub async fn get_content(source_json: String, chapter_url: String) -> Result<String, String> {
-    content::get_content(&source_json, &chapter_url).await
+pub async fn get_content(source_json: String, chapter_url: String) -> Result<String, AppError> {
+    content::get_content(&source_json, &chapter_url)
+        .await
+        .map_err(AppError::from_legacy)
+}
+
+/// 获取章节正文，并在正文下一页指向下一章时停止。
+#[frb]
+pub async fn get_content_with_next_chapter(
+    source_json: String,
+    chapter_url: String,
+    next_chapter_url: Option<String>,
+) -> Result<String, AppError> {
+    content::get_content_with_next_chapter(&source_json, &chapter_url, next_chapter_url.as_deref())
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// 书源校验（搜索 / 发现 / 目录 / 正文）
@@ -210,41 +326,26 @@ pub async fn get_content(source_json: String, chapter_url: String) -> Result<Str
 pub async fn validate_source(
     source_json: String,
     keyword: String,
-) -> Result<SourceValidation, String> {
-    validate::validate_source(&source_json, &keyword).await
+) -> Result<SourceValidation, AppError> {
+    validate::validate_source(&source_json, &keyword)
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// 分步调试搜索
 #[frb]
-pub async fn debug_search(
-    source_json: String,
-    keyword: String,
-) -> Result<DebugResult, String> {
-    debug::debug_search(&source_json, &keyword).await
+pub async fn debug_search(source_json: String, keyword: String) -> Result<DebugResult, AppError> {
+    debug::debug_search(&source_json, &keyword)
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// 分步调试目录
 #[frb]
-pub async fn debug_toc(source_json: String, book_url: String) -> Result<DebugResult, String> {
-    debug::debug_toc(&source_json, &book_url).await
-}
-
-/// 启动 Web API 服务
-#[frb]
-pub async fn start_web_api(port: i32, token: String) -> Result<WebApiStatus, String> {
-    crate::web_server::start_web_api(port, token).await
-}
-
-/// 停止 Web API 服务
-#[frb]
-pub async fn stop_web_api() -> Result<(), String> {
-    crate::web_server::stop_web_api().await
-}
-
-/// Web API 运行状态
-#[frb(sync)]
-pub fn web_api_status() -> WebApiStatus {
-    crate::web_server::web_api_status()
+pub async fn debug_toc(source_json: String, book_url: String) -> Result<DebugResult, AppError> {
+    debug::debug_toc(&source_json, &book_url)
+        .await
+        .map_err(AppError::from_legacy)
 }
 
 /// TXT 分章
@@ -255,8 +356,86 @@ pub fn parse_txt_chapters(content: String) -> Vec<LocalChapterItem> {
 
 /// EPUB 解析
 #[frb(sync)]
-pub fn parse_epub(data: Vec<u8>) -> Result<LocalBookInfo, String> {
+pub fn parse_epub(data: Vec<u8>) -> Result<LocalBookInfo, AppError> {
     local_book::parse_epub(&data)
+}
+
+/// 安全解析远程 ZIP，并按压缩包顺序返回其中的 TXT/EPUB 文件。
+#[frb(sync)]
+pub fn parse_remote_archive_book_files(
+    data: Vec<u8>,
+) -> Result<Vec<RemoteArchiveBookFile>, AppError> {
+    local_book::parse_remote_archive_book_files(&data)
+}
+
+/// 应用正文替换规则。
+#[frb(sync)]
+pub fn apply_content_replace_rules(text: String, rules: Vec<ContentReplaceRuleDto>) -> String {
+    crate::content_processing::apply_replace_rules(&text, &to_content_rules(rules))
+}
+
+/// 应用全局及书源级正文替换规则。
+#[frb(sync)]
+pub fn process_content(
+    text: String,
+    rules: Vec<ContentReplaceRuleDto>,
+    source_rules: Option<ContentProcessingSourceRulesDto>,
+) -> String {
+    crate::content_processing::process(
+        &text,
+        &to_content_rules(rules),
+        source_rules
+            .as_ref()
+            .map(|rules| crate::content_processing::SourceRulesInput {
+                content_replace: rules.content_replace.clone(),
+                content_replace_to: rules.content_replace_to.clone(),
+            })
+            .as_ref(),
+    )
+}
+
+/// 阅读前正文净化处理；不负责分页、断行或章节边界。
+#[frb(sync)]
+pub fn process_content_for_reading(
+    raw: String,
+    chapter_title: String,
+    book_name: String,
+    include_title: bool,
+    use_replace: bool,
+    paragraph_indent: String,
+    re_segment: bool,
+    rules: Vec<ContentReplaceRuleDto>,
+    source_rules: Option<ContentProcessingSourceRulesDto>,
+) -> Result<String, AppError> {
+    crate::content_processing::process_for_reading(crate::content_processing::ReadingProcessInput {
+        raw,
+        chapter_title,
+        book_name,
+        include_title,
+        use_replace,
+        paragraph_indent,
+        re_segment,
+        rules: to_content_rules(rules),
+        source_rules: source_rules.map(|r| crate::content_processing::SourceRulesInput {
+            content_replace: r.content_replace,
+            content_replace_to: r.content_replace_to,
+        }),
+    })
+    .map_err(AppError::Parse)
+}
+
+fn to_content_rules(
+    rules: Vec<ContentReplaceRuleDto>,
+) -> Vec<crate::content_processing::ReplaceRuleInput> {
+    rules
+        .into_iter()
+        .map(|rule| crate::content_processing::ReplaceRuleInput {
+            pattern: rule.pattern,
+            replacement: rule.replacement,
+            is_enabled: rule.is_enabled,
+            is_regex: rule.is_regex,
+        })
+        .collect()
 }
 
 /// 记录阅读（按书 + 日期累加）
@@ -266,25 +445,42 @@ pub fn record_reading(
     book_name: String,
     chars: i32,
     duration_seconds: i32,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     read_record::record_reading(&book_id, &book_name, chars, duration_seconds)
 }
 
 /// 阅读统计（range: week / month / year）
 #[frb(sync)]
-pub fn get_reading_stats(range: String) -> Result<ReadingStats, String> {
+pub fn get_reading_stats(range: String) -> Result<ReadingStats, AppError> {
     read_record::get_reading_stats(&range)
 }
 
 /// 导出阅读记录（csv / json）
 #[frb(sync)]
-pub fn export_reading_records(format: String) -> Result<String, String> {
+pub fn export_reading_records(format: String) -> Result<String, AppError> {
     read_record::export_reading_records(&format)
+}
+
+/// 写入详细阅读会话
+#[frb(sync)]
+pub fn record_detailed_read_session(
+    book_name: String,
+    start_time: i64,
+    end_time: i64,
+    read_iteration: i64,
+) -> Result<(), AppError> {
+    read_record::record_detailed_read_session(&book_name, start_time, end_time, read_iteration)
+}
+
+/// 导出详细阅读会话
+#[frb(sync)]
+pub fn export_detailed_read_records() -> Result<String, AppError> {
+    read_record::export_detailed_read_records()
 }
 
 /// 单本书阅读统计（阅读小票）
 #[frb(sync)]
-pub fn get_book_reading_stats(book_id: String) -> Result<BookReadingStats, String> {
+pub fn get_book_reading_stats(book_id: String) -> Result<BookReadingStats, AppError> {
     read_record::get_book_reading_stats(&book_id)
 }
 
@@ -297,7 +493,8 @@ pub fn upsert_note(
     selected_text: String,
     note_content: String,
     position: i32,
-) -> Result<(), String> {
+    chapter_pos: i32,
+) -> Result<(), AppError> {
     crate::notes_store::upsert_note(
         &id,
         &book_id,
@@ -305,31 +502,147 @@ pub fn upsert_note(
         &selected_text,
         &note_content,
         position,
+        chapter_pos,
     )
 }
 
 /// 删除想法笔记
 #[frb(sync)]
-pub fn delete_note(id: String) -> Result<(), String> {
+pub fn delete_note(id: String) -> Result<(), AppError> {
     crate::notes_store::delete_note(&id)
 }
 
 /// 列出想法笔记（book_id 为空则全部）
 #[frb(sync)]
-pub fn list_notes(book_id: String) -> Result<Vec<NoteDto>, String> {
+pub fn list_notes(book_id: String) -> Result<Vec<NoteDto>, AppError> {
     crate::notes_store::list_notes(book_id)
 }
 
 /// 导出 Obsidian 风格 Markdown
 #[frb(sync)]
-pub fn export_notes_markdown(book_id: String) -> Result<String, String> {
+pub fn export_notes_markdown(book_id: String) -> Result<String, AppError> {
     crate::notes_store::export_notes_markdown(book_id)
 }
 
+/// 保存独立书签；time 对齐原版 Bookmark 主键
+#[frb(sync)]
+pub fn upsert_bookmark(
+    time: i64,
+    book_id: String,
+    book_name: String,
+    book_author: String,
+    chapter_index: i32,
+    chapter_pos: i32,
+    chapter_name: String,
+    book_text: String,
+    content: String,
+) -> Result<(), AppError> {
+    crate::bookmarks_store::upsert_bookmark(
+        time,
+        &book_id,
+        &book_name,
+        &book_author,
+        chapter_index,
+        chapter_pos,
+        &chapter_name,
+        &book_text,
+        &content,
+    )
+}
+
+/// 删除独立书签
+#[frb(sync)]
+pub fn delete_bookmark(time: i64) -> Result<(), AppError> {
+    crate::bookmarks_store::delete_bookmark(time)
+}
+
+/// 列出独立书签；book_id 为空则全部
+#[frb(sync)]
+pub fn list_bookmarks(book_id: String) -> Result<Vec<BookmarkDto>, AppError> {
+    crate::bookmarks_store::list_bookmarks(book_id)
+}
+
+/// 执行裸 JS（登录 UI / loginUrl / 按钮脚本）
+#[frb(sync)]
+pub fn eval_js(script: String, js_lib: String, base_url: String) -> Result<String, AppError> {
+    crate::rule::js_engine::run_eval_script(&script, &js_lib, &base_url)
+        .map_err(AppError::JsExecution)
+}
+
+/// 预热 Rust 登录头缓存（Dart SharedPreferences → 引擎）
+#[frb(sync)]
+pub fn seed_login_header(source_url: String, header: String) -> Result<(), AppError> {
+    crate::http::login_header_store::seed(&source_url, &header);
+    Ok(())
+}
+
+/// 取出 loginCheckJs 新写入的登录头（JSON: url → header），供 Dart 回写 prefs
+#[frb(sync)]
+pub fn drain_login_header_updates() -> String {
+    crate::http::login_header_store::drain_dirty_json()
+}
+
+/// RSS 文章 DTO
+#[derive(Debug, Clone)]
+pub struct RssArticleDto {
+    pub title: String,
+    pub link: String,
+    pub pub_date: String,
+    pub description: String,
+    pub content: String,
+    pub image: String,
+    pub origin: String,
+    pub sort: String,
+}
+
+/// RSS 列表结果
+#[derive(Debug, Clone)]
+pub struct RssArticlesResult {
+    pub articles: Vec<RssArticleDto>,
+    pub next_url: Option<String>,
+}
+
+/// 获取 RSS 文章列表 — 对齐 Jingshiro Rss.getArticlesAwait
+#[frb]
+pub async fn get_rss_articles(
+    source_json: String,
+    sort_url: String,
+    sort_name: String,
+    page: i32,
+) -> Result<RssArticlesResult, AppError> {
+    let (articles, next_url) =
+        rss::get_rss_articles(&source_json, &sort_url, &sort_name, page).await?;
+    Ok(RssArticlesResult {
+        articles: articles
+            .into_iter()
+            .map(|a| RssArticleDto {
+                title: a.title,
+                link: a.link,
+                pub_date: a.pub_date,
+                description: a.description,
+                content: a.content,
+                image: a.image,
+                origin: a.origin,
+                sort: a.sort,
+            })
+            .collect(),
+        next_url,
+    })
+}
+
+/// 获取 RSS 正文 — 对齐 Jingshiro Rss.getContentAwait
+#[frb]
+pub async fn get_rss_content(
+    source_json: String,
+    article_link: String,
+) -> Result<String, AppError> {
+    rss::get_rss_content(&source_json, &article_link).await
+}
+
 pub use db::{
-    db_clear_replace_rules, db_delete_book, db_delete_replace_rule, db_delete_source,
-    db_get_books, db_get_chapters, db_get_replace_rules, db_get_sources, db_init,
-    db_insert_book, db_insert_chapters, db_save_chapter_content, db_schema_version,
+    db_clear_replace_rules, db_delete_book, db_delete_replace_rule, db_delete_source, db_get_books,
+    db_get_chapters, db_get_replace_rules, db_get_sources, db_init, db_insert_book,
+    db_insert_chapters, db_probe_legacy_room_database, db_save_chapter_content, db_schema_version,
     db_toggle_replace_rule, db_toggle_source, db_update_book_cover, db_update_book_group,
     db_update_book_progress, db_upsert_replace_rule, db_upsert_source,
 };
@@ -344,12 +657,14 @@ pub async fn http_fetch(
     referer: Option<String>,
     source_url: Option<String>,
     concurrent_rate: Option<String>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let source_key = source_url.as_deref().unwrap_or(&url);
     if let Some(rate) = concurrent_rate.as_deref() {
         crate::http::rate_limit::configure(source_key, rate);
     }
-    crate::http::rate_limit::wait_if_needed(source_key).await?;
+    crate::http::rate_limit::wait_if_needed(source_key)
+        .await
+        .map_err(AppError::Network)?;
     crate::http::client::fetch_text(
         &url,
         &method,
@@ -359,4 +674,233 @@ pub async fn http_fetch(
         source_key,
     )
     .await
+    .map_err(map_http_fetch_error)
+}
+
+fn map_http_fetch_error(message: String) -> AppError {
+    if message.starts_with("gzip 解压失败:") || message.starts_with("响应不是 UTF-8:") {
+        AppError::Parse(message)
+    } else {
+        AppError::Network(message)
+    }
+}
+
+#[cfg(test)]
+mod http_fetch_tests {
+    use super::{http_fetch, map_http_fetch_error, AppError};
+
+    #[tokio::test]
+    async fn http_fetch_maps_ssrf_errors_to_network_without_changing_original_text() {
+        let error = http_fetch(
+            "file:///private".to_string(),
+            "GET".to_string(),
+            None,
+            "UTF-8".to_string(),
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            AppError::Network(ref message) if message == "仅允许 http/https 请求"
+        ));
+    }
+
+    #[test]
+    fn maps_http_fetch_network_errors_without_changing_original_text() {
+        for message in [
+            "HTTP 请求失败: 503 Service Unavailable",
+            "主机并发闸损坏: example.com:443",
+            "SSRF blocked: private address",
+        ] {
+            let error = map_http_fetch_error(message.to_string());
+            assert!(matches!(error, AppError::Network(ref value) if value == message));
+        }
+    }
+
+    #[test]
+    fn maps_http_fetch_decode_errors_to_parse_without_changing_original_text() {
+        for message in [
+            "gzip 解压失败: unexpected end of file",
+            "响应不是 UTF-8: invalid byte",
+        ] {
+            let error = map_http_fetch_error(message.to_string());
+            assert!(matches!(error, AppError::Parse(ref value) if value == message));
+        }
+    }
+}
+
+#[cfg(test)]
+mod eval_js_tests {
+    use super::{eval_js, AppError};
+
+    #[test]
+    fn eval_js_preserves_successful_result() {
+        let result = eval_js("'结果:' + (1 + 1)".into(), String::new(), String::new())
+            .expect("有效脚本必须返回结果");
+
+        assert_eq!(result, "结果:2");
+    }
+
+    #[test]
+    fn eval_js_maps_errors_to_js_execution_without_changing_text() {
+        let error = eval_js(
+            "throw new Error('原始 JS 错误')".into(),
+            String::new(),
+            String::new(),
+        )
+        .expect_err("脚本异常必须通过 AppError 返回");
+
+        assert!(matches!(
+            error,
+            AppError::JsExecution(ref message)
+                if message.contains("JS 执行失败") && message.contains("原始 JS 错误")
+        ));
+    }
+}
+
+#[cfg(test)]
+mod init_engine_tests {
+    use super::{init_engine, AppError};
+
+    #[test]
+    fn init_engine_keeps_success_and_exposes_structured_error_type() {
+        fn assert_error_type(_: Result<(), AppError>) {}
+
+        assert_error_type(init_engine());
+        init_engine().expect("引擎初始化应保持成功");
+    }
+}
+
+#[cfg(test)]
+mod process_content_for_reading_tests {
+    use super::{process_content_for_reading, AppError};
+
+    #[test]
+    fn process_content_for_reading_preserves_successful_result() {
+        let result = process_content_for_reading(
+            "  第一段  \n\n第二段".into(),
+            "标题".into(),
+            "书名".into(),
+            false,
+            false,
+            "  ".into(),
+            false,
+            Vec::new(),
+            None,
+        )
+        .expect("正文处理应保持成功输出");
+
+        assert_eq!(result, "  第一段\n  第二段");
+    }
+
+    #[test]
+    fn process_content_for_reading_exposes_structured_error_type() {
+        fn assert_error_type(_: Result<String, AppError>) {}
+
+        assert_error_type(process_content_for_reading(
+            String::new(),
+            String::new(),
+            String::new(),
+            false,
+            false,
+            String::new(),
+            false,
+            Vec::new(),
+            None,
+        ));
+    }
+}
+
+#[cfg(test)]
+mod source_browser_host_error_tests {
+    use super::{
+        map_source_browser_host_error, probe_source_browser_host, AppError,
+        SourceBrowserRequestDto, SourceBrowserResponseDto,
+    };
+    use std::collections::HashMap;
+
+    fn request() -> SourceBrowserRequestDto {
+        SourceBrowserRequestDto {
+            source_key: "https://source.example".into(),
+            url: "https://source.example/verify".into(),
+            title: "验证".into(),
+            html: None,
+            headers: HashMap::new(),
+            refetch_after_success: true,
+        }
+    }
+
+    #[test]
+    fn browser_host_errors_preserve_cancelled_and_unknown_text() {
+        let cancelled = map_source_browser_host_error("用户取消验证".to_string());
+        assert!(matches!(
+            cancelled,
+            AppError::Cancelled(ref message) if message == "用户取消验证"
+        ));
+
+        let unsupported = map_source_browser_host_error("当前平台不支持书源网页验证".to_string());
+        assert!(matches!(
+            unsupported,
+            AppError::Unsupported(ref message) if message == "当前平台不支持书源网页验证"
+        ));
+
+        let stopped = map_source_browser_host_error("浏览器宿主已停止".to_string());
+        assert!(matches!(
+            stopped,
+            AppError::Unknown(ref message) if message == "浏览器宿主已停止"
+        ));
+    }
+
+    #[tokio::test]
+    #[serial_test::serial(source_browser_host)]
+    async fn probe_source_browser_host_maps_callback_cancellation() {
+        let _ = crate::browser_host::clear();
+        crate::browser_host::set_test_host(|_| Err("用户取消验证".to_string()));
+
+        let error = probe_source_browser_host(request()).await.unwrap_err();
+
+        assert!(matches!(
+            error,
+            AppError::Cancelled(ref message) if message == "用户取消验证"
+        ));
+        crate::browser_host::clear_test_host();
+        let _ = crate::browser_host::clear();
+    }
+
+    #[tokio::test]
+    #[serial_test::serial(source_browser_host)]
+    async fn probe_source_browser_host_keeps_success_response() {
+        let _ = crate::browser_host::clear();
+        crate::browser_host::set_test_host(|request| {
+            Ok(SourceBrowserResponseDto {
+                final_url: format!("{}/done", request.url.trim_end_matches('/')),
+                body: "ok".to_string(),
+            })
+        });
+
+        let response = probe_source_browser_host(request()).await.unwrap();
+
+        assert_eq!(response.final_url, "https://source.example/verify/done");
+        assert_eq!(response.body, "ok");
+        crate::browser_host::clear_test_host();
+        let _ = crate::browser_host::clear();
+    }
+
+    #[tokio::test]
+    #[serial_test::serial(source_browser_host)]
+    async fn probe_source_browser_host_maps_stopped_host_to_unknown() {
+        crate::browser_host::clear_test_host();
+        crate::browser_host::clear().unwrap();
+
+        let error = probe_source_browser_host(request()).await.unwrap_err();
+
+        assert!(matches!(
+            error,
+            AppError::Unknown(ref message) if message == "浏览器宿主未注册"
+        ));
+    }
 }

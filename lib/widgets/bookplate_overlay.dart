@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../models/book.dart';
-import '../services/bookplate_service.dart';
-import '../src/rust/api.dart' as rust_api;
+import '../application/annotation/bookplate_overlay_port.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 
 /// 阅读书票 — 章首/章尾卡片（Phase 4.4）
 class BookplateOverlay extends StatefulWidget {
@@ -14,6 +14,7 @@ class BookplateOverlay extends StatefulWidget {
 
   /// 测试注入：跳过异步加载
   final BookplateData? previewData;
+  final BookplateOverlayPort? port;
 
   const BookplateOverlay({
     super.key,
@@ -23,6 +24,7 @@ class BookplateOverlay extends StatefulWidget {
     required this.textColor,
     this.isHeader = true,
     this.previewData,
+    this.port,
   });
 
   @override
@@ -60,18 +62,17 @@ class _BookplateOverlayState extends State<BookplateOverlay> {
     }
 
     setState(() => _loading = true);
-    rust_api.BookReadingStats? stats;
-    try {
-      stats = BookplateService.loadBookStats(widget.book.id);
-    } catch (_) {}
+    final port =
+        widget.port ??
+        Provider.of<BookplateOverlayPort?>(context, listen: false) ??
+        const UnavailableBookplateOverlayPort();
 
     if (!mounted) return;
     setState(() {
-      _data = BookplateService.build(
+      _data = port.build(
         book: widget.book,
         currentChapterIndex: widget.currentChapterIndex,
         totalChapters: widget.totalChapters,
-        stats: stats,
       );
       _loading = false;
     });
@@ -111,17 +112,14 @@ class _BookplateOverlayState extends State<BookplateOverlay> {
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            data.author,
-            style: TextStyle(fontSize: 10, color: muted),
-          ),
+          Text(data.author, style: TextStyle(fontSize: 10, color: muted)),
           const SizedBox(height: 6),
           Row(
             children: [
               _StarRating(rating: data.rating, color: widget.textColor),
               const SizedBox(width: 8),
               Text(
-                '开始 ${BookplateService.formatDateLabel(data.startDate)}',
+                '开始 ${formatBookplateDateLabel(data.startDate)}',
                 style: TextStyle(fontSize: 10, color: muted),
               ),
             ],
@@ -170,7 +168,7 @@ class _BookplateOverlayState extends State<BookplateOverlay> {
               if (data.finishDate != null) ...[
                 const SizedBox(width: 10),
                 Text(
-                  '读完 ${BookplateService.formatDateLabel(data.finishDate)}',
+                  '读完 ${formatBookplateDateLabel(data.finishDate)}',
                   style: TextStyle(fontSize: 10, color: muted),
                 ),
               ],
@@ -219,7 +217,9 @@ class _StarRating extends StatelessWidget {
         return Icon(
           icon,
           size: 13,
-          color: color.withValues(alpha: i < full || (i == full && half) ? 0.75 : 0.3),
+          color: color.withValues(
+            alpha: i < full || (i == full && half) ? 0.75 : 0.3,
+          ),
         );
       }),
     );

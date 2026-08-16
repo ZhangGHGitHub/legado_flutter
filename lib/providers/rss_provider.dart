@@ -1,131 +1,79 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/rss_source.dart';
+import '../application/rss/rss_controller.dart';
+import '../application/rss/rss_source_store_port.dart';
+import '../domain/ports/rss_source_import_port.dart';
+import 'package:legado_flutter/domain/rss/rss_source.dart';
 
-const _rssSourcesKey = 'legado_rss_sources';
-
-/// RSS 订阅源管理 — 本地持久化（UI 层；规则引擎后续接入）
+/// RSS 订阅源管理的 ChangeNotifier 兼容外观。
+///
+/// 新页面使用 application 层控制器/Notifier；旧页面、启动任务和服务仍可
+/// 通过此外观保留原有调用签名，迁移期间两者共享同一份状态。
 class RssProvider extends ChangeNotifier {
-  List<RssSource> _sources = [];
-
-  List<RssSource> get sources => List.unmodifiable(_sources);
-
-  Future<void> loadSources() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_rssSourcesKey);
-    if (raw == null || raw.isEmpty) {
-      _sources = [];
-    } else {
-      try {
-        _sources = RssSource.listFromJsonString(raw);
-      } catch (_) {
-        _sources = [];
-      }
-    }
-    notifyListeners();
+  RssProvider({
+    RssSourceImportPort? sourceImportPort,
+    RssSourceStorePort? sourceStore,
+    RssSourceController? controller,
+  }) : _controller =
+           controller ??
+           RssSourceController(
+             sourceImportPort: sourceImportPort,
+             sourceStore: sourceStore,
+           ) {
+    _controller.addListener(_onControllerStateChanged);
   }
 
-  Future<void> _persist() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _rssSourcesKey,
-      jsonEncode(_sources.map((s) => s.toJson()).toList()),
-    );
-    notifyListeners();
-  }
+  final RssSourceController _controller;
 
-  List<RssSource> enabledSources({String? searchKey}) {
-    var list = _sources.where((s) => s.enabled).toList()
-      ..sort((a, b) {
-        final order = b.customOrder.compareTo(a.customOrder);
-        if (order != 0) return order;
-        return a.sourceName.compareTo(b.sourceName);
-      });
+  RssSourceController get controller => _controller;
+  List<RssSource> get sources => _controller.sources;
 
-    final key = searchKey?.trim();
-    if (key == null || key.isEmpty) return list;
+  Future<void> loadSources() => _controller.loadSources();
 
-    if (key.startsWith('group:')) {
-      final group = key.substring(6);
-      return list.where((s) => _matchGroup(s.sourceGroup, group)).toList();
-    }
+  List<RssSource> enabledSources({String? searchKey}) =>
+      _controller.enabledSources(searchKey: searchKey);
 
-    final lower = key.toLowerCase();
-    return list
-        .where(
-          (s) =>
-              s.sourceName.toLowerCase().contains(lower) ||
-              s.sourceGroup.toLowerCase().contains(lower),
-        )
-        .toList();
-  }
+  List<String> enabledGroups() => _controller.enabledGroups();
 
-  bool _matchGroup(String sourceGroup, String target) {
-    if (target.isEmpty) return sourceGroup.isEmpty;
-    return sourceGroup.split(',').map((g) => g.trim()).contains(target);
-  }
+  List<String> allGroups() => _controller.allGroups();
 
-  List<String> enabledGroups() {
-    final groups = <String>{};
-    for (final s in _sources.where((s) => s.enabled)) {
-      for (final g in s.sourceGroup.split(',')) {
-        final t = g.trim();
-        if (t.isNotEmpty) groups.add(t);
-      }
-    }
-    final sorted = groups.toList()..sort();
-    return sorted;
-  }
+  List<RssSource> managedSources({String? searchKey, String filter = 'all'}) =>
+      _controller.managedSources(searchKey: searchKey, filter: filter);
 
-  Future<void> upsertSource(RssSource source) async {
-    final i = _sources.indexWhere((s) => s.sourceUrl == source.sourceUrl);
-    if (i >= 0) {
-      _sources[i] = source;
-    } else {
-      _sources.add(source);
-    }
-    await _persist();
-  }
+  Future<void> setEnabled(RssSource source, bool enabled) =>
+      _controller.setEnabled(source, enabled);
 
-  Future<bool> importSources(String jsonText) async {
-    try {
-      final decoded = jsonDecode(jsonText.trim());
-      final list = decoded is List
-          ? decoded
-          : decoded is Map && decoded['sources'] is List
-              ? decoded['sources'] as List
-              : <dynamic>[];
-      if (list.isEmpty) return false;
-      for (final item in list) {
-        if (item is! Map<String, dynamic>) continue;
-        final source = RssSource.fromJson(item);
-        if (source.sourceUrl.isEmpty) continue;
-        await upsertSource(source);
-      }
-      return true;
-    } catch (e) {
-      debugPrint('RSS import failed: $e');
-      return false;
-    }
-  }
+  Future<void> setEnabledMany(Iterable<String> urls, bool enabled) =>
+      _controller.setEnabledMany(urls, enabled);
 
-  Future<void> topSource(RssSource source) async {
-    final maxOrder = _sources.fold<int>(
-      0,
-      (prev, s) => s.customOrder > prev ? s.customOrder : prev,
-    );
-    await upsertSource(source.copyWith(customOrder: maxOrder + 1));
-  }
+  Future<void> deleteSources(Iterable<String> urls) =>
+      _controller.deleteSources(urls);
 
-  Future<void> disableSource(RssSource source) async {
-    await upsertSource(source.copyWith(enabled: false));
-  }
+  Future<void> topSources(Iterable<String> urls) =>
+      _controller.topSources(urls);
 
-  Future<void> deleteSource(RssSource source) async {
-    _sources.removeWhere((s) => s.sourceUrl == source.sourceUrl);
-    await _persist();
+  Future<bool> importSourcesFromUrl(String url) =>
+      _controller.importSourcesFromUrl(url);
+
+  Future<void> upsertSource(RssSource source) =>
+      _controller.upsertSource(source);
+
+  Future<bool> importSources(String jsonText) =>
+      _controller.importSources(jsonText);
+
+  Future<void> topSource(RssSource source) => _controller.topSource(source);
+
+  Future<void> disableSource(RssSource source) =>
+      _controller.disableSource(source);
+
+  Future<void> deleteSource(RssSource source) =>
+      _controller.deleteSource(source);
+
+  void _onControllerStateChanged(_) => notifyListeners();
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onControllerStateChanged);
+    super.dispose();
   }
 }

@@ -12,6 +12,14 @@
 .swiftpm/
 migrate_working_dir/
 
+# Local secrets / env (never commit)
+.env
+.env.*
+!.env.example
+
+# Local WebDAV smoke-test storage
+/.local-webdav/
+
 # IntelliJ related
 *.iml
 *.ipr
@@ -46,4 +54,29 @@ app.*.map.json
 
 # Rust build artifacts
 /rust/target/
-/lib/src/rust/frb_generated*.dart
+
+# ── Development artifacts (analysis, fix scripts, config dumps, emulator) ──
+analyze_*.txt
+emulator_screen.png
+emulator_ui.xml
+fix_*.ps1
+fix*.py
+legado_my*.xml
+legado_ref.xml
+read_lines*.py
+tools_*_tmp.xml
+test.txt
+.dart_files.txt
+# Local-only Android TTS probe build output
+/tools/android_debug_tts_engine/
+
+# Local reference clone of Jingshiro/legado (for UI layout lookup)
+/reference/
+
+# Read-only original baselines and local R0 evidence probes. These files are
+# never build inputs and must not enter a refactor commit.
+/legado-main/
+/original_legado.db*
+/tools/*.db
+/tools/*.png
+/tools/*.txt

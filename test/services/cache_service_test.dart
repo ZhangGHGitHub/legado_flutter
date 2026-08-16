@@ -1,6 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_flutter/help/book_help.dart';
+import 'package:legado_flutter/help/content_processor.dart';
+import 'package:legado_flutter/domain/ports/network_engine_port.dart';
+import 'package:legado_flutter/domain/content/replace_rule.dart';
+import 'package:legado_flutter/infrastructure/cache/file_chapter_content_cache.dart';
 import 'package:legado_flutter/services/app_paths.dart';
 import 'package:legado_flutter/services/cache_service.dart';
 import 'package:path/path.dart' as p;
@@ -8,12 +13,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   late Directory tempRoot;
-  final service = CacheService();
+  late CacheService service;
 
   setUp(() async {
     tempRoot = await Directory.systemTemp.createTemp('legado_cache_test_');
     SharedPreferences.setMockInitialValues({});
     await AppDataPrefs.saveDataDir(tempRoot.path);
+    service = CacheService(
+      contentCache: const FileChapterContentCache(),
+      enginePort: _FakeNetworkEnginePort(),
+    );
   });
 
   tearDown(() async {
@@ -64,4 +73,72 @@ void main() {
     expect(await backup.exists(), isFalse);
     expect((await service.loadStats()).backupsBytes, 0);
   });
+
+  test(
+    'CacheService clearEngineCache delegates through the engine port',
+    () async {
+      final port = _FakeNetworkEnginePort();
+      final service = CacheService(
+        contentCache: const FileChapterContentCache(),
+        enginePort: port,
+      );
+
+      await service.clearEngineCache();
+
+      expect(port.clearCount, 1);
+    },
+  );
+
+  test(
+    'BookHelp isolates chapter files by book and deletes one chapter only',
+    () async {
+      await BookHelp.saveContent('book-a', 'chapter/1', 'A 内容');
+      await BookHelp.saveContent('book-b', 'chapter/1', 'B 内容');
+
+      expect(await BookHelp.getCachedContent('book-a', 'chapter/1'), 'A 内容');
+      expect(await BookHelp.getCachedContent('book-b', 'chapter/1'), 'B 内容');
+
+      await BookHelp.deleteChapterContent('book-a', 'chapter/1');
+      expect(await BookHelp.getCachedContent('book-a', 'chapter/1'), isNull);
+      expect(await BookHelp.getCachedContent('book-b', 'chapter/1'), 'B 内容');
+    },
+  );
+
+  test('ContentProcessor applies the current enabled replacement rules', () {
+    final processor = ContentProcessor.instance;
+    processor.loadRules([
+      ReplaceRule(
+        id: 'cache-test-remove',
+        name: 'remove marker',
+        pattern: '[广告]',
+        replacement: '',
+        isRegex: false,
+      ),
+    ]);
+    expect(processor.getContent('正文[广告]内容'), '正文内容');
+
+    processor.loadRules(const []);
+    expect(processor.getContent('正文[广告]内容'), '正文[广告]内容');
+  });
+}
+
+class _FakeNetworkEnginePort implements NetworkEnginePort {
+  int clearCount = 0;
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  void clearEngineCache() => clearCount++;
+
+  @override
+  void setNetworkConfig({
+    required bool proxyEnabled,
+    required String proxyType,
+    required String proxyHost,
+    required int proxyPort,
+    required String proxyUsername,
+    required String proxyPassword,
+    required String dnsServers,
+  }) {}
 }

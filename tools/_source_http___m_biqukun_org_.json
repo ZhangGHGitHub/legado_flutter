@@ -1,0 +1,58 @@
+{
+  "bookSourceName": "笔书网手机版",
+  "bookSourceUrl": "http://m.biqukun.org/",
+  "ruleSearchUrl_column": "",
+  "raw": {
+    "bookSourceComment": "笔书网手机版：http://m.biqukun.org/\n修复内容：搜索(作者/分类提取)、详情页(精确提取各字段)、目录分页、正文清洗",
+    "bookSourceName": "笔书网手机版",
+    "bookSourceType": 0,
+    "bookSourceUrl": "http://m.biqukun.org/",
+    "bookUrlPattern": "https?://m\\.biqukun\\.org/\\d+/\\d+/?",
+    "customButton": false,
+    "customOrder": 2,
+    "enabled": true,
+    "enabledCookieJar": true,
+    "enabledExplore": true,
+    "eventListener": false,
+    "exploreUrl": "[\n    {\n        \"title\": \"分类\",\n        \"url\": \"\",\n        \"style\": {\n            \"layout_flexGrow\": 0,\n            \"layout_flexBasisPercent\": 1\n        }\n    },\n    {\n        \"title\": \"玄幻\",\n        \"url\": \"/sort/1_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"修真\",\n        \"url\": \"/sort/2_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"都市\",\n        \"url\": \"/sort/3_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"穿越\",\n        \"url\": \"/sort/4_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"网游\",\n        \"url\": \"/sort/5_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"科幻\",\n        \"url\": \"/sort/6_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"全本\",\n        \"url\": \"/full/{{page}}\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"排行榜\",\n        \"url\": \"\",\n        \"style\": {\n            \"layout_flexGrow\": 0,\n            \"layout_flexBasisPercent\": 1\n        }\n    },\n    {\n        \"title\": \"总点击榜\",\n        \"url\": \"/top/allvisit_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"月点击榜\",\n        \"url\": \"/top/monthvisit_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"周点击榜\",\n        \"url\": \"/top/weekvisit_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"日点击榜\",\n        \"url\": \"/top/dayvisit_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"总推荐榜\",\n        \"url\": \"/top/allvote_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"总收藏榜\",\n        \"url\": \"/top/goodnum_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"最新入库\",\n        \"url\": \"/top/postdate_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"最近更新\",\n        \"url\": \"/top/lastupdate_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    },\n    {\n        \"title\": \"字数排行\",\n        \"url\": \"/top/size_{{page}}/\",\n        \"style\": {\n            \"layout_flexGrow\": 1,\n            \"layout_flexBasisPercent\": 0.29\n        }\n    }\n]",
+    "header": "{\"User-Agent\": \"Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36\", \"Accept-Language\": \"zh-CN,zh;q=0.9\"}",
+    "lastUpdateTime": "1783601353849",
+    "respondTime": 180000,
+    "ruleBookInfo": {
+      "author": "text.作者@text##.*作者[：:]\\s*##",
+      "coverUrl": ".block_img2 img@src",
+      "intro": "div.intro_info@text",
+      "kind": "text.分类@text##.*分类[：:]\\s*##",
+      "lastChapter": "text.最新：@text##.*最新[：:]\\s*##",
+      "name": "class.block_txt2@tag.h2@text"
+    },
+    "ruleContent": {
+      "content": "<js>\nvar html = String(result);\nvar doc = Packages.org.jsoup.Jsoup.parse(html);\nvar nr = doc.selectFirst('article#nr');\nvar lines = [];\nif (nr) {\n    var rawHtml = String(nr.html());\n    rawHtml = rawHtml.replace(/<br\\s*\\/?>/gi, '\\n');\n    var parts = rawHtml.split('\\n');\n    for (var i = 0; i < parts.length; i++) {\n        var line = parts[i].replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\\u00a0/g, ' ').trim();\n        if (line) {\n            if (/最新网址|m\\.biqukun|本章未完.*继续阅读/.test(line)) continue;\n            lines.push(line);\n        }\n    }\n    if (lines.length > 0 && /^第\\d+章/.test(lines[0])) {\n        lines.shift();\n    }\n}\nlines.join('\\n');\n</js>",
+      "nextContentUrl": "text.下一页@href"
+    },
+    "ruleExplore": {
+      "author": ".bk-author@text",
+      "bookList": "<js>\nvar html = String(result);\nvar doc = Packages.org.jsoup.Jsoup.parse(html);\nvar uls = doc.select('ul.xbk');\nvar sb = '<html><body><ul>';\nfor (var i = 0; i < uls.size(); i++) {\n    var ul = uls.get(i);\n    var tjxs = ul.selectFirst('li.tjxs');\n    if (!tjxs) continue;\n    var nameA = tjxs.selectFirst('.xsm a');\n    if (!nameA) continue;\n    var name = String(nameA.text());\n    var url = String(nameA.attr('href'));\n    var spans = tjxs.select('span');\n    var author = '';\n    var intro = '';\n    if (spans.size() >= 2) author = String(spans.get(1).text()).replace(/.*作者[：:]\\s*/, '');\n    if (spans.size() >= 3) intro = String(spans.get(2).text()).trim();\n    var tjimg = ul.selectFirst('li.tjimg img');\n    var cover = tjimg ? String(tjimg.attr('src')) : '';\n    sb += '<li>';\n    sb += '<div class=\"bk-name\"><a href=\"' + url + '\">' + name + '</a></div>';\n    sb += '<div class=\"bk-author\">' + author + '</div>';\n    sb += '<div class=\"bk-intro\">' + intro + '</div>';\n    sb += '<div class=\"bk-cover\"><img src=\"' + cover + '\"></div>';\n    sb += '</li>';\n}\nsb += '</ul></body></html>';\nsb;\n</js>\nul li",
+      "bookUrl": ".bk-name a@href",
+      "coverUrl": ".bk-cover img@src",
+      "intro": ".bk-intro@text",
+      "name": ".bk-name a@text"
+    },
+    "ruleSearch": {
+      "author": ".bk-author@text",
+      "bookList": "<js>\nvar html = String(result);\nvar doc = Packages.org.jsoup.Jsoup.parse(html);\nvar lis = doc.select('ul.fk li');\nvar sb = '<html><body><ul>';\nfor (var i = 0; i < lis.size(); i++) {\n    var li = lis.get(i);\n    var a = li.selectFirst('a.blue');\n    if (!a) continue;\n    var name = String(a.text());\n    var url = String(a.attr('href'));\n    var fullText = String(li.text());\n    var author = '';\n    var slashIdx = fullText.indexOf('/');\n    if (slashIdx >= 0) {\n        author = fullText.substring(slashIdx + 1).trim();\n    }\n    var kind = '';\n    var bracketMatch = fullText.match(/\\[(.+?)\\]/);\n    if (bracketMatch) {\n        kind = bracketMatch[1];\n    }\n    sb += '<li>';\n    sb += '<div class=\"bk-name\"><a href=\"' + url + '\">' + name + '</a></div>';\n    sb += '<div class=\"bk-author\">' + author + '</div>';\n    sb += '<div class=\"bk-kind\">' + kind + '</div>';\n    sb += '</li>';\n}\nsb += '</ul></body></html>';\nsb;\n</js>\nul li",
+      "bookUrl": ".bk-name a@href",
+      "kind": ".bk-kind@text",
+      "name": ".bk-name a@text"
+    },
+    "ruleToc": {
+      "chapterList": "ul.chapter li a",
+      "chapterName": "a@text",
+      "chapterUrl": "a@href",
+      "nextTocUrl": "text.下一页@href"
+    },
+    "searchUrl": "http://m.biqukun.org/search.php?s=4532499176958073452&submit=&type=articlename&searchkey={{key}}",
+    "weight": 0,
+    "bookSourceGroup": "📚 推荐书源"
+  }
+}

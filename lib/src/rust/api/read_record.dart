@@ -5,9 +5,10 @@
 
 import '../api.dart';
 import '../frb_generated.dart';
+import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `i64_to_i32`, `parse_stats_json`
+// These functions are ignored because they are not marked as `pub`: `i64_to_i32`, `map_database_error`, `parse_stats_json`
 
 /// 记录阅读（按书 + 日期累加）
 Future<void> recordReading({
@@ -31,6 +32,23 @@ Future<String> exportReadingRecords({required String format}) => LegadoEngine
     .instance
     .api
     .crateApiReadRecordExportReadingRecords(format: format);
+
+/// 写入详细阅读会话（短会话由数据库层过滤并按同书时间间隔合并）
+Future<void> recordDetailedReadSession({
+  required String bookName,
+  required PlatformInt64 startTime,
+  required PlatformInt64 endTime,
+  required PlatformInt64 readIteration,
+}) => LegadoEngine.instance.api.crateApiReadRecordRecordDetailedReadSession(
+  bookName: bookName,
+  startTime: startTime,
+  endTime: endTime,
+  readIteration: readIteration,
+);
+
+/// 导出按书分组的详细阅读会话
+Future<String> exportDetailedReadRecords() =>
+    LegadoEngine.instance.api.crateApiReadRecordExportDetailedReadRecords();
 
 /// 单本书阅读统计
 Future<BookReadingStats> getBookReadingStats({required String bookId}) =>

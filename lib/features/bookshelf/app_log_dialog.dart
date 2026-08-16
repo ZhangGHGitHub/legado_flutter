@@ -1,0 +1,117 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+
+import '../../application/diagnostics/app_log_port.dart';
+import '../../application/reader/reader_font_port.dart';
+
+/// 应用日志 Dialog — 对齐 Jingshiro [AppLogDialog]（清空；最新在前）。
+class AppLogDialog extends StatefulWidget {
+  const AppLogDialog({super.key, this.log, this.font});
+
+  final AppLogPort? log;
+  final ReaderFontPort? font;
+
+  static Future<void> show(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (_) => const AppLogDialog(),
+    );
+  }
+
+  @override
+  State<AppLogDialog> createState() => _AppLogDialogState();
+}
+
+class _AppLogDialogState extends State<AppLogDialog> {
+  bool _ready = false;
+  late final AppLogPort _log;
+
+  @override
+  void initState() {
+    super.initState();
+    _log = widget.log ?? context.read<AppLogPort>();
+    _log.ensureLoaded().then((_) {
+      if (mounted) setState(() => _ready = true);
+    });
+  }
+
+  Future<void> _copyAll() async {
+    final text = _log.exportText();
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已复制全部日志')));
+    }
+  }
+
+  Future<void> _clear() async {
+    await _log.clear();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final font = widget.font ?? context.read<ReaderFontPort>();
+    final style = TextStyle(
+      fontFamily: font.platformSansFamily(),
+      fontFamilyFallback: font.cjkFallbackFamilies(),
+      fontSize: 12,
+      height: 1.35,
+    );
+    final entries = _log.entries;
+    final size = MediaQuery.sizeOf(context);
+
+    return AlertDialog(
+      title: Row(
+        children: [
+          const Expanded(child: Text('日志')),
+          IconButton(
+            tooltip: '复制',
+            onPressed: entries.isEmpty ? null : _copyAll,
+            icon: const Icon(Icons.copy, size: 20),
+          ),
+          IconButton(
+            tooltip: '清空',
+            onPressed: entries.isEmpty ? null : _clear,
+            icon: const Icon(Icons.delete_outline, size: 20),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: size.width * 0.85,
+        height: size.height * 0.55,
+        child: !_ready
+            ? const Center(child: CircularProgressIndicator())
+            : entries.isEmpty
+            ? const Center(child: Text('暂无日志'))
+            : ListView.separated(
+                itemCount: entries.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (ctx, i) {
+                  final e = entries[i];
+                  final color = switch (e.severity.level) {
+                    'E' => Theme.of(ctx).colorScheme.error,
+                    'W' => Colors.orange.shade800,
+                    _ => Theme.of(ctx).colorScheme.onSurface,
+                  };
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: SelectableText(
+                      e.line,
+                      style: style.copyWith(color: color),
+                    ),
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('关闭'),
+        ),
+      ],
+    );
+  }
+}

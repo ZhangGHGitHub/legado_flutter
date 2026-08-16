@@ -1,33 +1,34 @@
 import 'dart:convert';
 
-import '../bridge/legado_db_bridge.dart';
-import '../models/book.dart';
-import '../models/book_source.dart';
-import '../models/chapter.dart';
-import '../models/replace_rule.dart';
-import '../src/rust/api/db.dart' as rust_db;
+import '../infrastructure/database/database_record_codec.dart';
+import '../infrastructure/database/frb_rust_database_port.dart';
+import '../infrastructure/database/rust_database_port.dart';
+import '../domain/content/replace_rule.dart';
+import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
+import 'package:legado_flutter/domain/book/chapter.dart';
 
 /// 数据库管理器 — 委托 Rust rusqlite（Phase C）
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   factory DatabaseHelper() => _instance;
-  DatabaseHelper._internal();
+  DatabaseHelper._internal() : _port = FrbRustDatabasePort();
+  DatabaseHelper.forPort(RustDatabasePort port) : _port = port;
 
-  void _requireReady() => LegadoDbBridge.requireReady();
+  final RustDatabasePort _port;
+
+  void _requireReady() => _port.requireReady();
 
   // ═══════════════════ 书籍操作 ═══════════════════
 
   Future<void> insertBook(Book book) async {
     _requireReady();
-    rust_db.dbInsertBook(bookJson: jsonEncode(book.toJson()));
+    _port.insertBook(bookJson: DatabaseRecordCodec.encodeBook(book));
   }
 
   Future<List<Book>> getBooks() async {
     _requireReady();
-    return rust_db
-        .dbGetBooks()
-        .map((s) => Book.fromJson(jsonDecode(s) as Map<String, dynamic>))
-        .toList();
+    return _port.getBooks().map(DatabaseRecordCodec.decodeBook).toList();
   }
 
   Future<void> updateBookProgress(
@@ -37,7 +38,7 @@ class DatabaseHelper {
     int pageIndex = 0,
   }) async {
     _requireReady();
-    rust_db.dbUpdateBookProgress(
+    _port.updateBookProgress(
       bookId: bookId,
       progress: progress,
       chapter: chapter,
@@ -47,30 +48,48 @@ class DatabaseHelper {
 
   Future<void> deleteBook(String bookId) async {
     _requireReady();
-    rust_db.dbDeleteBook(bookId: bookId);
+    _port.deleteBook(bookId: bookId);
   }
 
   Future<void> updateBookCover(String bookId, String coverUrl) async {
     _requireReady();
-    rust_db.dbUpdateBookCover(bookId: bookId, coverUrl: coverUrl);
+    _port.updateBookCover(bookId: bookId, coverUrl: coverUrl);
+  }
+
+  Future<void> updateBookCustomCover(
+    String bookId,
+    String customCoverUrl,
+  ) async {
+    _requireReady();
+    _port.updateBookCustomCover(bookId: bookId, customCoverUrl: customCoverUrl);
+  }
+
+  Future<void> updateBookDetails(
+    String bookId,
+    String name,
+    String author,
+    String description,
+  ) async {
+    _requireReady();
+    _port.updateBookDetails(bookId, name, author, description);
   }
 
   Future<void> updateBookGroup(String bookId, String group) async {
     _requireReady();
-    rust_db.dbUpdateBookGroup(bookId: bookId, group: group);
+    _port.updateBookGroup(bookId: bookId, group: group);
   }
 
   // ═══════════════════ 书源操作 ═══════════════════
 
   Future<void> insertBookSource(BookSource source) async {
     _requireReady();
-    rust_db.dbUpsertSource(sourceJson: _sourceJson(source));
+    _port.upsertSource(sourceJson: _sourceJson(source));
   }
 
   Future<void> insertBookSources(List<BookSource> sources) async {
     _requireReady();
     for (final source in sources) {
-      rust_db.dbUpsertSource(sourceJson: _sourceJson(source));
+      _port.upsertSource(sourceJson: _sourceJson(source));
     }
   }
 
@@ -78,10 +97,7 @@ class DatabaseHelper {
     await insertBookSource(source);
   }
 
-  String _sourceJson(BookSource source) {
-    if (source.rawSourceJson.isNotEmpty) return source.rawSourceJson;
-    return jsonEncode(source.toJson());
-  }
+  String _sourceJson(BookSource source) => source.toEngineJson();
 
   List<BookSource> _parseSources(List<String> rows) {
     return rows.map((s) {
@@ -92,73 +108,87 @@ class DatabaseHelper {
 
   Future<List<BookSource>> getBookSources() async {
     _requireReady();
-    return _parseSources(rust_db.dbGetSources(enabledOnly: false));
+    return _parseSources(_port.getSources(enabledOnly: false));
   }
 
   Future<List<BookSource>> getEnabledSources() async {
     _requireReady();
-    return _parseSources(rust_db.dbGetSources(enabledOnly: true));
+    return _parseSources(_port.getSources(enabledOnly: true));
   }
 
   Future<void> toggleSource(String url, bool enabled) async {
     _requireReady();
-    rust_db.dbToggleSource(url: url, enabled: enabled);
+    _port.toggleSource(url: url, enabled: enabled);
   }
 
   Future<void> deleteSource(String url) async {
     _requireReady();
-    rust_db.dbDeleteSource(url: url);
+    _port.deleteSource(url: url);
   }
 
   // ═══════════════════ 章节操作 ═══════════════════
 
   Future<void> insertChapters(List<Chapter> chapters) async {
     _requireReady();
-    rust_db.dbInsertChapters(
-      chaptersJson: jsonEncode(chapters.map((c) => c.toJson()).toList()),
+    _port.insertChapters(
+      chaptersJson: DatabaseRecordCodec.encodeChapters(chapters),
     );
   }
 
   Future<List<Chapter>> getChapters(String bookId) async {
     _requireReady();
-    return rust_db
-        .dbGetChapters(bookId: bookId)
-        .map((s) => Chapter.fromJson(jsonDecode(s) as Map<String, dynamic>))
+    return _port
+        .getChapters(bookId: bookId)
+        .map(DatabaseRecordCodec.decodeChapter)
         .toList();
+  }
+
+  Future<String?> getChapterContent(String chapterId) async {
+    _requireReady();
+    return _port.getChapterContent(chapterId: chapterId);
   }
 
   Future<void> saveChapterContent(String chapterId, String content) async {
     _requireReady();
-    rust_db.dbSaveChapterContent(chapterId: chapterId, content: content);
+    _port.saveChapterContent(chapterId: chapterId, content: content);
+  }
+
+  /// 清除章节文件缓存对应的数据库正文和下载标记。
+  Future<void> clearChapterContent(Chapter chapter) async {
+    _requireReady();
+    _port.insertChapters(
+      chaptersJson: DatabaseRecordCodec.encodeChapter(
+        chapter,
+        clearDownloaded: true,
+      ),
+    );
   }
 
   // ═══════════════════ 替换规则操作 ═══════════════════
 
   Future<void> insertReplaceRule(ReplaceRule rule) async {
     _requireReady();
-    rust_db.dbUpsertReplaceRule(ruleJson: jsonEncode(rule.toJson()));
+    _port.upsertReplaceRule(ruleJson: jsonEncode(rule.toJson()));
   }
 
   Future<void> insertReplaceRules(List<ReplaceRule> rules) async {
     _requireReady();
     for (final rule in rules) {
-      rust_db.dbUpsertReplaceRule(ruleJson: jsonEncode(rule.toJson()));
+      _port.upsertReplaceRule(ruleJson: jsonEncode(rule.toJson()));
     }
   }
 
   Future<List<ReplaceRule>> getReplaceRules() async {
     _requireReady();
-    return rust_db
-        .dbGetReplaceRules()
-        .map(
-          (s) => ReplaceRule.fromJson(jsonDecode(s) as Map<String, dynamic>),
-        )
+    return _port
+        .getReplaceRules()
+        .map((s) => ReplaceRule.fromJson(jsonDecode(s) as Map<String, dynamic>))
         .toList();
   }
 
   Future<void> toggleReplaceRule(String id, bool enabled) async {
     _requireReady();
-    rust_db.dbToggleReplaceRule(id: id, enabled: enabled);
+    _port.toggleReplaceRule(id: id, enabled: enabled);
   }
 
   Future<void> updateReplaceRule(ReplaceRule rule) async {
@@ -167,12 +197,12 @@ class DatabaseHelper {
 
   Future<void> deleteReplaceRule(String id) async {
     _requireReady();
-    rust_db.dbDeleteReplaceRule(id: id);
+    _port.deleteReplaceRule(id: id);
   }
 
   Future<void> clearReplaceRules() async {
     _requireReady();
-    rust_db.dbClearReplaceRules();
+    _port.clearReplaceRules();
   }
 
   /// 清空所有数据（调试用）

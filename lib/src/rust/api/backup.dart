@@ -4,7 +4,10 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+
+// These functions are ignored because they are not marked as `pub`: `map_database_error`
 
 /// 导出数据库备份 JSON（书架/书源/章节/规则/阅读记录）
 String exportBackup() => LegadoEngine.instance.api.crateApiBackupExportBackup();

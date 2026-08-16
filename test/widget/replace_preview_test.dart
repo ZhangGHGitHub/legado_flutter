@@ -1,26 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:legado_flutter/models/replace_rule.dart';
+import 'package:legado_flutter/domain/content/replace_rule.dart';
+import 'package:legado_flutter/services/replace_service.dart';
 import 'package:legado_flutter/widgets/replace_preview_panel.dart';
 
 void main() {
   testWidgets('ReplacePreviewPanel shows input and output panes', (
     WidgetTester tester,
   ) async {
-    final rules = [
-      ReplaceRule(
-        id: 'r1',
-        name: '去广告',
-        pattern: r'笔趣阁.*?更新',
-      ),
-    ];
+    final rules = [ReplaceRule(id: 'r1', name: '去广告', pattern: r'笔趣阁.*?更新')];
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: ReplacePreviewPanel(
             rules: rules,
+            applyRules: ReplaceService.applyWithRules,
             initialSample: '笔趣阁 www.test.com 为你提供最快更新\n正文',
           ),
         ),
@@ -51,11 +47,7 @@ void main() {
                 TextButton(
                   onPressed: () => setState(() {
                     rules = [
-                      ReplaceRule(
-                        id: 'r1',
-                        name: '去提示',
-                        pattern: '本章未完',
-                      ),
+                      ReplaceRule(id: 'r1', name: '去提示', pattern: '本章未完'),
                     ];
                   }),
                   child: const Text('启用规则'),
@@ -63,6 +55,7 @@ void main() {
                 Expanded(
                   child: ReplacePreviewPanel(
                     rules: rules,
+                    applyRules: ReplaceService.applyWithRules,
                     initialSample: '本章未完，请点击下一页\n正文',
                   ),
                 ),

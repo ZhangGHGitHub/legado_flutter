@@ -3,12 +3,10 @@ use crate::http;
 use crate::model::book_source::BookSource;
 use crate::rule;
 
-use crate::rule::js_engine;
-
 /// 执行书源搜索
-pub async fn search(source_json: &str, keyword: &str) -> Result<Vec<SearchItem>, String> {
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) async fn search(source_json: &str, keyword: &str) -> Result<Vec<SearchItem>, String> {
     let source = BookSource::from_json(source_json)?;
-    let _ = js_engine::reset_cache();
     if source.rule_search_url.is_empty() {
         return Ok(vec![]);
     }
@@ -24,14 +22,9 @@ pub async fn search(source_json: &str, keyword: &str) -> Result<Vec<SearchItem>,
         resolved_url = http::client::resolve_url(&resolved_url, &source.book_source_url);
     }
 
-    let body = http::client::fetch_with_source(
-        &resolved_url,
-        &cfg.method,
-        cfg.body.as_deref(),
-        &cfg.charset,
-        &source.raw_json,
-    )
-    .await?;
+    let body =
+        http::client::fetch_request_config_with_source(&cfg, &resolved_url, &source.raw_json)
+            .await?;
 
     // JSON API 书源
     if let Ok(data) = serde_json::from_str::<serde_json::Value>(&body) {

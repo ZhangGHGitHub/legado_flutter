@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
-import '../models/book.dart';
-import '../services/note_service.dart';
-import '../src/rust/api.dart' as rust_api;
+import '../application/annotation/note_editor_port.dart';
+import '../domain/annotation/note_snapshot.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 
 /// 半屏想法编辑器（Phase 4.5）
 Future<bool?> showNoteEditorSheet(
@@ -12,7 +13,9 @@ Future<bool?> showNoteEditorSheet(
   required String chapterTitle,
   required String selectedText,
   int position = 0,
-  rust_api.NoteDto? existing,
+  int chapterPos = -1,
+  NoteSnapshot? existing,
+  NoteEditorPort? port,
 }) {
   return showModalBottomSheet<bool>(
     context: context,
@@ -20,15 +23,15 @@ Future<bool?> showNoteEditorSheet(
     showDragHandle: true,
     builder: (ctx) {
       return Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-        ),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: _NoteEditorSheet(
           book: book,
           chapterTitle: chapterTitle,
           selectedText: selectedText,
           position: position,
+          chapterPos: chapterPos,
           existing: existing,
+          port: port,
         ),
       );
     },
@@ -40,14 +43,18 @@ class _NoteEditorSheet extends StatefulWidget {
   final String chapterTitle;
   final String selectedText;
   final int position;
-  final rust_api.NoteDto? existing;
+  final int chapterPos;
+  final NoteSnapshot? existing;
+  final NoteEditorPort? port;
 
   const _NoteEditorSheet({
     required this.book,
     required this.chapterTitle,
     required this.selectedText,
     required this.position,
+    required this.chapterPos,
     this.existing,
+    this.port,
   });
 
   @override
@@ -56,12 +63,19 @@ class _NoteEditorSheet extends StatefulWidget {
 
 class _NoteEditorSheetState extends State<_NoteEditorSheet> {
   late final TextEditingController _contentCtrl;
+  late final NoteEditorPort _port;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    _contentCtrl = TextEditingController(text: widget.existing?.noteContent ?? '');
+    _port =
+        widget.port ??
+        Provider.of<NoteEditorPort?>(context, listen: false) ??
+        const UnavailableNoteEditorPort();
+    _contentCtrl = TextEditingController(
+      text: widget.existing?.noteContent ?? '',
+    );
   }
 
   @override
@@ -71,23 +85,24 @@ class _NoteEditorSheetState extends State<_NoteEditorSheet> {
   }
 
   Future<void> _save() async {
-    if (!NoteService.isReady) {
+    if (!_port.isAvailable) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('引擎未就绪，无法保存想法')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('引擎未就绪，无法保存想法')));
       }
       return;
     }
     setState(() => _saving = true);
     final id = widget.existing?.id ?? const Uuid().v4();
-    NoteService.save(
+    _port.save(
       id: id,
       bookId: widget.book.id,
       chapterTitle: widget.chapterTitle,
       selectedText: widget.selectedText,
       noteContent: _contentCtrl.text.trim(),
       position: widget.position,
+      chapterPos: widget.chapterPos,
     );
     if (mounted) {
       setState(() => _saving = false);
@@ -106,10 +121,7 @@ class _NoteEditorSheetState extends State<_NoteEditorSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                '写想法',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text('写想法', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               Text(
                 widget.chapterTitle,

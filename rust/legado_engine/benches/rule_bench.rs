@@ -38,9 +38,7 @@ fn bench_html_toc(c: &mut Criterion) {
     for i in 1..=200 {
         items.push_str(&format!(r#"<li><a href="/c/{i}">第{i}章</a></li>"#));
     }
-    let html = format!(
-        r#"<html><body><ul class="chapter-list">{items}</ul></body></html>"#
-    );
+    let html = format!(r#"<html><body><ul class="chapter-list">{items}</ul></body></html>"#);
     c.bench_function("html_toc_parse_200", |b| {
         b.iter(|| html_toc::parse_html_toc(black_box(&html), black_box(&source)))
     });

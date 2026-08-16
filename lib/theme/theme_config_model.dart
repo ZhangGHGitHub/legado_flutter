@@ -10,15 +10,15 @@ class ThemeColorRole {
 
 abstract final class ThemeColorRoles {
   static const List<ThemeColorRole> all = [
-    ThemeColorRole('primary', '主色'),
+    ThemeColorRole('primary', '主色（顶栏）'),
     ThemeColorRole('onPrimary', '主色文字'),
-    ThemeColorRole('secondary', '次色'),
-    ThemeColorRole('onSecondary', '次色文字'),
+    ThemeColorRole('secondary', '强调色（底栏选中）'),
+    ThemeColorRole('onSecondary', '强调色文字'),
     ThemeColorRole('tertiary', '第三色'),
     ThemeColorRole('onTertiary', '第三色文字'),
     ThemeColorRole('error', '错误色'),
     ThemeColorRole('onError', '错误文字'),
-    ThemeColorRole('surface', '表面'),
+    ThemeColorRole('surface', '表面（内容区）'),
     ThemeColorRole('onSurface', '表面文字'),
     ThemeColorRole('surfaceContainer', '容器表面'),
     ThemeColorRole('outline', '轮廓线'),
@@ -37,6 +37,9 @@ abstract final class ThemeColorRoles {
     'onSurface',
     'surfaceContainer',
     'outline',
+    // Jingshiro ThemeStore 别名（导入兼容；bottomBackground 在 buildTheme 单独用于底栏）
+    'accent',
+    'bottomBackground',
   };
 
   static String toHex(Color color) {
@@ -74,10 +77,13 @@ abstract final class ThemeColorRoles {
     Map<String, Color> overrides,
   ) {
     if (overrides.isEmpty) return base;
+    // Jingshiro ThemeStore.accent → MD3 secondary
+    // bottomBackground 不覆盖 surface（内容区与底栏需可区分）
+    final accent = overrides['accent'] ?? overrides['secondary'];
     return base.copyWith(
       primary: overrides['primary'],
       onPrimary: overrides['onPrimary'],
-      secondary: overrides['secondary'],
+      secondary: accent,
       onSecondary: overrides['onSecondary'],
       tertiary: overrides['tertiary'],
       onTertiary: overrides['onTertiary'],

@@ -3,7 +3,10 @@ use crate::rule::html_search::{parse_html_search, preprocess_book_list_html, Htm
 use crate::rule::js_engine;
 
 /// 发现页结果解析 — 复用搜索列表逻辑，字段来自 ruleExplore
-pub fn parse_html_explore(html: &str, source: &BookSource) -> Result<Vec<HtmlSearchResult>, String> {
+pub fn parse_html_explore(
+    html: &str,
+    source: &BookSource,
+) -> Result<Vec<HtmlSearchResult>, String> {
     let base = source.book_source_url.as_str();
     let js_lib = source.js_lib.as_str();
     let html = preprocess_book_list_html(html, &source.rule_explore_list, js_lib, base);

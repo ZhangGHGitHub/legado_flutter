@@ -1,0 +1,10 @@
+{
+  "chapterTitle": "第十二章 山雨",
+  "paragraphIndent": "　　",
+  "raw": "\r\n。。。第十二章   山雨\r\n  广告词  \r\n[newpage]\r\n<usehtml><p><b>图文段落</b><br>第二行</p><endhtml>\r\n\\u00a0保留NBSP",
+  "replaceRule": {
+    "pattern": "^广告词$",
+    "replacement": "净化后"
+  },
+  "expected": "　　净化后\n　　[newpage]\n　　<usehtml><p><b>图文段落</b><br>第二行</p><endhtml>\n　　\\u00a0保留NBSP"
+}

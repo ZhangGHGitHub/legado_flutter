@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `map_items`
+// These functions are ignored because they are not marked as `pub`: `build_webdav_proxy`, `map_items`, `new_webdav_client_with_config`, `new_webdav_client`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
 
 /// 列出 WebDAV 目录
@@ -16,6 +16,32 @@ Future<List<WebDavEntry>> webdavList({
   required String password,
   required String path,
 }) => LegadoEngine.instance.api.crateApiWebdavWebdavList(
+  url: url,
+  username: username,
+  password: password,
+  path: path,
+);
+
+/// 验证 WebDAV 目录访问权限
+Future<void> webdavCheck({
+  required String url,
+  required String username,
+  required String password,
+  required String path,
+}) => LegadoEngine.instance.api.crateApiWebdavWebdavCheck(
+  url: url,
+  username: username,
+  password: password,
+  path: path,
+);
+
+/// 确保 WebDAV 目录存在
+Future<void> webdavEnsureDir({
+  required String url,
+  required String username,
+  required String password,
+  required String path,
+}) => LegadoEngine.instance.api.crateApiWebdavWebdavEnsureDir(
   url: url,
   username: username,
   password: password,
@@ -35,6 +61,23 @@ Future<void> webdavUpload({
   password: password,
   remotePath: remotePath,
   data: data,
+);
+
+/// 按 ETag 条件上传文件，避免覆盖其他设备的更新。
+Future<void> webdavUploadIfMatch({
+  required String url,
+  required String username,
+  required String password,
+  required String remotePath,
+  required List<int> data,
+  String? etag,
+}) => LegadoEngine.instance.api.crateApiWebdavWebdavUploadIfMatch(
+  url: url,
+  username: username,
+  password: password,
+  remotePath: remotePath,
+  data: data,
+  etag: etag,
 );
 
 /// 从 WebDAV 下载文件
@@ -63,23 +106,47 @@ Future<void> webdavDelete({
   remotePath: remotePath,
 );
 
+/// 重命名 WebDAV 文件
+Future<void> webdavMove({
+  required String url,
+  required String username,
+  required String password,
+  required String remotePath,
+  required String destinationPath,
+}) => LegadoEngine.instance.api.crateApiWebdavWebdavMove(
+  url: url,
+  username: username,
+  password: password,
+  remotePath: remotePath,
+  destinationPath: destinationPath,
+);
+
 /// WebDAV 文件条目
 class WebDavEntry {
   final String name;
   final String path;
   final bool isDir;
   final int size;
+  final PlatformInt64 lastModified;
+  final String? etag;
 
   const WebDavEntry({
     required this.name,
     required this.path,
     required this.isDir,
     required this.size,
+    required this.lastModified,
+    this.etag,
   });
 
   @override
   int get hashCode =>
-      name.hashCode ^ path.hashCode ^ isDir.hashCode ^ size.hashCode;
+      name.hashCode ^
+      path.hashCode ^
+      isDir.hashCode ^
+      size.hashCode ^
+      lastModified.hashCode ^
+      etag.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -89,5 +156,7 @@ class WebDavEntry {
           name == other.name &&
           path == other.path &&
           isDir == other.isDir &&
-          size == other.size;
+          size == other.size &&
+          lastModified == other.lastModified &&
+          etag == other.etag;
 }

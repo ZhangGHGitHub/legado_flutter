@@ -1,3 +1,6 @@
 [workspace]
 members = ["legado_engine", "legado-webdav"]
 resolver = "2"
+
+[patch.crates-io]
+rquickjs-sys = { path = "vendor/rquickjs-sys" }

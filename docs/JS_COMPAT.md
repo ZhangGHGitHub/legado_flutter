@@ -11,12 +11,12 @@
 或分步：
 
 ```powershell
-# Rust 离线测试（11 项）
+# Rust 离线测试（18 项）
 cd rust\legado_engine
-cargo test --test js_compatibility
+cargo test --locked --offline --test js_compatibility
 
 # Flutter 扫描器 + 集成测试
-flutter test test/services/js_compat_analyzer_test.dart test/integration/js_compatibility_test.dart
+flutter test --no-pub test/services/js_compat_analyzer_test.dart test/integration/js_compatibility_test.dart
 ```
 
 ## 覆盖范围
@@ -46,6 +46,10 @@ test/integration/js_compatibility_test.dart
 cd rust\legado_engine
 cargo test --test e2e_builtin -- --ignored --nocapture
 ```
+
+在线探测不属于离线兼容门禁；网络不可用或书源返回 HTTP 错误时，测试按现有契约记录为可选路径，不得据此宣称在线链路已验收。
+
+`scripts/run_js_compat.ps1` 会在 Cargo 或 Flutter 缺失时直接失败，不会跳过对应门禁；Rust 固定使用 `--locked --offline`，Flutter 固定使用 `--no-pub`。
 
 ## 后续（2a–2d）
 

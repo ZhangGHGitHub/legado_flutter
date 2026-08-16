@@ -1,0 +1,207 @@
+import 'dart:async';
+
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+import '../../domain/diagnostics/diagnostic_record.dart';
+import '../startup/startup_task_runner.dart';
+
+part 'app_diagnostics_monitor.freezed.dart';
+
+enum AppDiagnosticEventKind {
+  slowFrame,
+  appFreeze,
+  dispatcherTimeout,
+  startupTaskTimeout,
+  startupTaskFailure,
+}
+
+@freezed
+class AppDiagnosticsConfig with _$AppDiagnosticsConfig {
+  const factory AppDiagnosticsConfig({
+    @Default(false) bool enabled,
+    @Default(true) bool recordFrames,
+    @Default(true) bool recordFreeze,
+    @Default(true) bool recordDispatchers,
+    @Default(true) bool recordStartupTasks,
+    @Default(Duration(milliseconds: 16)) Duration frameBudget,
+    @Default(Duration(seconds: 3)) Duration freezeProbeInterval,
+    @Default(Duration(milliseconds: 300)) Duration freezeTolerance,
+    @Default(Duration(seconds: 5)) Duration dispatcherTimeout,
+  }) = _AppDiagnosticsConfig;
+
+  const factory AppDiagnosticsConfig.disabled({
+    @Default(false) bool enabled,
+    @Default(true) bool recordFrames,
+    @Default(true) bool recordFreeze,
+    @Default(true) bool recordDispatchers,
+    @Default(true) bool recordStartupTasks,
+    @Default(Duration(milliseconds: 16)) Duration frameBudget,
+    @Default(Duration(seconds: 3)) Duration freezeProbeInterval,
+    @Default(Duration(milliseconds: 300)) Duration freezeTolerance,
+    @Default(Duration(seconds: 5)) Duration dispatcherTimeout,
+  }) = _DisabledAppDiagnosticsConfig;
+}
+
+@freezed
+class AppDiagnosticEvent with _$AppDiagnosticEvent {
+  const AppDiagnosticEvent._();
+
+  const factory AppDiagnosticEvent({
+    required AppDiagnosticEventKind kind,
+    required String source,
+    required String message,
+    required DateTime occurredAt,
+    Duration? duration,
+    Duration? threshold,
+    Object? error,
+    StackTrace? stackTrace,
+  }) = _AppDiagnosticEvent;
+
+  bool get isCrash => false;
+  String get level => DiagnosticSeverity.warning.level;
+
+  String toLogLine() {
+    final meta = <String, String>{'kind': kind.name};
+    final elapsed = duration;
+    if (elapsed != null) meta['durationMs'] = '${elapsed.inMilliseconds}';
+    final limit = threshold;
+    if (limit != null) meta['thresholdMs'] = '${limit.inMilliseconds}';
+    return DiagnosticRecord(
+      time: occurredAt,
+      severity: DiagnosticSeverity.warning,
+      category: 'diagnostics',
+      source: source,
+      message: message,
+      metadata: meta,
+      error: error?.toString(),
+      stackTrace: stackTrace?.toString(),
+    ).line;
+  }
+}
+
+typedef AppDiagnosticSink = FutureOr<void> Function(AppDiagnosticEvent event);
+
+class AppDiagnosticsMonitor {
+  AppDiagnosticsMonitor({
+    required this.config,
+    required AppDiagnosticSink sink,
+    DateTime Function()? clock,
+  }) : _sink = sink,
+       _clock = clock ?? DateTime.now;
+
+  static const _maxEvents = 100;
+
+  final AppDiagnosticsConfig config;
+  final AppDiagnosticSink _sink;
+  final DateTime Function() _clock;
+  final List<AppDiagnosticEvent> _events = [];
+
+  bool get isEnabled => config.enabled;
+  List<AppDiagnosticEvent> get events => List.unmodifiable(_events);
+
+  Future<AppDiagnosticEvent?> recordFrameTiming({
+    required Duration buildDuration,
+    required Duration rasterDuration,
+    required Duration totalSpan,
+    String source = 'flutter.frame',
+  }) {
+    if (!config.enabled || !config.recordFrames) {
+      return Future<AppDiagnosticEvent?>.value();
+    }
+    if (totalSpan <= config.frameBudget) {
+      return Future<AppDiagnosticEvent?>.value();
+    }
+    return _emit(
+      AppDiagnosticEvent(
+        kind: AppDiagnosticEventKind.slowFrame,
+        source: source,
+        occurredAt: _clock(),
+        duration: totalSpan,
+        threshold: config.frameBudget,
+        message:
+            '检测到慢帧 build=${buildDuration.inMilliseconds}ms '
+            'raster=${rasterDuration.inMilliseconds}ms',
+      ),
+    );
+  }
+
+  Future<AppDiagnosticEvent?> recordFreezeSample({
+    required Duration elapsed,
+    required Duration expectedInterval,
+    String source = 'main_isolate.timer',
+  }) {
+    if (!config.enabled || !config.recordFreeze) {
+      return Future<AppDiagnosticEvent?>.value();
+    }
+    final extra = elapsed - expectedInterval;
+    if (extra <= config.freezeTolerance) {
+      return Future<AppDiagnosticEvent?>.value();
+    }
+    return _emit(
+      AppDiagnosticEvent(
+        kind: AppDiagnosticEventKind.appFreeze,
+        source: source,
+        occurredAt: _clock(),
+        duration: extra,
+        threshold: config.freezeTolerance,
+        message: '检测到应用主 isolate 可能被冻结',
+      ),
+    );
+  }
+
+  Future<AppDiagnosticEvent?> recordDispatcherTimeout({
+    required String dispatcher,
+    required Duration waited,
+  }) {
+    if (!config.enabled || !config.recordDispatchers) {
+      return Future<AppDiagnosticEvent?>.value();
+    }
+    if (waited < config.dispatcherTimeout) {
+      return Future<AppDiagnosticEvent?>.value();
+    }
+    return _emit(
+      AppDiagnosticEvent(
+        kind: AppDiagnosticEventKind.dispatcherTimeout,
+        source: dispatcher,
+        occurredAt: _clock(),
+        duration: waited,
+        threshold: config.dispatcherTimeout,
+        message: '调度器响应超过阈值',
+      ),
+    );
+  }
+
+  Future<AppDiagnosticEvent?> recordStartupTask(StartupTaskReport report) {
+    if (!config.enabled || !config.recordStartupTasks) {
+      return Future<AppDiagnosticEvent?>.value();
+    }
+    if (report.status != StartupTaskStatus.failed) {
+      return Future<AppDiagnosticEvent?>.value();
+    }
+    final error = report.error;
+    final isTimeout = error is TimeoutException;
+    return _emit(
+      AppDiagnosticEvent(
+        kind: isTimeout
+            ? AppDiagnosticEventKind.startupTaskTimeout
+            : AppDiagnosticEventKind.startupTaskFailure,
+        source: report.id,
+        occurredAt: _clock(),
+        duration: report.elapsed,
+        threshold: isTimeout ? StartupTaskRunner.defaultTimeout : null,
+        error: error,
+        stackTrace: report.stackTrace,
+        message: isTimeout ? '启动后台任务超时' : '启动后台任务失败',
+      ),
+    );
+  }
+
+  Future<AppDiagnosticEvent?> _emit(AppDiagnosticEvent event) async {
+    _events.insert(0, event);
+    while (_events.length > _maxEvents) {
+      _events.removeLast();
+    }
+    await _sink(event);
+    return event;
+  }
+}

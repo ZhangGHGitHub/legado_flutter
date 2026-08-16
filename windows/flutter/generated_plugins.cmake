@@ -3,6 +3,8 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  audioplayers_windows
+  battery_plus
   charset_converter
   dynamic_color
   share_plus

@@ -1,0 +1,11 @@
+{
+  "data": {
+    "name":"JSON 书籍",
+    "author":"丙作者",
+    "cover":"https://cdn.example/json-1.jpg",
+    "intro":"这是 JSON 简介。",
+    "kind":"科幻",
+    "latest":"第 2 章",
+    "toc":"https://fixture.example/api/book/1/chapters"
+  }
+}

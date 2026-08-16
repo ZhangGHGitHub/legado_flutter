@@ -1,0 +1,8 @@
+{
+  "data": {
+    "books": [
+      {"name":"JSON 书籍","author":"丙作者","url":"https://fixture.example/api/book/1","cover":"https://cdn.example/json-1.jpg","kind":"科幻","note":"JSON 简介"},
+      {"name":"JSON 第二本","author":"丁作者","url":"https://fixture.example/api/book/2","cover":"https://cdn.example/json-2.jpg","kind":"都市","note":"第二简介"}
+    ]
+  }
+}

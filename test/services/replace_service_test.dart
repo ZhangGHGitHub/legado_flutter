@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_flutter/models/replace_rule.dart';
+import 'package:legado_flutter/domain/content/replace_rule.dart';
 import 'package:legado_flutter/services/replace_preset_library.dart';
 import 'package:legado_flutter/services/replace_service.dart';
 

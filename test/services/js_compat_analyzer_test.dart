@@ -29,5 +29,27 @@ void main() {
       expect(report.jsFields, contains('jsLib'));
       expect(report.jsFields, contains('ruleContent'));
     });
+
+    test('counts ASCII case variants of @js: and classifies their fields', () {
+      const raw = '''
+{
+  "bookSourceName": "mixed-case fixture",
+  "bookSourceUrl": "https://example.com",
+  "searchUrl": "@JS:search",
+  "ruleSearch": {"bookList": "@Js:search-list"},
+  "ruleContent": {"content": "@jS:content <Js>value</jS>"}
+}
+''';
+
+      final report = JsCompatAnalyzer.scanJson(raw);
+
+      expect(report.atJsCount, 3);
+      expect(report.jsBlockCount, 1);
+      expect(report.jsFields, containsAll(<String>[
+        'searchUrl',
+        'ruleSearch',
+        'ruleContent',
+      ]));
+    });
   });
 }

@@ -1,16 +1,14 @@
 import 'dart:convert';
 
-import 'package:dio/dio.dart';
-
+import '../domain/ports/public_text_fetch_port.dart';
 import '../theme/app_theme.dart';
 import '../theme/color_presets.dart';
 import '../theme/theme_config_model.dart';
+import '../utils/ssrf_guard.dart';
 
 /// 主题 JSON 导入/市场加载（Phase 4.1）
 class ThemeImportService {
-  ThemeImportService({Dio? dio}) : _dio = dio ?? Dio();
-
-  final Dio _dio;
+  const ThemeImportService();
 
   LegadoThemeConfig parseJson(String raw) {
     final dynamic decoded = jsonDecode(raw.trim());
@@ -34,17 +32,14 @@ class ThemeImportService {
     );
   }
 
-  Future<LegadoThemeConfig> fetchFromUrl(String url) async {
-    final response = await _dio.get<String>(
-      url.trim(),
-      options: Options(
-        responseType: ResponseType.plain,
-        receiveTimeout: const Duration(seconds: 20),
-        headers: const {'Accept': 'application/json, text/plain, */*'},
-      ),
-    );
-    final body = response.data;
-    if (body == null || body.trim().isEmpty) {
+  Future<LegadoThemeConfig> fetchFromUrl(
+    String url, {
+    required PublicTextFetchPort fetchPort,
+  }) async {
+    final requestUrl = url.trim();
+    SsrfGuard.assertPublicHttpUrl(requestUrl);
+    final body = await fetchPort.fetch(requestUrl);
+    if (body.trim().isEmpty) {
       throw const FormatException('主题 URL 返回空内容');
     }
     return parseJson(body);

@@ -1,7 +1,6 @@
 use std::time::Instant;
 
-use super::SourceValidation;
-use super::SearchItem;
+use super::{SearchItem, SourceValidation};
 use crate::api::{book_info, content, explore, search, toc};
 use crate::model::book_source::BookSource;
 
@@ -31,14 +30,15 @@ fn first_explore_category_url(explore_url_json: &str) -> Option<String> {
 }
 
 fn pick_book(items: &[SearchItem]) -> Option<SearchItem> {
-    items
-        .iter()
-        .find(|b| !b.book_url.is_empty())
-        .cloned()
+    items.iter().find(|b| !b.book_url.is_empty()).cloned()
 }
 
 /// 校验书源：搜索 → 发现（可选）→ 目录 → 正文
-pub async fn validate_source(source_json: &str, keyword: &str) -> Result<SourceValidation, String> {
+#[flutter_rust_bridge::frb(ignore)]
+pub(crate) async fn validate_source(
+    source_json: &str,
+    keyword: &str,
+) -> Result<SourceValidation, String> {
     let source = BookSource::from_json(source_json)?;
     let keyword = if keyword.trim().is_empty() {
         "测试"
@@ -110,7 +110,11 @@ pub async fn validate_source(source_json: &str, keyword: &str) -> Result<SourceV
             content_ok: false,
             search_time_ms,
             errors: {
-                push_err(&mut errors, "校验", "无法获取测试书籍（搜索/发现均无可用结果）");
+                push_err(
+                    &mut errors,
+                    "校验",
+                    "无法获取测试书籍（搜索/发现均无可用结果）",
+                );
                 errors
             },
         });
@@ -119,7 +123,7 @@ pub async fn validate_source(source_json: &str, keyword: &str) -> Result<SourceV
     let info = match book_info::get_book_info(source_json, &book.book_url).await {
         Ok(info) => info,
         Err(e) => {
-            push_err(&mut errors, "详情", e);
+            push_err(&mut errors, "详情", e.into_legacy());
             return Ok(SourceValidation {
                 search_ok,
                 discovery_ok,
@@ -164,10 +168,7 @@ pub async fn validate_source(source_json: &str, keyword: &str) -> Result<SourceV
     };
 
     let toc_ok = true;
-    let first_chapter_url = chapters
-        .first()
-        .map(|c| c.url.clone())
-        .unwrap_or_default();
+    let first_chapter_url = chapters.first().map(|c| c.url.clone()).unwrap_or_default();
 
     let content_ok = match content::get_content(source_json, &first_chapter_url).await {
         Ok(text) if text.trim().len() >= 20 => true,

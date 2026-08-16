@@ -1,0 +1,31 @@
+{
+  "bookSourceUrl": "https://fixture.example/",
+  "bookSourceName": "Module 1 HTML fixture",
+  "ruleSearch": {
+    "bookList": ".result",
+    "name": ".name@text",
+    "author": ".author@text",
+    "bookUrl": "a@href",
+    "coverUrl": "img@src",
+    "kind": ".kind@text",
+    "note": ".note@text"
+  },
+  "ruleBookInfo": {
+    "name": "h1@text",
+    "author": ".author@text",
+    "coverUrl": "img.cover@src",
+    "intro": ".intro@text",
+    "kind": ".kind@text",
+    "lastChapter": ".latest@text",
+    "tocUrl": "a.read@href"
+  },
+  "ruleToc": {
+    "chapterList": ".chapters li",
+    "chapterName": "a@text",
+    "chapterUrl": "a@href"
+  },
+  "ruleContent": {
+    "content": "#content@text",
+    "replaceRegex": "广告内容##"
+  }
+}

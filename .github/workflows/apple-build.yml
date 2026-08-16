@@ -10,7 +10,8 @@ jobs:
   macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      # checkout@v5 / upload-artifact@v6 run on Node 24 (v4 Node 20 is deprecated)
+      - uses: actions/checkout@v5
 
       - uses: subosito/flutter-action@v2
         with:
@@ -41,19 +42,22 @@ jobs:
 
       - name: Upload macOS build log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: macos-build-log
           path: build_macos.log
 
-      - name: Build iOS (no codesign)
+      - name: Build iOS (simulator, no codesign)
         run: |
           set -o pipefail
-          flutter build ios --release --no-codesign 2>&1 | tee build_ios.log
+          # rquickjs has no prebuilt bindings for aarch64-apple-ios-sim; compile via bindgen.
+          sed -i.bak 's/rquickjs = "0.12.1"/rquickjs = { version = "0.12.1", features = ["bindgen"] }/' rust/legado_engine/Cargo.toml
+          flutter build ios --simulator --no-codesign 2>&1 | tee build_ios.log
+          mv rust/legado_engine/Cargo.toml.bak rust/legado_engine/Cargo.toml
 
       - name: Upload iOS build log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ios-build-log
           path: build_ios.log

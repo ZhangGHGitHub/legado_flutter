@@ -1,339 +1,205 @@
-import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
+
 import 'package:file_picker/file_picker.dart';
-import '../models/book.dart';
-import '../models/book_source.dart';
-import '../models/source_validation_result.dart';
-import '../bridge/legado_engine_bridge.dart';
-import '../database/database_helper.dart';
-import '../services/book_source_service.dart';
+import 'package:flutter/foundation.dart';
 
-/// 书源管理 Provider — 书源 CRUD、搜索
+import 'package:legado_flutter/application/source_login/source_login_page_port.dart';
+import 'package:legado_flutter/application/source_management/source_controller.dart';
+import 'package:legado_flutter/application/source_management/source_group_catalog_port.dart';
+import 'package:legado_flutter/application/source_management/source_management_book_source_port.dart';
+import 'package:legado_flutter/application/source_rules/check_source_prefs_port.dart';
+import 'package:legado_flutter/application/source_validation/source_validation_store_port.dart';
+import 'package:legado_flutter/domain/book/book.dart';
+import 'package:legado_flutter/domain/ports/book_source_validation_port.dart';
+import 'package:legado_flutter/domain/repositories/book_source_repository.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
+import 'package:legado_flutter/domain/source/source_validation_result.dart';
+
+/// 书源管理的 ChangeNotifier 兼容外观。
+///
+/// 业务状态由 [SourceController] 唯一持有。旧 Provider、Riverpod
+/// Notifier 和仍未迁移的消费者都监听同一份状态，迁移期间不会出现双份书源列表。
 class SourceProvider extends ChangeNotifier {
-  final DatabaseHelper _db = DatabaseHelper();
-  final BookSourceService _sourceService = BookSourceService();
+  SourceProvider({
+    required BookSourceRepository repository,
+    required BookSourceValidationPort validationPort,
+    required SourceManagementBookSourcePort sourceService,
+    SourceLoginPagePort? loginPort,
+    CheckSourcePrefsPort? checkSourcePrefsPort,
+    SourceGroupCatalogPort? sourceGroupPort,
+    SourceValidationStorePort? validationStorePort,
+    Future<List<BookSource>> Function()? builtInSourcesLoader,
+  }) : _controller = SourceController(
+         repository: repository,
+         validationPort: validationPort,
+         sourceService: sourceService,
+         loginPort: loginPort,
+         checkSourcePrefsPort: checkSourcePrefsPort,
+         sourceGroupPort: sourceGroupPort,
+         validationStorePort: validationStorePort,
+         builtInSourcesLoader: builtInSourcesLoader,
+       ) {
+    _controller.addListener(_onControllerStateChanged);
+  }
 
-  List<BookSource> _sources = [];
-  Map<String, List<Book>> _searchResults = {};
-  final Map<String, SourceValidationResult> _validationResults = {};
-  bool _isLoading = false;
-  bool _isValidating = false;
-  String _statusMessage = '';
-  String? _validatingSourceUrl;
+  final SourceController _controller;
 
-  List<BookSource> get sources => _sources;
-  Map<String, List<Book>> get searchResults => _searchResults;
+  SourceController get controller => _controller;
+
+  List<BookSource> get sources => _controller.sources;
+  BookSourceRepository get repository => _controller.repository;
+  Map<String, List<Book>> get searchResults => _controller.searchResults;
   Map<String, SourceValidationResult> get validationResults =>
-      Map.unmodifiable(_validationResults);
-  bool get isLoading => _isLoading;
-  bool get isValidating => _isValidating;
-  String? get validatingSourceUrl => _validatingSourceUrl;
-  String get statusMessage => _statusMessage;
+      _controller.validationResults;
+  bool get isLoading => _controller.isLoading;
+  bool get isValidating => _controller.isValidating;
+  String? get validatingSourceUrl => _controller.validatingSourceUrl;
+  String get statusMessage => _controller.statusMessage;
+  String? get loadError => _controller.loadError;
+  List<String> get knownGroups => _controller.knownGroups;
 
   SourceValidationResult? validationOf(String sourceUrl) =>
-      _validationResults[sourceUrl];
+      _controller.validationOf(sourceUrl);
 
-  /// 加载书源
-  Future<void> loadSources() async {
-    _sources = await _db.getBookSources();
-    notifyListeners();
-  }
+  String? validationProgressOf(String sourceUrl) =>
+      _controller.validationProgressOf(sourceUrl);
 
-  /// 添加单个书源
-  Future<void> addSource(BookSource source) async {
-    await _db.insertBookSource(source);
-    _sources = await _db.getBookSources();
-    notifyListeners();
-  }
+  Future<void> loadSources() => _controller.loadSources();
 
-  /// 从 JSON 文本或书源订阅 URL 导入
-  Future<bool> importSources(String jsonText) async {
-    final text = _normalizeImportText(jsonText);
-    if (text.isEmpty) return false;
+  Future<void> ensureBuiltInSources() => _controller.ensureBuiltInSources();
 
-    // 误将订阅 URL 粘贴到 JSON 框时，自动走网络拉取
-    if (_looksLikeUrl(text)) {
-      debugPrint('  ▸ 检测到书源 URL，自动拉取: $text');
-      return importSourcesFromUrl(text);
-    }
+  Future<void> addSource(BookSource source) => _controller.addSource(source);
 
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final decoded = jsonDecode(text);
-      final list = _extractSourceList(decoded);
-      if (list == null || list.isEmpty) {
-        _statusMessage = '未找到有效书源数据';
-        return false;
-      }
-      final sources = list
-          .whereType<Map<String, dynamic>>()
-          .map((e) => BookSource.fromJson(e))
-          .toList();
-      if (sources.isEmpty) {
-        _statusMessage = '书源格式无效';
-        return false;
-      }
-      await _db.insertBookSources(sources);
-      _sources = await _db.getBookSources();
-      _statusMessage = '已导入 ${sources.length} 个书源';
-      return true;
-    } catch (e) {
-      debugPrint('  ✗ JSON 解析失败: $e');
-      _statusMessage = 'JSON 解析失败，请检查格式或改用「从URL导入」';
-      return false;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
+  Future<void> renameGroup(String oldName, String newName) =>
+      _controller.renameGroup(oldName, newName);
 
-  static String _normalizeImportText(String raw) {
-    var text = raw.trim().replaceFirst('\uFEFF', '');
-    // 仅粘贴 URL 时取首行（避免尾部多余空行/说明文字）
-    final firstLine = text.split(RegExp(r'\r?\n')).first.trim();
-    if (_looksLikeUrl(firstLine)) return firstLine;
-    // 去掉 JSON 字符串式引号包裹
-    if ((text.startsWith('"') && text.endsWith('"')) ||
-        (text.startsWith("'") && text.endsWith("'"))) {
-      text = text.substring(1, text.length - 1).trim();
-    }
-    return text;
-  }
+  Future<bool> addGroup(String group) => _controller.addGroup(group);
 
-  static bool _looksLikeUrl(String text) {
-    if (RegExp(r'^https?://', caseSensitive: false).hasMatch(text)) {
-      return true;
-    }
-    final uri = Uri.tryParse(text);
-    return uri != null &&
-        (uri.scheme == 'http' || uri.scheme == 'https') &&
-        uri.host.isNotEmpty;
-  }
+  Future<void> deleteGroup(String groupName) =>
+      _controller.deleteGroup(groupName);
 
-  static List<dynamic>? _extractSourceList(dynamic decoded) {
-    if (decoded is List) return decoded;
-    if (decoded is Map) {
-      if (decoded.containsKey('bookSourceUrl') ||
-          decoded.containsKey('bookSourceName')) {
-        return [decoded];
-      }
-      for (final key in [
-        'data',
-        'sources',
-        'result',
-        'bookSources',
-        'items',
-        'records',
-      ]) {
-        final val = decoded[key];
-        if (val is List) return val;
-      }
-    }
-    return null;
-  }
+  Future<List<BookSource>?> parseSourcesForImport(String text) =>
+      _controller.parseSourcesForImport(text);
 
-  /// 从文件导入
+  Future<bool> importParsedSources(List<BookSource> sources) =>
+      _controller.importParsedSources(sources);
+
+  Future<bool> importSources(String jsonText) =>
+      _controller.importSources(jsonText);
+
+  Future<bool> importSourcesFromUrl(String url) =>
+      _controller.importSourcesFromUrl(url);
+
+  /// 旧文件导入入口保留在兼容外观，平台文件选择不进入 application 层。
   Future<void> importSourcesFromFile() async {
-    _isLoading = true;
-    notifyListeners();
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
       );
       if (result == null || result.files.isEmpty) return;
-      final file = File(result.files.single.path!);
-      final jsonText = await file.readAsString();
-      await importSources(jsonText);
-    } catch (e) {
-      debugPrint('  ✗ 文件导入失败: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      final path = result.files.single.path;
+      if (path == null) return;
+      await _controller.importSources(await File(path).readAsString());
+    } catch (error) {
+      debugPrint('  ✗ 文件导入失败: $error');
     }
   }
 
-  /// 从 URL 导入
-  Future<bool> importSourcesFromUrl(String url) async {
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final sources = await BookSourceService.fetchSourcesFromUrl(url);
-      if (sources.isEmpty) {
-        _statusMessage = 'URL 未返回有效书源，请检查链接或网络';
-        return false;
-      }
-      await _db.insertBookSources(sources);
-      _sources = await _db.getBookSources();
-      _statusMessage = '已从 URL 导入 ${sources.length} 个书源';
-      notifyListeners();
-      return true;
-    } catch (e) {
-      debugPrint('  ✗ 从 URL 导入失败: $e');
-      _statusMessage = '从 URL 获取书源失败: $e';
-      return false;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
+  Future<void> toggleSource(String sourceUrl, bool enabled) =>
+      _controller.toggleSource(sourceUrl, enabled);
 
-  /// 启用/禁用书源
-  Future<void> toggleSource(String sourceUrl, bool enabled) async {
-    await _db.toggleSource(sourceUrl, enabled);
-    _sources = await _db.getBookSources();
-    notifyListeners();
-  }
+  Future<void> deleteSource(String sourceUrl) =>
+      _controller.deleteSource(sourceUrl);
 
-  /// 删除书源
-  Future<void> deleteSource(String sourceUrl) async {
-    await _db.deleteSource(sourceUrl);
-    _sources = await _db.getBookSources();
-    notifyListeners();
-  }
+  Future<void> setSourcesEnabled(Iterable<String> sourceUrls, bool enabled) =>
+      _controller.setSourcesEnabled(sourceUrls, enabled);
 
-  /// 更新单个书源
-  Future<void> updateSource(BookSource source) async {
-    await _db.updateBookSource(source);
-    _sources = await _db.getBookSources();
-    notifyListeners();
-  }
+  Future<void> deleteSources(Iterable<String> sourceUrls) =>
+      _controller.deleteSources(sourceUrls);
 
-  // ── 搜索 ──
+  Future<void> setSourcesGroup(Iterable<String> sourceUrls, String group) =>
+      _controller.setSourcesGroup(sourceUrls, group);
 
-  /// 联合搜索所有已启用书源
-  Future<void> searchAll(String keyword) async {
-    if (keyword.isEmpty) return;
-    _isLoading = true;
-    _searchResults = {};
-    _statusMessage = '正在搜索 "$keyword"...';
-    notifyListeners();
+  Future<void> setSourcesExploreEnabled(Iterable<String> urls, bool enabled) =>
+      _controller.setSourcesExploreEnabled(urls, enabled);
 
-    final enabledSources = await _db.getEnabledSources();
-    debugPrint('📡 搜索 "$keyword"，共 ${enabledSources.length} 个书源');
+  Future<void> moveSourcesToTop(Iterable<String> urls) =>
+      _controller.moveSourcesToTop(urls);
 
-    if (enabledSources.isEmpty) {
-      _isLoading = false;
-      _statusMessage = '没有启用的书源，请先导入书源';
-      notifyListeners();
-      return;
-    }
+  Future<void> moveSourcesToBottom(Iterable<String> urls) =>
+      _controller.moveSourcesToBottom(urls);
 
-    // 并行搜索，单书源超时 20s，避免无效书源拖慢整体
-    await Future.wait(
-      enabledSources.map((source) => _searchOneSource(source, keyword)),
-    );
+  Future<void> reorderSources(List<String> orderedUrls) =>
+      _controller.reorderSources(orderedUrls);
 
-    _isLoading = false;
-    _statusMessage = _searchResults.isEmpty
-        ? '未找到结果'
-        : '找到 ${_searchResults.values.fold(0, (s, l) => s + l.length)} 本书';
-    notifyListeners();
-  }
+  Future<String> exportSourcesJson(Iterable<String> urls) =>
+      _controller.exportSourcesJson(urls);
 
-  Future<void> _searchOneSource(BookSource source, String keyword) async {
-    try {
-      debugPrint(
-        '  ▶ 书源: ${source.bookSourceName} (${source.bookSourceUrl})',
-      );
-      final results = await _sourceService
-          .search(source, keyword)
-          .timeout(const Duration(seconds: 20), onTimeout: () {
-        debugPrint('  ⚠ ${source.bookSourceName}: 搜索超时 (20s)');
-        return <Map<String, String>>[];
-      });
-      debugPrint('  ✓ ${source.bookSourceName}: ${results.length} 个结果');
-      if (results.isEmpty) {
-        debugPrint('  ⚠ ${source.bookSourceName}: 搜索返回 0 结果（书源规则或网络问题）');
-      }
-      if (results.isNotEmpty) {
-        _searchResults[source.bookSourceUrl] = _sourceService.resultsToBooks(
-          results,
-          source.bookSourceUrl,
-        );
-        notifyListeners();
-      }
-    } catch (e, stack) {
-      debugPrint('  ✗ ${source.bookSourceName}: 出错 — $e');
-      debugPrint('     $stack');
-    }
-  }
+  Future<void> addGroupToSources(Iterable<String> urls, String group) =>
+      _controller.addGroupToSources(urls, group);
 
-  /// 根据书籍查找对应的书源（用于阅读）
-  BookSource? findSourceForBook(Book book) {
-    if (book.bookSourceUrl.isNotEmpty) {
-      for (final s in _sources) {
-        if (s.bookSourceUrl == book.bookSourceUrl) return s;
-      }
-    }
-    // 兼容旧数据: 按 book.id 前缀匹配
-    for (final s in _sources) {
-      if (book.id.startsWith(s.bookSourceUrl)) return s;
-    }
-    // 按 book.sourceUrl 匹配
-    for (final s in _sources) {
-      if (book.sourceUrl.startsWith(s.bookSourceUrl)) return s;
-    }
-    return null;
-  }
+  Future<void> clearGroupOnSources(Iterable<String> urls) =>
+      _controller.clearGroupOnSources(urls);
 
-  /// 校验单个书源（搜索 → 发现 → 目录 → 正文）
+  Future<void> removeGroupTagFromSources(Iterable<String> urls, String tag) =>
+      _controller.removeGroupTagFromSources(urls, tag);
+
+  Future<void> updateSource(BookSource source) =>
+      _controller.updateSource(source);
+
+  Future<void> searchAll(
+    String keyword, {
+    String? author,
+    bool preciseName = false,
+    Set<String>? restrictSourceUrls,
+  }) => _controller.searchAll(
+    keyword,
+    author: author,
+    preciseName: preciseName,
+    restrictSourceUrls: restrictSourceUrls,
+  );
+
+  BookSource? findSourceForBook(Book book) =>
+      _controller.findSourceForBook(book);
+
+  Future<Map<String, String>> imageHeadersForSource(BookSource source) =>
+      _controller.imageHeadersForSource(source);
+
+  Future<Map<String, String>> imageHeadersForBook(Book book) =>
+      _controller.imageHeadersForBook(book);
+
   Future<SourceValidationResult?> validateSource(
     BookSource source, {
     String? keyword,
-  }) async {
-    if (!LegadoEngineBridge.isAvailable) {
-      _statusMessage = 'Rust 引擎不可用，无法校验';
-      notifyListeners();
-      return null;
-    }
+  }) => _controller.validateSource(source, keyword: keyword);
 
-    final key = defaultValidationKeyword(
-      source.bookSourceName,
-      source.bookSourceUrl,
-    );
-    final query = (keyword?.trim().isNotEmpty == true) ? keyword!.trim() : key;
+  Future<int> validateEnabledSources({
+    String? keyword,
+    void Function(int done, int total)? onProgress,
+  }) => _controller.validateEnabledSources(
+    keyword: keyword,
+    onProgress: onProgress,
+  );
 
-    _isValidating = true;
-    _validatingSourceUrl = source.bookSourceUrl;
-    notifyListeners();
+  Future<int> validateSources(
+    List<BookSource> sources, {
+    String? keyword,
+    void Function(int done, int total)? onProgress,
+  }) => _controller.validateSources(
+    sources,
+    keyword: keyword,
+    onProgress: onProgress,
+  );
 
-    try {
-      final raw = await LegadoEngineBridge.validateSource(
-        source,
-        keyword: query,
-      );
-      final result = SourceValidationResult.fromRust(raw);
-      _validationResults[source.bookSourceUrl] = result;
-      _statusMessage = result.allOk
-          ? '${source.bookSourceName} 校验通过'
-          : '${source.bookSourceName} 校验未完全通过';
-      return result;
-    } catch (e) {
-      debugPrint('  ✗ 校验失败 ${source.bookSourceName}: $e');
-      _statusMessage = '校验失败: $e';
-      return null;
-    } finally {
-      _isValidating = false;
-      _validatingSourceUrl = null;
-      notifyListeners();
-    }
-  }
+  static List<dynamic>? extractSourceListFromDecoded(dynamic decoded) =>
+      SourceController.extractSourceListFromDecoded(decoded);
 
-  /// 批量校验已启用书源
-  Future<int> validateEnabledSources({void Function(int done, int total)? onProgress}) async {
-    final enabled = _sources.where((s) => s.enabled).toList();
-    var passed = 0;
-    for (var i = 0; i < enabled.length; i++) {
-      onProgress?.call(i, enabled.length);
-      final result = await validateSource(enabled[i]);
-      if (result?.pipelineOk == true) passed++;
-    }
-    onProgress?.call(enabled.length, enabled.length);
-    _statusMessage = '批量校验完成：$passed/${enabled.length} 可用';
-    notifyListeners();
-    return passed;
+  void _onControllerStateChanged(_) => notifyListeners();
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onControllerStateChanged);
+    super.dispose();
   }
 }

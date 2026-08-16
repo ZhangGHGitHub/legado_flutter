@@ -1,10 +1,58 @@
 var legadoResult = null;
 var baseUrl = '';
 
+// 跨 QuickJS Runtime 的全局 cache（宿主 __legado_cache_*；无宿主时回退内存）
 var cache = {
   _mem: {},
-  putMemory: function(k, v) { cache._mem[String(k)] = String(v); },
-  getFromMemory: function(k) { return cache._mem[String(k)] || ''; }
+  _ttl: {},
+  putMemory: function(k, v) {
+    if (typeof __legado_cache_put === 'function') {
+      __legado_cache_put(String(k), String(v), 0);
+      return;
+    }
+    cache._mem[String(k)] = String(v);
+  },
+  getFromMemory: function(k) {
+    if (typeof __legado_cache_get === 'function') {
+      return __legado_cache_get(String(k)) || '';
+    }
+    return cache._mem[String(k)] || '';
+  },
+  deleteMemory: function(k) {
+    if (typeof __legado_cache_delete === 'function') {
+      __legado_cache_delete(String(k));
+      return;
+    }
+    delete cache._mem[String(k)];
+    delete cache._ttl[String(k)];
+  },
+  put: function(k, v, seconds) {
+    var key = String(k);
+    var sec = seconds && seconds > 0 ? Number(seconds) : 0;
+    if (typeof __legado_cache_put === 'function') {
+      __legado_cache_put(key, String(v), sec);
+      return;
+    }
+    cache._mem[key] = String(v);
+    if (sec > 0) {
+      cache._ttl[key] = Date.now() + (sec * 1000);
+    } else {
+      delete cache._ttl[key];
+    }
+  },
+  get: function(k) {
+    var key = String(k);
+    if (typeof __legado_cache_get === 'function') {
+      return __legado_cache_get(key) || '';
+    }
+    var exp = cache._ttl[key];
+    if (exp && Date.now() > exp) {
+      delete cache._mem[key];
+      delete cache._ttl[key];
+      return '';
+    }
+    return cache._mem[key] || '';
+  }
 };
 
 function base64Decode(str) {
@@ -68,3 +116,113 @@ function parseUrl(url, base) {
   if (String(url).startsWith('/')) return b + url;
   return b + '/' + url;
 }
+
+/** Legado Rhino `java.*` 子集 — 对称加密对齐 Hutool createSymmetricCrypto */
+function _SymmetricCrypto(transformation, key, iv) {
+  this.transformation = String(transformation || 'AES/CBC/PKCS5Padding');
+  this.key = String(key == null ? '' : key);
+  this.iv = String(iv == null ? '' : iv);
+}
+_SymmetricCrypto.prototype.encryptBase64 = function(data) {
+  return __legado_aes_encrypt_b64(
+    this.transformation,
+    this.key,
+    this.iv,
+    String(data == null ? '' : data)
+  );
+};
+_SymmetricCrypto.prototype.decryptStr = function(data) {
+  return __legado_aes_decrypt_str(
+    this.transformation,
+    this.key,
+    this.iv,
+    String(data == null ? '' : data)
+  );
+};
+_SymmetricCrypto.prototype.encrypt = function(data) {
+  return this.encryptBase64(data);
+};
+_SymmetricCrypto.prototype.decrypt = function(data) {
+  return this.decryptStr(data);
+};
+
+/** CookieStore 子集 — 对齐 Legado `cookie.removeCookie`（AnalyzeUrl `{{cookie.*}}`） */
+var cookie = {
+  removeCookie: function(_url) { return ''; },
+  getCookie: function(_url) { return ''; },
+  setCookie: function(_url, _val) {}
+};
+
+var java = {
+  base64Encode: function(value) {
+    return typeof __legado_base64_encode === 'function'
+      ? __legado_base64_encode(String(value == null ? '' : value)) : '';
+  },
+  hexDecodeToString: function(value) {
+    return typeof __legado_hex_decode === 'function'
+      ? __legado_hex_decode(String(value == null ? '' : value)) : String(value || '');
+  },
+  createSymmetricCrypto: function(transformation, key, iv) {
+    return new _SymmetricCrypto(transformation, key, iv);
+  },
+  // Jingshiro JsExtensions.ajax：同步拉页面。无宿主回调时返回空串（调用方常 try/catch）。
+  // 支持 AnalyzeUrl：url,{"method":"POST","body":"...","headers":{...}}
+  ajax: function(url) {
+    if (typeof __legado_java_ajax === 'function') {
+      try {
+        var u = url;
+        if (u && typeof u === 'object' && typeof u.length === 'number' && u.length > 0) {
+          u = u[0];
+        }
+        return __legado_java_ajax(String(u == null ? '' : u)) || '';
+      } catch (e) {
+        return '';
+      }
+    }
+    return '';
+  },
+  ajaxAll: function(urls) {
+    var input = Array.from(urls || []);
+    if (typeof __legado_java_ajax_all === 'function') {
+      try {
+        var raw = __legado_java_ajax_all(JSON.stringify(input)) || '[]';
+        var rows = JSON.parse(raw);
+        return rows.map(function(row, index) {
+          var url = input[index];
+          return {
+            body: function() { return String(row.body || ''); },
+            url: function() { return String(row.url || url || ''); },
+            code: function() { return Number(row.code || 0); },
+            message: function() { return String(row.message || ''); },
+            headers: function() { return row.headers || {}; },
+            raw: function() { return String(row.raw || row.body || ''); },
+            callTime: function() { return Number(row.callTime || 0); }
+          };
+        });
+      } catch (e) {}
+    }
+    return input.map(function(url) {
+      var value = java.ajax(url);
+      return {
+        body: function() { return value; },
+        url: function() { return String(url == null ? '' : url); },
+        code: function() { return value === '' ? 0 : 200; },
+        message: function() { return value === '' ? '请求失败' : ''; },
+        headers: function() { return {}; },
+        raw: function() { return value; },
+        callTime: function() { return 0; }
+      };
+    });
+  },
+  getWebViewUA: function() {
+    return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  },
+  timeToDateString: function(time) {
+    try {
+      var d = new Date(Number(time));
+      return d.toISOString();
+    } catch (e) {
+      return String(time);
+    }
+  }
+};

@@ -88,9 +88,11 @@ pub fn extract_text(root: &ElementRef<'_>, xpath: &str) -> String {
     }
 
     query_all(root, xpath)
-        .first()
+        .iter()
         .map(|e| e.text().collect::<String>().trim().to_string())
-        .unwrap_or_default()
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// 执行 XPath 并提取属性（规则含 `@href` 终端）
@@ -388,7 +390,10 @@ fn parse_predicate(raw: &str) -> XPathPredicate {
         };
     }
 
-    if Regex::new(r"^[\w-]+$").ok().is_some_and(|re| re.is_match(s)) {
+    if Regex::new(r"^[\w-]+$")
+        .ok()
+        .is_some_and(|re| re.is_match(s))
+    {
         return XPathPredicate {
             pred_type: "has_child".to_string(),
             position: 1,
@@ -467,10 +472,7 @@ fn query_parent<'a>(el: &ElementRef<'a>) -> Vec<ElementRef<'a>> {
     out
 }
 
-fn apply_predicate<'a>(
-    elements: &[ElementRef<'a>],
-    pred: &XPathPredicate,
-) -> Vec<ElementRef<'a>> {
+fn apply_predicate<'a>(elements: &[ElementRef<'a>], pred: &XPathPredicate) -> Vec<ElementRef<'a>> {
     match pred.pred_type.as_str() {
         "position" => {
             let idx = pred.position.saturating_sub(1);
@@ -490,10 +492,7 @@ fn apply_predicate<'a>(
             .filter(|e| {
                 let name = pred.attr_name.as_deref().unwrap_or("");
                 let needle = pred.attr_value.as_deref().unwrap_or("");
-                e.value()
-                    .attr(name)
-                    .unwrap_or("")
-                    .contains(needle)
+                e.value().attr(name).unwrap_or("").contains(needle)
             })
             .cloned()
             .collect(),
@@ -535,9 +534,8 @@ mod tests {
 
     #[test]
     fn contains_predicate() {
-        let doc = Html::parse_fragment(
-            r#"<div class="hot_sale_item">X</div><div class="cold">Y</div>"#,
-        );
+        let doc =
+            Html::parse_fragment(r#"<div class="hot_sale_item">X</div><div class="cold">Y</div>"#);
         let root = doc.root_element();
         let items = query_all(&root, "//div[contains(@class, \"hot\")]");
         assert_eq!(items.len(), 1);
@@ -557,5 +555,16 @@ mod tests {
         let root = doc.root_element();
         let out = extract_attr(&root, "//a/@href");
         assert_eq!(out, "/book/1");
+    }
+
+    #[test]
+    fn non_terminal_text_joins_all_matching_nodes() {
+        let doc =
+            Html::parse_fragment(r#"<div class="item">第一项</div><div class="item">第二项</div>"#);
+        let root = doc.root_element();
+        assert_eq!(
+            extract_text(&root, "//div[@class='item']"),
+            "第一项\n第二项"
+        );
     }
 }

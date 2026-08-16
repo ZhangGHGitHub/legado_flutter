@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/bridge/legado_engine_bridge.dart';
-import 'package:legado_flutter/models/book_source.dart';
+import 'package:legado_flutter/domain/source/book_source.dart';
 
 Future<String> _loadBuiltinJson(String name) async {
   final file = File('assets/builtin_sources/$name');

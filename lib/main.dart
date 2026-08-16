@@ -1,42 +1,28 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'app.dart';
-import 'bridge/legado_db_bridge.dart';
-import 'bridge/legado_engine_bridge.dart';
-import 'config/engine_config.dart';
-import 'services/web_api_service.dart';
-import 'services/network_prefs.dart';
-import 'providers/book_provider.dart';
-import 'providers/source_provider.dart';
-import 'providers/replace_provider.dart';
-import 'providers/rss_provider.dart';
-import 'theme/app_theme.dart';
+import 'dart:async';
 
-/// 应用入口
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+import 'package:flutter/widgets.dart';
 
-  await EngineConfig.load();
-  await LegadoEngineBridge.tryInit();
-  if (LegadoEngineBridge.isAvailable) {
-    await LegadoDbBridge.init();
-    await NetworkPrefs.restoreToEngine();
-    await WebApiService.restoreIfEnabled();
-  }
+import 'application/crash/crash_log_service.dart';
+import 'bootstrap/app_composition_root.dart';
+import 'infrastructure/platform/global_crash_handler.dart';
+import 'infrastructure/platform/platform_crash_metadata_loader.dart';
+import 'infrastructure/preferences/shared_preferences_crash_report_store.dart';
 
-  final themeController = ThemeModeController();
-  await themeController.load();
+export 'application/app_bootstrap.dart' show loadStartupBookProgress;
 
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: themeController),
-        ChangeNotifierProvider(create: (_) => BookProvider()),
-        ChangeNotifierProvider(create: (_) => SourceProvider()),
-        ChangeNotifierProvider(create: (_) => ReplaceProvider()..loadRules()),
-        ChangeNotifierProvider(create: (_) => RssProvider()..loadSources()),
-      ],
-      child: const LegadoApp(),
-    ),
+void main() {
+  final crashLog = CrashLogService(
+    store: const SharedPreferencesCrashReportStore(),
+    metadataLoader: const PlatformCrashMetadataLoader().call,
   );
+  final globalCrashHandler = GlobalCrashHandler(crashLog: crashLog);
+
+  runZonedGuarded(() async {
+    crashLog.updateStartupStage('Flutter 绑定初始化');
+    WidgetsFlutterBinding.ensureInitialized();
+    globalCrashHandler.install();
+
+    // 整站关闭语义曾与阅读器正文空白并存，阅读器只允许局部管理语义树。
+    await AppCompositionRoot.run(crashLog: crashLog);
+  }, globalCrashHandler.handleZoneError);
 }

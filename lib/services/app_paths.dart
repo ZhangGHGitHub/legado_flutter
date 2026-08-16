@@ -2,21 +2,23 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../application/preferences/shared_preferences_runtime.dart';
 
 /// 数据目录与路径（Phase 4.3）
 abstract final class AppDataPrefs {
   static const dataDirKey = 'legado_data_dir';
 
   static Future<String?> loadDataDir() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(dataDirKey);
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    final raw = prefs?.getString(dataDirKey);
     if (raw == null || raw.trim().isEmpty) return null;
     return raw.trim();
   }
 
   static Future<void> saveDataDir(String? path) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferencesRuntime.getOrNull();
+    if (prefs == null) return;
     if (path == null || path.trim().isEmpty) {
       await prefs.remove(dataDirKey);
       return;

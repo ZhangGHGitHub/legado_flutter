@@ -1,4 +1,4 @@
-import '../models/replace_rule.dart';
+import '../domain/content/replace_rule.dart';
 import 'replace_preset_library.dart';
 
 /// 替换净化引擎 - 对正文应用正则替换规则
@@ -42,11 +42,13 @@ class ReplaceService {
   /// 内置广告过滤规则（首次启动默认）
   static List<ReplaceRule> builtInRules() {
     return ReplacePresetLibrary.all
-        .where((p) =>
-            p.id == 'ad_biquge' ||
-            p.id == 'ad_shuwu' ||
-            p.id == 'fmt_blank_lines' ||
-            p.id == 'ad_next_page')
+        .where(
+          (p) =>
+              p.id == 'ad_biquge' ||
+              p.id == 'ad_shuwu' ||
+              p.id == 'fmt_blank_lines' ||
+              p.id == 'ad_next_page',
+        )
         .map((p) => p.toRule())
         .toList();
   }
