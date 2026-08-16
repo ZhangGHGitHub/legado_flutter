@@ -6,6 +6,7 @@
 import 'api.dart';
 import 'api/backup.dart';
 import 'api/book_info.dart';
+import 'api/cover.dart';
 import 'api/db.dart';
 import 'api/dict.dart';
 import 'api/error.dart';

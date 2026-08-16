@@ -30,6 +30,33 @@ void main() {
         });
       },
     );
+
+    test(
+      'preserves source cover while applying the original custom cover rules',
+      () {
+        const sourceCover = 'https://example.test/source.jpg';
+        final imported = Book.fromJson({
+          'id': 'book-1',
+          'name': '书名',
+          'coverUrl': sourceCover,
+          'customCoverUrl': 'https://example.test/custom.jpg',
+        });
+
+        expect(imported.coverUrl, sourceCover);
+        expect(imported.displayCoverUrl, 'https://example.test/custom.jpg');
+        expect(imported.toJson()['customCoverUrl'], imported.customCoverUrl);
+        expect(
+          imported
+              .copyWith(customCoverUrl: legadoDefaultCoverMarker)
+              .displayCoverUrl,
+          isEmpty,
+        );
+        expect(
+          imported.copyWith(customCoverUrl: '').displayCoverUrl,
+          sourceCover,
+        );
+      },
+    );
   });
 
   group('BookSource Freezed contract', () {

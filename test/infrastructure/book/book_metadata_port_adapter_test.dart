@@ -14,6 +14,8 @@ void main() {
         receivedCover = coverUrl;
         return updated;
       },
+      updateCustomCover: (book, customCoverUrl) async =>
+          book.copyWith(customCoverUrl: customCoverUrl),
       updateBookDetails:
           (_, {required name, required author, required description}) async =>
               null,
@@ -32,6 +34,7 @@ void main() {
     String? receivedDescription;
     final port = BookMetadataPortAdapter(
       updateCover: (book, coverUrl) async => book,
+      updateCustomCover: (book, customCoverUrl) async => book,
       updateBookDetails:
           (
             id, {

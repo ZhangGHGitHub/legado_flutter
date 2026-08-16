@@ -16,6 +16,17 @@ final class BookMetadataController {
   Future<void> updateCover(String bookId, String coverUrl) =>
       _repository.updateCover(bookId, coverUrl);
 
+  Future<void> updateCustomCover(String bookId, String customCoverUrl) {
+    final repository = _repository;
+    if (repository is! BookCustomCoverRepository) {
+      return Future<void>.error(UnsupportedError('自定义封面存储服务不可用'));
+    }
+    return (repository as BookCustomCoverRepository).updateCustomCover(
+      bookId,
+      customCoverUrl,
+    );
+  }
+
   Future<NormalizedBookDetails> updateBookDetails({
     required String bookId,
     required String fallbackName,

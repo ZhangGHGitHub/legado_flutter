@@ -72,6 +72,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/default_data/rssSources.json
+    - assets/default_data/coverRule.json
     - assets/help/SourceMBookHelp.md
     - assets/help/SourceMRssHelp.md
     - assets/help/webDavBookHelp.md

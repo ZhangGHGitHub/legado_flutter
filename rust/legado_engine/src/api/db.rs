@@ -73,6 +73,14 @@ pub fn db_update_book_cover(book_id: String, cover_url: String) -> Result<(), Ap
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn db_update_book_custom_cover(
+    book_id: String,
+    custom_cover_url: String,
+) -> Result<(), AppError> {
+    map_database_error(db::db_update_book_custom_cover(book_id, custom_cover_url))
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn db_update_book_details(
     book_id: String,
     name: String,

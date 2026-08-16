@@ -12,6 +12,7 @@ import '../application/book/batch_book_progress_sync_port.dart';
 import '../application/book/book_info_chapter_port.dart';
 import '../application/book/book_metadata_port.dart';
 import '../application/book/book_read_status_port.dart';
+import '../application/book/change_cover_controller.dart';
 import '../application/book/toc_persistence_port.dart';
 import '../application/book/book_provider_source_port.dart';
 import '../application/book/book_source_change_port.dart';
@@ -177,6 +178,8 @@ import '../infrastructure/book/book_read_status_port_adapter.dart';
 import '../infrastructure/book/book_provider_source_port_adapter.dart';
 import '../infrastructure/book/book_source_change_port_adapter.dart';
 import '../infrastructure/book/local_book_import_port_adapter.dart';
+import '../infrastructure/book/rust_change_cover_rule_port.dart';
+import '../infrastructure/book/shared_preferences_change_cover_cache.dart';
 import '../infrastructure/bookshelf/book_group_management_port_adapter.dart';
 import '../infrastructure/bookshelf/book_group_store_port_adapter.dart';
 import '../infrastructure/bookshelf/bookshelf_arrange_delete_command_port_adapter.dart';
@@ -647,6 +650,7 @@ abstract final class AppCompositionRoot {
           Provider<BookMetadataPort>.value(
             value: BookMetadataPortAdapter(
               updateCover: bootstrap.bookProvider.updateBookCover,
+              updateCustomCover: bootstrap.bookProvider.updateBookCustomCover,
               updateBookDetails: bootstrap.bookProvider.updateBookDetails,
             ),
           ),
@@ -959,6 +963,12 @@ abstract final class AppCompositionRoot {
             value: const ReplacePresetPortAdapter(),
           ),
           Provider<BookSourceSearchPort>.value(value: bookSourceSearchPort),
+          Provider<ChangeCoverRulePort>(
+            create: (_) => RustChangeCoverRulePort(),
+          ),
+          Provider<ChangeCoverCandidateCachePort>.value(
+            value: const SharedPreferencesChangeCoverCache(),
+          ),
           Provider<BookSourceExplorePort>.value(value: bookSourceExplorePort),
           Provider<SearchHistoryPort>.value(
             value: const SharedPreferencesSearchHistoryAdapter(),

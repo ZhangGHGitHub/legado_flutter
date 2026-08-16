@@ -1273,6 +1273,19 @@ class BookProvider extends ChangeNotifier {
     return next;
   }
 
+  /// 只更新用户封面覆盖，保留书源 coverUrl 以便恢复。
+  Future<Book> updateBookCustomCover(Book book, String customCoverUrl) async {
+    await _bookMetadataController.updateCustomCover(book.id, customCoverUrl);
+    final index = _books.indexWhere((item) => item.id == book.id);
+    final next = (index >= 0 ? _books[index] : book).copyWith(
+      customCoverUrl: customCoverUrl,
+    );
+    if (index >= 0) _replaceBookAt(index, next);
+    _bookshelfChangePort.notifyChanged(_books);
+    notifyListeners();
+    return next;
+  }
+
   /// 字段级更新书籍基础信息，始终合并到最新书架记录。
   Future<Book?> updateBookDetails(
     String bookId, {

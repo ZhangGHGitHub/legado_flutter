@@ -12,6 +12,7 @@ pub struct BookDto {
     pub name: String,
     pub author: String,
     pub cover_url: String,
+    pub custom_cover_url: String,
     #[serde(rename = "type")]
     pub book_type: String,
     pub progress: f64,
@@ -47,6 +48,7 @@ mod tests {
             name: "测试书".to_string(),
             author: "作者".to_string(),
             cover_url: "https://example.test/cover.jpg".to_string(),
+            custom_cover_url: "https://example.test/custom.jpg".to_string(),
             book_type: "online".to_string(),
             progress: 0.5,
             current_chapter: Some("第十章".to_string()),
@@ -72,6 +74,7 @@ mod tests {
         let encoded = serde_json::to_value(dto).unwrap();
 
         assert_eq!(encoded["coverUrl"], "https://example.test/cover.jpg");
+        assert_eq!(encoded["customCoverUrl"], "https://example.test/custom.jpg");
         assert_eq!(encoded["type"], "online");
         assert_eq!(encoded["currentChapter"], "第十章");
         assert_eq!(encoded["durChapterIndex"], 9);

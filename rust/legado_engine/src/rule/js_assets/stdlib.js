@@ -181,6 +181,39 @@ var java = {
     }
     return '';
   },
+  ajaxAll: function(urls) {
+    var input = Array.from(urls || []);
+    if (typeof __legado_java_ajax_all === 'function') {
+      try {
+        var raw = __legado_java_ajax_all(JSON.stringify(input)) || '[]';
+        var rows = JSON.parse(raw);
+        return rows.map(function(row, index) {
+          var url = input[index];
+          return {
+            body: function() { return String(row.body || ''); },
+            url: function() { return String(row.url || url || ''); },
+            code: function() { return Number(row.code || 0); },
+            message: function() { return String(row.message || ''); },
+            headers: function() { return row.headers || {}; },
+            raw: function() { return String(row.raw || row.body || ''); },
+            callTime: function() { return Number(row.callTime || 0); }
+          };
+        });
+      } catch (e) {}
+    }
+    return input.map(function(url) {
+      var value = java.ajax(url);
+      return {
+        body: function() { return value; },
+        url: function() { return String(url == null ? '' : url); },
+        code: function() { return value === '' ? 0 : 200; },
+        message: function() { return value === '' ? '请求失败' : ''; },
+        headers: function() { return {}; },
+        raw: function() { return value; },
+        callTime: function() { return 0; }
+      };
+    });
+  },
   getWebViewUA: function() {
     return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
   },

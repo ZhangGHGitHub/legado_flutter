@@ -41,6 +41,17 @@ class FrbRustDatabasePort implements RustDatabasePort {
   }
 
   @override
+  void updateBookCustomCover({
+    required String bookId,
+    required String customCoverUrl,
+  }) {
+    rust_db.dbUpdateBookCustomCover(
+      bookId: bookId,
+      customCoverUrl: customCoverUrl,
+    );
+  }
+
+  @override
   void updateBookDetails(
     String bookId,
     String name,

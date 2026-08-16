@@ -7,3 +7,13 @@ import 'package:legado_flutter/domain/source/book_source.dart';
 abstract interface class BookSourceSearchPort {
   Future<List<Map<String, String>>> search(BookSource source, String keyword);
 }
+
+final class EmptyBookSourceSearchPort implements BookSourceSearchPort {
+  const EmptyBookSourceSearchPort();
+
+  @override
+  Future<List<Map<String, String>>> search(
+    BookSource source,
+    String keyword,
+  ) async => const [];
+}

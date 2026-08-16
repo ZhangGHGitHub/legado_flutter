@@ -6,6 +6,7 @@
 import 'api.dart';
 import 'api/backup.dart';
 import 'api/book_info.dart';
+import 'api/cover.dart';
 import 'api/db.dart';
 import 'api/dict.dart';
 import 'api/error.dart';
@@ -77,7 +78,7 @@ class LegadoEngine
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -1219312496;
+  int get rustContentHash => -211965388;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -146,6 +147,11 @@ abstract class LegadoEngineApi extends BaseApi {
   void crateApiDbDbUpdateBookCover({
     required String bookId,
     required String coverUrl,
+  });
+
+  void crateApiDbDbUpdateBookCustomCover({
+    required String bookId,
+    required String customCoverUrl,
   });
 
   void crateApiDbDbUpdateBookDetails({
@@ -371,6 +377,12 @@ abstract class LegadoEngineApi extends BaseApi {
   Future<List<SearchItem>> crateApiSearch({
     required String sourceJson,
     required String keyword,
+  });
+
+  Future<String?> crateApiCoverSearchCoverByRule({
+    required String ruleJson,
+    required String name,
+    required String author,
   });
 
   void crateApiSeedLoginHeader({
@@ -1079,6 +1091,36 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       );
 
   @override
+  void crateApiDbDbUpdateBookCustomCover({
+    required String bookId,
+    required String customCoverUrl,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(bookId, serializer);
+          sse_encode_String(customCoverUrl, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_app_error,
+        ),
+        constMeta: kCrateApiDbDbUpdateBookCustomCoverConstMeta,
+        argValues: [bookId, customCoverUrl],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDbDbUpdateBookCustomCoverConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_update_book_custom_cover",
+        argNames: ["bookId", "customCoverUrl"],
+      );
+
+  @override
   void crateApiDbDbUpdateBookDetails({
     required String bookId,
     required String name,
@@ -1093,7 +1135,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           sse_encode_String(name, serializer);
           sse_encode_String(author, serializer);
           sse_encode_String(description, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1123,7 +1165,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(bookId, serializer);
           sse_encode_String(group, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1157,7 +1199,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           sse_encode_f_64(progress, serializer);
           sse_encode_opt_String(chapter, serializer);
           sse_encode_i_32(pageIndex, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1183,7 +1225,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(ruleJson, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1209,7 +1251,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(sourceJson, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1241,7 +1283,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1275,7 +1317,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1302,7 +1344,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_i_64(time, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1325,7 +1367,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(id, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1347,7 +1389,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1369,7 +1411,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1394,7 +1436,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1423,7 +1465,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           sse_encode_String(script, serializer);
           sse_encode_String(jsLib, serializer);
           sse_encode_String(baseUrl, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1457,7 +1499,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 36,
+            funcId: 37,
             port: port_,
           );
         },
@@ -1483,7 +1525,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1505,7 +1547,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1533,7 +1575,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 39,
+            funcId: 40,
             port: port_,
           );
         },
@@ -1561,7 +1603,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(bookId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 40)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 41)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1587,7 +1629,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(format, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 41)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 42)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1618,7 +1660,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 42,
+            funcId: 43,
             port: port_,
           );
         },
@@ -1653,7 +1695,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 43,
+            funcId: 44,
             port: port_,
           );
         },
@@ -1688,7 +1730,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 44,
+            funcId: 45,
             port: port_,
           );
         },
@@ -1722,7 +1764,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 45,
+            funcId: 46,
             port: port_,
           );
         },
@@ -1750,7 +1792,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(bookId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 46)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 47)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_book_reading_stats,
@@ -1781,7 +1823,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 47,
+            funcId: 48,
             port: port_,
           );
         },
@@ -1816,7 +1858,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 48,
+            funcId: 49,
             port: port_,
           );
         },
@@ -1852,7 +1894,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 49,
+            funcId: 50,
             port: port_,
           );
         },
@@ -1879,7 +1921,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 50)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 51)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_network_config_dto,
@@ -1902,7 +1944,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(range, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 51)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 52)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_reading_stats,
@@ -1930,7 +1972,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 52,
+            funcId: 53,
             port: port_,
           );
         },
@@ -1966,7 +2008,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 53,
+            funcId: 54,
             port: port_,
           );
         },
@@ -2000,7 +2042,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 54,
+            funcId: 55,
             port: port_,
           );
         },
@@ -2034,7 +2076,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 55,
+            funcId: 56,
             port: port_,
           );
         },
@@ -2078,7 +2120,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 56,
+            funcId: 57,
             port: port_,
           );
         },
@@ -2121,7 +2163,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(appDir, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 57)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 58)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -2146,7 +2188,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 58,
+            funcId: 59,
             port: port_,
           );
         },
@@ -2170,7 +2212,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 59)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 60)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -2193,7 +2235,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(bookId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 60)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 61)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_bookmark_dto,
@@ -2216,7 +2258,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(bookId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 61)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 62)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_note_dto,
@@ -2239,7 +2281,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(data, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 62)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 63)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_local_book_info,
@@ -2265,7 +2307,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 63,
+            funcId: 64,
             port: port_,
           );
         },
@@ -2292,7 +2334,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(data, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 64)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 65)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_remote_archive_book_file,
@@ -2318,7 +2360,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 65)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 66)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_local_chapter_item,
@@ -2348,7 +2390,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 66,
+            funcId: 67,
             port: port_,
           );
         },
@@ -2384,7 +2426,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 67,
+            funcId: 68,
             port: port_,
           );
         },
@@ -2421,7 +2463,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
             sourceRules,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 68)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 69)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -2467,7 +2509,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
             sourceRules,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 69)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 70)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -2520,7 +2562,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 70,
+            funcId: 71,
             port: port_,
           );
         },
@@ -2555,7 +2597,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           sse_encode_i_64(startTime, serializer);
           sse_encode_i_64(endTime, serializer);
           sse_encode_i_64(readIteration, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 71)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 72)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -2592,7 +2634,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 72,
+            funcId: 73,
             port: port_,
           );
         },
@@ -2628,7 +2670,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           sse_encode_String(bookName, serializer);
           sse_encode_i_32(chars, serializer);
           sse_encode_i_32(durationSeconds, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 73)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 74)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -2664,7 +2706,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 74,
+            funcId: 75,
             port: port_,
           );
         },
@@ -2696,7 +2738,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(json, serializer);
           sse_encode_bool(replace, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 75)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 76)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -2729,7 +2771,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 76,
+            funcId: 77,
             port: port_,
           );
         },
@@ -2750,6 +2792,43 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
   );
 
   @override
+  Future<String?> crateApiCoverSearchCoverByRule({
+    required String ruleJson,
+    required String name,
+    required String author,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(ruleJson, serializer);
+          sse_encode_String(name, serializer);
+          sse_encode_String(author, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 78,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_String,
+          decodeErrorData: sse_decode_app_error,
+        ),
+        constMeta: kCrateApiCoverSearchCoverByRuleConstMeta,
+        argValues: [ruleJson, name, author],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoverSearchCoverByRuleConstMeta =>
+      const TaskConstMeta(
+        debugName: "search_cover_by_rule",
+        argNames: ["ruleJson", "name", "author"],
+      );
+
+  @override
   void crateApiSeedLoginHeader({
     required String sourceUrl,
     required String header,
@@ -2760,7 +2839,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(sourceUrl, serializer);
           sse_encode_String(header, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 77)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 79)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -2803,7 +2882,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 78,
+            funcId: 80,
             port: port_,
           );
         },
@@ -2862,7 +2941,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 79,
+            funcId: 81,
             port: port_,
           );
         },
@@ -2915,7 +2994,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 80,
+            funcId: 82,
             port: port_,
           );
         },
@@ -2957,7 +3036,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           sse_encode_String(proxyUsername, serializer);
           sse_encode_String(proxyPassword, serializer);
           sse_encode_String(dnsServers, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 81)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 83)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -3003,7 +3082,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(sourceUrl, serializer);
           sse_encode_String(cookie, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 82)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 84)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -3029,7 +3108,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(sourceUrl, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 83)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 85)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -3054,7 +3133,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 84)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 86)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -3095,7 +3174,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           sse_encode_String(chapterName, serializer);
           sse_encode_String(bookText, serializer);
           sse_encode_String(content, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 85)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 87)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -3154,7 +3233,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           sse_encode_String(noteContent, serializer);
           sse_encode_i_32(position, serializer);
           sse_encode_i_32(chapterPos, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 86)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 88)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -3202,7 +3281,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 87,
+            funcId: 89,
             port: port_,
           );
         },
@@ -3240,7 +3319,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 88,
+            funcId: 90,
             port: port_,
           );
         },
@@ -3278,7 +3357,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 89,
+            funcId: 91,
             port: port_,
           );
         },
@@ -3316,7 +3395,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 90,
+            funcId: 92,
             port: port_,
           );
         },
@@ -3355,7 +3434,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 91,
+            funcId: 93,
             port: port_,
           );
         },
@@ -3394,7 +3473,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 92,
+            funcId: 94,
             port: port_,
           );
         },
@@ -3434,7 +3513,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 93,
+            funcId: 95,
             port: port_,
           );
         },
@@ -3474,7 +3553,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 94,
+            funcId: 96,
             port: port_,
           );
         },
@@ -3516,7 +3595,7 @@ class LegadoEngineApiImpl extends LegadoEngineApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 95,
+            funcId: 97,
             port: port_,
           );
         },

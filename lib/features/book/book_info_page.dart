@@ -45,6 +45,7 @@ class BookInfoPage extends StatelessWidget {
   final BookshelfBookLifecyclePort? lifecyclePort;
   final CacheBookDownloadPort? cacheDownloadPort;
   final ReaderSourceAccessPort? sourceAccessPort;
+  final BookSourceSearchPort? searchPort;
 
   const BookInfoPage({
     super.key,
@@ -58,6 +59,7 @@ class BookInfoPage extends StatelessWidget {
     this.lifecyclePort,
     this.cacheDownloadPort,
     this.sourceAccessPort,
+    this.searchPort,
   });
 
   @override
@@ -73,6 +75,7 @@ class BookInfoPage extends StatelessWidget {
       lifecyclePort: lifecyclePort,
       cacheDownloadPort: cacheDownloadPort,
       sourceAccessPort: sourceAccessPort,
+      searchPort: searchPort,
     );
   }
 }
@@ -88,6 +91,7 @@ class _BookInfoPageBody extends riverpod.ConsumerStatefulWidget {
   final BookshelfBookLifecyclePort? lifecyclePort;
   final CacheBookDownloadPort? cacheDownloadPort;
   final ReaderSourceAccessPort? sourceAccessPort;
+  final BookSourceSearchPort? searchPort;
 
   const _BookInfoPageBody({
     required this.book,
@@ -100,6 +104,7 @@ class _BookInfoPageBody extends riverpod.ConsumerStatefulWidget {
     this.lifecyclePort,
     this.cacheDownloadPort,
     this.sourceAccessPort,
+    this.searchPort,
   });
 
   @override
@@ -118,6 +123,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   late final BookshelfMembershipPort _membershipPort;
   late final BookMetadataPort _metadataPort;
   late final BookReadStatusPort _readStatusPort;
+  late final BookSourceSearchPort _searchPort;
   late final BookshelfArrangeGroupCommandPort _groupCommandPort;
   late final BookshelfBookLifecyclePort _lifecyclePort;
   late final CacheBookDownloadPort _cacheDownloadPort;
@@ -151,6 +157,10 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
         widget.sourceAccessPort ??
         Provider.of<ReaderSourceAccessPort?>(context, listen: false) ??
         const EmptyReaderSourceAccessPort();
+    _searchPort =
+        widget.searchPort ??
+        Provider.of<BookSourceSearchPort?>(context, listen: false) ??
+        const EmptyBookSourceSearchPort();
     _membershipPort =
         widget.membershipPort ??
         Provider.of<BookshelfMembershipPort?>(context, listen: false) ??
@@ -184,8 +194,6 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   }
 
   Future<void> _initPage() async {
-    _coverUrl = _book.coverUrl;
-
     final shelf = _findShelfBook(_book);
     if (shelf != null) {
       _book = shelf;
@@ -193,6 +201,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     } else {
       _isInShelf = false;
     }
+    _coverUrl = _book.displayCoverUrl;
     if (mounted) setState(() {});
 
     if (!mounted) return;
@@ -210,7 +219,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
           }
         }
       }
-      if (_coverUrl.isEmpty && mounted) {
+      if (_book.coverUrl.isEmpty && _book.customCoverUrl.isEmpty && mounted) {
         await _fetchCoverFromSource(source);
       }
     }
@@ -230,8 +239,7 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
 
   Future<void> _fetchCoverFromSource(BookSource source) async {
     try {
-      final searchPort = context.read<BookSourceSearchPort>();
-      final results = await searchPort.search(source, _book.name);
+      final results = await _searchPort.search(source, _book.name);
       String? foundCover;
       for (final r in results) {
         final name = r['name'] ?? '';
@@ -273,7 +281,9 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
   }
 
   String get _resolvedCover {
-    if (_book.coverUrl.isNotEmpty) return _book.coverUrl;
+    if (_book.coverUrl.isNotEmpty || _book.customCoverUrl.isNotEmpty) {
+      return _book.displayCoverUrl;
+    }
     return _coverUrl;
   }
 
@@ -438,7 +448,9 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
     if (result != null) {
       setState(() {
         _book = result;
-        _coverUrl = result.coverUrl.isNotEmpty ? result.coverUrl : _coverUrl;
+        _coverUrl = result.displayCoverUrl.isNotEmpty
+            ? result.displayCoverUrl
+            : _coverUrl;
         _errorMessage = null;
       });
       final shelf = _findShelfBook(result);
@@ -446,8 +458,8 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
         setState(() {
           _book = shelf;
           _isInShelf = true;
-          if (shelf.coverUrl.isNotEmpty) {
-            _coverUrl = shelf.coverUrl;
+          if (shelf.displayCoverUrl.isNotEmpty) {
+            _coverUrl = shelf.displayCoverUrl;
           }
         });
       }
@@ -458,24 +470,38 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
       setState(() {
         _book = shelf;
         _isInShelf = true;
-        if (shelf.coverUrl.isNotEmpty) {
-          _coverUrl = shelf.coverUrl;
+        if (shelf.displayCoverUrl.isNotEmpty) {
+          _coverUrl = shelf.displayCoverUrl;
         }
       });
     }
   }
 
   Future<void> _openChangeCover() async {
-    await Navigator.push(
+    final changed = await Navigator.push<Book>(
       context,
-      MaterialPageRoute(builder: (_) => ChangeCoverPage(book: _book)),
+      MaterialPageRoute(
+        builder: (_) => ChangeCoverPage(
+          book: _book,
+          persistChanges: _isInShelf,
+          metadataPort: _metadataPort,
+          sourceAccessPort: _sourceAccessPort,
+          searchPort: _searchPort,
+        ),
+      ),
     );
     if (!mounted) return;
+    if (changed != null) {
+      setState(() {
+        _book = changed;
+        _coverUrl = changed.displayCoverUrl;
+      });
+    }
     final shelf = _findShelfBook(_book);
     if (shelf != null) {
       setState(() {
         _book = shelf;
-        _coverUrl = shelf.coverUrl;
+        _coverUrl = shelf.displayCoverUrl;
       });
     }
   }
@@ -971,12 +997,16 @@ class _BookInfoPageState extends riverpod.ConsumerState<_BookInfoPageBody> {
                 elevation: 6,
                 shadowColor: Colors.black38,
                 borderRadius: BorderRadius.circular(6),
-                child: BookCover(
-                  coverUrl: cover,
-                  author: _book.author,
-                  width: 108,
-                  height: 152,
-                  radius: 6,
+                child: InkWell(
+                  key: const ValueKey('book-info-cover-action'),
+                  onTap: _openChangeCover,
+                  child: BookCover(
+                    coverUrl: cover,
+                    author: _book.author,
+                    width: 108,
+                    height: 152,
+                    radius: 6,
+                  ),
                 ),
               ),
             ),

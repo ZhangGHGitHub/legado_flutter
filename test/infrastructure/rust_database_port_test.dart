@@ -10,6 +10,7 @@ class _FakeRustDatabasePort implements RustDatabasePort {
   final List<String> books = [];
   String? insertedBook;
   (String, String, String, String)? updatedBookDetails;
+  (String, String)? updatedCustomCover;
 
   @override
   void requireReady() => readyChecks++;
@@ -28,6 +29,14 @@ class _FakeRustDatabasePort implements RustDatabasePort {
     String description,
   ) {
     updatedBookDetails = (bookId, name, author, description);
+  }
+
+  @override
+  void updateBookCustomCover({
+    required String bookId,
+    required String customCoverUrl,
+  }) {
+    updatedCustomCover = (bookId, customCoverUrl);
   }
 
   @override
@@ -62,6 +71,19 @@ void main() {
 
       expect(port.readyChecks, 1);
       expect(port.updatedBookDetails, ('book-1', '新书名', '新作者', '新简介'));
+    },
+  );
+
+  test(
+    'DatabaseHelper forwards custom cover without touching source cover',
+    () async {
+      final port = _FakeRustDatabasePort();
+      final database = DatabaseHelper.forPort(port);
+
+      await database.updateBookCustomCover('book-1', legadoDefaultCoverMarker);
+
+      expect(port.readyChecks, 1);
+      expect(port.updatedCustomCover, ('book-1', legadoDefaultCoverMarker));
     },
   );
 }

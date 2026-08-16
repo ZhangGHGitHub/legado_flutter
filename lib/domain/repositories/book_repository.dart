@@ -40,3 +40,8 @@ abstract interface class BookRepository {
 
   Future<void> clearChapterContent(Chapter chapter);
 }
+
+/// 原版 Book.customCoverUrl 的独立字段级写入能力。
+abstract interface class BookCustomCoverRepository {
+  Future<void> updateCustomCover(String bookId, String customCoverUrl);
+}

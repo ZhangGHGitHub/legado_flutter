@@ -56,6 +56,14 @@ class DatabaseHelper {
     _port.updateBookCover(bookId: bookId, coverUrl: coverUrl);
   }
 
+  Future<void> updateBookCustomCover(
+    String bookId,
+    String customCoverUrl,
+  ) async {
+    _requireReady();
+    _port.updateBookCustomCover(bookId: bookId, customCoverUrl: customCoverUrl);
+  }
+
   Future<void> updateBookDetails(
     String bookId,
     String name,

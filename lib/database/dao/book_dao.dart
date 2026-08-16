@@ -5,7 +5,7 @@ import '../database_helper.dart';
 
 /// 书籍 DAO — 薄封装 [DatabaseHelper]（不引入第二套存储栈）
 /// 当前 SQLite/Rust 适配器；Provider 通过 [BookRepository] 使用它。
-class BookDao implements BookRepository {
+class BookDao implements BookRepository, BookCustomCoverRepository {
   BookDao([DatabaseHelper? db]) : _db = db ?? DatabaseHelper();
 
   final DatabaseHelper _db;
@@ -30,6 +30,10 @@ class BookDao implements BookRepository {
   @override
   Future<void> updateCover(String bookId, String coverUrl) =>
       _db.updateBookCover(bookId, coverUrl);
+
+  @override
+  Future<void> updateCustomCover(String bookId, String customCoverUrl) =>
+      _db.updateBookCustomCover(bookId, customCoverUrl);
 
   @override
   Future<void> updateBookDetails(

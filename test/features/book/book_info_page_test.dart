@@ -24,6 +24,7 @@ import 'package:legado_flutter/features/book/book_info_page.dart';
 import 'package:legado_flutter/providers/book_provider.dart';
 import 'package:legado_flutter/providers/source_provider.dart';
 import 'package:legado_flutter/services/book_source_service.dart';
+import 'package:legado_flutter/widgets/book_cover.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/source_management/source_controller_test.dart'
@@ -463,6 +464,70 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('点击详情页封面可在独立宿主打开封面换源', (tester) async {
+    await _pumpEditPage(
+      tester,
+      inShelf: false,
+      searchPort: const EmptyBookSourceSearchPort(),
+      includeProviderSearchPort: false,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('book-info-cover-action')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('封面换源'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('详情页优先显示用户自定义封面', (tester) async {
+    const customCoverUrl = 'https://cover.example/custom.jpg';
+    await _pumpEditPage(
+      tester,
+      inShelf: false,
+      initialBook: const Book(
+        id: 'book-1',
+        name: '自定义封面书',
+        author: '作者',
+        coverUrl: 'https://cover.example/source.jpg',
+        customCoverUrl: customCoverUrl,
+      ),
+    );
+
+    final cover = tester.widget<BookCover>(
+      find.descendant(
+        of: find.byKey(const ValueKey('book-info-cover-action')),
+        matching: find.byType(BookCover),
+      ),
+    );
+    expect(cover.coverUrl, customCoverUrl);
+  });
+
+  testWidgets('默认封面标记不显示源封面且不触发自动补全', (tester) async {
+    final searchPort = _RecordingSearchPort();
+    await _pumpEditPage(
+      tester,
+      inShelf: false,
+      initialBook: const Book(
+        id: 'book-1',
+        name: '默认封面书',
+        author: '作者',
+        coverUrl: 'https://cover.example/source.jpg',
+        customCoverUrl: legadoDefaultCoverMarker,
+        bookSourceUrl: 'https://source.example',
+      ),
+      searchPort: searchPort,
+    );
+
+    final cover = tester.widget<BookCover>(
+      find.descendant(
+        of: find.byKey(const ValueKey('book-info-cover-action')),
+        matching: find.byType(BookCover),
+      ),
+    );
+    expect(cover.coverUrl, isEmpty);
+    expect(searchPort.calls, isEmpty);
+  });
+
   testWidgets('书架内编辑基础信息走元数据端口字段级写入', (tester) async {
     final fixture = await _pumpEditPage(tester, inShelf: true);
 
@@ -545,6 +610,9 @@ _pumpEditPage(
   ReaderSourceAccessPort? sourceAccessPort,
   ReaderSourceAccessPort? providerSourceAccessPort,
   bool includeProviderSourceAccessPort = true,
+  BookSourceSearchPort? searchPort,
+  bool includeProviderSearchPort = true,
+  Book? initialBook,
 }) async {
   final source = BookSource(
     bookSourceUrl: 'https://source.example',
@@ -560,16 +628,18 @@ _pumpEditPage(
   await sourceProvider.loadSources();
 
   final repository = _MemoryBookRepository();
-  final book = Book(
-    id: 'book-1',
-    name: '旧书名',
-    author: '旧作者',
-    coverUrl: 'https://cover.example/current.jpg',
-    description: '旧简介',
-    sourceUrl: 'https://source.example/book',
-    bookSourceUrl: source.bookSourceUrl,
-    currentPageIndex: 65537,
-  );
+  final book =
+      initialBook ??
+      Book(
+        id: 'book-1',
+        name: '旧书名',
+        author: '旧作者',
+        coverUrl: 'https://cover.example/current.jpg',
+        description: '旧简介',
+        sourceUrl: 'https://source.example/book',
+        bookSourceUrl: source.bookSourceUrl,
+        currentPageIndex: 65537,
+      );
   if (inShelf) await repository.insert(book);
   final bookProvider = BookProvider(
     repository: repository,
@@ -581,6 +651,7 @@ _pumpEditPage(
       providerMetadataPort ??
       BookMetadataPortCallbacks(
         updateCover: bookProvider.updateBookCover,
+        updateCustomCover: bookProvider.updateBookCustomCover,
         updateBookDetails: bookProvider.updateBookDetails,
       );
 
@@ -599,7 +670,10 @@ _pumpEditPage(
           value: _TestBookshelfMembershipPort(bookProvider),
         ),
         Provider<BookMetadataPort>.value(value: sharedMetadataPort),
-        Provider<BookSourceSearchPort>.value(value: const _EmptySearchPort()),
+        if (includeProviderSearchPort)
+          Provider<BookSourceSearchPort>.value(
+            value: searchPort ?? const _EmptySearchPort(),
+          ),
         if (providerReadStatusPort != null)
           Provider<BookReadStatusPort>.value(value: providerReadStatusPort),
         if (providerChapterPort != null)
@@ -621,6 +695,7 @@ _pumpEditPage(
             metadataPort: metadataPort,
             cacheDownloadPort: cacheDownloadPort,
             sourceAccessPort: sourceAccessPort,
+            searchPort: searchPort,
           ),
         ),
       ),
@@ -676,6 +751,7 @@ _pumpCoverPage(
   await bookProvider.loadBooks(runMaintenance: false);
   final metadataPort = BookMetadataPortCallbacks(
     updateCover: bookProvider.updateBookCover,
+    updateCustomCover: bookProvider.updateBookCustomCover,
     updateBookDetails: bookProvider.updateBookDetails,
   );
 
@@ -765,7 +841,8 @@ final class _MemorySourceRepository implements BookSourceRepository {
   }
 }
 
-final class _MemoryBookRepository implements BookRepository {
+final class _MemoryBookRepository
+    implements BookRepository, BookCustomCoverRepository {
   final books = <String, Book>{};
   final chapters = <String, List<Chapter>>{};
   final coverUpdates = <(String, String)>[];
@@ -795,6 +872,14 @@ final class _MemoryBookRepository implements BookRepository {
     if (failCoverWrite) throw StateError('封面写入失败');
     final book = books[bookId];
     if (book != null) books[bookId] = book.copyWith(coverUrl: coverUrl);
+  }
+
+  @override
+  Future<void> updateCustomCover(String bookId, String customCoverUrl) async {
+    final book = books[bookId];
+    if (book != null) {
+      books[bookId] = book.copyWith(customCoverUrl: customCoverUrl);
+    }
   }
 
   @override
@@ -858,12 +943,19 @@ final class _RecordingBookReadStatusPort implements BookReadStatusPort {
 
 final class _RecordingBookMetadataPort implements BookMetadataPort {
   final coverCalls = <(String, String)>[];
+  final customCoverCalls = <(String, String)>[];
   final detailsCalls = <(String, String, String, String)>[];
 
   @override
   Future<Book> updateCover(Book book, String coverUrl) async {
     coverCalls.add((book.id, coverUrl));
     return book.copyWith(coverUrl: coverUrl);
+  }
+
+  @override
+  Future<Book> updateCustomCover(Book book, String customCoverUrl) async {
+    customCoverCalls.add((book.id, customCoverUrl));
+    return book.copyWith(customCoverUrl: customCoverUrl);
   }
 
   @override
@@ -1037,6 +1129,19 @@ final class _CoverSearchPort implements BookSourceSearchPort {
   ) async => const [
     {'name': '测试书', 'coverUrl': 'https://cover.example/new.jpg'},
   ];
+}
+
+final class _RecordingSearchPort implements BookSourceSearchPort {
+  final calls = <(String, String)>[];
+
+  @override
+  Future<List<Map<String, String>>> search(
+    BookSource source,
+    String keyword,
+  ) async {
+    calls.add((source.bookSourceUrl, keyword));
+    return const [];
+  }
 }
 
 final class _EmptyBookInfoPort implements BookSourceBookInfoPort {

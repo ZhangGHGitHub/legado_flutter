@@ -197,6 +197,86 @@ fn register_host_apis(ctx: &Ctx<'_>) -> Result<(), String> {
         .set("__legado_java_ajax", ajax)
         .map_err(|e| format!("注入 java.ajax 失败: {e}"))?;
 
+    // Jingshiro `java.ajaxAll`：并发执行 URL，并保持 StrResponse 的方法形状。
+    let ajax_all = Function::new(ctx.clone(), {
+        move |_ctx: Ctx<'_>, payload: String| -> Result<String, rquickjs::Error> {
+            let urls = serde_json::from_str::<Vec<String>>(&payload).unwrap_or_default();
+            let referer = AJAX_REFERER.with(|r| r.borrow().clone());
+            let source_json = AJAX_SOURCE_JSON.with(|r| r.borrow().clone());
+            let login_header = AJAX_LOGIN_HEADER.with(|r| r.borrow().clone());
+            let handles = urls.into_iter().map(|url| {
+                let referer = referer.clone();
+                let source_json = source_json.clone();
+                let login_header = login_header.clone();
+                std::thread::spawn(move || {
+                    let started = Instant::now();
+                    let result = crate::http::client::ajax_blocking_with_deadline(
+                        &url,
+                        if referer.is_empty() {
+                            None
+                        } else {
+                            Some(referer.as_str())
+                        },
+                        if source_json.is_empty() {
+                            None
+                        } else {
+                            Some(source_json.as_str())
+                        },
+                        if login_header.is_empty() {
+                            None
+                        } else {
+                            Some(login_header.as_str())
+                        },
+                        JS_HOST_HTTP_TIMEOUT,
+                    );
+                    match result {
+                        Ok(body) => {
+                            let raw = body.clone();
+                            serde_json::json!({
+                            "body": body,
+                            "url": url,
+                            "code": 200,
+                            "message": "",
+                            "headers": {},
+                            "raw": raw,
+                            "callTime": started.elapsed().as_millis(),
+                            })
+                        }
+                        Err(error) => serde_json::json!({
+                            "body": "",
+                            "url": url,
+                            "code": 0,
+                            "message": error,
+                            "headers": {},
+                            "raw": "",
+                            "callTime": started.elapsed().as_millis(),
+                        }),
+                    }
+                })
+            });
+            let rows = handles
+                .map(|handle| {
+                    handle.join().unwrap_or_else(|_| {
+                        serde_json::json!({
+                            "body": "",
+                            "url": "",
+                            "code": 0,
+                            "message": "java.ajaxAll 线程异常",
+                            "headers": {},
+                            "raw": "",
+                            "callTime": 0,
+                        })
+                    })
+                })
+                .collect::<Vec<_>>();
+            Ok(serde_json::to_string(&rows).unwrap_or_else(|_| "[]".to_string()))
+        }
+    })
+    .map_err(|e| format!("注册 java.ajaxAll 失败: {e}"))?;
+    ctx.globals()
+        .set("__legado_java_ajax_all", ajax_all)
+        .map_err(|e| format!("注入 java.ajaxAll 失败: {e}"))?;
+
     // 登录/源脚本注入 ajax 上下文（书源 header + 登录头）
     let set_ajax_ctx = Function::new(ctx.clone(), {
         move |_ctx: Ctx<'_>, source_json: String, login_header: String| {
@@ -413,7 +493,9 @@ pub fn run_with_result_opts(
     base_url: &str,
     book_url: Option<&str>,
 ) -> Result<String, String> {
-    run_with_result_opts_internal(script, result, js_lib, base_url, book_url, false)
+    run_with_result_opts_internal(
+        script, result, js_lib, base_url, book_url, None, None, false,
+    )
 }
 
 pub fn run_with_result_opts_as_string(
@@ -423,7 +505,27 @@ pub fn run_with_result_opts_as_string(
     base_url: &str,
     book_url: Option<&str>,
 ) -> Result<String, String> {
-    run_with_result_opts_internal(script, result, js_lib, base_url, book_url, true)
+    run_with_result_opts_internal(script, result, js_lib, base_url, book_url, None, None, true)
+}
+
+pub fn run_with_book_as_string(
+    script: &str,
+    result: &str,
+    js_lib: &str,
+    base_url: &str,
+    book_name: &str,
+    book_author: &str,
+) -> Result<String, String> {
+    run_with_result_opts_internal(
+        script,
+        result,
+        js_lib,
+        base_url,
+        None,
+        Some(book_name),
+        Some(book_author),
+        true,
+    )
 }
 
 fn run_with_result_opts_internal(
@@ -432,6 +534,8 @@ fn run_with_result_opts_internal(
     js_lib: &str,
     base_url: &str,
     book_url: Option<&str>,
+    book_name: Option<&str>,
+    book_author: Option<&str>,
     as_string: bool,
 ) -> Result<String, String> {
     let script = normalize_rhino_with(script);
@@ -440,8 +544,10 @@ fn run_with_result_opts_internal(
         let escaped = serde_json::to_string(result).unwrap_or_else(|_| "\"\"".to_string());
         let book_url = book_url.unwrap_or(base_url);
         let book_inject = format!(
-            "var book = {{ bookUrl: {}, name: '', author: '' }};\n",
-            json_escape(book_url)
+            "var book = {{ bookUrl: {}, name: {}, author: {} }};\n",
+            json_escape(book_url),
+            json_escape(book_name.unwrap_or("")),
+            json_escape(book_author.unwrap_or("")),
         );
         let code = format!(
             "{book_inject}legadoResult = {escaped}; var result = typeof legadoResult === 'string' ? legadoResult : JSON.stringify(legadoResult);\n{script}"
@@ -2033,6 +2139,20 @@ value;
         let out =
             run_with_result_as_string(script, r#"{"data":{"pinyin":"ce shi"}}"#, "", "").unwrap();
         assert_eq!(out, "ce shi");
+    }
+
+    #[test]
+    fn jayway_jsonpath_static_read_and_global_com_match_default_rules() {
+        let out = run_with_book_as_string(
+            "com.jayway.jsonpath.JsonPath.read(result, '$.data.data[*]')[0].cover",
+            r#"{"data":{"data":[{"cover":"https://cover.example/a.jpg"}]}}"#,
+            "",
+            "",
+            "书名",
+            "作者",
+        )
+        .unwrap();
+        assert_eq!(out, "https://cover.example/a.jpg");
     }
 
     #[test]

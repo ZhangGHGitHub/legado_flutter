@@ -1,9 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_flutter/application/book/book_metadata_controller.dart';
+import 'package:legado_flutter/domain/book/book.dart';
 import 'package:legado_flutter/domain/repositories/book_repository.dart';
 
-final class _RecordingBookRepository implements BookRepository {
+final class _RecordingBookRepository
+    implements BookRepository, BookCustomCoverRepository {
   (String, String)? updatedCover;
+  (String, String)? updatedCustomCover;
   (String, String, String, String)? updatedDetails;
   Object? error;
 
@@ -11,6 +14,12 @@ final class _RecordingBookRepository implements BookRepository {
   Future<void> updateCover(String bookId, String coverUrl) async {
     if (error case final error?) throw error;
     updatedCover = (bookId, coverUrl);
+  }
+
+  @override
+  Future<void> updateCustomCover(String bookId, String customCoverUrl) async {
+    if (error case final error?) throw error;
+    updatedCustomCover = (bookId, customCoverUrl);
   }
 
   @override
@@ -48,6 +57,16 @@ void main() {
       throwsA(same(error)),
     );
 
+    expect(repository.updatedCover, isNull);
+  });
+
+  test('自定义封面只委托 customCoverUrl 字段级写入', () async {
+    final repository = _RecordingBookRepository();
+    final controller = BookMetadataController(repository: repository);
+
+    await controller.updateCustomCover('book-1', legadoDefaultCoverMarker);
+
+    expect(repository.updatedCustomCover, ('book-1', legadoDefaultCoverMarker));
     expect(repository.updatedCover, isNull);
   });
 

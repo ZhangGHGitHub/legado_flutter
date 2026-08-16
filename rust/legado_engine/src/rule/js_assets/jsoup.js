@@ -18,6 +18,7 @@ var Packages = {
   }
 };
 var org = Packages.org;
+var com = Packages.com;
 
 function _JsonPathDocument(value) {
   this._value = value;
@@ -152,6 +153,9 @@ _JsonPathPackage.Configuration = {
   }
 };
 _JsonPathPackage.JsonPath = {
+  read: function(value, path) {
+    return this.using().parse(value).read(path);
+  },
   using: function() {
     return {
       parse: function(value) {

@@ -202,6 +202,7 @@ mixin _$Book {
   String get name => throw _privateConstructorUsedError;
   String get author => throw _privateConstructorUsedError;
   String get coverUrl => throw _privateConstructorUsedError;
+  String get customCoverUrl => throw _privateConstructorUsedError;
   String get type => throw _privateConstructorUsedError;
   double get progress => throw _privateConstructorUsedError;
   String? get currentChapter => throw _privateConstructorUsedError;
@@ -239,6 +240,7 @@ abstract class $BookCopyWith<$Res> {
     String name,
     String author,
     String coverUrl,
+    String customCoverUrl,
     String type,
     double progress,
     String? currentChapter,
@@ -283,6 +285,7 @@ class _$BookCopyWithImpl<$Res, $Val extends Book>
     Object? name = null,
     Object? author = null,
     Object? coverUrl = null,
+    Object? customCoverUrl = null,
     Object? type = null,
     Object? progress = null,
     Object? currentChapter = freezed,
@@ -321,6 +324,10 @@ class _$BookCopyWithImpl<$Res, $Val extends Book>
             coverUrl: null == coverUrl
                 ? _value.coverUrl
                 : coverUrl // ignore: cast_nullable_to_non_nullable
+                      as String,
+            customCoverUrl: null == customCoverUrl
+                ? _value.customCoverUrl
+                : customCoverUrl // ignore: cast_nullable_to_non_nullable
                       as String,
             type: null == type
                 ? _value.type
@@ -431,6 +438,7 @@ abstract class _$$BookImplCopyWith<$Res> implements $BookCopyWith<$Res> {
     String name,
     String author,
     String coverUrl,
+    String customCoverUrl,
     String type,
     double progress,
     String? currentChapter,
@@ -473,6 +481,7 @@ class __$$BookImplCopyWithImpl<$Res>
     Object? name = null,
     Object? author = null,
     Object? coverUrl = null,
+    Object? customCoverUrl = null,
     Object? type = null,
     Object? progress = null,
     Object? currentChapter = freezed,
@@ -511,6 +520,10 @@ class __$$BookImplCopyWithImpl<$Res>
         coverUrl: null == coverUrl
             ? _value.coverUrl
             : coverUrl // ignore: cast_nullable_to_non_nullable
+                  as String,
+        customCoverUrl: null == customCoverUrl
+            ? _value.customCoverUrl
+            : customCoverUrl // ignore: cast_nullable_to_non_nullable
                   as String,
         type: null == type
             ? _value.type
@@ -605,6 +618,7 @@ class _$BookImpl extends _Book {
     required this.name,
     this.author = '未知作者',
     this.coverUrl = '',
+    this.customCoverUrl = '',
     this.type = 'online',
     this.progress = 0.0,
     this.currentChapter,
@@ -637,6 +651,9 @@ class _$BookImpl extends _Book {
   @override
   @JsonKey()
   final String coverUrl;
+  @override
+  @JsonKey()
+  final String customCoverUrl;
   @override
   @JsonKey()
   final String type;
@@ -705,6 +722,8 @@ class _$BookImpl extends _Book {
             (identical(other.author, author) || other.author == author) &&
             (identical(other.coverUrl, coverUrl) ||
                 other.coverUrl == coverUrl) &&
+            (identical(other.customCoverUrl, customCoverUrl) ||
+                other.customCoverUrl == customCoverUrl) &&
             (identical(other.type, type) || other.type == type) &&
             (identical(other.progress, progress) ||
                 other.progress == progress) &&
@@ -751,6 +770,7 @@ class _$BookImpl extends _Book {
     name,
     author,
     coverUrl,
+    customCoverUrl,
     type,
     progress,
     currentChapter,
@@ -788,6 +808,7 @@ abstract class _Book extends Book {
     required final String name,
     final String author,
     final String coverUrl,
+    final String customCoverUrl,
     final String type,
     final double progress,
     final String? currentChapter,
@@ -819,6 +840,8 @@ abstract class _Book extends Book {
   String get author;
   @override
   String get coverUrl;
+  @override
+  String get customCoverUrl;
   @override
   String get type;
   @override

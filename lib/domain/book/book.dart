@@ -4,6 +4,8 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'book.freezed.dart';
 
+const legadoDefaultCoverMarker = 'use_default_cover';
+
 /// Per-book reader settings persisted inside the Book `readConfig` record.
 @freezed
 class BookReadConfig with _$BookReadConfig {
@@ -52,6 +54,7 @@ class Book with _$Book {
     required String name,
     @Default('未知作者') String author,
     @Default('') String coverUrl,
+    @Default('') String customCoverUrl,
     @Default('online') String type,
     @Default(0.0) double progress,
     String? currentChapter,
@@ -80,6 +83,7 @@ class Book with _$Book {
       name: json['name'] as String,
       author: json['author'] as String? ?? '未知作者',
       coverUrl: json['coverUrl'] as String? ?? '',
+      customCoverUrl: json['customCoverUrl'] as String? ?? '',
       type: json['type'] as String? ?? 'online',
       progress: (json['progress'] as num?)?.toDouble() ?? 0.0,
       currentChapter: json['currentChapter'] as String?,
@@ -113,6 +117,7 @@ class Book with _$Book {
       'name': name,
       'author': author,
       'coverUrl': coverUrl,
+      'customCoverUrl': customCoverUrl,
       'type': type,
       'progress': progress,
       'currentChapter': currentChapter,
@@ -134,6 +139,12 @@ class Book with _$Book {
       'simReadDailyChapters': simReadDailyChapters,
       if (updatedAt != null) 'updatedAt': updatedAt,
     };
+  }
+
+  String get displayCoverUrl {
+    final custom = customCoverUrl.trim();
+    if (custom == legadoDefaultCoverMarker) return '';
+    return custom.isNotEmpty ? custom : coverUrl;
   }
 
   @override

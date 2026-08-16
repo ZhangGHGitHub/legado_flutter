@@ -5,6 +5,8 @@ import '../../domain/book/book.dart';
 final class BookMetadataPortAdapter implements BookMetadataPort {
   const BookMetadataPortAdapter({
     required Future<Book> Function(Book book, String coverUrl) updateCover,
+    required Future<Book> Function(Book book, String customCoverUrl)
+    updateCustomCover,
     required Future<Book?> Function(
       String bookId, {
       required String name,
@@ -13,9 +15,12 @@ final class BookMetadataPortAdapter implements BookMetadataPort {
     })
     updateBookDetails,
   }) : _updateCover = updateCover,
+       _updateCustomCover = updateCustomCover,
        _updateBookDetails = updateBookDetails;
 
   final Future<Book> Function(Book book, String coverUrl) _updateCover;
+  final Future<Book> Function(Book book, String customCoverUrl)
+  _updateCustomCover;
   final Future<Book?> Function(
     String bookId, {
     required String name,
@@ -27,6 +32,10 @@ final class BookMetadataPortAdapter implements BookMetadataPort {
   @override
   Future<Book> updateCover(Book book, String coverUrl) =>
       _updateCover(book, coverUrl);
+
+  @override
+  Future<Book> updateCustomCover(Book book, String customCoverUrl) =>
+      _updateCustomCover(book, customCoverUrl);
 
   @override
   Future<Book?> updateBookDetails(

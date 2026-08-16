@@ -1,6 +1,7 @@
 pub mod backup;
 pub mod book_info;
 pub mod content;
+pub mod cover;
 pub mod db;
 pub mod debug;
 pub mod dict;

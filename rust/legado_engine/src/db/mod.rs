@@ -14,7 +14,7 @@ use thiserror::Error;
 
 pub(crate) mod room_import;
 
-const SCHEMA_VERSION: i32 = 17;
+const SCHEMA_VERSION: i32 = 18;
 
 static DB: OnceCell<Mutex<EngineDb>> = OnceCell::new();
 static DB_INIT_LOCK: Mutex<()> = Mutex::new(());
@@ -62,6 +62,7 @@ impl EngineDb {
                name TEXT NOT NULL,
                author TEXT DEFAULT '未知作者',
                coverUrl TEXT DEFAULT '',
+               customCoverUrl TEXT DEFAULT '',
                type TEXT DEFAULT 'online',
                progress REAL DEFAULT 0.0,
                currentChapter TEXT,
@@ -280,6 +281,14 @@ impl EngineDb {
                 "ALTER TABLE books ADD COLUMN tocUrl TEXT DEFAULT ''",
             )?;
         }
+        if current < 18 {
+            add_column_if_missing(
+                conn,
+                "books",
+                "customCoverUrl",
+                "ALTER TABLE books ADD COLUMN customCoverUrl TEXT DEFAULT ''",
+            )?;
+        }
         if current < SCHEMA_VERSION {
             conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
         }
@@ -431,13 +440,14 @@ impl EngineDb {
             .map_err(|e| DbError::Message(format!("book JSON 无效: {e}")))?;
         let id = str_field(&v, "id")?;
         self.conn.execute(
-            "INSERT INTO books (id, name, author, coverUrl, type, progress, currentChapter,
+            "INSERT INTO books (id, name, author, coverUrl, customCoverUrl, type, progress, currentChapter,
               lastChapter, totalChapterNum, durChapterIndex, currentPageIndex, isFavorite,
               sourceUrl, description, bookSourceUrl, tocUrl, bookGroup, readIteration, simReadEnabled,
               simReadStartDate, simReadStartChapter, simReadDailyChapters, readConfig)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24)
              ON CONFLICT(id) DO UPDATE SET
                name=excluded.name, author=excluded.author, coverUrl=excluded.coverUrl,
+               customCoverUrl=CASE WHEN ?25 = 1 THEN excluded.customCoverUrl ELSE books.customCoverUrl END,
                type=excluded.type, progress=excluded.progress, currentChapter=excluded.currentChapter,
                lastChapter=excluded.lastChapter, totalChapterNum=excluded.totalChapterNum,
                durChapterIndex=excluded.durChapterIndex, currentPageIndex=excluded.currentPageIndex,
@@ -454,6 +464,7 @@ impl EngineDb {
                 str_field(&v, "name").unwrap_or_else(|_| "未知".into()),
                 str_field(&v, "author").unwrap_or_default(),
                 str_field(&v, "coverUrl").unwrap_or_default(),
+                str_field(&v, "customCoverUrl").unwrap_or_default(),
                 str_field(&v, "type").unwrap_or_else(|_| "online".into()),
                 f64_field(&v, "progress"),
                 opt_str_field(&v, "currentChapter"),
@@ -485,6 +496,7 @@ impl EngineDb {
                     })
                     .unwrap_or(3),
                 read_config_json(&v),
+                i64::from(v.get("customCoverUrl").is_some()),
             ],
         )?;
         Ok(())
@@ -492,7 +504,7 @@ impl EngineDb {
 
     pub fn get_books_json(&self) -> Result<Vec<String>, DbError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, author, coverUrl, type, progress, currentChapter, lastChapter,
+            "SELECT id, name, author, coverUrl, customCoverUrl, type, progress, currentChapter, lastChapter,
                     totalChapterNum, durChapterIndex, currentPageIndex, isFavorite, sourceUrl,
                     description, bookSourceUrl, tocUrl, bookGroup, readIteration, simReadEnabled,
                     simReadStartDate, simReadStartChapter, simReadDailyChapters, readConfig,
@@ -500,33 +512,34 @@ impl EngineDb {
              FROM books ORDER BY updatedAt DESC",
         )?;
         let rows = stmt.query_map([], |row| {
-            let daily_raw = row.get::<_, Option<i64>>(21)?.unwrap_or(3);
+            let daily_raw = row.get::<_, Option<i64>>(22)?.unwrap_or(3);
             let daily = if daily_raw < 1 { 3 } else { daily_raw.min(999) };
             Ok(BookDto {
                 id: row.get(0)?,
                 name: row.get(1)?,
                 author: row.get(2)?,
                 cover_url: row.get(3)?,
-                book_type: row.get(4)?,
-                progress: row.get(5)?,
-                current_chapter: row.get(6)?,
-                last_chapter: row.get(7)?,
-                total_chapter_num: row.get::<_, Option<i64>>(8)?.unwrap_or(0).max(0),
-                dur_chapter_index: row.get::<_, Option<i64>>(9)?.unwrap_or(0).max(0),
-                current_page_index: row.get(10)?,
-                is_favorite: row.get::<_, i64>(11)? == 1,
-                source_url: row.get(12)?,
-                description: row.get(13)?,
-                book_source_url: row.get(14)?,
-                toc_url: row.get::<_, Option<String>>(15)?.unwrap_or_default(),
-                group: row.get(16)?,
-                read_iteration: row.get::<_, Option<i64>>(17)?.unwrap_or(0),
-                sim_read_enabled: row.get::<_, Option<i64>>(18)?.unwrap_or(0) == 1,
-                sim_read_start_date: row.get::<_, Option<String>>(19)?.unwrap_or_default(),
-                sim_read_start_chapter: row.get::<_, Option<i64>>(20)?.unwrap_or(0).max(0),
+                custom_cover_url: row.get(4)?,
+                book_type: row.get(5)?,
+                progress: row.get(6)?,
+                current_chapter: row.get(7)?,
+                last_chapter: row.get(8)?,
+                total_chapter_num: row.get::<_, Option<i64>>(9)?.unwrap_or(0).max(0),
+                dur_chapter_index: row.get::<_, Option<i64>>(10)?.unwrap_or(0).max(0),
+                current_page_index: row.get(11)?,
+                is_favorite: row.get::<_, i64>(12)? == 1,
+                source_url: row.get(13)?,
+                description: row.get(14)?,
+                book_source_url: row.get(15)?,
+                toc_url: row.get::<_, Option<String>>(16)?.unwrap_or_default(),
+                group: row.get(17)?,
+                read_iteration: row.get::<_, Option<i64>>(18)?.unwrap_or(0),
+                sim_read_enabled: row.get::<_, Option<i64>>(19)?.unwrap_or(0) == 1,
+                sim_read_start_date: row.get::<_, Option<String>>(20)?.unwrap_or_default(),
+                sim_read_start_chapter: row.get::<_, Option<i64>>(21)?.unwrap_or(0).max(0),
                 sim_read_daily_chapters: daily,
-                read_config: parse_read_config(row.get::<_, Option<String>>(22)?),
-                updated_at: row.get::<_, Option<String>>(23)?.unwrap_or_default(),
+                read_config: parse_read_config(row.get::<_, Option<String>>(23)?),
+                updated_at: row.get::<_, Option<String>>(24)?.unwrap_or_default(),
             })
         })?;
         rows.map(|r| {
@@ -567,6 +580,18 @@ impl EngineDb {
         self.conn.execute(
             "UPDATE books SET coverUrl=?1 WHERE id=?2",
             params![cover_url, book_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_book_custom_cover(
+        &self,
+        book_id: &str,
+        custom_cover_url: &str,
+    ) -> Result<(), DbError> {
+        self.conn.execute(
+            "UPDATE books SET customCoverUrl=?1 WHERE id=?2",
+            params![custom_cover_url, book_id],
         )?;
         Ok(())
     }
@@ -1925,6 +1950,13 @@ pub fn db_update_book_cover(book_id: String, cover_url: String) -> Result<(), St
     with_db(|db| db.update_book_cover(&book_id, &cover_url))
 }
 
+pub fn db_update_book_custom_cover(
+    book_id: String,
+    custom_cover_url: String,
+) -> Result<(), String> {
+    with_db(|db| db.update_book_custom_cover(&book_id, &custom_cover_url))
+}
+
 pub fn db_update_book_details(
     book_id: String,
     name: String,
@@ -2948,7 +2980,8 @@ mod tests {
         db.insert_book_json(
             r#"{
                 "id":"dto-book", "name":"DTO 书", "author":"DTO 作者",
-                "coverUrl":"https://example.test/cover.jpg", "type":"audio",
+                "coverUrl":"https://example.test/cover.jpg",
+                "customCoverUrl":"https://example.test/custom.jpg", "type":"audio",
                 "progress":0.25, "currentChapter":"第三章", "lastChapter":"第十二章",
                 "totalChapterNum":12, "durChapterIndex":2, "currentPageIndex":42,
                 "isFavorite":true, "sourceUrl":"https://example.test/book",
@@ -2973,6 +3006,7 @@ mod tests {
         assert_eq!(book["name"], "DTO 书");
         assert_eq!(book["author"], "DTO 作者");
         assert_eq!(book["coverUrl"], "https://example.test/cover.jpg");
+        assert_eq!(book["customCoverUrl"], "https://example.test/custom.jpg");
         assert_eq!(book["type"], "audio");
         assert_eq!(book["progress"], 0.25);
         assert_eq!(book["currentChapter"], "第三章");
@@ -3032,9 +3066,26 @@ mod tests {
 
         assert!(db.update_book_cover("missing-book", "new-cover").is_ok());
         assert!(db
+            .update_book_custom_cover("missing-book", "new-custom-cover")
+            .is_ok());
+        assert!(db
             .update_book_details("missing-book", "新书名", "新作者", "新简介")
             .is_ok());
         assert!(db.get_books_json().unwrap().is_empty());
+    }
+
+    #[test]
+    fn update_custom_cover_preserves_source_cover() {
+        let db = EngineDb::open_in_memory().unwrap();
+        db.insert_book_json(r#"{"id":"cover-book","name":"封面书","coverUrl":"source-cover"}"#)
+            .unwrap();
+
+        db.update_book_custom_cover("cover-book", "use_default_cover")
+            .unwrap();
+
+        let book: Value = serde_json::from_str(&db.get_books_json().unwrap()[0]).unwrap();
+        assert_eq!(book["coverUrl"], "source-cover");
+        assert_eq!(book["customCoverUrl"], "use_default_cover");
     }
 
     #[test]
@@ -3154,6 +3205,85 @@ mod tests {
             )
             .unwrap();
         assert_eq!(toc_url, "https://example.test/book/toc");
+    }
+
+    #[test]
+    fn legacy_v17_schema_adds_custom_cover_and_old_json_merge_preserves_it() {
+        let directory = test_directory("v17-custom-cover");
+        let path = directory.join("legado.db");
+        let path_string = path.to_string_lossy().into_owned();
+        {
+            let conn = Connection::open(&path_string).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE books (
+                   id TEXT PRIMARY KEY,
+                   name TEXT NOT NULL,
+                   author TEXT DEFAULT '',
+                   coverUrl TEXT DEFAULT '',
+                   type TEXT DEFAULT 'online',
+                   progress REAL DEFAULT 0.0,
+                   currentChapter TEXT,
+                   lastChapter TEXT DEFAULT '',
+                   totalChapterNum INTEGER DEFAULT 0,
+                   durChapterIndex INTEGER DEFAULT 0,
+                   currentPageIndex INTEGER DEFAULT 0,
+                   isFavorite INTEGER DEFAULT 0,
+                   sourceUrl TEXT DEFAULT '',
+                   description TEXT DEFAULT '',
+                   bookSourceUrl TEXT DEFAULT '',
+                   tocUrl TEXT DEFAULT '',
+                   bookGroup TEXT DEFAULT '',
+                   readIteration INTEGER DEFAULT 0,
+                   simReadEnabled INTEGER DEFAULT 0,
+                   simReadStartDate TEXT DEFAULT '',
+                   simReadStartChapter INTEGER DEFAULT 0,
+                   simReadDailyChapters INTEGER DEFAULT 3,
+                   readConfig TEXT DEFAULT '{}',
+                   updatedAt TEXT DEFAULT (datetime('now'))
+                 );
+                 PRAGMA user_version = 17;",
+            )
+            .unwrap();
+        }
+
+        {
+            let db = EngineDb::open(&path_string).unwrap();
+            assert_eq!(db.schema_version().unwrap(), 18);
+            let custom: String = db
+                .conn
+                .query_row(
+                    "SELECT customCoverUrl FROM books WHERE id = 'missing'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or_default();
+            assert!(custom.is_empty());
+            db.insert_book_json(
+                r#"{"id":"book-1","name":"旧书","author":"作者","coverUrl":"source-cover"}"#,
+            )
+            .unwrap();
+            db.update_book_custom_cover("book-1", "custom-cover")
+                .unwrap();
+            db.insert_book_json(
+                r#"{"id":"book-1","name":"旧书更新","author":"作者","coverUrl":"new-source-cover"}"#,
+            )
+            .unwrap();
+            let custom: String = db
+                .conn
+                .query_row(
+                    "SELECT customCoverUrl FROM books WHERE id = 'book-1'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(custom, "custom-cover");
+        }
+
+        let db = EngineDb::open(&path_string).unwrap();
+        let book: Value = serde_json::from_str(&db.get_books_json().unwrap()[0]).unwrap();
+        assert_eq!(book["coverUrl"], "new-source-cover");
+        assert_eq!(book["customCoverUrl"], "custom-cover");
+        let _ = fs::remove_dir_all(directory);
     }
 
     #[test]
